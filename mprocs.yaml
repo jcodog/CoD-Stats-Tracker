@@ -1,0 +1,5 @@
+procs:
+  frontend:
+    shell: "bun run dev"
+  backend:
+    shell: "bun run convex:dev"

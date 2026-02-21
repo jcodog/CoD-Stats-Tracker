@@ -1,0 +1,81 @@
+import { v } from "convex/values";
+import { mutation } from "../../_generated/server";
+
+export type Outcome = "win" | "loss";
+export type Mode = "hardpoint" | "snd" | "overload";
+
+export const logMatch = mutation({
+  args: {
+    sessionUuid: v.string(),
+    mode: v.union(
+      v.literal("hardpoint"),
+      v.literal("snd"),
+      v.literal("overload"),
+    ),
+    outcome: v.union(v.literal("win"), v.literal("loss")),
+    kills: v.number(),
+    deaths: v.number(),
+    srChange: v.number(),
+    lossProtected: v.boolean(),
+    teamScore: v.optional(v.union(v.null(), v.number())),
+    enemyScore: v.optional(v.union(v.null(), v.number())),
+    hillTimeSeconds: v.optional(v.union(v.null(), v.number())),
+    plants: v.optional(v.union(v.null(), v.number())),
+    defuses: v.optional(v.union(v.null(), v.number())),
+    overloads: v.optional(v.union(v.null(), v.number())),
+  },
+  handler: async (ctx, args) => {
+    const {
+      sessionUuid,
+      mode,
+      outcome,
+      kills,
+      deaths,
+      srChange,
+      lossProtected,
+    } = args;
+    // 1. Fetch the session document to get current aggregates
+    const session = await ctx.db
+      .query("sessions")
+      .withIndex("by_uuid", (q) => q.eq("uuid", sessionUuid))
+      .filter((q) => q.eq(q.field("endedAt"), null))
+      .first();
+    if (!session) {
+      throw new Error("Session not found in Convex");
+    }
+    // 2. Compute new aggregate values (replicate logic from Prisma)
+    const newCurrentSr = session.currentSr + srChange;
+    const newStreak = outcome === "win" ? session.streak + 1 : 0;
+    const newBestStreak =
+      newStreak > session.bestStreak ? newStreak : session.bestStreak;
+    // 3. Insert the new game document
+    await ctx.db.insert("games", {
+      sessionId: sessionUuid,
+      userId: session.userId,
+      mode,
+      outcome,
+      kills,
+      deaths,
+      srChange,
+      lossProtected,
+      teamScore: args.teamScore ?? null,
+      enemyScore: args.enemyScore ?? null,
+      hillTimeSeconds: args.hillTimeSeconds ?? null,
+      plants: args.plants ?? null,
+      defuses: args.defuses ?? null,
+      overloads: args.overloads ?? null,
+      createdAt: Date.now(),
+    });
+    // 4. Update the session document aggregates
+    await ctx.db.patch(session._id, {
+      // Use patch to increment and set fields atomically
+      wins: outcome === "win" ? session.wins + 1 : session.wins,
+      losses: outcome === "loss" ? session.losses + 1 : session.losses,
+      kills: session.kills + kills,
+      deaths: session.deaths + deaths,
+      currentSr: newCurrentSr,
+      streak: newStreak,
+      bestStreak: newBestStreak,
+    });
+  },
+});
