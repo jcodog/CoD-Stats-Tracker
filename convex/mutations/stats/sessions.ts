@@ -5,6 +5,7 @@ import {
   applyGlobalLandingStatsDelta,
   applyUserLandingStatsDelta,
 } from "../../lib/landingMetrics";
+import { getStatsUserIdCandidatesForInvalidation } from "../../lib/userIds";
 
 export const createSession = mutation({
   args: {
@@ -49,12 +50,19 @@ export const createSession = mutation({
         await applyGlobalLandingStatsDelta(ctx, statsDelta);
         await applyUserLandingStatsDelta(ctx, userId, statsDelta);
 
-        await ctx.scheduler.runAfter(
-          0,
-          internal.actions.stats.cache.invalidateLandingMetricsCache,
-          {
-            userId,
-          },
+        const invalidationUserIds =
+          await getStatsUserIdCandidatesForInvalidation(ctx, userId);
+
+        await Promise.all(
+          invalidationUserIds.map((invalidationUserId) =>
+            ctx.scheduler.runAfter(
+              0,
+              internal.actions.stats.cache.invalidateLandingMetricsCache,
+              {
+                userId: invalidationUserId,
+              },
+            )
+          ),
         );
       }
 
@@ -94,12 +102,21 @@ export const createSession = mutation({
     await applyGlobalLandingStatsDelta(ctx, statsDelta);
     await applyUserLandingStatsDelta(ctx, userId, statsDelta);
 
-    await ctx.scheduler.runAfter(
-      0,
-      internal.actions.stats.cache.invalidateLandingMetricsCache,
-      {
-        userId,
-      },
+    const invalidationUserIds = await getStatsUserIdCandidatesForInvalidation(
+      ctx,
+      userId,
+    );
+
+    await Promise.all(
+      invalidationUserIds.map((invalidationUserId) =>
+        ctx.scheduler.runAfter(
+          0,
+          internal.actions.stats.cache.invalidateLandingMetricsCache,
+          {
+            userId: invalidationUserId,
+          },
+        )
+      ),
     );
 
     return {

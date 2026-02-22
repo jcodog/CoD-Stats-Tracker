@@ -1,5 +1,3 @@
-import type { UserIdentity } from "convex/server";
-
 import type { Doc } from "../../_generated/dataModel";
 import { query, type QueryCtx } from "../../_generated/server";
 import {
@@ -7,26 +5,7 @@ import {
   getUserLandingCounters,
   toWinRate,
 } from "../../lib/landingMetrics";
-
-function addCandidate(candidates: Set<string>, value: string | null | undefined) {
-  if (!value) {
-    return;
-  }
-
-  const trimmedValue = value.trim();
-  if (trimmedValue.length > 0) {
-    candidates.add(trimmedValue);
-  }
-}
-
-function getUserIdCandidates(identity: UserIdentity) {
-  const candidates = new Set<string>();
-
-  addCandidate(candidates, identity.subject);
-  addCandidate(candidates, identity.tokenIdentifier);
-
-  return Array.from(candidates);
-}
+import { getStatsUserIdCandidatesForIdentity } from "../../lib/userIds";
 
 async function getLatestUserGameForCandidates(
   ctx: QueryCtx,
@@ -64,9 +43,9 @@ export const getLandingMetrics = query({
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
     const canReadPersonal = Boolean(identity?.subject);
-    const userIdCandidates = canReadPersonal && identity
-      ? getUserIdCandidates(identity)
-      : [];
+    const userIdCandidatesPromise = canReadPersonal && identity
+      ? getStatsUserIdCandidatesForIdentity(ctx, identity)
+      : Promise.resolve([]);
 
     const globalCountersPromise = getGlobalLandingCounters(ctx);
     const latestGlobalGamePromise = ctx.db
@@ -74,6 +53,7 @@ export const getLandingMetrics = query({
       .withIndex("by_createdat")
       .order("desc")
       .first();
+    const userIdCandidates = await userIdCandidatesPromise;
     const personalCountersPromise = canReadPersonal
       ? getUserLandingCounters(ctx, userIdCandidates)
       : Promise.resolve(null);

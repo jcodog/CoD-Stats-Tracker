@@ -1,6 +1,6 @@
 "use node";
 
-import { createClient, type RedisClientType } from "redis";
+import { createClient } from "redis";
 import { v } from "convex/values";
 
 import { internalAction } from "../../_generated/server";
@@ -14,7 +14,7 @@ const REDIS_URL_ENV_KEYS = [
   "KV_URL",
 ] as const;
 
-type ActionRedisClient = RedisClientType;
+type ActionRedisClient = ReturnType<typeof createClient>;
 
 let redisClient: ActionRedisClient | null = null;
 let redisClientPromise: Promise<ActionRedisClient | null> | null = null;
@@ -32,7 +32,18 @@ function resolveRedisUrl() {
 
 async function getRedisClient(): Promise<ActionRedisClient | null> {
   if (redisClient?.isOpen) {
-    return redisClient;
+    try {
+      await redisClient.ping();
+      return redisClient;
+    } catch (error) {
+      console.error("Cached Redis client is unhealthy; reconnecting", error);
+      try {
+        redisClient.destroy();
+      } catch {
+        // noop
+      }
+      redisClient = null;
+    }
   }
 
   if (redisClientPromise) {
@@ -44,15 +55,28 @@ async function getRedisClient(): Promise<ActionRedisClient | null> {
     return null;
   }
 
-  const client = redisClient ?? createClient({
+  const client = createClient({
     url: redisUrl,
   });
 
-  if (!redisClient) {
-    client.on("error", (error) => {
-      console.error("Landing metrics invalidation Redis error", error);
-    });
-  }
+  client.on("error", (error) => {
+    console.error("Landing metrics invalidation Redis error", error);
+    if (redisClient === client) {
+      redisClient = null;
+    }
+
+    try {
+      client.destroy();
+    } catch {
+      // noop
+    }
+  });
+
+  client.on("end", () => {
+    if (redisClient === client) {
+      redisClient = null;
+    }
+  });
 
   redisClientPromise = client
     .connect()
@@ -107,10 +131,12 @@ async function appendInvalidationTrace(
 async function deleteKeysByPattern(redis: ActionRedisClient, pattern: string) {
   let deletedKeyCount = 0;
 
-  for await (const keys of redis.scanIterator({
+  for await (const scanResult of redis.scanIterator({
     MATCH: pattern,
     COUNT: 200,
   })) {
+    const keys = Array.isArray(scanResult) ? scanResult : [scanResult];
+
     for (const key of keys) {
       if (key === LANDING_METRICS_TRACE_LIST_KEY) {
         continue;

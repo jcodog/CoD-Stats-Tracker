@@ -97,9 +97,12 @@ export async function GET(request: Request) {
       console.error("Failed to get Convex token from Clerk", error);
     }
   }
+
+  const canReadPersonal = Boolean(userId && convexToken);
+  const cacheUserId = canReadPersonal ? userId : null;
   const traceId = crypto.randomUUID();
-  const scope = userId ? "authenticated" : "anonymous";
-  const cacheTtl = getLandingMetricsCacheTtl(userId);
+  const scope = canReadPersonal ? "authenticated" : "anonymous";
+  const cacheTtl = getLandingMetricsCacheTtl(cacheUserId);
   let missNote: string | undefined;
 
   if (userId && !convexToken) {
@@ -107,7 +110,7 @@ export async function GET(request: Request) {
   }
 
   const redis = await getRedisClient();
-  const cacheKey = getLandingMetricsCacheKey(userId);
+  const cacheKey = getLandingMetricsCacheKey(cacheUserId);
 
   if (redis) {
     try {
@@ -120,7 +123,7 @@ export async function GET(request: Request) {
           traceId,
           event: "query",
           scope,
-          userId,
+          userId: cacheUserId,
           cacheStatus: "hit",
           at: new Date().toISOString(),
         });
@@ -160,7 +163,7 @@ export async function GET(request: Request) {
         traceId,
         event: "query",
         scope,
-        userId,
+        userId: cacheUserId,
         cacheStatus: "miss",
         note: missNote,
         at: new Date().toISOString(),

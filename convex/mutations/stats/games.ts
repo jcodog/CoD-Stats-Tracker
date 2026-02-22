@@ -5,6 +5,7 @@ import {
   applyGlobalLandingStatsDelta,
   applyUserLandingStatsDelta,
 } from "../../lib/landingMetrics";
+import { getStatsUserIdCandidatesForInvalidation } from "../../lib/userIds";
 
 export type Outcome = "win" | "loss";
 export type Mode = "hardpoint" | "snd" | "overload";
@@ -92,12 +93,21 @@ export const logMatch = mutation({
     await applyGlobalLandingStatsDelta(ctx, statsDelta);
     await applyUserLandingStatsDelta(ctx, session.userId, statsDelta);
 
-    await ctx.scheduler.runAfter(
-      0,
-      internal.actions.stats.cache.invalidateLandingMetricsCache,
-      {
-        userId: session.userId,
-      },
+    const invalidationUserIds = await getStatsUserIdCandidatesForInvalidation(
+      ctx,
+      session.userId,
+    );
+
+    await Promise.all(
+      invalidationUserIds.map((invalidationUserId) =>
+        ctx.scheduler.runAfter(
+          0,
+          internal.actions.stats.cache.invalidateLandingMetricsCache,
+          {
+            userId: invalidationUserId,
+          },
+        )
+      ),
     );
   },
 });
