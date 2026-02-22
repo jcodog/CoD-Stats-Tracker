@@ -72,6 +72,53 @@ export declare const api: {
     };
   };
   mutations: {
+    oauth: {
+      createAuthorizationCode: FunctionReference<
+        "mutation",
+        "public",
+        {
+          codeChallenge?: string;
+          codeChallengeMethod?: "S256";
+          codeHash: string;
+          expiresAt: number;
+          redirectUri: string;
+          scopes: Array<string>;
+          sessionId: string;
+          stateHash: string;
+        },
+        any
+      >;
+      exchangeAuthorizationCode: FunctionReference<
+        "mutation",
+        "public",
+        {
+          codeHash: string;
+          codeVerifierHash?: string;
+          redirectUri: string;
+          refreshTokenExpiresAt: number;
+          refreshTokenHash: string;
+          requestedScopes?: Array<string>;
+        },
+        any
+      >;
+      revokeByRefreshToken: FunctionReference<
+        "mutation",
+        "public",
+        { refreshTokenHash: string },
+        any
+      >;
+      rotateRefreshToken: FunctionReference<
+        "mutation",
+        "public",
+        {
+          newRefreshTokenExpiresAt: number;
+          newRefreshTokenHash: string;
+          refreshTokenHash: string;
+          requestedScopes?: Array<string>;
+        },
+        any
+      >;
+    };
     stats: {
       games: {
         logMatch: FunctionReference<

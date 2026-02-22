@@ -3,6 +3,7 @@ import { sessions } from "./db/tables/sessions";
 import { games } from "./db/tables/games";
 import { users } from "./db/tables/users";
 import { chatgptAppConnections } from "./db/tables/chatgpt";
+import { oauthAuthCodes, oauthTokens } from "./db/tables/oauth";
 import { landingGlobalStats, landingUserStats } from "./db/tables/landingStats";
 
 export default defineSchema({
@@ -10,6 +11,8 @@ export default defineSchema({
   games,
   users,
   chatgptAppConnections,
+  oauthAuthCodes,
+  oauthTokens,
   landingGlobalStats,
   landingUserStats,
 });

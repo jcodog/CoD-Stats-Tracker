@@ -34,3 +34,43 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## OAuth endpoints for ChatGPT App
+
+Required env vars:
+
+- `OAUTH_CLIENT_ID`
+- `OAUTH_CLIENT_SECRET`
+- `OAUTH_JWT_SECRET`
+- `OAUTH_AUDIENCE`
+- `OAUTH_ALLOWED_REDIRECT_URIS` (comma-separated exact allowlist)
+
+Optional env vars:
+
+- `OAUTH_ISSUER` (defaults to request origin)
+- `OAUTH_ALLOWED_SCOPES` (comma-separated)
+
+Routes:
+
+- `GET /oauth/authorize`
+- `POST /oauth/token`
+- `POST /oauth/revoke`
+- `GET /.well-known/oauth-authorization-server`
+
+Example authorize URL:
+
+```text
+https://your-app.example.com/oauth/authorize?response_type=code&client_id=cleo-chatgpt-app&redirect_uri=https%3A%2F%2Fchatgpt.com%2Fconnector_platform_oauth_redirect&scope=stats.read&state=7f9cb3ea2e6f4f2f8c8d4df83947dca1&code_challenge=4h9u8hdW4XUrpQy6b-0YjXwM0B0uHhPwV6nW5zJ5lM0&code_challenge_method=S256
+```
+
+Example authorization code exchange:
+
+```bash
+curl -X POST "https://your-app.example.com/oauth/token" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -u "${OAUTH_CLIENT_ID}:${OAUTH_CLIENT_SECRET}" \
+  --data-urlencode "grant_type=authorization_code" \
+  --data-urlencode "code=<authorization_code>" \
+  --data-urlencode "redirect_uri=https://chatgpt.com/connector_platform_oauth_redirect" \
+  --data-urlencode "code_verifier=<pkce_code_verifier>"
+```
