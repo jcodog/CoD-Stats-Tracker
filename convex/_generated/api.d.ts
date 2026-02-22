@@ -143,12 +143,7 @@ export declare const api: {
         >;
       };
       landing: {
-        getLandingMetrics: FunctionReference<
-          "query",
-          "public",
-          { userId?: string },
-          any
-        >;
+        getLandingMetrics: FunctionReference<"query", "public", {}, any>;
       };
       sessions: {
         getSessionAggregatedStats: FunctionReference<
@@ -205,12 +200,7 @@ export declare const api: {
       { sessionId: string },
       any
     >;
-    getLandingMetrics: FunctionReference<
-      "query",
-      "public",
-      { userId?: string },
-      any
-    >;
+    getLandingMetrics: FunctionReference<"query", "public", {}, any>;
     getSessionAggregatedStats: FunctionReference<
       "query",
       "public",

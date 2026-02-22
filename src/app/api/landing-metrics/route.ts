@@ -1,5 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
-import { ConvexHttpClient } from "convex/browser";
+import { fetchQuery } from "convex/nextjs";
 import { NextResponse } from "next/server";
 
 import { api } from "@/convex/_generated/api";
@@ -21,14 +21,6 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const LANDING_METRICS_CACHE_CONTROL = "private, no-store";
-
-const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
-
-if (!convexUrl) {
-  throw new Error("Missing NEXT_PUBLIC_CONVEX_URL in your .env file");
-}
-
-const convex = new ConvexHttpClient(convexUrl);
 
 function getLandingMetricsCacheTtl(userId: string | null) {
   return userId
@@ -96,11 +88,23 @@ export async function GET(request: Request) {
 
   const includeSensitiveHeaders = apiKeyValidation.valid;
 
-  const { userId } = await auth();
+  const { userId, getToken } = await auth();
+  let convexToken: string | null = null;
+  if (userId) {
+    try {
+      convexToken = await getToken({ template: "convex" });
+    } catch (error) {
+      console.error("Failed to get Convex token from Clerk", error);
+    }
+  }
   const traceId = crypto.randomUUID();
   const scope = userId ? "authenticated" : "anonymous";
   const cacheTtl = getLandingMetricsCacheTtl(userId);
   let missNote: string | undefined;
+
+  if (userId && !convexToken) {
+    missNote = "missing_convex_token";
+  }
 
   const redis = await getRedisClient();
   const cacheKey = getLandingMetricsCacheKey(userId);
@@ -141,9 +145,10 @@ export async function GET(request: Request) {
     }
   }
 
-  const freshMetrics = (await convex.query(
+  const freshMetrics = (await fetchQuery(
     api.stats.getLandingMetrics,
-    userId ? { userId } : {},
+    {},
+    convexToken ? { token: convexToken } : {},
   )) as LandingMetricsResponse;
 
   if (redis) {

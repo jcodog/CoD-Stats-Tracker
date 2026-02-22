@@ -1,5 +1,4 @@
 import type { UserIdentity } from "convex/server";
-import { v } from "convex/values";
 
 import type { Doc } from "../../_generated/dataModel";
 import { query, type QueryCtx } from "../../_generated/server";
@@ -20,21 +19,11 @@ function addCandidate(candidates: Set<string>, value: string | null | undefined)
   }
 }
 
-function getUserIdCandidates(
-  userId: string | undefined,
-  identity: UserIdentity | null,
-) {
+function getUserIdCandidates(identity: UserIdentity) {
   const candidates = new Set<string>();
 
-  addCandidate(candidates, userId);
-  addCandidate(candidates, identity?.subject);
-  addCandidate(candidates, identity?.tokenIdentifier);
-
-  const tokenIdentifier = identity?.tokenIdentifier;
-  if (tokenIdentifier && tokenIdentifier.includes("|")) {
-    const tokenParts = tokenIdentifier.split("|");
-    addCandidate(candidates, tokenParts[tokenParts.length - 1]);
-  }
+  addCandidate(candidates, identity.subject);
+  addCandidate(candidates, identity.tokenIdentifier);
 
   return Array.from(candidates);
 }
@@ -71,12 +60,13 @@ async function getLatestUserGameForCandidates(
 }
 
 export const getLandingMetrics = query({
-  args: {
-    userId: v.optional(v.string()),
-  },
-  handler: async (ctx, { userId }) => {
+  args: {},
+  handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
-    const userIdCandidates = getUserIdCandidates(userId, identity);
+    const canReadPersonal = Boolean(identity?.subject);
+    const userIdCandidates = canReadPersonal && identity
+      ? getUserIdCandidates(identity)
+      : [];
 
     const globalCountersPromise = getGlobalLandingCounters(ctx);
     const latestGlobalGamePromise = ctx.db
@@ -84,11 +74,12 @@ export const getLandingMetrics = query({
       .withIndex("by_createdat")
       .order("desc")
       .first();
-    const personalCountersPromise = getUserLandingCounters(ctx, userIdCandidates);
-    const latestUserGamePromise = getLatestUserGameForCandidates(
-      ctx,
-      userIdCandidates,
-    );
+    const personalCountersPromise = canReadPersonal
+      ? getUserLandingCounters(ctx, userIdCandidates)
+      : Promise.resolve(null);
+    const latestUserGamePromise = canReadPersonal
+      ? getLatestUserGameForCandidates(ctx, userIdCandidates)
+      : Promise.resolve(null);
 
     const [
       globalCounters,
