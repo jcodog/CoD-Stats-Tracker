@@ -142,6 +142,9 @@ export declare const api: {
           any
         >;
       };
+      landing: {
+        getLandingMetrics: FunctionReference<"query", "public", {}, any>;
+      };
       sessions: {
         getSessionAggregatedStats: FunctionReference<
           "query",
@@ -167,6 +170,9 @@ export declare const api: {
           any
         >;
       };
+    };
+    users: {
+      current: FunctionReference<"query", "public", {}, any>;
     };
   };
   stats: {
@@ -194,6 +200,7 @@ export declare const api: {
       { sessionId: string },
       any
     >;
+    getLandingMetrics: FunctionReference<"query", "public", {}, any>;
     getSessionAggregatedStats: FunctionReference<
       "query",
       "public",
@@ -256,6 +263,51 @@ export declare const api: {
  * const myFunctionReference = internal.myModule.myFunction;
  * ```
  */
-export declare const internal: {};
+export declare const internal: {
+  actions: {
+    stats: {
+      cache: {
+        invalidateLandingMetricsCache: FunctionReference<
+          "action",
+          "internal",
+          { invalidateAll?: boolean; userId?: string },
+          any
+        >;
+      };
+    };
+  };
+  mutations: {
+    stats: {
+      landingMetrics: {
+        rebuildLandingMetrics: FunctionReference<
+          "mutation",
+          "internal",
+          {},
+          any
+        >;
+      };
+    };
+    users: {
+      deleteFromClerk: FunctionReference<
+        "mutation",
+        "internal",
+        { clerkUserId: string },
+        any
+      >;
+      updateFromClerk: FunctionReference<
+        "mutation",
+        "internal",
+        { data: any },
+        any
+      >;
+      upsertFromClerk: FunctionReference<
+        "mutation",
+        "internal",
+        { data: any },
+        any
+      >;
+    };
+  };
+};
 
 export declare const components: {};

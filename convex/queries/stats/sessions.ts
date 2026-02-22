@@ -117,8 +117,9 @@ export const getSessionAggregatedStats = query({
 
     const totals = buildAgg(filteredGames);
     const modeKeys = ["hardpoint", "snd", "overload"] as const;
+    type ModeAggregate = ReturnType<typeof buildAgg>;
 
-    const modes: Record<string, any> = {};
+    const modes: Partial<Record<(typeof modeKeys)[number], ModeAggregate>> = {};
     for (const mode of modeKeys) {
       const modeGames = filteredGames.filter((g) => g.mode === mode);
       modes[mode] = buildAgg(modeGames);
@@ -129,7 +130,7 @@ export const getSessionAggregatedStats = query({
     return {
       totalSrChanges: srChangesAll,
       totals,
-      modes,
+      modes: modes as Record<(typeof modeKeys)[number], ModeAggregate>,
     };
   },
 });
