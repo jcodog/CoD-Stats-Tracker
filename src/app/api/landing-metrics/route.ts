@@ -10,6 +10,11 @@ import {
   type LandingMetricsResponse,
   type LandingMetricsTraceEvent,
 } from "@/lib/landing/metrics";
+import {
+  getLandingMetricsApiKeyHeaderName,
+  shouldRequireLandingMetricsApiKey,
+  validateLandingMetricsApiKey,
+} from "@/lib/server/landing-metrics-auth";
 import { getRedisClient } from "@/lib/server/redis";
 
 export const runtime = "nodejs";
@@ -46,20 +51,51 @@ function buildResponse(
   scope: "anonymous" | "authenticated",
   cacheKey: string,
   cacheTtl: number,
+  includeSensitiveHeaders: boolean,
 ) {
+  const headers: Record<string, string> = {
+    "Cache-Control": LANDING_METRICS_CACHE_CONTROL,
+    "X-Landing-Metrics-Cache": cacheStatus,
+  };
+
+  if (includeSensitiveHeaders) {
+    headers["X-Landing-Metrics-Trace-Id"] = traceId;
+    headers["X-Landing-Metrics-Trace"] = `status=${cacheStatus};scope=${scope}`;
+    headers["X-Landing-Metrics-Cache-Key"] = cacheKey;
+    headers["X-Landing-Metrics-Cache-TTL"] = `${cacheTtl}`;
+  }
+
   return NextResponse.json(data, {
-    headers: {
-      "Cache-Control": LANDING_METRICS_CACHE_CONTROL,
-      "X-Landing-Metrics-Cache": cacheStatus,
-      "X-Landing-Metrics-Trace-Id": traceId,
-      "X-Landing-Metrics-Trace": `status=${cacheStatus};scope=${scope}`,
-      "X-Landing-Metrics-Cache-Key": cacheKey,
-      "X-Landing-Metrics-Cache-TTL": `${cacheTtl}`,
-    },
+    headers,
   });
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  const requireApiKey = shouldRequireLandingMetricsApiKey();
+  const apiKeyValidation = validateLandingMetricsApiKey(request);
+
+  if (requireApiKey && !apiKeyValidation.valid) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          apiKeyValidation.reason === "missing_api_key_env"
+            ? "landing_metrics_api_key_not_configured"
+            : "unauthorized",
+      },
+      {
+        status: apiKeyValidation.reason === "missing_api_key_env" ? 503 : 401,
+        headers: {
+          "Cache-Control": LANDING_METRICS_CACHE_CONTROL,
+          "X-Landing-Metrics-Auth": "required",
+          "X-Landing-Metrics-Auth-Header": getLandingMetricsApiKeyHeaderName(),
+        },
+      },
+    );
+  }
+
+  const includeSensitiveHeaders = apiKeyValidation.valid;
+
   const { userId } = await auth();
   const traceId = crypto.randomUUID();
   const scope = userId ? "authenticated" : "anonymous";
@@ -92,6 +128,7 @@ export async function GET() {
           scope,
           cacheKey,
           cacheTtl,
+          includeSensitiveHeaders,
         );
       }
     } catch (error) {
@@ -135,5 +172,6 @@ export async function GET() {
     scope,
     cacheKey,
     cacheTtl,
+    includeSensitiveHeaders,
   );
 }

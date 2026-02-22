@@ -6,6 +6,10 @@ import {
   getLandingMetricsCacheKey,
   type LandingMetricsTraceEvent,
 } from "@/lib/landing/metrics";
+import {
+  getLandingMetricsApiKeyHeaderName,
+  validateLandingMetricsApiKey,
+} from "@/lib/server/landing-metrics-auth";
 import { getRedisClient, getRedisConnectionState } from "@/lib/server/redis";
 
 export const runtime = "nodejs";
@@ -23,7 +27,29 @@ function parseTraceEntries(entries: string[]) {
   });
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  const apiKeyValidation = validateLandingMetricsApiKey(request);
+  if (!apiKeyValidation.valid) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          apiKeyValidation.reason === "missing_api_key_env"
+            ? "landing_metrics_api_key_not_configured"
+            : "unauthorized",
+      },
+      {
+        status: apiKeyValidation.reason === "missing_api_key_env" ? 503 : 401,
+        headers: {
+          "Cache-Control": DEBUG_CACHE_CONTROL,
+          "X-Landing-Metrics-Debug": "true",
+          "X-Landing-Metrics-Auth": "required",
+          "X-Landing-Metrics-Auth-Header": getLandingMetricsApiKeyHeaderName(),
+        },
+      },
+    );
+  }
+
   const { userId } = await auth();
   const connectionState = getRedisConnectionState();
   const redis = await getRedisClient();
