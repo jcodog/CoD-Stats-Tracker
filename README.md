@@ -86,6 +86,11 @@ Routes:
 - `GET /.well-known/oauth-authorization-server`
 - `GET /.well-known/oauth-protected-resource`
 
+Account settings linking:
+
+- Set `NEXT_PUBLIC_CHATGPT_APP_CONNECT_URL` to your ChatGPT app URL so linking is initiated in ChatGPT.
+- OAuth starts when the user invokes a protected tool in ChatGPT (ChatGPT initiates PKCE + state).
+
 Minimum scopes by App API endpoint:
 
 - `GET /api/app/profile` -> `profile.read`

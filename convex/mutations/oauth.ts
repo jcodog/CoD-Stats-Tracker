@@ -371,6 +371,78 @@ export const rotateRefreshToken = mutation({
   },
 });
 
+export const revokeForCurrentUser = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("unauthorized");
+    }
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerkUserId", (q) => q.eq("clerkUserId", identity.subject))
+      .unique();
+
+    if (!user) {
+      return { ok: true as const, revoked: false as const };
+    }
+
+    const now = Date.now();
+
+    const tokens = await ctx.db
+      .query("oauthTokens")
+      .withIndex("by_user_provider", (q) =>
+        q.eq("userId", user._id).eq("provider", OAUTH_PROVIDER),
+      )
+      .collect();
+
+    let hasActiveToken = false;
+
+    for (const token of tokens) {
+      if (token.revokedAt === undefined) {
+        hasActiveToken = true;
+        await ctx.db.patch(token._id, {
+          revokedAt: now,
+          lastUsedAt: now,
+        });
+      }
+    }
+
+    const connection = await ctx.db
+      .query("chatgptAppConnections")
+      .withIndex("by_userId", (q) => q.eq("userId", user._id))
+      .unique();
+
+    const hasActiveConnection = connection?.status === "active";
+    const shouldMarkUserRevoked =
+      hasActiveToken || user.chatgptLinked || hasActiveConnection;
+
+    if (shouldMarkUserRevoked) {
+      await updateLinkedUser(ctx, user, { now, linked: false });
+    }
+
+    if (hasActiveToken || user.chatgptLinked || connection) {
+      const scopeSource = tokens.find((token) => token.scopes.length > 0);
+      const scopes = scopeSource?.scopes ?? connection?.scopes ?? [];
+
+      await upsertChatGptConnection(ctx, {
+        userId: user._id,
+        scopes,
+        now,
+        status: "revoked",
+        revokedAt: now,
+      });
+    }
+
+    return {
+      ok: true as const,
+      revoked: shouldMarkUserRevoked,
+      userId: user._id,
+    };
+  },
+});
+
 export const revokeByRefreshToken = mutation({
   args: {
     clientId: v.string(),

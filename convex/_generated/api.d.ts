@@ -138,6 +138,7 @@ export declare const api: {
         { clientId: string; refreshTokenHash: string },
         any
       >;
+      revokeForCurrentUser: FunctionReference<"mutation", "public", {}, any>;
       rotateRefreshToken: FunctionReference<
         "mutation",
         "public",

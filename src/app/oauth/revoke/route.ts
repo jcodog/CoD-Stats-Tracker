@@ -1,3 +1,4 @@
+import { auth } from "@clerk/nextjs/server";
 import { fetchMutation } from "convex/nextjs";
 
 import { api } from "@/convex/_generated/api";
@@ -17,6 +18,108 @@ import {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+const SETTINGS_CSRF_HEADER = "x-codstats-csrf";
+const SETTINGS_CSRF_HEADER_VALUE = "1";
+
+type RevokeRouteDeps = {
+  getAuth: typeof auth;
+  runMutation: typeof fetchMutation;
+  resolveClient: typeof resolveOAuthClient;
+  validateClientAuth: typeof validateOAuthClientAuthentication;
+};
+
+const defaultDeps: RevokeRouteDeps = {
+  getAuth: auth,
+  runMutation: fetchMutation,
+  resolveClient: resolveOAuthClient,
+  validateClientAuth: validateOAuthClientAuthentication,
+};
+
+function successNoStoreResponse() {
+  return new Response(null, {
+    status: 200,
+    headers: {
+      "Cache-Control": "no-store",
+      Pragma: "no-cache",
+    },
+  });
+}
+
+function getPrimaryForwardedValue(value: string | null) {
+  return value?.split(",")[0]?.trim() ?? null;
+}
+
+function normalizeOrigin(value: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    return new URL(value).origin;
+  } catch {
+    return null;
+  }
+}
+
+function getExpectedOrigin(request: Request, requestUrl: URL) {
+  const forwardedHost = getPrimaryForwardedValue(
+    request.headers.get("x-forwarded-host"),
+  );
+  const forwardedProto = getPrimaryForwardedValue(
+    request.headers.get("x-forwarded-proto"),
+  );
+
+  if (forwardedHost && forwardedProto) {
+    const forwardedOrigin = normalizeOrigin(`${forwardedProto}://${forwardedHost}`);
+    if (forwardedOrigin) {
+      return forwardedOrigin;
+    }
+  }
+
+  const host = getPrimaryForwardedValue(request.headers.get("host"));
+  if (host) {
+    const hostOrigin = normalizeOrigin(`${requestUrl.protocol}//${host}`);
+    if (hostOrigin) {
+      return hostOrigin;
+    }
+  }
+
+  return requestUrl.origin;
+}
+
+function getRequestOrigin(request: Request) {
+  const origin = normalizeOrigin(request.headers.get("origin"));
+  if (origin) {
+    return origin;
+  }
+
+  return normalizeOrigin(request.headers.get("referer"));
+}
+
+function validateSettingsRevocationRequest(request: Request, requestUrl: URL) {
+  if (request.headers.get(SETTINGS_CSRF_HEADER) !== SETTINGS_CSRF_HEADER_VALUE) {
+    return "Missing CSRF protection header";
+  }
+
+  const contentType = request.headers.get("content-type")?.toLowerCase() ?? "";
+  if (!contentType.includes("application/json")) {
+    return "Invalid content type";
+  }
+
+  const fetchSite = request.headers.get("sec-fetch-site");
+  if (fetchSite && fetchSite !== "same-origin") {
+    return "Cross-site request blocked";
+  }
+
+  const expectedOrigin = getExpectedOrigin(request, requestUrl);
+  const requestOrigin = getRequestOrigin(request);
+  if (!requestOrigin || requestOrigin !== expectedOrigin) {
+    return "Origin validation failed";
+  }
+
+  return null;
+}
+
 function invalidClientResponse() {
   return oauthErrorResponse(
     "invalid_client",
@@ -28,7 +131,42 @@ function invalidClientResponse() {
   );
 }
 
-export async function POST(request: Request) {
+async function revokeForSettingsUser(deps: RevokeRouteDeps) {
+  const { userId, sessionId, getToken } = await deps.getAuth();
+
+  if (!userId || !sessionId) {
+    return oauthErrorResponse("invalid_request", 401, "Authentication required");
+  }
+
+  const convexToken = await getToken({ template: "convex" });
+
+  if (!convexToken) {
+    console.error("OAuth settings revoke missing Convex token for Clerk session");
+    return oauthErrorResponse(
+      "invalid_request",
+      500,
+      "Unable to initialize revocation request",
+    );
+  }
+
+  try {
+    await deps.runMutation(
+      api.mutations.oauth.revokeForCurrentUser,
+      {},
+      { token: convexToken },
+    );
+  } catch (error) {
+    console.error("OAuth settings revoke failed", error);
+    return oauthErrorResponse("invalid_request", 500, "Token revocation failed");
+  }
+
+  return successNoStoreResponse();
+}
+
+export async function handleRevokePost(
+  request: Request,
+  deps: RevokeRouteDeps = defaultDeps,
+) {
   const requestUrl = new URL(request.url);
 
   try {
@@ -40,6 +178,15 @@ export async function POST(request: Request) {
       500,
       "OAuth server is not configured",
     );
+  }
+
+  if (requestUrl.searchParams.get("source") === "settings") {
+    const validationError = validateSettingsRevocationRequest(request, requestUrl);
+    if (validationError) {
+      return oauthErrorResponse("invalid_request", 403, validationError);
+    }
+
+    return revokeForSettingsUser(deps);
   }
 
   let params: URLSearchParams;
@@ -56,8 +203,8 @@ export async function POST(request: Request) {
     return invalidClientResponse();
   }
 
-  const client = await resolveOAuthClient(authInput.clientId, requestUrl.origin);
-  if (!client || !validateOAuthClientAuthentication(client, authInput)) {
+  const client = await deps.resolveClient(authInput.clientId, requestUrl.origin);
+  if (!client || !deps.validateClientAuth(client, authInput)) {
     return invalidClientResponse();
   }
 
@@ -83,7 +230,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    await fetchMutation(api.mutations.oauth.revokeByRefreshToken, {
+    await deps.runMutation(api.mutations.oauth.revokeByRefreshToken, {
       clientId: client.clientId,
       refreshTokenHash: sha256Base64Url(token),
     });
@@ -92,11 +239,9 @@ export async function POST(request: Request) {
     return oauthErrorResponse("invalid_request", 500, "Token revocation failed");
   }
 
-  return new Response(null, {
-    status: 200,
-    headers: {
-      "Cache-Control": "no-store",
-      Pragma: "no-cache",
-    },
-  });
+  return successNoStoreResponse();
+}
+
+export async function POST(request: Request) {
+  return handleRevokePost(request);
 }
