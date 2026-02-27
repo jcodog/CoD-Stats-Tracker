@@ -7,11 +7,10 @@ import {
   requireAuthenticatedAppRequest,
   touchChatGptConnectionLastUsedAt,
 } from "@/lib/server/chatgpt-app-auth";
+import { CHATGPT_APP_ROUTE_REQUIRED_SCOPES } from "@/lib/server/chatgpt-app-scopes";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-const SUMMARY_REQUIRED_SCOPES = ["stats.read"];
 
 type SummaryRouteDeps = {
   authenticate: typeof requireAuthenticatedAppRequest;
@@ -32,7 +31,10 @@ export async function handleSummaryGet(
   request: Request,
   deps: SummaryRouteDeps = defaultDeps,
 ) {
-  const authResult = await deps.authenticate(request, SUMMARY_REQUIRED_SCOPES);
+  const authResult = await deps.authenticate(
+    request,
+    CHATGPT_APP_ROUTE_REQUIRED_SCOPES.statsSummary,
+  );
 
   if (!authResult.ok) {
     return authResult.response;

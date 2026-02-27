@@ -14,7 +14,7 @@ export const APP_API_NO_STORE_HEADERS = {
   "Cache-Control": "no-store",
 } as const;
 
-type RequiredAppScopes = string[];
+type RequiredAppScopes = readonly string[];
 
 type AppUserRecord = {
   _id: Id<"users">;
@@ -73,7 +73,7 @@ function buildAuthFailureResponse(request: Request, params: AuthFailureParams) {
   );
 }
 
-function normalizeRequiredScopes(requiredScopes: string[]) {
+function normalizeRequiredScopes(requiredScopes: readonly string[]) {
   return Array.from(
     new Set(
       requiredScopes
@@ -127,7 +127,6 @@ export async function requireAuthenticatedAppRequest(
   );
 
   if (missingScopes.length > 0) {
-
     return {
       ok: false,
       response: buildAuthFailureResponse(request, {

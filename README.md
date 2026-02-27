@@ -93,6 +93,10 @@ Minimum scopes by App API endpoint:
 - `GET /api/app/stats/daily` -> `stats.read`
 - `GET /api/app/stats/recent` -> `stats.read`
 
+Source of truth for route scopes and MCP `securitySchemes` mapping:
+
+- `src/lib/server/chatgpt-app-scopes.ts`
+
 Example authorize URL:
 
 ```text

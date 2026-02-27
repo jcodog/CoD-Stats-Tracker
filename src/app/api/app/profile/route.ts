@@ -5,11 +5,10 @@ import {
   requireAuthenticatedAppRequest,
   touchChatGptConnectionLastUsedAt,
 } from "@/lib/server/chatgpt-app-auth";
+import { CHATGPT_APP_ROUTE_REQUIRED_SCOPES } from "@/lib/server/chatgpt-app-scopes";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-const PROFILE_REQUIRED_SCOPES = ["profile.read"];
 
 type ProfileRouteDeps = {
   authenticate: typeof requireAuthenticatedAppRequest;
@@ -25,7 +24,10 @@ export async function handleProfileGet(
   request: Request,
   deps: ProfileRouteDeps = defaultDeps,
 ) {
-  const authResult = await deps.authenticate(request, PROFILE_REQUIRED_SCOPES);
+  const authResult = await deps.authenticate(
+    request,
+    CHATGPT_APP_ROUTE_REQUIRED_SCOPES.profile,
+  );
 
   if (!authResult.ok) {
     return authResult.response;

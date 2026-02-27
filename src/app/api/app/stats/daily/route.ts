@@ -7,11 +7,11 @@ import {
   requireAuthenticatedAppRequest,
   touchChatGptConnectionLastUsedAt,
 } from "@/lib/server/chatgpt-app-auth";
+import { CHATGPT_APP_ROUTE_REQUIRED_SCOPES } from "@/lib/server/chatgpt-app-scopes";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const DAILY_REQUIRED_SCOPES = ["stats.read"];
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 type DailyRouteDeps = {
@@ -61,7 +61,10 @@ export async function handleDailyGet(
   request: Request,
   deps: DailyRouteDeps = defaultDeps,
 ) {
-  const authResult = await deps.authenticate(request, DAILY_REQUIRED_SCOPES);
+  const authResult = await deps.authenticate(
+    request,
+    CHATGPT_APP_ROUTE_REQUIRED_SCOPES.statsDaily,
+  );
 
   if (!authResult.ok) {
     return authResult.response;
