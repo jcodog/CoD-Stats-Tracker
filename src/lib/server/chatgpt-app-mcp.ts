@@ -1,4 +1,8 @@
-import { registerAppTool } from "@modelcontextprotocol/ext-apps/server";
+import {
+  registerAppResource,
+  registerAppTool,
+  RESOURCE_MIME_TYPE,
+} from "@modelcontextprotocol/ext-apps/server";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol.js";
 import type {
@@ -9,7 +13,12 @@ import type {
 } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
-import { getAppPublicOrigin, getCodstatsWidgetTemplateUrl } from "@/lib/server/app-public-origin";
+import {
+  getAppPublicOrigin,
+  getCodstatsTemplateResourceUri,
+  getCodstatsTemplateUrl,
+  type CodstatsTemplateName,
+} from "@/lib/server/app-public-origin";
 import {
   CHATGPT_APP_ERROR_CODES,
   CHATGPT_APP_VIEWS,
@@ -19,6 +28,11 @@ import {
   type ChatGptAppErrorPayload,
   type ChatGptAppSuccessPayload,
 } from "@/lib/server/chatgpt-app-contract";
+import {
+  getCodstatsTemplateCatalog,
+  getCodstatsTemplateResourceMeta,
+  renderCodstatsTemplateHtml,
+} from "@/lib/server/chatgpt-app-ui-templates";
 import { CHATGPT_APP_TOOL_SECURITY_SCHEMES } from "@/lib/server/chatgpt-app-scopes";
 
 type ToolExtra = RequestHandlerExtra<ServerRequest, ServerNotification>;
@@ -37,6 +51,137 @@ type ApiCallResult =
     };
 
 const NO_AUTH_SECURITY_SCHEMES = [{ type: "noauth" }] as const;
+
+const TOOL_TEMPLATE_MAP = {
+  codstats_open: "widget",
+  codstats_get_current_session: "session",
+  codstats_get_last_session: "session",
+  codstats_get_match_history: "widget",
+  codstats_get_rank_progress: "widget",
+  codstats_get_settings: "settings",
+} as const satisfies Partial<Record<string, CodstatsTemplateName>>;
+
+const CHATGPT_APP_TOOL_NAMES = [
+  "codstats_open",
+  "codstats_get_current_session",
+  "codstats_get_last_session",
+  "codstats_get_match_history",
+  "codstats_get_match",
+  "codstats_get_rank_ladder",
+  "codstats_get_rank_progress",
+  "codstats_get_settings",
+  "codstats_disconnect",
+] as const;
+
+type ChatGptAppToolName = (typeof CHATGPT_APP_TOOL_NAMES)[number];
+
+type ToolUiOutput = {
+  templateUri: string;
+  templateUrl: string;
+  kind: "dashboard" | "session" | "manage_connection";
+};
+
+export type ChatGptAppToolTemplateDebugEntry = {
+  name: ChatGptAppToolName;
+  resourceUri: string | null;
+  outputTemplate: string | null;
+  hostedTemplateUrl: string | null;
+};
+
+function getToolTemplateName(toolName: ChatGptAppToolName): CodstatsTemplateName | null {
+  const templateMap =
+    TOOL_TEMPLATE_MAP as Partial<Record<ChatGptAppToolName, CodstatsTemplateName>>;
+  return templateMap[toolName] ?? null;
+}
+
+function createToolUiOutput(
+  templateName: CodstatsTemplateName,
+  kind: ToolUiOutput["kind"],
+  requestOrigin?: string,
+): ToolUiOutput {
+  return {
+    templateUri: getCodstatsTemplateResourceUri(templateName),
+    templateUrl: getCodstatsTemplateUrl(templateName, requestOrigin),
+    kind,
+  };
+}
+
+function withToolUiOutput(
+  payload: ContractSuccess,
+  requestOrigin?: string,
+): ContractSuccess {
+  const payloadData = asRecord(payload.data) ?? {};
+
+  if (payload.view === CHATGPT_APP_VIEWS.uiOpen) {
+    return {
+      ...payload,
+      data: {
+        ...payloadData,
+        uiOutput: createToolUiOutput("widget", "dashboard", requestOrigin),
+      },
+    };
+  }
+
+  if (payload.view === CHATGPT_APP_VIEWS.settings) {
+    return {
+      ...payload,
+      data: {
+        ...payloadData,
+        uiOutput: createToolUiOutput("settings", "manage_connection", requestOrigin),
+      },
+    };
+  }
+
+  if (payload.view === CHATGPT_APP_VIEWS.sessionCurrent && payloadData.active === true) {
+    return {
+      ...payload,
+      data: {
+        ...payloadData,
+        uiOutput: createToolUiOutput("session", "session", requestOrigin),
+      },
+    };
+  }
+
+  if (payload.view === CHATGPT_APP_VIEWS.sessionLast && payloadData.found === true) {
+    return {
+      ...payload,
+      data: {
+        ...payloadData,
+        uiOutput: createToolUiOutput("session", "session", requestOrigin),
+      },
+    };
+  }
+
+  if (
+    payload.view === CHATGPT_APP_VIEWS.matchesHistory ||
+    payload.view === CHATGPT_APP_VIEWS.matchesDetail ||
+    payload.view === CHATGPT_APP_VIEWS.rankLadder ||
+    payload.view === CHATGPT_APP_VIEWS.rankProgress
+  ) {
+    return {
+      ...payload,
+      data: {
+        ...payloadData,
+        uiOutput: createToolUiOutput("widget", "dashboard", requestOrigin),
+      },
+    };
+  }
+
+  return payload;
+}
+
+export function getChatGptAppToolTemplateDebugEntries(requestOrigin?: string) {
+  return CHATGPT_APP_TOOL_NAMES.map((toolName) => {
+    const templateName = getToolTemplateName(toolName);
+
+    return {
+      name: toolName,
+      resourceUri: templateName ? getCodstatsTemplateResourceUri(templateName) : null,
+      outputTemplate: templateName ? getCodstatsTemplateResourceUri(templateName) : null,
+      hostedTemplateUrl: templateName ? getCodstatsTemplateUrl(templateName, requestOrigin) : null,
+    } satisfies ChatGptAppToolTemplateDebugEntry;
+  });
+}
 
 function buildTextContent(text: string): Array<{ type: "text"; text: string }> {
   return [{ type: "text", text }];
@@ -95,6 +240,10 @@ function getHeaderValue(
 function resolveApiOrigin(extra: ToolExtra) {
   return extra.requestInfo?.url?.origin ?? getAppPublicOrigin();
 }
+
+type CreateChatGptAppMcpServerOptions = {
+  requestOrigin?: string;
+};
 
 function parseContractSuccess(payload: Record<string, unknown>): ContractSuccess | null {
   const view = payload.view;
@@ -251,6 +400,7 @@ async function requestContractApi(
 async function fetchContractToolPayload(
   extra: ToolExtra,
   endpointPath: string,
+  requestOrigin: string,
   init?: RequestInit,
 ): Promise<CallToolResult | { structuredContent: ContractSuccess; content: { type: "text"; text: string }[] }> {
   const result = await requestContractApi(extra, endpointPath, init);
@@ -259,25 +409,29 @@ async function fetchContractToolPayload(
     return result.result;
   }
 
+  const enrichedPayload = withToolUiOutput(result.payload, requestOrigin);
+
   return {
-    structuredContent: result.payload,
-    content: buildTextContent(summarizeContractView(result.payload)),
+    structuredContent: enrichedPayload,
+    content: buildTextContent(summarizeContractView(enrichedPayload)),
   };
 }
 
 function createToolMeta(args: {
-  includeWidget?: boolean;
+  templateName?: CodstatsTemplateName;
   securitySchemes?: readonly unknown[];
 }) {
-  const widgetTemplateUrl = getCodstatsWidgetTemplateUrl();
+  const templateUri = args.templateName
+    ? getCodstatsTemplateResourceUri(args.templateName)
+    : null;
 
   return {
-    ...(args.includeWidget
+    ...(templateUri
       ? {
           ui: {
-            resourceUri: widgetTemplateUrl,
+            resourceUri: templateUri,
           },
-          "openai/outputTemplate": widgetTemplateUrl,
+          "openai/outputTemplate": templateUri,
         }
       : {}),
     ...(args.securitySchemes
@@ -306,11 +460,42 @@ function withHistoryQuery(params: { cursor?: string; limit?: number }) {
     : "/api/app/stats/matches";
 }
 
-export function createChatGptAppMcpServer() {
+export function createChatGptAppMcpServer(
+  options: CreateChatGptAppMcpServerOptions = {},
+) {
   const server = new McpServer({
     name: "codstats-app",
     version: "2.0.0",
   });
+
+  const requestOrigin = getAppPublicOrigin(options.requestOrigin);
+  const templateCatalog = getCodstatsTemplateCatalog(requestOrigin);
+  const templateResourceMeta = getCodstatsTemplateResourceMeta(requestOrigin);
+
+  for (const template of templateCatalog) {
+    registerAppResource(
+      server,
+      template.title,
+      template.resourceUri,
+      {
+        description: template.description,
+        _meta: templateResourceMeta,
+      },
+      async () => ({
+        contents: [
+          {
+            uri: template.resourceUri,
+            mimeType: RESOURCE_MIME_TYPE,
+            text: renderCodstatsTemplateHtml(template.name, requestOrigin),
+            _meta: {
+              ...templateResourceMeta,
+              "openai/widgetDescription": template.description,
+            },
+          },
+        ],
+      }),
+    );
+  }
 
   registerAppTool(
     server,
@@ -325,7 +510,7 @@ export function createChatGptAppMcpServer() {
         readOnlyHint: true,
       },
       _meta: createToolMeta({
-        includeWidget: true,
+        templateName: "widget",
         securitySchemes: NO_AUTH_SECURITY_SCHEMES,
       }),
     },
@@ -335,7 +520,7 @@ export function createChatGptAppMcpServer() {
       });
 
       return {
-        structuredContent: payload,
+        structuredContent: withToolUiOutput(payload, requestOrigin),
         content: buildTextContent("Opened CodStats."),
       };
     },
@@ -352,12 +537,16 @@ export function createChatGptAppMcpServer() {
         readOnlyHint: true,
       },
       _meta: createToolMeta({
-        includeWidget: true,
+        templateName: "session",
         securitySchemes: CHATGPT_APP_TOOL_SECURITY_SCHEMES.currentSession,
       }),
     },
     async (_args, extra) => {
-      return fetchContractToolPayload(extra, "/api/app/stats/session/current");
+      return fetchContractToolPayload(
+        extra,
+        "/api/app/stats/session/current",
+        requestOrigin,
+      );
     },
   );
 
@@ -372,12 +561,12 @@ export function createChatGptAppMcpServer() {
         readOnlyHint: true,
       },
       _meta: createToolMeta({
-        includeWidget: true,
+        templateName: "session",
         securitySchemes: CHATGPT_APP_TOOL_SECURITY_SCHEMES.lastSession,
       }),
     },
     async (_args, extra) => {
-      return fetchContractToolPayload(extra, "/api/app/stats/session/last");
+      return fetchContractToolPayload(extra, "/api/app/stats/session/last", requestOrigin);
     },
   );
 
@@ -395,12 +584,16 @@ export function createChatGptAppMcpServer() {
         readOnlyHint: true,
       },
       _meta: createToolMeta({
-        includeWidget: true,
+        templateName: "widget",
         securitySchemes: CHATGPT_APP_TOOL_SECURITY_SCHEMES.matchHistory,
       }),
     },
     async ({ cursor, limit }, extra) => {
-      return fetchContractToolPayload(extra, withHistoryQuery({ cursor, limit }));
+      return fetchContractToolPayload(
+        extra,
+        withHistoryQuery({ cursor, limit }),
+        requestOrigin,
+      );
     },
   );
 
@@ -424,6 +617,7 @@ export function createChatGptAppMcpServer() {
       return fetchContractToolPayload(
         extra,
         `/api/app/stats/matches/${encodeURIComponent(matchId)}`,
+        requestOrigin,
       );
     },
   );
@@ -443,7 +637,7 @@ export function createChatGptAppMcpServer() {
       }),
     },
     async (_args, extra) => {
-      return fetchContractToolPayload(extra, "/api/app/stats/rank/ladder");
+      return fetchContractToolPayload(extra, "/api/app/stats/rank/ladder", requestOrigin);
     },
   );
 
@@ -458,12 +652,12 @@ export function createChatGptAppMcpServer() {
         readOnlyHint: true,
       },
       _meta: createToolMeta({
-        includeWidget: true,
+        templateName: "widget",
         securitySchemes: CHATGPT_APP_TOOL_SECURITY_SCHEMES.rankProgress,
       }),
     },
     async (_args, extra) => {
-      return fetchContractToolPayload(extra, "/api/app/stats/rank/progress");
+      return fetchContractToolPayload(extra, "/api/app/stats/rank/progress", requestOrigin);
     },
   );
 
@@ -478,12 +672,12 @@ export function createChatGptAppMcpServer() {
         readOnlyHint: true,
       },
       _meta: createToolMeta({
-        includeWidget: true,
+        templateName: "settings",
         securitySchemes: CHATGPT_APP_TOOL_SECURITY_SCHEMES.profile,
       }),
     },
     async (_args, extra) => {
-      return fetchContractToolPayload(extra, "/api/app/profile");
+      return fetchContractToolPayload(extra, "/api/app/profile", requestOrigin);
     },
   );
 
@@ -513,7 +707,7 @@ export function createChatGptAppMcpServer() {
         );
       }
 
-      return fetchContractToolPayload(extra, "/api/app/disconnect", {
+      return fetchContractToolPayload(extra, "/api/app/disconnect", requestOrigin, {
         method: "POST",
         body: "{}",
       });

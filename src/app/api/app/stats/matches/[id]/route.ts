@@ -1,15 +1,14 @@
 import { fetchQuery } from "convex/nextjs";
-import { NextResponse } from "next/server";
 
 import { api } from "@/convex/_generated/api";
 import {
   CHATGPT_APP_ERROR_CODES,
   CHATGPT_APP_VIEWS,
-  createChatGptAppErrorPayload,
-  createChatGptAppSuccessPayload,
+  createChatGptAppErrorResponse,
+  createChatGptAppSuccessResponse,
+  withChatGptAppRoute,
 } from "@/lib/server/chatgpt-app-contract";
 import {
-  APP_API_NO_STORE_HEADERS,
   requireAuthenticatedAppRequest,
   touchChatGptConnectionLastUsedAt,
 } from "@/lib/server/chatgpt-app-auth";
@@ -17,6 +16,8 @@ import { CHATGPT_APP_ROUTE_REQUIRED_SCOPES } from "@/lib/server/chatgpt-app-scop
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+const MATCH_ID_PATTERN = /^[a-zA-Z0-9_-]{4,128}$/;
 
 type MatchDetailRouteDeps = {
   authenticate: typeof requireAuthenticatedAppRequest;
@@ -50,14 +51,24 @@ export async function handleMatchDetailGet(
   const normalizedMatchId = matchId.trim();
 
   if (normalizedMatchId.length === 0) {
-    return NextResponse.json(
-      createChatGptAppErrorPayload(
-        CHATGPT_APP_ERROR_CODES.validation,
-        "match id is required",
-      ),
+    return createChatGptAppErrorResponse(
+      CHATGPT_APP_ERROR_CODES.validation,
+      "match id is required",
       {
         status: 400,
-        headers: APP_API_NO_STORE_HEADERS,
+      },
+    );
+  }
+
+  if (!MATCH_ID_PATTERN.test(normalizedMatchId)) {
+    return createChatGptAppErrorResponse(
+      CHATGPT_APP_ERROR_CODES.validation,
+      "match id format is invalid",
+      {
+        status: 400,
+        details: {
+          field: "matchId",
+        },
       },
     );
   }
@@ -71,33 +82,32 @@ export async function handleMatchDetailGet(
     return authResult.response;
   }
 
-  const match = asRecord(
-    await deps.getMatchById(authResult.auth.user.discordId, normalizedMatchId),
-  );
+  const normalizedDiscordId = authResult.auth.user.discordId.trim();
+
+  if (normalizedDiscordId.length === 0) {
+    return createChatGptAppErrorResponse(
+      CHATGPT_APP_ERROR_CODES.internal,
+      "Unable to load match details for this account.",
+    );
+  }
+
+  const match = asRecord(await deps.getMatchById(normalizedDiscordId, normalizedMatchId));
 
   await deps.touchConnectionLastUsedAt(authResult.auth.user._id);
 
   if (!match) {
-    return NextResponse.json(
-      createChatGptAppErrorPayload(
-        CHATGPT_APP_ERROR_CODES.notFound,
-        "match not found",
-      ),
+    return createChatGptAppErrorResponse(
+      CHATGPT_APP_ERROR_CODES.notFound,
+      "match not found",
       {
         status: 404,
-        headers: APP_API_NO_STORE_HEADERS,
       },
     );
   }
 
-  return NextResponse.json(
-    createChatGptAppSuccessPayload(CHATGPT_APP_VIEWS.matchesDetail, {
+  return createChatGptAppSuccessResponse(CHATGPT_APP_VIEWS.matchesDetail, {
       match,
-    }),
-    {
-      headers: APP_API_NO_STORE_HEADERS,
-    },
-  );
+    });
 }
 
 type MatchDetailRouteContext = {
@@ -106,7 +116,10 @@ type MatchDetailRouteContext = {
   }>;
 };
 
-export async function GET(request: Request, context: MatchDetailRouteContext) {
-  const { id } = await context.params;
-  return handleMatchDetailGet(request, id);
-}
+export const GET = withChatGptAppRoute(
+  "api.app.stats.matches.detail.get",
+  async (request: Request, context: MatchDetailRouteContext) => {
+    const { id } = await context.params;
+    return handleMatchDetailGet(request, id);
+  },
+);

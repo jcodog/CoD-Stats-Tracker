@@ -15,6 +15,11 @@ const REQUIRED_TOOLS = [
   "codstats_disconnect",
 ];
 
+const TEMPLATE_URIS = {
+  widget: "ui://codstats/widget.html",
+  settings: "ui://codstats/settings.html",
+};
+
 function parseArgValue(name, fallback) {
   const index = process.argv.indexOf(name);
   if (index === -1 || index + 1 >= process.argv.length) {
@@ -106,6 +111,10 @@ async function main() {
       openResult.structuredContent?.data?.tab === "overview",
       "codstats_open returned unexpected tab",
     );
+    assertCondition(
+      openResult.structuredContent?.data?.uiOutput?.templateUri === TEMPLATE_URIS.widget,
+      "codstats_open returned unexpected uiOutput.templateUri",
+    );
 
     console.log("[smoke] codstats_open ok");
 
@@ -140,6 +149,19 @@ async function main() {
         ? "[smoke] protected tools succeeded with bearer token"
         : "[smoke] protected tools correctly returned auth challenge",
     );
+
+    if (bearerToken) {
+      const settingsResult = await client.callTool({
+        name: "codstats_get_settings",
+        arguments: {},
+      });
+
+      assertCondition(!isToolError(settingsResult), "codstats_get_settings failed");
+      assertCondition(
+        settingsResult.structuredContent?.data?.uiOutput?.templateUri === TEMPLATE_URIS.settings,
+        "codstats_get_settings returned unexpected uiOutput.templateUri",
+      );
+    }
 
     const disconnectResult = await client.callTool({
       name: "codstats_disconnect",

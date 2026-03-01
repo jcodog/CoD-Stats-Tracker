@@ -1,11 +1,13 @@
 import { fetchMutation, fetchQuery } from "convex/nextjs";
-import { NextResponse } from "next/server";
 
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import {
   CHATGPT_APP_ERROR_CODES,
-  createChatGptAppErrorPayload,
+  CHATGPT_APP_JSON_CONTENT_TYPE,
+  createChatGptAppErrorResponse,
+  createChatGptAppRequestId,
+  resolveChatGptAppOAuthMetadata,
   type ChatGptAppErrorCode,
 } from "@/lib/server/chatgpt-app-contract";
 import {
@@ -17,6 +19,7 @@ import {
 
 export const APP_API_NO_STORE_HEADERS = {
   "Cache-Control": "no-store",
+  "Content-Type": CHATGPT_APP_JSON_CONTENT_TYPE,
 } as const;
 
 type RequiredAppScopes = readonly string[];
@@ -39,6 +42,7 @@ type AuthFailureParams = {
   error: "invalid_token" | "insufficient_scope";
   description: string;
   scope?: string;
+  oauthScopes?: string[];
 };
 
 export type AuthenticatedAppRequest = {
@@ -53,29 +57,38 @@ export type AuthenticatedAppRequestResult =
     }
   | {
       ok: false;
-      response: NextResponse;
+      response: Response;
     };
 
 function buildAuthFailureResponse(request: Request, params: AuthFailureParams) {
   const requestUrl = new URL(request.url);
-  const requestId = request.headers.get("x-request-id") ?? undefined;
+  const requestId = createChatGptAppRequestId();
 
-  return NextResponse.json(
-    createChatGptAppErrorPayload(params.code, params.description, {
+  let wwwAuthenticate: string | null = null;
+
+  try {
+    wwwAuthenticate = buildOAuthWwwAuthenticate(requestUrl.origin, {
+      error: params.error,
+      errorDescription: params.description,
+      scope: params.scope,
+    });
+  } catch (error) {
+    console.error("Unable to build OAuth challenge metadata", {
       requestId,
-    }),
-    {
-      status: params.status,
-      headers: {
-        ...APP_API_NO_STORE_HEADERS,
-        "WWW-Authenticate": buildOAuthWwwAuthenticate(requestUrl.origin, {
-          error: params.error,
-          errorDescription: params.description,
-          scope: params.scope,
-        }),
-      },
-    },
-  );
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  return createChatGptAppErrorResponse(params.code, params.description, {
+    status: params.status,
+    requestId,
+    oauth: resolveChatGptAppOAuthMetadata(requestUrl.origin, params.oauthScopes),
+    headers: wwwAuthenticate
+      ? {
+          "WWW-Authenticate": wwwAuthenticate,
+        }
+      : undefined,
+  });
 }
 
 function normalizeRequiredScopes(requiredScopes: readonly string[]) {
@@ -98,6 +111,8 @@ export async function requireAuthenticatedAppRequest(
   requiredScopes: RequiredAppScopes,
 ): Promise<AuthenticatedAppRequestResult> {
   // ChatGPT App endpoints must not require Clerk session.
+  const normalizedRequiredScopes = normalizeRequiredScopes(requiredScopes);
+
   const token = extractBearerToken(request);
   if (!token) {
     return {
@@ -107,6 +122,7 @@ export async function requireAuthenticatedAppRequest(
         code: CHATGPT_APP_ERROR_CODES.unauthorized,
         error: "invalid_token",
         description: "Missing bearer token",
+        oauthScopes: normalizedRequiredScopes,
       }),
     };
   }
@@ -124,11 +140,11 @@ export async function requireAuthenticatedAppRequest(
         code: CHATGPT_APP_ERROR_CODES.unauthorized,
         error: "invalid_token",
         description: "Invalid or expired access token",
+        oauthScopes: normalizedRequiredScopes,
       }),
     };
   }
 
-  const normalizedRequiredScopes = normalizeRequiredScopes(requiredScopes);
   const missingScopes = getMissingScopes(
     verifiedToken.scopes,
     normalizedRequiredScopes,
@@ -143,6 +159,7 @@ export async function requireAuthenticatedAppRequest(
         error: "insufficient_scope",
         description: `Missing required scope: ${missingScopes.join(" ")}`,
         scope: normalizedRequiredScopes.join(" "),
+        oauthScopes: normalizedRequiredScopes,
       }),
     };
   }
@@ -159,6 +176,20 @@ export async function requireAuthenticatedAppRequest(
         code: CHATGPT_APP_ERROR_CODES.unauthorized,
         error: "invalid_token",
         description: "Token subject does not map to an active account",
+        oauthScopes: normalizedRequiredScopes,
+      }),
+    };
+  }
+
+  if (typeof user.discordId !== "string" || user.discordId.trim().length === 0) {
+    return {
+      ok: false,
+      response: buildAuthFailureResponse(request, {
+        status: 401,
+        code: CHATGPT_APP_ERROR_CODES.unauthorized,
+        error: "invalid_token",
+        description: "Token subject is missing a CodStats account identity",
+        oauthScopes: normalizedRequiredScopes,
       }),
     };
   }
@@ -171,6 +202,7 @@ export async function requireAuthenticatedAppRequest(
         code: CHATGPT_APP_ERROR_CODES.unauthorized,
         error: "invalid_token",
         description: "User account is not active",
+        oauthScopes: normalizedRequiredScopes,
       }),
     };
   }
@@ -180,9 +212,11 @@ export async function requireAuthenticatedAppRequest(
       ok: false,
       response: buildAuthFailureResponse(request, {
         status: 403,
-        code: CHATGPT_APP_ERROR_CODES.notLinked,
+        code: CHATGPT_APP_ERROR_CODES.unauthorized,
         error: "insufficient_scope",
         description: "ChatGPT app is not linked for this account",
+        scope: normalizedRequiredScopes.join(" "),
+        oauthScopes: normalizedRequiredScopes,
       }),
     };
   }

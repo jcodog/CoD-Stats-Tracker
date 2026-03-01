@@ -493,7 +493,7 @@ describe("/api/app/disconnect", () => {
 
     const body = await response.json();
 
-    expect(response.status).toBe(500);
+    expect(response.status).toBe(502);
     expectContractError(body, CHATGPT_APP_ERROR_CODES.internal);
   });
 

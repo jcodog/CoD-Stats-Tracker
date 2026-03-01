@@ -1,15 +1,14 @@
 import { fetchQuery } from "convex/nextjs";
-import { NextResponse } from "next/server";
 
 import { api } from "@/convex/_generated/api";
 import {
   CHATGPT_APP_ERROR_CODES,
   CHATGPT_APP_VIEWS,
-  createChatGptAppErrorPayload,
-  createChatGptAppSuccessPayload,
+  createChatGptAppErrorResponse,
+  createChatGptAppSuccessResponse,
+  withChatGptAppRoute,
 } from "@/lib/server/chatgpt-app-contract";
 import {
-  APP_API_NO_STORE_HEADERS,
   requireAuthenticatedAppRequest,
   touchChatGptConnectionLastUsedAt,
 } from "@/lib/server/chatgpt-app-auth";
@@ -69,9 +68,18 @@ export async function handleRankProgressGet(
     return authResult.response;
   }
 
+  const normalizedDiscordId = authResult.auth.user.discordId.trim();
+
+  if (normalizedDiscordId.length === 0) {
+    return createChatGptAppErrorResponse(
+      CHATGPT_APP_ERROR_CODES.internal,
+      "Unable to load rank progress for this account.",
+    );
+  }
+
   const [activeSessionRaw, lastSessionRaw] = await Promise.all([
-    deps.getActiveSessionByDiscordId(authResult.auth.user.discordId),
-    deps.getLastCompletedSessionByDiscordId(authResult.auth.user.discordId),
+    deps.getActiveSessionByDiscordId(normalizedDiscordId),
+    deps.getLastCompletedSessionByDiscordId(normalizedDiscordId),
   ]);
 
   await deps.touchConnectionLastUsedAt(authResult.auth.user._id);
@@ -82,14 +90,11 @@ export async function handleRankProgressGet(
   const currentSr = readSrCurrent(activeSession) ?? readSrCurrent(lastSession);
 
   if (currentSr === null) {
-    return NextResponse.json(
-      createChatGptAppErrorPayload(
-        CHATGPT_APP_ERROR_CODES.notFound,
-        "rank progress unavailable because no session SR data exists",
-      ),
+    return createChatGptAppErrorResponse(
+      CHATGPT_APP_ERROR_CODES.notFound,
+      "rank progress unavailable because no session SR data exists",
       {
         status: 404,
-        headers: APP_API_NO_STORE_HEADERS,
       },
     );
   }
@@ -97,14 +102,10 @@ export async function handleRankProgressGet(
   const ladder = getCodstatsRankLadder();
   const progress = getCodstatsRankProgress(currentSr, ladder);
 
-  return NextResponse.json(
-    createChatGptAppSuccessPayload(CHATGPT_APP_VIEWS.rankProgress, progress),
-    {
-      headers: APP_API_NO_STORE_HEADERS,
-    },
-  );
+  return createChatGptAppSuccessResponse(CHATGPT_APP_VIEWS.rankProgress, progress);
 }
 
-export async function GET(request: Request) {
-  return handleRankProgressGet(request);
-}
+export const GET = withChatGptAppRoute(
+  "api.app.stats.rank.progress.get",
+  async (request) => handleRankProgressGet(request),
+  );

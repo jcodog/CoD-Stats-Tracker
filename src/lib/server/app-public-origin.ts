@@ -1,6 +1,64 @@
-const APP_WIDGET_PATH = "/ui/codstats/widget.html";
+const PRODUCTION_APP_HOSTNAME = "stats.cleoai.cloud";
 
-export function getAppPublicOrigin() {
+const CODSTATS_TEMPLATE_PATHS = {
+  widget: "/ui/codstats/widget.html",
+  session: "/ui/codstats/session.html",
+  settings: "/ui/codstats/settings.html",
+} as const;
+
+export const CODSTATS_TEMPLATE_URIS = {
+  widget: "ui://codstats/widget.html",
+  session: "ui://codstats/session.html",
+  settings: "ui://codstats/settings.html",
+} as const;
+
+export type CodstatsTemplateName = keyof typeof CODSTATS_TEMPLATE_PATHS;
+
+type RequestOriginInput = Request | URL | string | null | undefined;
+
+function parseOriginOrThrow(rawOrigin: string, fieldName: string) {
+  let parsedOrigin: URL;
+
+  try {
+    parsedOrigin = new URL(rawOrigin);
+  } catch {
+    throw new Error(
+      `Invalid ${fieldName}: "${rawOrigin}". Use an absolute HTTPS URL like https://stats.cleoai.cloud.`,
+    );
+  }
+
+  if (parsedOrigin.protocol !== "https:") {
+    throw new Error(
+      `${fieldName} must use https://. Received protocol "${parsedOrigin.protocol}".`,
+    );
+  }
+
+  if (!parsedOrigin.hostname) {
+    throw new Error(
+      `Invalid ${fieldName}: "${rawOrigin}". Include a hostname, for example https://stats.cleoai.cloud.`,
+    );
+  }
+
+  return parsedOrigin;
+}
+
+function normalizeRequestOrigin(input: RequestOriginInput) {
+  if (!input) {
+    return null;
+  }
+
+  if (typeof input === "string") {
+    return parseOriginOrThrow(input, "request origin").origin;
+  }
+
+  if (input instanceof URL) {
+    return input.origin;
+  }
+
+  return new URL(input.url).origin;
+}
+
+export function getAppPublicOrigin(requestOriginInput?: RequestOriginInput) {
   const rawOrigin = process.env.APP_PUBLIC_ORIGIN?.trim();
 
   if (!rawOrigin) {
@@ -9,31 +67,45 @@ export function getAppPublicOrigin() {
     );
   }
 
-  let parsedOrigin: URL;
+  const parsedOrigin = parseOriginOrThrow(rawOrigin, "APP_PUBLIC_ORIGIN");
+  const requestOrigin = normalizeRequestOrigin(requestOriginInput);
 
-  try {
-    parsedOrigin = new URL(rawOrigin);
-  } catch {
-    throw new Error(
-      `Invalid APP_PUBLIC_ORIGIN: \"${rawOrigin}\". Use an absolute HTTPS URL like https://stats.cleoai.cloud.`,
-    );
-  }
+  if (process.env.NODE_ENV === "production") {
+    if (parsedOrigin.hostname !== PRODUCTION_APP_HOSTNAME) {
+      throw new Error(
+        `APP_PUBLIC_ORIGIN must use ${PRODUCTION_APP_HOSTNAME} in production. Received "${parsedOrigin.hostname}".`,
+      );
+    }
 
-  if (parsedOrigin.protocol !== "https:") {
-    throw new Error(
-      `APP_PUBLIC_ORIGIN must use https://. Received protocol \"${parsedOrigin.protocol}\".`,
-    );
-  }
-
-  if (!parsedOrigin.hostname) {
-    throw new Error(
-      `Invalid APP_PUBLIC_ORIGIN: \"${rawOrigin}\". Include a hostname, for example https://stats.cleoai.cloud.`,
-    );
+    if (requestOrigin && requestOrigin !== parsedOrigin.origin) {
+      throw new Error(
+        `Request origin ${requestOrigin} does not match APP_PUBLIC_ORIGIN ${parsedOrigin.origin}.`,
+      );
+    }
   }
 
   return parsedOrigin.origin;
 }
 
-export function getCodstatsWidgetTemplateUrl() {
-  return `${getAppPublicOrigin()}${APP_WIDGET_PATH}`;
+export function getCodstatsTemplateResourceUri(templateName: CodstatsTemplateName) {
+  return CODSTATS_TEMPLATE_URIS[templateName];
+}
+
+export function getCodstatsTemplateUrl(
+  templateName: CodstatsTemplateName,
+  requestOriginInput?: RequestOriginInput,
+) {
+  return `${getAppPublicOrigin(requestOriginInput)}${CODSTATS_TEMPLATE_PATHS[templateName]}`;
+}
+
+export function getCodstatsTemplateUrls(requestOriginInput?: RequestOriginInput) {
+  return {
+    widget: getCodstatsTemplateUrl("widget", requestOriginInput),
+    session: getCodstatsTemplateUrl("session", requestOriginInput),
+    settings: getCodstatsTemplateUrl("settings", requestOriginInput),
+  };
+}
+
+export function getCodstatsWidgetTemplateUrl(requestOriginInput?: RequestOriginInput) {
+  return getCodstatsTemplateUrl("widget", requestOriginInput);
 }

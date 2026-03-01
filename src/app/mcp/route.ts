@@ -1,6 +1,7 @@
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 
 import { createChatGptAppMcpServer } from "@/lib/server/chatgpt-app-mcp";
+import { createChatGptAppRequestId } from "@/lib/server/chatgpt-app-contract";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -28,7 +29,7 @@ function withCorsHeaders(response: Response) {
   });
 }
 
-function internalErrorResponse() {
+function internalErrorResponse(requestId: string) {
   return new Response(
     JSON.stringify({
       jsonrpc: "2.0",
@@ -39,17 +40,21 @@ function internalErrorResponse() {
       id: null,
     }),
     {
-      status: 500,
+      status: 200,
       headers: {
         ...MCP_CORS_HEADERS,
-        "Content-Type": "application/json",
+        "Content-Type": "application/json; charset=utf-8",
+        "X-Request-Id": requestId,
       },
     },
   );
 }
 
 async function handleMcpRequest(request: Request) {
-  const server = createChatGptAppMcpServer();
+  const requestId = createChatGptAppRequestId();
+  const server = createChatGptAppMcpServer({
+    requestOrigin: new URL(request.url).origin,
+  });
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
     enableJsonResponse: true,
@@ -60,8 +65,13 @@ async function handleMcpRequest(request: Request) {
     const response = await transport.handleRequest(request);
     return withCorsHeaders(response);
   } catch (error) {
-    console.error("MCP route error", error);
-    return internalErrorResponse();
+    console.error("MCP route error", {
+      requestId,
+      method: request.method,
+      path: new URL(request.url).pathname,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return internalErrorResponse(requestId);
   } finally {
     await Promise.allSettled([transport.close(), server.close()]);
   }

@@ -3,15 +3,26 @@ import process from "node:process";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 
-const WIDGET_PATH = "/ui/codstats/widget.html";
-const WIDGET_TEMPLATE_TOOLS = [
-  "codstats_open",
-  "codstats_get_current_session",
-  "codstats_get_last_session",
-  "codstats_get_match_history",
-  "codstats_get_rank_progress",
-  "codstats_get_settings",
-];
+const TEMPLATE_PATHS = {
+  widget: "/ui/codstats/widget.html",
+  session: "/ui/codstats/session.html",
+  settings: "/ui/codstats/settings.html",
+};
+
+const TEMPLATE_URIS = {
+  widget: "ui://codstats/widget.html",
+  session: "ui://codstats/session.html",
+  settings: "ui://codstats/settings.html",
+};
+
+const TOOL_TEMPLATE_URIS = {
+  codstats_open: TEMPLATE_URIS.widget,
+  codstats_get_current_session: TEMPLATE_URIS.session,
+  codstats_get_last_session: TEMPLATE_URIS.session,
+  codstats_get_match_history: TEMPLATE_URIS.widget,
+  codstats_get_rank_progress: TEMPLATE_URIS.widget,
+  codstats_get_settings: TEMPLATE_URIS.settings,
+};
 
 function parseArgValue(name, fallback) {
   const index = process.argv.indexOf(name);
@@ -134,33 +145,37 @@ async function verifyMcpEndpointIsNotHtml(baseUrl) {
   };
 }
 
-async function verifyWidgetHtmlEndpoint(baseUrl) {
-  const url = new URL(WIDGET_PATH, baseUrl);
+async function verifyTemplateHtmlEndpoints(baseUrl) {
+  const details = [];
 
-  const response = await fetch(url, {
-    headers: {
-      Accept: "text/html",
-    },
-  });
+  for (const path of Object.values(TEMPLATE_PATHS)) {
+    const url = new URL(path, baseUrl);
+    const response = await fetch(url, {
+      headers: {
+        Accept: "text/html",
+      },
+    });
 
-  const contentType = response.headers.get("content-type") ?? "";
-  const csp = response.headers.get("content-security-policy") ?? "";
+    const contentType = response.headers.get("content-type") ?? "";
+    const csp = response.headers.get("content-security-policy") ?? "";
 
-  assertCondition(response.status === 200, `${url.pathname} returned status ${response.status}`);
-  assertCondition(
-    contentType.toLowerCase().includes("text/html"),
-    `${url.pathname} did not return text/html (content-type: ${contentType || "(missing)"})`,
-  );
-  assertCondition(csp.length > 0, `${url.pathname} is missing Content-Security-Policy`);
+    assertCondition(response.status === 200, `${url.pathname} returned status ${response.status}`);
+    assertCondition(
+      contentType.toLowerCase().includes("text/html"),
+      `${url.pathname} did not return text/html (content-type: ${contentType || "(missing)"})`,
+    );
+    assertCondition(csp.length > 0, `${url.pathname} is missing Content-Security-Policy`);
+
+    details.push(`${url.pathname}:ok`);
+  }
 
   return {
-    csp,
+    details,
   };
 }
 
 async function verifyToolTemplateMetadata(baseUrl) {
   const mcpUrl = new URL("/mcp", baseUrl);
-  const expectedWidgetUrl = new URL(WIDGET_PATH, baseUrl).toString();
 
   const client = new Client({
     name: "codstats-preflight-client",
@@ -172,23 +187,49 @@ async function verifyToolTemplateMetadata(baseUrl) {
 
   try {
     const listedTools = await client.listTools();
+    const listedResources = await client.listResources();
 
-    for (const toolName of WIDGET_TEMPLATE_TOOLS) {
+    const resourceUris = listedResources.resources.map((resource) => resource.uri);
+    for (const templateUri of Object.values(TEMPLATE_URIS)) {
+      assertCondition(
+        resourceUris.includes(templateUri),
+        `MCP resources list does not include ${templateUri}`,
+      );
+    }
+
+    for (const templateUri of Object.values(TEMPLATE_URIS)) {
+      const resourceResult = await client.readResource({
+        uri: templateUri,
+      });
+      const contentItem = resourceResult.contents[0];
+
+      assertCondition(Boolean(contentItem), `No resource content returned for ${templateUri}`);
+      assertCondition(
+        typeof contentItem?.text === "string" && contentItem.text.length > 0,
+        `${templateUri} did not return HTML text content`,
+      );
+      assertCondition(
+        contentItem?.mimeType === "text/html;profile=mcp-app",
+        `${templateUri} did not return text/html;profile=mcp-app`,
+      );
+    }
+
+    for (const [toolName, expectedTemplateUri] of Object.entries(TOOL_TEMPLATE_URIS)) {
       const tool = listedTools.tools.find((candidate) => candidate.name === toolName);
 
       assertCondition(tool, `MCP tools list does not include ${toolName}`);
       assertCondition(
-        tool._meta?.ui?.resourceUri === expectedWidgetUrl,
-        `${toolName} _meta.ui.resourceUri must equal ${expectedWidgetUrl}`,
+        tool._meta?.ui?.resourceUri === expectedTemplateUri,
+        `${toolName} _meta.ui.resourceUri must equal ${expectedTemplateUri}`,
       );
       assertCondition(
-        tool._meta?.["openai/outputTemplate"] === expectedWidgetUrl,
-        `${toolName} _meta["openai/outputTemplate"] must equal ${expectedWidgetUrl}`,
+        tool._meta?.["openai/outputTemplate"] === expectedTemplateUri,
+        `${toolName} _meta["openai/outputTemplate"] must equal ${expectedTemplateUri}`,
       );
     }
 
     return {
-      resourceUri: expectedWidgetUrl,
+      resourceUris: Object.values(TEMPLATE_URIS).join(","),
     };
   } finally {
     await Promise.allSettled([client.close(), transport.close()]);
@@ -249,10 +290,10 @@ async function main() {
   );
 
   await runCheck(
-    "Widget HTML endpoint",
+    "Template HTML endpoints",
     async () => {
-      const result = await verifyWidgetHtmlEndpoint(baseUrl);
-      return `csp=${result.csp}`;
+      const result = await verifyTemplateHtmlEndpoints(baseUrl);
+      return result.details.join(" ");
     },
     failures,
   );
@@ -261,7 +302,7 @@ async function main() {
     "Tool output templates",
     async () => {
       const result = await verifyToolTemplateMetadata(baseUrl);
-      return `resourceUri=${result.resourceUri}`;
+      return `resourceUris=${result.resourceUris}`;
     },
     failures,
   );

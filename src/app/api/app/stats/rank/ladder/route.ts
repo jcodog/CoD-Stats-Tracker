@@ -1,11 +1,11 @@
-import { NextResponse } from "next/server";
-
 import {
+  CHATGPT_APP_ERROR_CODES,
   CHATGPT_APP_VIEWS,
-  createChatGptAppSuccessPayload,
+  createChatGptAppErrorResponse,
+  createChatGptAppSuccessResponse,
+  withChatGptAppRoute,
 } from "@/lib/server/chatgpt-app-contract";
 import {
-  APP_API_NO_STORE_HEADERS,
   requireAuthenticatedAppRequest,
   touchChatGptConnectionLastUsedAt,
 } from "@/lib/server/chatgpt-app-auth";
@@ -38,19 +38,21 @@ export async function handleRankLadderGet(
     return authResult.response;
   }
 
+  if (typeof authResult.auth.user.discordId !== "string") {
+    return createChatGptAppErrorResponse(
+      CHATGPT_APP_ERROR_CODES.internal,
+      "Unable to load rank ladder for this account.",
+    );
+  }
+
   await deps.touchConnectionLastUsedAt(authResult.auth.user._id);
 
-  return NextResponse.json(
-    createChatGptAppSuccessPayload(
-      CHATGPT_APP_VIEWS.rankLadder,
-      getCodstatsRankLadder(),
-    ),
-    {
-      headers: APP_API_NO_STORE_HEADERS,
-    },
+  return createChatGptAppSuccessResponse(
+    CHATGPT_APP_VIEWS.rankLadder,
+    getCodstatsRankLadder(),
   );
 }
 
-export async function GET(request: Request) {
-  return handleRankLadderGet(request);
-}
+export const GET = withChatGptAppRoute("api.app.stats.rank.ladder.get", async (request) =>
+  handleRankLadderGet(request),
+);

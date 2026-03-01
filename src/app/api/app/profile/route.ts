@@ -1,11 +1,9 @@
-import { NextResponse } from "next/server";
-
 import {
   CHATGPT_APP_VIEWS,
-  createChatGptAppSuccessPayload,
+  createChatGptAppSuccessResponse,
+  withChatGptAppRoute,
 } from "@/lib/server/chatgpt-app-contract";
 import {
-  APP_API_NO_STORE_HEADERS,
   requireAuthenticatedAppRequest,
   touchChatGptConnectionLastUsedAt,
 } from "@/lib/server/chatgpt-app-auth";
@@ -39,20 +37,28 @@ export async function handleProfileGet(
 
   await deps.touchConnectionLastUsedAt(authResult.auth.user._id);
 
-  return NextResponse.json(
-    createChatGptAppSuccessPayload(CHATGPT_APP_VIEWS.settings, {
+  const normalizedUserName =
+    typeof authResult.auth.user.name === "string" &&
+    authResult.auth.user.name.trim().length > 0
+      ? authResult.auth.user.name
+      : "CodStats User";
+
+  const normalizedPlan = authResult.auth.user.plan === "premium" ? "premium" : "free";
+
+  const chatgptLinked =
+    authResult.auth.user.chatgptLinked === true &&
+    authResult.auth.user.connectionStatus === "active";
+
+  return createChatGptAppSuccessResponse(CHATGPT_APP_VIEWS.settings, {
       connected: true,
+      chatgptLinked,
       user: {
-        name: authResult.auth.user.name,
-        plan: authResult.auth.user.plan,
+        name: normalizedUserName,
+        plan: normalizedPlan,
       },
-    }),
-    {
-      headers: APP_API_NO_STORE_HEADERS,
-    },
-  );
+    });
 }
 
-export async function GET(request: Request) {
-  return handleProfileGet(request);
-}
+export const GET = withChatGptAppRoute("api.app.profile.get", async (request) =>
+  handleProfileGet(request),
+);

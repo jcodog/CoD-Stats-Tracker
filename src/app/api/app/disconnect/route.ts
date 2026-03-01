@@ -1,18 +1,15 @@
 import { fetchMutation } from "convex/nextjs";
-import { NextResponse } from "next/server";
 
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import {
   CHATGPT_APP_ERROR_CODES,
   CHATGPT_APP_VIEWS,
-  createChatGptAppErrorPayload,
-  createChatGptAppSuccessPayload,
+  createChatGptAppErrorResponse,
+  createChatGptAppSuccessResponse,
+  withChatGptAppRoute,
 } from "@/lib/server/chatgpt-app-contract";
-import {
-  APP_API_NO_STORE_HEADERS,
-  requireAuthenticatedAppRequest,
-} from "@/lib/server/chatgpt-app-auth";
+import { requireAuthenticatedAppRequest } from "@/lib/server/chatgpt-app-auth";
 import { CHATGPT_APP_ROUTE_REQUIRED_SCOPES } from "@/lib/server/chatgpt-app-scopes";
 
 export const runtime = "nodejs";
@@ -60,31 +57,20 @@ export async function handleDisconnectPost(
   const disconnectResult = await deps.disconnectByUserId(authResult.auth.user._id);
 
   if (!disconnectResult.ok) {
-    return NextResponse.json(
-      createChatGptAppErrorPayload(
-        CHATGPT_APP_ERROR_CODES.internal,
-        "Unable to disconnect right now.",
-      ),
-      {
-        status: 500,
-        headers: APP_API_NO_STORE_HEADERS,
-      },
+    return createChatGptAppErrorResponse(
+      CHATGPT_APP_ERROR_CODES.internal,
+      "Unable to disconnect right now.",
     );
   }
 
-  return NextResponse.json(
-    createChatGptAppSuccessPayload(CHATGPT_APP_VIEWS.settings, {
+  return createChatGptAppSuccessResponse(CHATGPT_APP_VIEWS.settings, {
       connected: false,
       disconnected: true,
       revokedAt: disconnectResult.revokedAt,
       revokedTokenCount: disconnectResult.revokedTokenCount,
-    }),
-    {
-      headers: APP_API_NO_STORE_HEADERS,
-    },
-  );
+    });
 }
 
-export async function POST(request: Request) {
-  return handleDisconnectPost(request);
-}
+export const POST = withChatGptAppRoute("api.app.disconnect.post", async (request) =>
+  handleDisconnectPost(request),
+);

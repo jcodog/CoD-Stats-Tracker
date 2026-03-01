@@ -1,9 +1,14 @@
 import { fetchQuery } from "convex/nextjs";
-import { NextResponse } from "next/server";
 
 import { api } from "@/convex/_generated/api";
 import {
-  APP_API_NO_STORE_HEADERS,
+  CHATGPT_APP_ERROR_CODES,
+  CHATGPT_APP_VIEWS,
+  createChatGptAppErrorResponse,
+  createChatGptAppSuccessResponse,
+  withChatGptAppRoute,
+} from "@/lib/server/chatgpt-app-contract";
+import {
   requireAuthenticatedAppRequest,
   touchChatGptConnectionLastUsedAt,
 } from "@/lib/server/chatgpt-app-auth";
@@ -29,6 +34,14 @@ const defaultDeps: RecentRouteDeps = {
     }),
   touchConnectionLastUsedAt: touchChatGptConnectionLastUsedAt,
 };
+
+function asRecord(value: unknown) {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  return value as Record<string, unknown>;
+}
 
 function parseLimit(rawLimit: string | null) {
   if (rawLimit === null) {
@@ -60,38 +73,38 @@ export async function handleRecentGet(
     return authResult.response;
   }
 
+  const normalizedDiscordId = authResult.auth.user.discordId.trim();
+
+  if (normalizedDiscordId.length === 0) {
+    return createChatGptAppErrorResponse(
+      CHATGPT_APP_ERROR_CODES.internal,
+      "Unable to load recent stats for this account.",
+    );
+  }
+
   const requestUrl = new URL(request.url);
   const limit = parseLimit(requestUrl.searchParams.get("limit"));
 
   if (limit === null) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "invalid_request",
-        error_description: "limit must be a positive integer",
-      },
+    return createChatGptAppErrorResponse(
+      CHATGPT_APP_ERROR_CODES.validation,
+      "limit must be a positive integer",
       {
         status: 400,
-        headers: APP_API_NO_STORE_HEADERS,
       },
     );
   }
 
-  const recent = await deps.getRecentByDiscordId(authResult.auth.user.discordId, limit);
+  const recent = asRecord(await deps.getRecentByDiscordId(normalizedDiscordId, limit));
 
   await deps.touchConnectionLastUsedAt(authResult.auth.user._id);
 
-  return NextResponse.json(
-    {
-      ok: true,
-      recent,
-    },
-    {
-      headers: APP_API_NO_STORE_HEADERS,
-    },
-  );
+  return createChatGptAppSuccessResponse(CHATGPT_APP_VIEWS.statsRecent, {
+    limit,
+    recent: recent ?? {},
+  });
 }
 
-export async function GET(request: Request) {
-  return handleRecentGet(request);
-}
+export const GET = withChatGptAppRoute("api.app.stats.recent.get", async (request) =>
+  handleRecentGet(request),
+);

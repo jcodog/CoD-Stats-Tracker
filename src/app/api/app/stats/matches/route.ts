@@ -1,15 +1,14 @@
 import { fetchQuery } from "convex/nextjs";
-import { NextResponse } from "next/server";
 
 import { api } from "@/convex/_generated/api";
 import {
   CHATGPT_APP_ERROR_CODES,
   CHATGPT_APP_VIEWS,
-  createChatGptAppErrorPayload,
-  createChatGptAppSuccessPayload,
+  createChatGptAppErrorResponse,
+  createChatGptAppSuccessResponse,
+  withChatGptAppRoute,
 } from "@/lib/server/chatgpt-app-contract";
 import {
-  APP_API_NO_STORE_HEADERS,
   requireAuthenticatedAppRequest,
   touchChatGptConnectionLastUsedAt,
 } from "@/lib/server/chatgpt-app-auth";
@@ -103,18 +102,24 @@ export async function handleMatchHistoryGet(
     return authResult.response;
   }
 
+  const normalizedDiscordId = authResult.auth.user.discordId.trim();
+
+  if (normalizedDiscordId.length === 0) {
+    return createChatGptAppErrorResponse(
+      CHATGPT_APP_ERROR_CODES.internal,
+      "Unable to load match history for this account.",
+    );
+  }
+
   const requestUrl = new URL(request.url);
   const requestedLimit = parseRequestedLimit(requestUrl.searchParams.get("limit"));
 
   if (!requestedLimit.ok) {
-    return NextResponse.json(
-      createChatGptAppErrorPayload(
-        CHATGPT_APP_ERROR_CODES.validation,
-        "limit must be a positive integer",
-      ),
+    return createChatGptAppErrorResponse(
+      CHATGPT_APP_ERROR_CODES.validation,
+      "limit must be a positive integer",
       {
         status: 400,
-        headers: APP_API_NO_STORE_HEADERS,
       },
     );
   }
@@ -123,7 +128,7 @@ export async function handleMatchHistoryGet(
   const cursor = cursorParam && cursorParam.trim().length > 0 ? cursorParam : null;
 
   const paginatedMatches = asRecord(
-    await deps.getMatchesByDiscordIdPaginated(authResult.auth.user.discordId, {
+    await deps.getMatchesByDiscordIdPaginated(normalizedDiscordId, {
       cursor,
       numItems: requestedLimit.limit,
     }),
@@ -131,8 +136,7 @@ export async function handleMatchHistoryGet(
 
   await deps.touchConnectionLastUsedAt(authResult.auth.user._id);
 
-  return NextResponse.json(
-    createChatGptAppSuccessPayload(CHATGPT_APP_VIEWS.matchesHistory, {
+  return createChatGptAppSuccessResponse(CHATGPT_APP_VIEWS.matchesHistory, {
       items: asItems(paginatedMatches?.items),
       nextCursor:
         typeof paginatedMatches?.nextCursor === "string"
@@ -140,13 +144,9 @@ export async function handleMatchHistoryGet(
           : null,
       hasMore: paginatedMatches?.hasMore === true,
       limit: requestedLimit.limit,
-    }),
-    {
-      headers: APP_API_NO_STORE_HEADERS,
-    },
-  );
+    });
 }
 
-export async function GET(request: Request) {
-  return handleMatchHistoryGet(request);
-}
+export const GET = withChatGptAppRoute("api.app.stats.matches.get", async (request) =>
+  handleMatchHistoryGet(request),
+);

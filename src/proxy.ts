@@ -10,6 +10,8 @@ export const CHATGPT_APP_PUBLIC_ROUTE_PATTERNS = [
   "/oauth/revoke(.*)",
   "/oauth/register(.*)",
   "/ui/codstats/widget.html(.*)",
+  "/ui/codstats/session.html(.*)",
+  "/ui/codstats/settings.html(.*)",
   "/api/app(.*)",
 ];
 

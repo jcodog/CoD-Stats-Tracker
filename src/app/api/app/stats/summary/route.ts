@@ -1,9 +1,14 @@
 import { fetchQuery } from "convex/nextjs";
-import { NextResponse } from "next/server";
 
 import { api } from "@/convex/_generated/api";
 import {
-  APP_API_NO_STORE_HEADERS,
+  CHATGPT_APP_ERROR_CODES,
+  CHATGPT_APP_VIEWS,
+  createChatGptAppErrorResponse,
+  createChatGptAppSuccessResponse,
+  withChatGptAppRoute,
+} from "@/lib/server/chatgpt-app-contract";
+import {
   requireAuthenticatedAppRequest,
   touchChatGptConnectionLastUsedAt,
 } from "@/lib/server/chatgpt-app-auth";
@@ -27,6 +32,14 @@ const defaultDeps: SummaryRouteDeps = {
   touchConnectionLastUsedAt: touchChatGptConnectionLastUsedAt,
 };
 
+function asRecord(value: unknown) {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  return value as Record<string, unknown>;
+}
+
 export async function handleSummaryGet(
   request: Request,
   deps: SummaryRouteDeps = defaultDeps,
@@ -40,21 +53,24 @@ export async function handleSummaryGet(
     return authResult.response;
   }
 
-  const summary = await deps.getSummaryByDiscordId(authResult.auth.user.discordId);
+  const normalizedDiscordId = authResult.auth.user.discordId.trim();
+
+  if (normalizedDiscordId.length === 0) {
+    return createChatGptAppErrorResponse(
+      CHATGPT_APP_ERROR_CODES.internal,
+      "Unable to load summary stats for this account.",
+    );
+  }
+
+  const summary = asRecord(await deps.getSummaryByDiscordId(normalizedDiscordId));
 
   await deps.touchConnectionLastUsedAt(authResult.auth.user._id);
 
-  return NextResponse.json(
-    {
-      ok: true,
-      summary,
-    },
-    {
-      headers: APP_API_NO_STORE_HEADERS,
-    },
-  );
+  return createChatGptAppSuccessResponse(CHATGPT_APP_VIEWS.statsSummary, {
+    summary: summary ?? {},
+  });
 }
 
-export async function GET(request: Request) {
-  return handleSummaryGet(request);
-}
+export const GET = withChatGptAppRoute("api.app.stats.summary.get", async (request) =>
+  handleSummaryGet(request),
+);

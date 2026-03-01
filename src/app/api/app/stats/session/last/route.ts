@@ -1,13 +1,14 @@
 import { fetchQuery } from "convex/nextjs";
-import { NextResponse } from "next/server";
 
 import { api } from "@/convex/_generated/api";
 import {
+  CHATGPT_APP_ERROR_CODES,
   CHATGPT_APP_VIEWS,
-  createChatGptAppSuccessPayload,
+  createChatGptAppErrorResponse,
+  createChatGptAppSuccessResponse,
+  withChatGptAppRoute,
 } from "@/lib/server/chatgpt-app-contract";
 import {
-  APP_API_NO_STORE_HEADERS,
   requireAuthenticatedAppRequest,
   touchChatGptConnectionLastUsedAt,
 } from "@/lib/server/chatgpt-app-auth";
@@ -52,25 +53,27 @@ export async function handleLastSessionGet(
     return authResult.response;
   }
 
-  const lastSession = await deps.getLastCompletedSessionByDiscordId(
-    authResult.auth.user.discordId,
-  );
+  const normalizedDiscordId = authResult.auth.user.discordId.trim();
+
+  if (normalizedDiscordId.length === 0) {
+    return createChatGptAppErrorResponse(
+      CHATGPT_APP_ERROR_CODES.internal,
+      "Unable to load session data for this account.",
+    );
+  }
+
+  const lastSession = await deps.getLastCompletedSessionByDiscordId(normalizedDiscordId);
 
   await deps.touchConnectionLastUsedAt(authResult.auth.user._id);
 
   const sessionRecord = asRecord(lastSession);
 
-  return NextResponse.json(
-    createChatGptAppSuccessPayload(CHATGPT_APP_VIEWS.sessionLast, {
+  return createChatGptAppSuccessResponse(CHATGPT_APP_VIEWS.sessionLast, {
       found: sessionRecord !== null,
       ...(sessionRecord ? { session: sessionRecord } : {}),
-    }),
-    {
-      headers: APP_API_NO_STORE_HEADERS,
-    },
-  );
+    });
 }
 
-export async function GET(request: Request) {
-  return handleLastSessionGet(request);
-}
+export const GET = withChatGptAppRoute("api.app.stats.session.last.get", async (request) =>
+  handleLastSessionGet(request),
+);
