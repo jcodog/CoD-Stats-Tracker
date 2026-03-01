@@ -67,14 +67,14 @@ Required env vars:
 
 - `OAUTH_JWT_SECRET`
 - `OAUTH_ALLOWED_REDIRECT_URIS` (comma-separated exact allowlist)
+- `OAUTH_ISSUER` (canonical HTTPS app origin; discovery `issuer` must match this exactly)
 
 Optional env vars:
 
 - `OAUTH_AUDIENCE` (defaults to `OAUTH_RESOURCE`; if set, must match `OAUTH_RESOURCE`)
 - `OAUTH_CLIENT_ID` + `OAUTH_CLIENT_SECRET` (set both for static client mode; omit both for dynamic client registration only)
-- `OAUTH_RESOURCE` (canonical resource identifier; defaults to request origin)
-- `OAUTH_ISSUER` (defaults to request origin for OAuth metadata, but set this explicitly for ChatGPT widget verification)
-- `OAUTH_ALLOWED_SCOPES` (comma-separated, e.g. `profile.read,stats.read`)
+- `OAUTH_RESOURCE` (canonical resource identifier; defaults to `OAUTH_ISSUER`)
+- `OAUTH_ALLOWED_SCOPES` (comma-separated allowlist, e.g. `profile.read,stats.read`; if set, must include enforced app scopes)
 - `OAUTH_RESOURCE_DOCUMENTATION`
 
 Routes:
@@ -98,6 +98,11 @@ Minimum scopes by App API endpoint:
 - `GET /api/app/stats/summary` -> `stats.read`
 - `GET /api/app/stats/daily` -> `stats.read`
 - `GET /api/app/stats/recent` -> `stats.read`
+
+Discovery metadata scope behavior:
+
+- `scopes_supported` includes enforced app scopes (`profile.read`, `stats.read`).
+- `offline_access` is included because refresh tokens are supported.
 
 Source of truth for route scopes and MCP `securitySchemes` mapping:
 
@@ -189,6 +194,15 @@ curl -i https://<domain>/mcp
 ```
 
 Each response should be JSON (or MCP protocol output), not `text/html`.
+
+Verify discovery issuer consistency (`issuer` must exactly equal `OAUTH_ISSUER`):
+
+```bash
+curl -s https://<domain>/.well-known/oauth-authorization-server | jq '.issuer, .authorization_endpoint, .token_endpoint, .registration_endpoint'
+curl -s https://<domain>/.well-known/oauth-protected-resource | jq '.authorization_servers[0], .resource'
+```
+
+Expected: `.issuer` and `.authorization_servers[0]` are exactly your configured `OAUTH_ISSUER`.
 
 ### Run locally
 

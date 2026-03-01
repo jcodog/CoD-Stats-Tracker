@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 
-import { getOAuthServerConfig } from "@/lib/server/oauth/config";
+import {
+  getOAuthServerConfig,
+  getOAuthSupportedScopes,
+} from "@/lib/server/oauth/config";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,9 +16,13 @@ export async function GET(request: Request) {
     config = getOAuthServerConfig(requestUrl.origin);
   } catch (error) {
     console.error("OAuth protected resource metadata config error", error);
+    const description =
+      error instanceof Error ? error.message : "OAuth server is not configured";
+
     return NextResponse.json(
       {
         error: "server_error",
+        error_description: description,
       },
       {
         status: 500,
@@ -23,11 +30,13 @@ export async function GET(request: Request) {
     );
   }
 
+  const scopesSupported = getOAuthSupportedScopes(config.allowedScopes);
+
   return NextResponse.json(
     {
       resource: config.resource,
       authorization_servers: [config.issuer],
-      scopes_supported: config.allowedScopes ? Array.from(config.allowedScopes) : [],
+      scopes_supported: scopesSupported,
       token_endpoint_auth_methods_supported: [
         "none",
         "client_secret_post",

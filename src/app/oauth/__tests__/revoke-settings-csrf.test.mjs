@@ -4,6 +4,7 @@ import { handleRevokePost } from "../revoke/route.ts";
 
 function configureOAuthEnv() {
   process.env.OAUTH_JWT_SECRET = "test_jwt_secret";
+  process.env.OAUTH_ISSUER = "https://app.example.com";
   process.env.OAUTH_ALLOWED_REDIRECT_URIS =
     "https://chatgpt.com/connector_platform_oauth_redirect";
 }

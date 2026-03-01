@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test";
+import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 
 import { handleDisconnectPost } from "../disconnect/route.ts";
 import { handleProfileGet } from "../profile/route.ts";
@@ -30,6 +30,21 @@ const VERIFIED_TOKEN = {
   jti: "jti_test_123",
   scopes: ["stats.read"],
 };
+
+const previousOauthIssuer = process.env.OAUTH_ISSUER;
+
+beforeAll(() => {
+  process.env.OAUTH_ISSUER = "https://example.test";
+});
+
+afterAll(() => {
+  if (previousOauthIssuer === undefined) {
+    delete process.env.OAUTH_ISSUER;
+    return;
+  }
+
+  process.env.OAUTH_ISSUER = previousOauthIssuer;
+});
 
 function createRequest(url) {
   return new Request(url);
