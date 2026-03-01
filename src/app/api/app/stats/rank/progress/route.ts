@@ -99,8 +99,7 @@ export async function handleRankProgressGet(
     );
   }
 
-  const ladder = getCodstatsRankLadder();
-  const progress = getCodstatsRankProgress(currentSr, ladder);
+  const progress = getCodstatsRankProgress(currentSr, getCodstatsRankLadder());
 
   return createChatGptAppSuccessResponse(CHATGPT_APP_VIEWS.rankProgress, progress);
 }

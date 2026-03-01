@@ -413,10 +413,33 @@ describe("/api/app/stats/rank/ladder", () => {
     expect(body.data.divisions.length).toBeGreaterThan(0);
     expect(typeof body.data.divisions[0].minSr).toBe("number");
     expect(typeof body.data.divisions[0].maxSr).toBe("number");
+    expect(typeof body.data.divisions[0].index).toBe("number");
+    expect(body.data.divisions.at(-1).rank).toBe("Iridescent");
+    expect(body.data.divisions.at(-1).division).toBeNull();
+    expect(body.data.divisions.at(-1).maxSr).toBeNull();
   });
 });
 
 describe("/api/app/stats/rank/progress", () => {
+  async function getRankProgressResponse(srCurrent) {
+    const response = await handleRankProgressGet(
+      createRequest("https://example.test/api/app/stats/rank/progress"),
+      {
+        authenticate: async () => createAuthSuccess(),
+        getActiveSessionByDiscordId: async () => ({ srCurrent }),
+        getLastCompletedSessionByDiscordId: async () => ({ srCurrent: 0 }),
+        touchConnectionLastUsedAt: async () => {},
+      },
+    );
+
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expectContractSuccess(body, CHATGPT_APP_VIEWS.rankProgress);
+
+    return body;
+  }
+
   it("returns not_found when no SR data exists", async () => {
     const response = await handleRankProgressGet(
       createRequest("https://example.test/api/app/stats/rank/progress"),
@@ -434,36 +457,57 @@ describe("/api/app/stats/rank/progress", () => {
     expectContractError(body, CHATGPT_APP_ERROR_CODES.notFound);
   });
 
-  it("computes rank progress from the ladder without hardcoded thresholds", async () => {
-    const response = await handleRankProgressGet(
-      createRequest("https://example.test/api/app/stats/rank/progress"),
-      {
-        authenticate: async () => createAuthSuccess(),
-        getActiveSessionByDiscordId: async () => ({ srCurrent: 3350 }),
-        getLastCompletedSessionByDiscordId: async () => ({ srCurrent: 3200 }),
-        touchConnectionLastUsedAt: async () => {},
-      },
-    );
+  it("returns Gold II range and Gold III as next tier for SR 2800", async () => {
+    const body = await getRankProgressResponse(2800);
 
-    const body = await response.json();
+    expect(body.data.current).toEqual({
+      rank: "Gold",
+      division: "II",
+      displayName: "Gold II",
+      minSr: 2600,
+      maxSr: 3099,
+    });
+    expect(body.data.next).toEqual({
+      rank: "Gold",
+      division: "III",
+      displayName: "Gold III",
+      minSr: 3100,
+      maxSr: 3599,
+    });
+    expect(body.data.nextDivision).toBeUndefined();
+    expect(body.data.nextRank).toBeUndefined();
+  });
 
-    expect(response.status).toBe(200);
-    expectContractSuccess(body, CHATGPT_APP_VIEWS.rankProgress);
-    expect(body.data.currentSr).toBe(3350);
-    expect(body.data.current.rank).toBe("Gold");
-    expect(body.data.current.division).toBe("III");
-    expect(body.data.nextDivision.rank).toBe("Platinum");
-    expect(body.data.nextDivision.division).toBe("I");
-    expect(body.data.nextDivision.srNeeded).toBe(250);
-    expect(body.data.nextRank.rank).toBe("Platinum");
-    expect(body.data.nextRank.division).toBe("I");
-    expect(body.data.nextRank.srNeeded).toBe(250);
-    expect(body.data.prevDivision.rank).toBe("Gold");
-    expect(body.data.prevDivision.division).toBe("II");
-    expect(body.data.prevDivision.srBack).toBe(251);
-    expect(body.data.prevRank.rank).toBe("Silver");
-    expect(body.data.prevRank.division).toBe("III");
-    expect(body.data.prevRank.srBack).toBe(1251);
+  it("returns Gold III with Platinum I as next tier for SR 3100", async () => {
+    const body = await getRankProgressResponse(3100);
+
+    expect(body.data.current).toEqual({
+      rank: "Gold",
+      division: "III",
+      displayName: "Gold III",
+      minSr: 3100,
+      maxSr: 3599,
+    });
+    expect(body.data.next).toEqual({
+      rank: "Platinum",
+      division: "I",
+      displayName: "Platinum I",
+      minSr: 3600,
+      maxSr: 4199,
+    });
+  });
+
+  it("returns Iridescent with no next tier for SR 10000", async () => {
+    const body = await getRankProgressResponse(10000);
+
+    expect(body.data.current).toEqual({
+      rank: "Iridescent",
+      division: null,
+      displayName: "Iridescent",
+      minSr: 10000,
+      maxSr: null,
+    });
+    expect(body.data.next).toBeNull();
   });
 });
 

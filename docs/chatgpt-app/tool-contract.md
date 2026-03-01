@@ -180,9 +180,10 @@ type MatchSummary = {
 ```ts
 type RankDivision = {
   rank: string
-  division?: string
+  division: string | null
   minSr: number
-  maxSr: number
+  maxSr: number | null
+  index: number
 }
 
 type RankLadder = {
@@ -197,14 +198,20 @@ type RankLadder = {
 
 ```ts
 type RankProgress = {
-  title: string
-  ruleset: string
-  currentSr: number
-  current: { rank: string; division?: string; minSr: number; maxSr: number }
-  nextDivision?: { rank: string; division?: string; minSr: number; maxSr: number; srNeeded: number }
-  nextRank?: { rank: string; division?: string; minSr: number; maxSr: number; srNeeded: number }
-  prevDivision?: { rank: string; division?: string; minSr: number; maxSr: number; srBack: number }
-  prevRank?: { rank: string; division?: string; minSr: number; maxSr: number; srBack: number }
+  current: {
+    rank: string
+    division: string | null
+    displayName: string
+    minSr: number
+    maxSr: number | null
+  }
+  next: {
+    rank: string
+    division: string | null
+    displayName: string
+    minSr: number
+    maxSr: number | null
+  } | null
 }
 ```
 

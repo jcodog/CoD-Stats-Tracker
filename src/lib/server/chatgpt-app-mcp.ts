@@ -745,6 +745,11 @@ function buildRankLabel(value: Record<string, unknown> | null): string | null {
     return null;
   }
 
+  const displayName = asString(value.displayName);
+  if (displayName) {
+    return displayName;
+  }
+
   const rank = asString(value.rank);
   if (!rank) {
     return null;
@@ -782,15 +787,24 @@ function hydrateDashboardSession(snapshot: DashboardSnapshot, payload: ContractS
 function hydrateDashboardRank(snapshot: DashboardSnapshot, payload: ContractSuccess) {
   const data = asRecord(payload.data);
   const current = asRecord(data?.current);
-  const nextDivision = asRecord(data?.nextDivision);
-  const nextRank = asRecord(data?.nextRank);
+  const next =
+    asRecord(data?.next) ??
+    asRecord(data?.nextDivision) ??
+    asRecord(data?.nextRank);
 
   snapshot.rank.currentRank = buildRankLabel(current);
-  snapshot.rank.currentSr = asNumber(data?.currentSr);
-  snapshot.rank.nextDivisionTarget = buildRankLabel(nextDivision);
-  snapshot.rank.nextRankTarget = buildRankLabel(nextRank);
+  snapshot.rank.currentSr = asNumber(data?.currentSr) ?? snapshot.session.srCurrent;
+
+  const nextTargetLabel = buildRankLabel(next);
+  snapshot.rank.nextDivisionTarget = nextTargetLabel;
+  snapshot.rank.nextRankTarget = nextTargetLabel;
+
+  const currentSr = snapshot.rank.currentSr;
+  const nextMinSr = asInteger(next?.minSr);
   snapshot.rank.srNeeded =
-    asInteger(nextDivision?.srNeeded) ?? asInteger(nextRank?.srNeeded) ?? null;
+    currentSr !== null && nextMinSr !== null
+      ? Math.max(0, nextMinSr - Math.trunc(currentSr))
+      : null;
 }
 
 function hydrateDashboardMatches(snapshot: DashboardSnapshot, payload: ContractSuccess) {

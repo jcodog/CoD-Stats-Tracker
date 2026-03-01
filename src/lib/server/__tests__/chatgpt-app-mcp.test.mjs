@@ -351,30 +351,19 @@ describe("ChatGPT MCP CodStats app", () => {
         return jsonResponse(
           200,
           contractSuccess(CHATGPT_APP_VIEWS.rankProgress, {
-            title: "COD Ranked Skill Divisions",
-            ruleset: "sr-based-v1",
-            currentSr: 3350,
-            current: { rank: "Gold", division: "III", minSr: 3100, maxSr: 3599 },
-            nextDivision: {
-              rank: "Platinum",
-              division: "I",
-              minSr: 3600,
-              maxSr: 4199,
-              srNeeded: 250,
-            },
-            nextRank: {
-              rank: "Platinum",
-              division: "I",
-              minSr: 3600,
-              maxSr: 4199,
-              srNeeded: 250,
-            },
-            prevDivision: {
+            current: {
               rank: "Gold",
               division: "II",
+              displayName: "Gold II",
               minSr: 2600,
               maxSr: 3099,
-              srBack: 251,
+            },
+            next: {
+              rank: "Gold",
+              division: "III",
+              displayName: "Gold III",
+              minSr: 3100,
+              maxSr: 3599,
             },
           }),
         );
@@ -392,13 +381,13 @@ describe("ChatGPT MCP CodStats app", () => {
       expect(result.isError).not.toBe(true);
       expectContractShape(result.structuredContent, CHATGPT_APP_VIEWS.rankProgress);
       expect(result.structuredContent.data.current.rank).toBe("Gold");
-      expect(result.structuredContent.data.nextDivision.srNeeded).toBe(250);
-      expect(result.structuredContent.data.nextRank.srNeeded).toBe(250);
-      expect(result.structuredContent.data.prevDivision.srBack).toBe(251);
+      expect(result.structuredContent.data.current.displayName).toBe("Gold II");
+      expect(result.structuredContent.data.next.displayName).toBe("Gold III");
       expect(result.structuredContent.data.uiOutput.templateUri).toBe(TEST_RANK_URI);
       expect(result.structuredContent.data.uiOutput.templateUrl).toBe(TEST_RANK_URL);
       expect(result._meta.codstats.templateName).toBe("rank");
       expect(result._meta.codstats.viewModel.current.rank).toBe("Gold");
+      expect(result._meta.codstats.viewModel.next.displayName).toBe("Gold III");
       expect(typeof result.content?.[0]?.text).toBe("string");
       expect(result.content?.[0]?.text.length).toBeLessThan(80);
     });

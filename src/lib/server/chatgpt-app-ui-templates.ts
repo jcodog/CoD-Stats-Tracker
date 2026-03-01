@@ -605,51 +605,13 @@ function renderTemplateBody(templateName: CodstatsTemplateName) {
 
       <section class="codstats-grid codstats-grid-two">
         <article class="codstats-card">
-          <span class="codstats-stat-label">Current SR</span>
-          <strong class="codstats-stat-value" id="rank-current-sr">--</strong>
-        </article>
-        <article class="codstats-card">
-          <span class="codstats-stat-label">Current Division</span>
+          <span class="codstats-stat-label">Current Tier</span>
           <strong class="codstats-stat-value" id="rank-current-division">--</strong>
-        </article>
-      </section>
-
-      <section class="codstats-card">
-        <div class="codstats-card-head">
-          <h2 class="codstats-card-title">Progress Targets</h2>
-          <p class="codstats-card-subtitle">Exact SR requirements from ladder config only.</p>
-        </div>
-
-        <div class="codstats-progress-stack">
-          <div class="codstats-progress-block">
-            <div class="codstats-progress-head">
-              <span>Next Division</span>
-              <strong id="rank-next-division-needed">--</strong>
-            </div>
-            <div class="codstats-progress-track">
-              <div class="codstats-progress-fill" id="rank-next-division-fill"></div>
-            </div>
-          </div>
-
-          <div class="codstats-progress-block">
-            <div class="codstats-progress-head">
-              <span>Next Rank</span>
-              <strong id="rank-next-rank-needed">--</strong>
-            </div>
-            <div class="codstats-progress-track">
-              <div class="codstats-progress-fill" id="rank-next-rank-fill"></div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section class="codstats-grid codstats-grid-two">
-        <article class="codstats-card">
-          <h3 class="codstats-card-title">Current Tier Range</h3>
           <p class="codstats-note" id="rank-current-range">--</p>
         </article>
-        <article class="codstats-card">
-          <h3 class="codstats-card-title">Next Tier Range</h3>
+        <article class="codstats-card" id="rank-next-tier-section">
+          <span class="codstats-stat-label">Next Tier</span>
+          <strong class="codstats-stat-value" id="rank-next-tier">--</strong>
           <p class="codstats-note" id="rank-next-range">--</p>
         </article>
       </section>

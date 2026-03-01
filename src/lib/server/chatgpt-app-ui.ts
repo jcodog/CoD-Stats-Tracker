@@ -64,22 +64,14 @@ type MatchesViewModel = {
 type RankDivisionViewModel = {
   rank: string;
   division: string | null;
+  displayName: string;
   minSr: number;
-  maxSr: number;
-  srNeeded: number | null;
+  maxSr: number | null;
 };
 
 type RankViewModel = {
-  title: string | null;
-  ruleset: string | null;
-  currentSr: number | null;
   current: RankDivisionViewModel | null;
-  nextDivision: RankDivisionViewModel | null;
-  nextRank: RankDivisionViewModel | null;
-  srToNextDivision: number | null;
-  srToNextRank: number | null;
-  progressToNextDivision: number | null;
-  progressToNextRank: number | null;
+  next: RankDivisionViewModel | null;
 };
 
 type SettingsViewModel = {
@@ -321,74 +313,43 @@ function buildMatchesViewModel(payload: ContractSuccess): MatchesViewModel {
   };
 }
 
-function toRankDivisionViewModel(
-  value: Record<string, unknown> | null,
-  srNeededOverride?: number | null,
-): RankDivisionViewModel | null {
+function toRankDivisionViewModel(value: Record<string, unknown> | null): RankDivisionViewModel | null {
   if (!value) {
     return null;
   }
 
   const rank = asString(value.rank);
   const minSr = asNumber(value.minSr);
-  const maxSr = asNumber(value.maxSr);
+  const rawMaxSr = value.maxSr;
+  const maxSr = rawMaxSr === null ? null : asNumber(rawMaxSr);
 
-  if (!rank || minSr === null || maxSr === null) {
+  if (!rank || minSr === null || (rawMaxSr !== null && maxSr === null)) {
     return null;
   }
+
+  const division = asString(value.division);
+  const displayName = asString(value.displayName) ?? (division ? `${rank} ${division}` : rank);
 
   return {
     rank,
-    division: asString(value.division),
+    division,
+    displayName,
     minSr,
     maxSr,
-    srNeeded:
-      srNeededOverride ??
-      asNumber(value.srNeeded) ??
-      asNumber(value.srBack) ??
-      null,
   };
-}
-
-function computeProgress(currentSr: number | null, currentMin: number | null, targetMin: number | null) {
-  if (currentSr === null || currentMin === null || targetMin === null) {
-    return null;
-  }
-
-  const span = targetMin - currentMin;
-  if (span <= 0) {
-    return null;
-  }
-
-  const progress = ((currentSr - currentMin) / span) * 100;
-  return Math.max(0, Math.min(100, progress));
 }
 
 function buildRankViewModel(payload: ContractSuccess): RankViewModel {
   const data = asRecord(payload.data) ?? {};
-
-  const currentSr = asNumber(data.currentSr);
   const current = toRankDivisionViewModel(asRecord(data.current));
-  const nextDivision = toRankDivisionViewModel(
-    asRecord(data.nextDivision),
-    asNumber(asRecord(data.nextDivision)?.srNeeded),
-  );
-  const nextRank = toRankDivisionViewModel(
-    asRecord(data.nextRank),
-    asNumber(asRecord(data.nextRank)?.srNeeded),
-  );
+  const next =
+    toRankDivisionViewModel(asRecord(data.next)) ??
+    toRankDivisionViewModel(asRecord(data.nextDivision)) ??
+    toRankDivisionViewModel(asRecord(data.nextRank));
 
   return {
-    title: asString(data.title),
-    ruleset: asString(data.ruleset),
-    currentSr,
     current,
-    nextDivision,
-    nextRank,
-    srToNextDivision: nextDivision?.srNeeded ?? null,
-    srToNextRank: nextRank?.srNeeded ?? null,
-    progressToNextDivision: computeProgress(currentSr, current?.minSr ?? null, nextDivision?.minSr ?? null),
-    progressToNextRank: computeProgress(currentSr, current?.minSr ?? null, nextRank?.minSr ?? null),
+    next,
   };
 }
 

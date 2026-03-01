@@ -1,85 +1,59 @@
 type RankDivision = {
   rank: string;
-  division?: string;
+  division: string | null;
   minSr: number;
-  maxSr: number;
+  maxSr: number | null;
+  index: number;
+};
+
+type RankProgressTier = {
+  rank: string;
+  division: string | null;
+  displayName: string;
+  minSr: number;
+  maxSr: number | null;
 };
 
 export type RankLadder = {
   title: string;
   ruleset: string;
-  divisions: RankDivision[];
+  divisions: readonly RankDivision[];
   updatedAt: number;
 };
 
 export type RankProgress = {
-  title: string;
-  ruleset: string;
-  currentSr: number;
-  current: RankDivision;
-  nextDivision?: RankDivision & {
-    srNeeded: number;
-  };
-  nextRank?: RankDivision & {
-    srNeeded: number;
-  };
-  prevDivision?: RankDivision & {
-    srBack: number;
-  };
-  prevRank?: RankDivision & {
-    srBack: number;
-  };
+  current: RankProgressTier;
+  next: RankProgressTier | null;
 };
 
 const LADDER_UPDATED_AT = Date.UTC(2026, 1, 1);
-const OPEN_ENDED_MAX_SR = Number.MAX_SAFE_INTEGER;
 
-type DivisionTierInfo = {
-  minSr: number;
-  rank: string;
-  division?: string;
-};
-
-const DIVISION_TIER_MIN_SR_CONFIG: readonly DivisionTierInfo[] = [
-  { minSr: 0, rank: "Bronze", division: "I" },
-  { minSr: 300, rank: "Bronze", division: "II" },
-  { minSr: 600, rank: "Bronze", division: "III" },
-  { minSr: 900, rank: "Silver", division: "I" },
-  { minSr: 1300, rank: "Silver", division: "II" },
-  { minSr: 1700, rank: "Silver", division: "III" },
-  { minSr: 2100, rank: "Gold", division: "I" },
-  { minSr: 2600, rank: "Gold", division: "II" },
-  { minSr: 3100, rank: "Gold", division: "III" },
-  { minSr: 3600, rank: "Platinum", division: "I" },
-  { minSr: 4200, rank: "Platinum", division: "II" },
-  { minSr: 4800, rank: "Platinum", division: "III" },
-  { minSr: 5400, rank: "Diamond", division: "I" },
-  { minSr: 6100, rank: "Diamond", division: "II" },
-  { minSr: 6800, rank: "Diamond", division: "III" },
-  { minSr: 7500, rank: "Crimson", division: "I" },
-  { minSr: 8300, rank: "Crimson", division: "II" },
-  { minSr: 9100, rank: "Crimson", division: "III" },
-  { minSr: 10000, rank: "Iridescent" },
+const CODSTATS_SR_LADDER: readonly RankDivision[] = [
+  { rank: "Bronze", division: "I", minSr: 0, maxSr: 299, index: 0 },
+  { rank: "Bronze", division: "II", minSr: 300, maxSr: 599, index: 1 },
+  { rank: "Bronze", division: "III", minSr: 600, maxSr: 899, index: 2 },
+  { rank: "Silver", division: "I", minSr: 900, maxSr: 1299, index: 3 },
+  { rank: "Silver", division: "II", minSr: 1300, maxSr: 1699, index: 4 },
+  { rank: "Silver", division: "III", minSr: 1700, maxSr: 2099, index: 5 },
+  { rank: "Gold", division: "I", minSr: 2100, maxSr: 2599, index: 6 },
+  { rank: "Gold", division: "II", minSr: 2600, maxSr: 3099, index: 7 },
+  { rank: "Gold", division: "III", minSr: 3100, maxSr: 3599, index: 8 },
+  { rank: "Platinum", division: "I", minSr: 3600, maxSr: 4199, index: 9 },
+  { rank: "Platinum", division: "II", minSr: 4200, maxSr: 4799, index: 10 },
+  { rank: "Platinum", division: "III", minSr: 4800, maxSr: 5399, index: 11 },
+  { rank: "Diamond", division: "I", minSr: 5400, maxSr: 6099, index: 12 },
+  { rank: "Diamond", division: "II", minSr: 6100, maxSr: 6799, index: 13 },
+  { rank: "Diamond", division: "III", minSr: 6800, maxSr: 7499, index: 14 },
+  { rank: "Crimson", division: "I", minSr: 7500, maxSr: 8299, index: 15 },
+  { rank: "Crimson", division: "II", minSr: 8300, maxSr: 9099, index: 16 },
+  { rank: "Crimson", division: "III", minSr: 9100, maxSr: 9999, index: 17 },
+  { rank: "Iridescent", division: null, minSr: 10000, maxSr: null, index: 18 },
 ];
-
-function buildRankDivisionsFromMinSr(config: readonly DivisionTierInfo[]): RankDivision[] {
-  return config.map((entry, index) => {
-    const nextEntry = config[index + 1];
-    const maxSr = nextEntry ? nextEntry.minSr - 1 : OPEN_ENDED_MAX_SR;
-
-    return {
-      rank: entry.rank,
-      division: entry.division,
-      minSr: entry.minSr,
-      maxSr,
-    };
-  });
-}
 
 const RANK_LADDER_CONFIG: Omit<RankLadder, "updatedAt"> = {
   title: "COD Ranked Skill Divisions",
   ruleset: "sr-based-v1",
-  divisions: buildRankDivisionsFromMinSr(DIVISION_TIER_MIN_SR_CONFIG),
+  divisions: CODSTATS_SR_LADDER,
 };
 
 function cloneDivision(division: RankDivision): RankDivision {
@@ -88,55 +62,47 @@ function cloneDivision(division: RankDivision): RankDivision {
     division: division.division,
     minSr: division.minSr,
     maxSr: division.maxSr,
+    index: division.index,
   };
 }
 
-function getCurrentDivisionIndex(currentSr: number, divisions: RankDivision[]) {
-  const inRangeIndex = divisions.findIndex(
-    (division) => currentSr >= division.minSr && currentSr <= division.maxSr,
-  );
+function toDisplayName(division: RankDivision) {
+  return division.division ? `${division.rank} ${division.division}` : division.rank;
+}
 
-  if (inRangeIndex !== -1) {
-    return inRangeIndex;
+function toProgressTier(division: RankDivision): RankProgressTier {
+  return {
+    rank: division.rank,
+    division: division.division,
+    displayName: toDisplayName(division),
+    minSr: division.minSr,
+    maxSr: division.maxSr,
+  };
+}
+
+function isWithinDivision(currentSr: number, division: RankDivision) {
+  if (currentSr < division.minSr) {
+    return false;
   }
 
+  if (division.maxSr === null) {
+    return true;
+  }
+
+  return currentSr <= division.maxSr;
+}
+
+function getCurrentDivisionIndex(currentSr: number, divisions: readonly RankDivision[]) {
   if (currentSr < divisions[0].minSr) {
     return 0;
   }
 
+  const inRangeIndex = divisions.findIndex((division) => isWithinDivision(currentSr, division));
+  if (inRangeIndex !== -1) {
+    return inRangeIndex;
+  }
+
   return divisions.length - 1;
-}
-
-function findNextRankIndex(currentIndex: number, divisions: RankDivision[]) {
-  const currentRank = divisions[currentIndex].rank;
-
-  for (let index = currentIndex + 1; index < divisions.length; index += 1) {
-    if (divisions[index].rank !== currentRank) {
-      return index;
-    }
-  }
-
-  return null;
-}
-
-function findPrevRankIndex(currentIndex: number, divisions: RankDivision[]) {
-  const currentRank = divisions[currentIndex].rank;
-
-  for (let index = currentIndex - 1; index >= 0; index -= 1) {
-    if (divisions[index].rank !== currentRank) {
-      return index;
-    }
-  }
-
-  return null;
-}
-
-function getSrNeeded(currentSr: number, minSr: number) {
-  return Math.max(0, minSr - currentSr);
-}
-
-function getSrBack(currentSr: number, maxSr: number) {
-  return Math.max(0, currentSr - maxSr);
 }
 
 export function getCodstatsRankLadder(): RankLadder {
@@ -148,10 +114,7 @@ export function getCodstatsRankLadder(): RankLadder {
   };
 }
 
-export function getCodstatsRankProgress(
-  currentSr: number,
-  ladder: RankLadder,
-): RankProgress {
+export function getCodstatsRankProgress(currentSr: number, ladder: RankLadder): RankProgress {
   const divisions = ladder.divisions;
 
   if (divisions.length === 0) {
@@ -159,50 +122,11 @@ export function getCodstatsRankProgress(
   }
 
   const currentIndex = getCurrentDivisionIndex(currentSr, divisions);
-  const currentDivision = cloneDivision(divisions[currentIndex]);
-
-  const nextDivision =
-    currentIndex < divisions.length - 1
-      ? {
-          ...cloneDivision(divisions[currentIndex + 1]),
-          srNeeded: getSrNeeded(currentSr, divisions[currentIndex + 1].minSr),
-        }
-      : undefined;
-
-  const nextRankIndex = findNextRankIndex(currentIndex, divisions);
-  const nextRank =
-    nextRankIndex === null
-      ? undefined
-      : {
-          ...cloneDivision(divisions[nextRankIndex]),
-          srNeeded: getSrNeeded(currentSr, divisions[nextRankIndex].minSr),
-        };
-
-  const prevDivision =
-    currentIndex > 0
-      ? {
-          ...cloneDivision(divisions[currentIndex - 1]),
-          srBack: getSrBack(currentSr, divisions[currentIndex - 1].maxSr),
-        }
-      : undefined;
-
-  const prevRankIndex = findPrevRankIndex(currentIndex, divisions);
-  const prevRank =
-    prevRankIndex === null
-      ? undefined
-      : {
-          ...cloneDivision(divisions[prevRankIndex]),
-          srBack: getSrBack(currentSr, divisions[prevRankIndex].maxSr),
-        };
+  const currentDivision = divisions[currentIndex];
+  const nextDivision = currentIndex < divisions.length - 1 ? divisions[currentIndex + 1] : null;
 
   return {
-    title: ladder.title,
-    ruleset: ladder.ruleset,
-    currentSr,
-    current: currentDivision,
-    nextDivision,
-    nextRank,
-    prevDivision,
-    prevRank,
+    current: toProgressTier(currentDivision),
+    next: nextDivision ? toProgressTier(nextDivision) : null,
   };
 }

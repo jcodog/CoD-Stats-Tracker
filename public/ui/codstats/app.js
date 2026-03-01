@@ -103,17 +103,18 @@
     }
 
     const minSr = toInteger(entry.minSr);
-    const maxSr = toInteger(entry.maxSr);
+    const rawMaxSr = entry.maxSr;
+    const maxSr = rawMaxSr === null ? null : toInteger(rawMaxSr);
 
-    if (minSr === null || maxSr === null) {
+    if (minSr === null || (rawMaxSr !== null && maxSr === null)) {
       return "--";
     }
 
-    if (maxSr >= Number.MAX_SAFE_INTEGER) {
+    if (maxSr === null) {
       return `${NUMBER_FORMAT.format(minSr)}+ SR`;
     }
 
-    return `${NUMBER_FORMAT.format(minSr)} to ${NUMBER_FORMAT.format(maxSr)} SR`;
+    return `${NUMBER_FORMAT.format(minSr)}\u2013${NUMBER_FORMAT.format(maxSr)} SR`;
   }
 
   function setText(id, value) {
@@ -626,38 +627,43 @@
 
   function renderRank(viewModel) {
     const current = asObject(viewModel.current);
-    const nextDivision = asObject(viewModel.nextDivision);
-    const nextRank = asObject(viewModel.nextRank);
+    const next = asObject(viewModel.next);
 
     const currentRank = toText(current && current.rank);
     const currentDivision = toText(current && current.division);
-    const currentTierLabel = currentRank
-      ? `${currentRank}${currentDivision ? ` ${currentDivision}` : ""}`
+    const currentDisplayName =
+      toText(current && current.displayName) ||
+      (currentRank
+        ? `${currentRank}${currentDivision ? ` ${currentDivision}` : ""}`
+        : null);
+    const currentTierLabel = currentDisplayName
+      ? currentDisplayName
       : "Unranked";
 
-    setText("rank-title", toText(viewModel.title) || "Rank Progress");
-    setText("rank-ruleset", toText(viewModel.ruleset) || "Live ladder state from configured SR ruleset.");
+    const nextRank = toText(next && next.rank);
+    const nextDivision = toText(next && next.division);
+    const nextDisplayName =
+      toText(next && next.displayName) ||
+      (nextRank
+        ? `${nextRank}${nextDivision ? ` ${nextDivision}` : ""}`
+        : null);
+
+    setText("rank-title", "Rank Progress");
+    setText("rank-ruleset", "Live ladder state from the configured SR ruleset.");
     setText("rank-current-tier", currentTierLabel);
-    setText("rank-current-sr", formatInteger(viewModel.currentSr));
     setText("rank-current-division", currentTierLabel);
-
-    const srToNextDivision = toInteger(viewModel.srToNextDivision);
-    const srToNextRank = toInteger(viewModel.srToNextRank);
-
-    setText(
-      "rank-next-division-needed",
-      srToNextDivision === null ? "Division complete" : `${NUMBER_FORMAT.format(srToNextDivision)} SR`,
-    );
-    setText(
-      "rank-next-rank-needed",
-      srToNextRank === null ? "Rank complete" : `${NUMBER_FORMAT.format(srToNextRank)} SR`,
-    );
-
-    setProgress("rank-next-division-fill", viewModel.progressToNextDivision);
-    setProgress("rank-next-rank-fill", viewModel.progressToNextRank);
-
     setText("rank-current-range", formatRange(current));
-    setText("rank-next-range", formatRange(nextRank || nextDivision));
+
+    if (nextDisplayName) {
+      setHidden("rank-next-tier-section", false);
+      setText("rank-next-tier", nextDisplayName);
+      setText("rank-next-range", formatRange(next));
+      return;
+    }
+
+    setHidden("rank-next-tier-section", true);
+    setText("rank-next-tier", "--");
+    setText("rank-next-range", "--");
   }
 
   function resetDisconnectState() {
