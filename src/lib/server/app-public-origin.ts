@@ -1,4 +1,7 @@
-const PRODUCTION_APP_HOSTNAME = "stats.cleoai.cloud";
+const PRODUCTION_APP_HOSTNAMES = new Set([
+  "stats.cleoai.cloud",
+  "stats-dev.cleoai.cloud",
+]);
 
 const CODSTATS_TEMPLATE_PATHS = {
   widget: "/ui/codstats/widget.html",
@@ -71,9 +74,9 @@ export function getAppPublicOrigin(requestOriginInput?: RequestOriginInput) {
   const requestOrigin = normalizeRequestOrigin(requestOriginInput);
 
   if (process.env.NODE_ENV === "production") {
-    if (parsedOrigin.hostname !== PRODUCTION_APP_HOSTNAME) {
+    if (!PRODUCTION_APP_HOSTNAMES.has(parsedOrigin.hostname)) {
       throw new Error(
-        `APP_PUBLIC_ORIGIN must use ${PRODUCTION_APP_HOSTNAME} in production. Received "${parsedOrigin.hostname}".`,
+        `APP_PUBLIC_ORIGIN must use one of ${Array.from(PRODUCTION_APP_HOSTNAMES).join(", ")} in production. Received "${parsedOrigin.hostname}".`,
       );
     }
 
