@@ -4,6 +4,11 @@ import { NextResponse } from "next/server";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import {
+  CHATGPT_APP_ERROR_CODES,
+  createChatGptAppErrorPayload,
+  type ChatGptAppErrorCode,
+} from "@/lib/server/chatgpt-app-contract";
+import {
   buildOAuthWwwAuthenticate,
   extractBearerToken,
   type VerifiedOAuthAccessToken,
@@ -30,6 +35,7 @@ type AppUserRecord = {
 
 type AuthFailureParams = {
   status: number;
+  code: ChatGptAppErrorCode;
   error: "invalid_token" | "insufficient_scope";
   description: string;
   scope?: string;
@@ -52,13 +58,12 @@ export type AuthenticatedAppRequestResult =
 
 function buildAuthFailureResponse(request: Request, params: AuthFailureParams) {
   const requestUrl = new URL(request.url);
+  const requestId = request.headers.get("x-request-id") ?? undefined;
 
   return NextResponse.json(
-    {
-      ok: false,
-      error: params.error,
-      error_description: params.description,
-    },
+    createChatGptAppErrorPayload(params.code, params.description, {
+      requestId,
+    }),
     {
       status: params.status,
       headers: {
@@ -99,6 +104,7 @@ export async function requireAuthenticatedAppRequest(
       ok: false,
       response: buildAuthFailureResponse(request, {
         status: 401,
+        code: CHATGPT_APP_ERROR_CODES.unauthorized,
         error: "invalid_token",
         description: "Missing bearer token",
       }),
@@ -115,6 +121,7 @@ export async function requireAuthenticatedAppRequest(
       ok: false,
       response: buildAuthFailureResponse(request, {
         status: 401,
+        code: CHATGPT_APP_ERROR_CODES.unauthorized,
         error: "invalid_token",
         description: "Invalid or expired access token",
       }),
@@ -132,6 +139,7 @@ export async function requireAuthenticatedAppRequest(
       ok: false,
       response: buildAuthFailureResponse(request, {
         status: 403,
+        code: CHATGPT_APP_ERROR_CODES.unauthorized,
         error: "insufficient_scope",
         description: `Missing required scope: ${missingScopes.join(" ")}`,
         scope: normalizedRequiredScopes.join(" "),
@@ -148,6 +156,7 @@ export async function requireAuthenticatedAppRequest(
       ok: false,
       response: buildAuthFailureResponse(request, {
         status: 401,
+        code: CHATGPT_APP_ERROR_CODES.unauthorized,
         error: "invalid_token",
         description: "Token subject does not map to an active account",
       }),
@@ -159,6 +168,7 @@ export async function requireAuthenticatedAppRequest(
       ok: false,
       response: buildAuthFailureResponse(request, {
         status: 403,
+        code: CHATGPT_APP_ERROR_CODES.unauthorized,
         error: "invalid_token",
         description: "User account is not active",
       }),
@@ -170,7 +180,8 @@ export async function requireAuthenticatedAppRequest(
       ok: false,
       response: buildAuthFailureResponse(request, {
         status: 403,
-        error: "invalid_token",
+        code: CHATGPT_APP_ERROR_CODES.notLinked,
+        error: "insufficient_scope",
         description: "ChatGPT app is not linked for this account",
       }),
     };

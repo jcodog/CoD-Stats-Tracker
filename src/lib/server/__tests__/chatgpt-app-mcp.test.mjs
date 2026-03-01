@@ -3,18 +3,26 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "bun:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 
-import { createChatGptAppMcpServer } from "../chatgpt-app-mcp.ts";
 import { GET as getMcpRoute } from "../../../app/mcp/route.ts";
+import { createChatGptAppMcpServer } from "../chatgpt-app-mcp.ts";
+import {
+  CHATGPT_APP_ERROR_CODES,
+  CHATGPT_APP_VIEWS,
+} from "../chatgpt-app-contract.ts";
 
 const TEST_ORIGIN = "https://codstats.test";
+const TEST_APP_PUBLIC_ORIGIN = "https://stats-dev.cleoai.cloud";
+const TEST_WIDGET_URL = `${TEST_APP_PUBLIC_ORIGIN}/ui/codstats/widget.html`;
 
 const originalFetch = globalThis.fetch;
 const previousOauthResource = process.env.OAUTH_RESOURCE;
 const previousOauthIssuer = process.env.OAUTH_ISSUER;
+const previousAppPublicOrigin = process.env.APP_PUBLIC_ORIGIN;
 
 beforeAll(() => {
   process.env.OAUTH_RESOURCE = TEST_ORIGIN;
   process.env.OAUTH_ISSUER = TEST_ORIGIN;
+  process.env.APP_PUBLIC_ORIGIN = TEST_APP_PUBLIC_ORIGIN;
 });
 
 afterAll(() => {
@@ -28,6 +36,12 @@ afterAll(() => {
     delete process.env.OAUTH_ISSUER;
   } else {
     process.env.OAUTH_ISSUER = previousOauthIssuer;
+  }
+
+  if (previousAppPublicOrigin === undefined) {
+    delete process.env.APP_PUBLIC_ORIGIN;
+  } else {
+    process.env.APP_PUBLIC_ORIGIN = previousAppPublicOrigin;
   }
 });
 
@@ -43,6 +57,38 @@ function jsonResponse(status, payload, extraHeaders = {}) {
       ...extraHeaders,
     },
   });
+}
+
+function contractSuccess(view, data) {
+  return {
+    ok: true,
+    view,
+    data,
+    meta: {
+      generatedAt: Date.now(),
+    },
+  };
+}
+
+function contractError(code, message) {
+  return {
+    ok: false,
+    error: {
+      code,
+      message,
+    },
+    meta: {
+      generatedAt: Date.now(),
+    },
+  };
+}
+
+function expectContractShape(payload, view) {
+  expect(payload.ok).toBe(true);
+  expect(payload.view).toBe(view);
+  expect(typeof payload.data).toBe("object");
+  expect(payload.data).not.toBeNull();
+  expect(typeof payload.meta.generatedAt).toBe("number");
 }
 
 async function withMcpClient(runTest) {
@@ -71,154 +117,216 @@ function getToolByName(tools, name) {
   return tools.find((tool) => tool.name === name) ?? null;
 }
 
-function buildRecentGames(totalGames, now) {
-  return Array.from({ length: totalGames }, (_, index) => ({
-    sessionId: index < 4 ? "session-last" : `session-${index + 1}`,
-    createdAt: now - index * 60_000,
-    mode: index % 2 === 0 ? "hardpoint" : "snd",
-    outcome: index % 3 === 0 ? "loss" : "win",
-    srChange: index % 2 === 0 ? 22 : -13,
-    kills: 18 - (index % 5),
-    deaths: 9 + (index % 4),
-  }));
-}
-
 describe("ChatGPT MCP CodStats app", () => {
-  it("registers expected tools with best-practice hints", async () => {
+  it("registers contract-compliant tools and APP_PUBLIC_ORIGIN widget metadata", async () => {
     await withMcpClient(async ({ client }) => {
       const listed = await client.listTools();
       const names = listed.tools.map((tool) => tool.name);
 
-      expect(names).toContain("codstats_open");
-      expect(names).toContain("codstats_get_home");
-      expect(names).toContain("codstats_get_settings");
-      expect(names).toContain("codstats_disconnect");
+      const expectedTools = [
+        "codstats_open",
+        "codstats_get_current_session",
+        "codstats_get_last_session",
+        "codstats_get_match_history",
+        "codstats_get_match",
+        "codstats_get_rank_ladder",
+        "codstats_get_rank_progress",
+        "codstats_get_settings",
+        "codstats_disconnect",
+      ];
 
-      const openTool = getToolByName(listed.tools, "codstats_open");
-      const homeTool = getToolByName(listed.tools, "codstats_get_home");
-      const settingsTool = getToolByName(listed.tools, "codstats_get_settings");
+      for (const toolName of expectedTools) {
+        expect(names).toContain(toolName);
+      }
+
+      expect(names).not.toContain("codstats_get_home");
+
+      const widgetTools = [
+        "codstats_open",
+        "codstats_get_current_session",
+        "codstats_get_last_session",
+        "codstats_get_match_history",
+        "codstats_get_rank_progress",
+        "codstats_get_settings",
+      ];
+
+      for (const toolName of widgetTools) {
+        const tool = getToolByName(listed.tools, toolName);
+        expect(tool?._meta?.ui?.resourceUri).toBe(TEST_WIDGET_URL);
+        expect(tool?._meta?.["openai/outputTemplate"]).toBe(TEST_WIDGET_URL);
+      }
+
       const disconnectTool = getToolByName(listed.tools, "codstats_disconnect");
-
-      expect(openTool?._meta?.ui?.resourceUri).toBe("ui://codstats/widget.html");
-      expect(openTool?._meta?.["openai/outputTemplate"]).toBe(
-        "ui://codstats/widget.html",
-      );
-
-      expect(homeTool?.annotations?.readOnlyHint).toBe(true);
-      expect(settingsTool?.annotations?.readOnlyHint).toBe(true);
 
       expect(disconnectTool?.annotations?.readOnlyHint).toBe(false);
       expect(disconnectTool?.annotations?.destructiveHint).toBe(true);
       expect(disconnectTool?.annotations?.openWorldHint).toBe(false);
-
-      expect(Array.isArray(homeTool?._meta?.securitySchemes)).toBe(true);
-      expect(Array.isArray(settingsTool?._meta?.securitySchemes)).toBe(true);
-      expect(Array.isArray(disconnectTool?._meta?.securitySchemes)).toBe(true);
     });
   });
 
-  it("loads home data and composes compact dashboard content", async () => {
-    const now = Date.now();
-    const recentGames = buildRecentGames(30, now);
+  it("returns only active session for codstats_get_current_session", async () => {
+    let currentCalls = 0;
+    let lastCalls = 0;
 
     globalThis.fetch = async (input) => {
       const url = new URL(input);
 
-      if (url.pathname === "/api/app/stats/summary") {
-        return jsonResponse(200, {
-          ok: true,
-          summary: {
-            totalMatches: 144,
-            wins: 88,
-            losses: 56,
-            kills: 2_250,
-            deaths: 1_500,
-            totalSrChange: 910,
-            winRate: 0.6111,
-            kdRatio: 1.5,
-            bestStreak: 8,
-            currentSr: 3_420,
-            lastSessionStartedAt: now - 20 * 60_000,
-            lastSessionEndedAt: now - 4 * 60_000,
-            lastSessionUuid: "session-last",
-            lastMatchAt: now - 60_000,
-          },
-        });
+      if (url.pathname === "/api/app/stats/session/current") {
+        currentCalls += 1;
+        return jsonResponse(
+          200,
+          contractSuccess(CHATGPT_APP_VIEWS.sessionCurrent, {
+            active: false,
+          }),
+        );
       }
 
-      if (url.pathname === "/api/app/stats/recent") {
-        const requestedLimit = Number(url.searchParams.get("limit"));
-        const limit = Number.isInteger(requestedLimit) ? requestedLimit : 10;
-
-        return jsonResponse(200, {
-          ok: true,
-          recent: {
-            games: recentGames.slice(0, limit),
-          },
-        });
+      if (url.pathname === "/api/app/stats/session/last") {
+        lastCalls += 1;
+        return jsonResponse(
+          200,
+          contractSuccess(CHATGPT_APP_VIEWS.sessionLast, {
+            found: true,
+          }),
+        );
       }
 
-      return jsonResponse(404, {
-        ok: false,
-        error: "not_found",
-      });
+      return jsonResponse(404, contractError(CHATGPT_APP_ERROR_CODES.notFound, "not found"));
     };
 
     await withMcpClient(async ({ client }) => {
       const result = await client.callTool({
-        name: "codstats_get_home",
+        name: "codstats_get_current_session",
+        arguments: {},
+      });
+
+      expect(result.isError).not.toBe(true);
+      expectContractShape(result.structuredContent, CHATGPT_APP_VIEWS.sessionCurrent);
+      expect(result.structuredContent.data.active).toBe(false);
+      expect(currentCalls).toBe(1);
+      expect(lastCalls).toBe(0);
+    });
+  });
+
+  it("clamps codstats_get_match_history limit to 15", async () => {
+    let receivedLimit = null;
+
+    globalThis.fetch = async (input) => {
+      const url = new URL(input);
+
+      if (url.pathname === "/api/app/stats/matches") {
+        receivedLimit = Number(url.searchParams.get("limit"));
+
+        return jsonResponse(
+          200,
+          contractSuccess(CHATGPT_APP_VIEWS.matchesHistory, {
+            items: [
+              {
+                matchId: "match_1",
+                mode: "hardpoint",
+                playedAt: 1700000000000,
+                outcome: "win",
+              },
+            ],
+            nextCursor: null,
+            hasMore: false,
+            limit: receivedLimit,
+          }),
+        );
+      }
+
+      return jsonResponse(404, contractError(CHATGPT_APP_ERROR_CODES.notFound, "not found"));
+    };
+
+    await withMcpClient(async ({ client }) => {
+      const result = await client.callTool({
+        name: "codstats_get_match_history",
         arguments: {
-          recentLimit: 8,
+          limit: 99,
         },
       });
 
       expect(result.isError).not.toBe(true);
-      expect(result.structuredContent.today.totalMatches).toBeGreaterThan(0);
-      expect(result.structuredContent.recentMatches).toHaveLength(8);
-      expect(result.structuredContent.lastSession.sessionUuid).toBe("session-last");
-      expect(result.structuredContent.overall.bestStreak).toBe(8);
+      expect(receivedLimit).toBe(15);
+      expectContractShape(result.structuredContent, CHATGPT_APP_VIEWS.matchesHistory);
+      expect(Array.isArray(result.structuredContent.data.items)).toBe(true);
+      expect(result.structuredContent.data.hasMore).toBe(false);
     });
   });
 
-  it("serves verifier-compliant widget metadata", async () => {
+  it("returns rank progress contract payload", async () => {
+    globalThis.fetch = async (input) => {
+      const url = new URL(input);
+
+      if (url.pathname === "/api/app/stats/rank/progress") {
+        return jsonResponse(
+          200,
+          contractSuccess(CHATGPT_APP_VIEWS.rankProgress, {
+            title: "COD Ranked Skill Divisions",
+            ruleset: "sr-based-v1",
+            currentSr: 3350,
+            current: { rank: "Platinum", division: "I", minSr: 3300, maxSr: 3599 },
+            nextDivision: {
+              rank: "Platinum",
+              division: "II",
+              minSr: 3600,
+              maxSr: 3899,
+              srNeeded: 250,
+            },
+            nextRank: {
+              rank: "Diamond",
+              division: "I",
+              minSr: 4200,
+              maxSr: 4499,
+              srNeeded: 850,
+            },
+            prevDivision: {
+              rank: "Gold",
+              division: "III",
+              minSr: 3000,
+              maxSr: 3299,
+              srBack: 51,
+            },
+          }),
+        );
+      }
+
+      return jsonResponse(404, contractError(CHATGPT_APP_ERROR_CODES.notFound, "not found"));
+    };
+
     await withMcpClient(async ({ client }) => {
-      const resource = await client.readResource({
-        uri: "ui://codstats/widget.html",
+      const result = await client.callTool({
+        name: "codstats_get_rank_progress",
+        arguments: {},
       });
 
-      const widget = resource.contents.find(
-        (content) => content.uri === "ui://codstats/widget.html",
-      );
-
-      expect(widget).toBeTruthy();
-      expect(widget?._meta?.ui?.prefersBorder).toBe(true);
-      expect(widget?._meta?.ui?.domain).toBe("codstats.test");
-      expect(widget?._meta?.ui?.csp?.resourceDomains).toEqual([TEST_ORIGIN]);
-      expect(widget?._meta?.ui?.csp?.connectDomains).toEqual([TEST_ORIGIN]);
-      expect(widget?._meta?.ui?.csp?.frameDomains).toEqual([]);
-      expect(widget?._meta?.ui?.csp?.baseUriDomains).toEqual([]);
+      expect(result.isError).not.toBe(true);
+      expectContractShape(result.structuredContent, CHATGPT_APP_VIEWS.rankProgress);
+      expect(result.structuredContent.data.current.rank).toBe("Platinum");
+      expect(result.structuredContent.data.nextDivision.srNeeded).toBe(250);
+      expect(result.structuredContent.data.nextRank.srNeeded).toBe(850);
+      expect(result.structuredContent.data.prevDivision.srBack).toBe(51);
     });
   });
 
-  it("loads settings with minimized profile payload", async () => {
+  it("loads settings in contract shape", async () => {
     globalThis.fetch = async (input) => {
       const url = new URL(input);
 
       if (url.pathname === "/api/app/profile") {
-        return jsonResponse(200, {
-          ok: true,
-          profile: {
-            name: "Casey",
-            plan: "premium",
-            discordId: "discord-user-123",
-          },
-        });
+        return jsonResponse(
+          200,
+          contractSuccess(CHATGPT_APP_VIEWS.settings, {
+            connected: true,
+            user: {
+              name: "Casey",
+              plan: "premium",
+            },
+          }),
+        );
       }
 
-      return jsonResponse(404, {
-        ok: false,
-        error: "not_found",
-      });
+      return jsonResponse(404, contractError(CHATGPT_APP_ERROR_CODES.notFound, "not found"));
     };
 
     await withMcpClient(async ({ client }) => {
@@ -228,9 +336,9 @@ describe("ChatGPT MCP CodStats app", () => {
       });
 
       expect(result.isError).not.toBe(true);
-      expect(result.structuredContent.user.name).toBe("Casey");
-      expect(result.structuredContent.user.plan).toBe("premium");
-      expect(result.structuredContent.user.discordId).toBeUndefined();
+      expectContractShape(result.structuredContent, CHATGPT_APP_VIEWS.settings);
+      expect(result.structuredContent.data.user.name).toBe("Casey");
+      expect(result.structuredContent.data.user.plan).toBe("premium");
     });
   });
 
@@ -241,11 +349,7 @@ describe("ChatGPT MCP CodStats app", () => {
       if (url.pathname === "/api/app/profile") {
         return jsonResponse(
           401,
-          {
-            ok: false,
-            error: "invalid_token",
-            error_description: "Missing bearer token",
-          },
+          contractError(CHATGPT_APP_ERROR_CODES.unauthorized, "Missing bearer token"),
           {
             "WWW-Authenticate":
               'Bearer resource_metadata="https://codstats.test/.well-known/oauth-protected-resource", error="invalid_token", error_description="Missing bearer token"',
@@ -253,10 +357,7 @@ describe("ChatGPT MCP CodStats app", () => {
         );
       }
 
-      return jsonResponse(404, {
-        ok: false,
-        error: "not_found",
-      });
+      return jsonResponse(404, contractError(CHATGPT_APP_ERROR_CODES.notFound, "not found"));
     };
 
     await withMcpClient(async ({ client }) => {
@@ -279,18 +380,19 @@ describe("ChatGPT MCP CodStats app", () => {
 
       if (url.pathname === "/api/app/disconnect") {
         disconnectCallCount += 1;
-        return jsonResponse(200, {
-          ok: true,
-          disconnected: true,
-          revokedAt: Date.now(),
-          revokedTokenCount: 2,
-        });
+
+        return jsonResponse(
+          200,
+          contractSuccess(CHATGPT_APP_VIEWS.settings, {
+            connected: false,
+            disconnected: true,
+            revokedAt: Date.now(),
+            revokedTokenCount: 2,
+          }),
+        );
       }
 
-      return jsonResponse(404, {
-        ok: false,
-        error: "not_found",
-      });
+      return jsonResponse(404, contractError(CHATGPT_APP_ERROR_CODES.notFound, "not found"));
     };
 
     await withMcpClient(async ({ client }) => {
@@ -312,7 +414,8 @@ describe("ChatGPT MCP CodStats app", () => {
       });
 
       expect(approved.isError).not.toBe(true);
-      expect(approved.structuredContent.disconnected).toBe(true);
+      expectContractShape(approved.structuredContent, CHATGPT_APP_VIEWS.settings);
+      expect(approved.structuredContent.data.disconnected).toBe(true);
       expect(disconnectCallCount).toBe(1);
     });
   });

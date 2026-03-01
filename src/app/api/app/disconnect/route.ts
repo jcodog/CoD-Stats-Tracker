@@ -4,6 +4,12 @@ import { NextResponse } from "next/server";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import {
+  CHATGPT_APP_ERROR_CODES,
+  CHATGPT_APP_VIEWS,
+  createChatGptAppErrorPayload,
+  createChatGptAppSuccessPayload,
+} from "@/lib/server/chatgpt-app-contract";
+import {
   APP_API_NO_STORE_HEADERS,
   requireAuthenticatedAppRequest,
 } from "@/lib/server/chatgpt-app-auth";
@@ -55,11 +61,10 @@ export async function handleDisconnectPost(
 
   if (!disconnectResult.ok) {
     return NextResponse.json(
-      {
-        ok: false,
-        error: "disconnect_failed",
-        error_description: "Unable to disconnect right now.",
-      },
+      createChatGptAppErrorPayload(
+        CHATGPT_APP_ERROR_CODES.internal,
+        "Unable to disconnect right now.",
+      ),
       {
         status: 500,
         headers: APP_API_NO_STORE_HEADERS,
@@ -68,12 +73,12 @@ export async function handleDisconnectPost(
   }
 
   return NextResponse.json(
-    {
-      ok: true,
+    createChatGptAppSuccessPayload(CHATGPT_APP_VIEWS.settings, {
+      connected: false,
       disconnected: true,
       revokedAt: disconnectResult.revokedAt,
       revokedTokenCount: disconnectResult.revokedTokenCount,
-    },
+    }),
     {
       headers: APP_API_NO_STORE_HEADERS,
     },

@@ -3,7 +3,15 @@ import process from "node:process";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 
-const WIDGET_RESOURCE_URI = "ui://codstats/widget.html";
+const WIDGET_PATH = "/ui/codstats/widget.html";
+const WIDGET_TEMPLATE_TOOLS = [
+  "codstats_open",
+  "codstats_get_current_session",
+  "codstats_get_last_session",
+  "codstats_get_match_history",
+  "codstats_get_rank_progress",
+  "codstats_get_settings",
+];
 
 function parseArgValue(name, fallback) {
   const index = process.argv.indexOf(name);
@@ -126,8 +134,33 @@ async function verifyMcpEndpointIsNotHtml(baseUrl) {
   };
 }
 
-async function verifyWidgetUiMetadata(baseUrl) {
+async function verifyWidgetHtmlEndpoint(baseUrl) {
+  const url = new URL(WIDGET_PATH, baseUrl);
+
+  const response = await fetch(url, {
+    headers: {
+      Accept: "text/html",
+    },
+  });
+
+  const contentType = response.headers.get("content-type") ?? "";
+  const csp = response.headers.get("content-security-policy") ?? "";
+
+  assertCondition(response.status === 200, `${url.pathname} returned status ${response.status}`);
+  assertCondition(
+    contentType.toLowerCase().includes("text/html"),
+    `${url.pathname} did not return text/html (content-type: ${contentType || "(missing)"})`,
+  );
+  assertCondition(csp.length > 0, `${url.pathname} is missing Content-Security-Policy`);
+
+  return {
+    csp,
+  };
+}
+
+async function verifyToolTemplateMetadata(baseUrl) {
   const mcpUrl = new URL("/mcp", baseUrl);
+  const expectedWidgetUrl = new URL(WIDGET_PATH, baseUrl).toString();
 
   const client = new Client({
     name: "codstats-preflight-client",
@@ -138,46 +171,24 @@ async function verifyWidgetUiMetadata(baseUrl) {
   await client.connect(transport);
 
   try {
-    const listedResources = await client.listResources();
-    const hasWidgetResource = listedResources.resources.some(
-      (resource) => resource.uri === WIDGET_RESOURCE_URI,
-    );
+    const listedTools = await client.listTools();
 
-    assertCondition(
-      hasWidgetResource,
-      `MCP resources list does not include ${WIDGET_RESOURCE_URI}`,
-    );
+    for (const toolName of WIDGET_TEMPLATE_TOOLS) {
+      const tool = listedTools.tools.find((candidate) => candidate.name === toolName);
 
-    const readResult = await client.readResource({ uri: WIDGET_RESOURCE_URI });
-    const widget =
-      readResult.contents.find((content) => content.uri === WIDGET_RESOURCE_URI) ??
-      readResult.contents[0];
-
-    assertCondition(widget, `MCP readResource returned no content for ${WIDGET_RESOURCE_URI}`);
-
-    const uiMeta = widget._meta?.ui;
-
-    assertCondition(uiMeta && typeof uiMeta === "object", "widget _meta.ui is missing");
-    assertCondition(
-      typeof uiMeta.domain === "string" && uiMeta.domain.length > 0,
-      "widget _meta.ui.domain is missing",
-    );
-    assertCondition(uiMeta.csp && typeof uiMeta.csp === "object", "widget _meta.ui.csp is missing");
-
-    const csp = uiMeta.csp;
-    const cspKeys = [
-      "resourceDomains",
-      "connectDomains",
-      "frameDomains",
-      "baseUriDomains",
-    ];
-
-    for (const key of cspKeys) {
-      assertCondition(Array.isArray(csp[key]), `widget _meta.ui.csp.${key} must be an array`);
+      assertCondition(tool, `MCP tools list does not include ${toolName}`);
+      assertCondition(
+        tool._meta?.ui?.resourceUri === expectedWidgetUrl,
+        `${toolName} _meta.ui.resourceUri must equal ${expectedWidgetUrl}`,
+      );
+      assertCondition(
+        tool._meta?.["openai/outputTemplate"] === expectedWidgetUrl,
+        `${toolName} _meta["openai/outputTemplate"] must equal ${expectedWidgetUrl}`,
+      );
     }
 
     return {
-      domain: uiMeta.domain,
+      resourceUri: expectedWidgetUrl,
     };
   } finally {
     await Promise.allSettled([client.close(), transport.close()]);
@@ -238,10 +249,19 @@ async function main() {
   );
 
   await runCheck(
-    "Widget UI metadata",
+    "Widget HTML endpoint",
     async () => {
-      const result = await verifyWidgetUiMetadata(baseUrl);
-      return `domain=${result.domain}`;
+      const result = await verifyWidgetHtmlEndpoint(baseUrl);
+      return `csp=${result.csp}`;
+    },
+    failures,
+  );
+
+  await runCheck(
+    "Tool output templates",
+    async () => {
+      const result = await verifyToolTemplateMetadata(baseUrl);
+      return `resourceUri=${result.resourceUri}`;
     },
     failures,
   );

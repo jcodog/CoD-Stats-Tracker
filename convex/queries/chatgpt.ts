@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { paginationOptsValidator } from "convex/server";
 
 import type { Id } from "../_generated/dataModel";
 import { query, type QueryCtx } from "../_generated/server";
@@ -91,6 +92,112 @@ function aggregateGames(
     totalSrChange,
     winRate: roundRatio(totalMatches > 0 ? wins / totalMatches : null),
     kdRatio: roundRatio(deaths > 0 ? kills / deaths : null),
+  };
+}
+
+function calculateKd(kills: number, deaths: number) {
+  if (deaths <= 0) {
+    return null;
+  }
+
+  return roundRatio(kills / deaths);
+}
+
+function buildSessionSummary(
+  session: {
+    _id: Id<"sessions">;
+    uuid: string;
+    codTitle: string;
+    season: number;
+    startedAt: number;
+    endedAt: number | null;
+    startSr: number;
+    currentSr: number;
+    wins: number;
+    losses: number;
+    kills: number;
+    deaths: number;
+    bestStreak: number;
+  },
+  lastMatchAt: number | null,
+) {
+  return {
+    sessionId: String(session._id),
+    sessionUuid: session.uuid,
+    title: session.codTitle,
+    season: session.season,
+    startedAt: session.startedAt,
+    endedAt: session.endedAt ?? undefined,
+    srStart: session.startSr,
+    srCurrent: session.currentSr,
+    srChange: session.currentSr - session.startSr,
+    wins: session.wins,
+    losses: session.losses,
+    kd: calculateKd(session.kills, session.deaths),
+    kills: session.kills,
+    deaths: session.deaths,
+    bestStreak: session.bestStreak,
+    lastMatchAt: lastMatchAt ?? undefined,
+  };
+}
+
+function buildMatchSummary(game: {
+  _id: Id<"games">;
+  mode: "hardpoint" | "snd" | "overload";
+  createdAt: number;
+  outcome: "win" | "loss";
+  srChange: number;
+  kills: number;
+  deaths: number;
+}) {
+  return {
+    matchId: String(game._id),
+    mode: game.mode,
+    playedAt: game.createdAt,
+    outcome: game.outcome,
+    srDelta: game.srChange,
+    kills: game.kills,
+    deaths: game.deaths,
+    kd: calculateKd(game.kills, game.deaths),
+  };
+}
+
+function buildMatchDetail(game: {
+  _id: Id<"games">;
+  sessionId: string;
+  userId: string;
+  mode: "hardpoint" | "snd" | "overload";
+  outcome: "win" | "loss";
+  kills: number;
+  deaths: number;
+  srChange: number;
+  lossProtected: boolean;
+  teamScore?: number | null;
+  enemyScore?: number | null;
+  hillTimeSeconds?: number | null;
+  plants?: number | null;
+  defuses?: number | null;
+  overloads?: number | null;
+  createdAt: number;
+}) {
+  return {
+    matchId: String(game._id),
+    sessionId: game.sessionId,
+    userId: game.userId,
+    mode: game.mode,
+    playedAt: game.createdAt,
+    outcome: game.outcome,
+    srDelta: game.srChange,
+    kills: game.kills,
+    deaths: game.deaths,
+    kd: calculateKd(game.kills, game.deaths),
+    lossProtected: game.lossProtected,
+    teamScore: game.teamScore ?? null,
+    enemyScore: game.enemyScore ?? null,
+    hillTimeSeconds: game.hillTimeSeconds ?? null,
+    plants: game.plants ?? null,
+    defuses: game.defuses ?? null,
+    overloads: game.overloads ?? null,
   };
 }
 
@@ -296,5 +403,137 @@ export const getRecentStatsByDiscordId = query({
         overloads: game.overloads ?? null,
       })),
     };
+  },
+});
+
+export const getActiveSessionByDiscordId = query({
+  args: {
+    discordId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const discordId = args.discordId.trim();
+    if (discordId.length === 0) {
+      throw new Error("invalid_discord_id");
+    }
+
+    const sessions = await ctx.db
+      .query("sessions")
+      .withIndex("by_user", (q) => q.eq("userId", discordId))
+      .collect();
+
+    const activeSessions = sessions
+      .filter((session) => session.endedAt === null)
+      .sort((left, right) => right.startedAt - left.startedAt);
+
+    const activeSession = activeSessions[0] ?? null;
+
+    if (!activeSession) {
+      return null;
+    }
+
+    const latestMatch = await ctx.db
+      .query("games")
+      .withIndex("by_session_createdat", (q) => q.eq("sessionId", activeSession.uuid))
+      .order("desc")
+      .first();
+
+    return buildSessionSummary(activeSession, latestMatch?.createdAt ?? null);
+  },
+});
+
+export const getLastCompletedSessionByDiscordId = query({
+  args: {
+    discordId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const discordId = args.discordId.trim();
+    if (discordId.length === 0) {
+      throw new Error("invalid_discord_id");
+    }
+
+    const sessions = await ctx.db
+      .query("sessions")
+      .withIndex("by_user", (q) => q.eq("userId", discordId))
+      .collect();
+
+    const completedSessions = sessions
+      .filter((session) => typeof session.endedAt === "number")
+      .sort((left, right) => {
+        const leftEndedAt = left.endedAt ?? left.startedAt;
+        const rightEndedAt = right.endedAt ?? right.startedAt;
+        return rightEndedAt - leftEndedAt;
+      });
+
+    const lastCompletedSession = completedSessions[0] ?? null;
+
+    if (!lastCompletedSession) {
+      return null;
+    }
+
+    const latestMatch = await ctx.db
+      .query("games")
+      .withIndex("by_session_createdat", (q) => q.eq("sessionId", lastCompletedSession.uuid))
+      .order("desc")
+      .first();
+
+    return buildSessionSummary(lastCompletedSession, latestMatch?.createdAt ?? null);
+  },
+});
+
+export const getMatchesByDiscordIdPaginated = query({
+  args: {
+    discordId: v.string(),
+    paginationOpts: paginationOptsValidator,
+  },
+  handler: async (ctx, args) => {
+    const discordId = args.discordId.trim();
+    if (discordId.length === 0) {
+      throw new Error("invalid_discord_id");
+    }
+
+    const paginatedMatches = await ctx.db
+      .query("games")
+      .withIndex("by_user_createdat", (q) => q.eq("userId", discordId))
+      .order("desc")
+      .paginate(args.paginationOpts);
+
+    return {
+      items: paginatedMatches.page.map((game) => buildMatchSummary(game)),
+      nextCursor: paginatedMatches.isDone ? null : paginatedMatches.continueCursor,
+      hasMore: !paginatedMatches.isDone,
+    };
+  },
+});
+
+export const getMatchById = query({
+  args: {
+    discordId: v.string(),
+    matchId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const discordId = args.discordId.trim();
+    const matchId = args.matchId.trim();
+
+    if (discordId.length === 0) {
+      throw new Error("invalid_discord_id");
+    }
+
+    if (matchId.length === 0) {
+      throw new Error("invalid_match_id");
+    }
+
+    let match = null;
+
+    try {
+      match = await ctx.db.get(matchId as Id<"games">);
+    } catch {
+      return null;
+    }
+
+    if (!match || match.userId !== discordId) {
+      return null;
+    }
+
+    return buildMatchDetail(match);
   },
 });

@@ -9,6 +9,7 @@ export const CHATGPT_APP_PUBLIC_ROUTE_PATTERNS = [
   "/oauth/token(.*)",
   "/oauth/revoke(.*)",
   "/oauth/register(.*)",
+  "/ui/codstats/widget.html(.*)",
   "/api/app(.*)",
 ];
 

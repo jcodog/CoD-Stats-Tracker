@@ -5,7 +5,12 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 
 const REQUIRED_TOOLS = [
   "codstats_open",
-  "codstats_get_home",
+  "codstats_get_current_session",
+  "codstats_get_last_session",
+  "codstats_get_match_history",
+  "codstats_get_match",
+  "codstats_get_rank_ladder",
+  "codstats_get_rank_progress",
   "codstats_get_settings",
   "codstats_disconnect",
 ];
@@ -92,19 +97,26 @@ async function main() {
     const openResult = await client.callTool({
       name: "codstats_open",
       arguments: {
-        tab: "home",
+        tab: "overview",
       },
     });
 
     assertCondition(!isToolError(openResult), "codstats_open returned error");
     assertCondition(
-      openResult.structuredContent?.tab === "home",
+      openResult.structuredContent?.data?.tab === "overview",
       "codstats_open returned unexpected tab",
     );
 
     console.log("[smoke] codstats_open ok");
 
-    const protectedChecks = ["codstats_get_home", "codstats_get_settings"];
+    const protectedChecks = [
+      "codstats_get_current_session",
+      "codstats_get_last_session",
+      "codstats_get_match_history",
+      "codstats_get_rank_ladder",
+      "codstats_get_rank_progress",
+      "codstats_get_settings",
+    ];
 
     for (const tool of protectedChecks) {
       const result = await client.callTool({
