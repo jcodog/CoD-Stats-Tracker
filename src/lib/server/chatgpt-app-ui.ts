@@ -94,6 +94,37 @@ type SettingsViewModel = {
 
 type WidgetViewModel = {
   tab: "overview" | "matches" | "rank" | "settings";
+  session: {
+    srCurrent: number | null;
+    srChange: number | null;
+    matches: number | null;
+    wins: number | null;
+    losses: number | null;
+    kd: number | null;
+    kills: number | null;
+    deaths: number | null;
+    bestStreak: number | null;
+    startedAt: number | null;
+  };
+  rank: {
+    currentRank: string | null;
+    currentSr: number | null;
+    nextDivisionTarget: string | null;
+    nextRankTarget: string | null;
+    srNeeded: number | null;
+  };
+  recentMatches: Array<{
+    mode: string | null;
+    outcome: string | null;
+    srDelta: number | null;
+    kd: number | null;
+    playedAt: number | null;
+  }>;
+  connection: {
+    connected: boolean;
+    status: string;
+    actionsHint: string;
+  };
 };
 
 type CodstatsUiViewModel =
@@ -393,8 +424,50 @@ function buildSettingsViewModel(payload: ContractSuccess): SettingsViewModel {
 
 function buildWidgetViewModel(payload: ContractSuccess): WidgetViewModel {
   const data = asRecord(payload.data) ?? {};
+  const dashboard = asRecord(data.dashboard) ?? {};
+  const session = asRecord(dashboard.session) ?? {};
+  const rank = asRecord(dashboard.rank) ?? {};
+  const connection = asRecord(dashboard.connection) ?? {};
+
   return {
     tab: normalizeTab(data.tab),
+    session: {
+      srCurrent: asNumber(session.srCurrent),
+      srChange: asNumber(session.srChange),
+      matches: asOptionalInteger(session.matches),
+      wins: asOptionalInteger(session.wins),
+      losses: asOptionalInteger(session.losses),
+      kd: asNumber(session.kd),
+      kills: asOptionalInteger(session.kills),
+      deaths: asOptionalInteger(session.deaths),
+      bestStreak: asOptionalInteger(session.bestStreak),
+      startedAt: asNumber(session.startedAt),
+    },
+    rank: {
+      currentRank: asString(rank.currentRank),
+      currentSr: asNumber(rank.currentSr),
+      nextDivisionTarget: asString(rank.nextDivisionTarget),
+      nextRankTarget: asString(rank.nextRankTarget),
+      srNeeded: asOptionalInteger(rank.srNeeded),
+    },
+    recentMatches: asArray(dashboard.recentMatches)
+      .map((entry) => asRecord(entry))
+      .filter((entry): entry is Record<string, unknown> => entry !== null)
+      .slice(0, 5)
+      .map((entry) => ({
+        mode: asString(entry.mode),
+        outcome: asString(entry.outcome),
+        srDelta: asNumber(entry.srDelta),
+        kd: asNumber(entry.kd),
+        playedAt: asNumber(entry.playedAt),
+      })),
+    connection: {
+      connected: asBoolean(connection.connected),
+      status: asString(connection.status) ?? "Disconnected",
+      actionsHint:
+        asString(connection.actionsHint) ??
+        "Open settings to connect your CodStats account.",
+    },
   };
 }
 
@@ -403,20 +476,10 @@ function resolveCodstatsUiBinding(
   requestOrigin?: string,
 ): CodstatsUiBinding | null {
   if (payload.view === CHATGPT_APP_VIEWS.uiOpen) {
-    const openViewModel = buildWidgetViewModel(payload);
-
-    if (openViewModel.tab === "overview") {
-      return {
-        templateName: "session",
-        uiOutput: buildCodstatsToolUiOutput("session", "session", requestOrigin),
-        viewModel: buildSessionViewModel(payload, "open"),
-      };
-    }
-
     return {
       templateName: "widget",
       uiOutput: buildCodstatsToolUiOutput("widget", "dashboard", requestOrigin),
-      viewModel: openViewModel,
+      viewModel: buildWidgetViewModel(payload),
     };
   }
 

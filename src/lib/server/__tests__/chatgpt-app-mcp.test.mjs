@@ -3,7 +3,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "bun:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 
-import { GET as getMcpRoute } from "../../../app/mcp/route.ts";
+import { GET as getMcpRoute, POST as postMcpRoute } from "../../../app/mcp/route.ts";
 import { GET as getWidgetTemplateRoute } from "../../../app/ui/codstats/widget.html/route.ts";
 import { GET as getSessionTemplateRoute } from "../../../app/ui/codstats/session.html/route.ts";
 import { GET as getMatchesTemplateRoute } from "../../../app/ui/codstats/matches.html/route.ts";
@@ -239,9 +239,9 @@ describe("ChatGPT MCP CodStats app", () => {
 
       expect(overview.isError).not.toBe(true);
       expectContractShape(overview.structuredContent, CHATGPT_APP_VIEWS.uiOpen);
-      expect(overview.structuredContent.data.uiOutput.templateUri).toBe(TEST_SESSION_URI);
-      expect(overview.structuredContent.data.uiOutput.templateUrl).toBe(TEST_SESSION_URL);
-      expect(overview._meta.codstats.templateName).toBe("session");
+      expect(overview.structuredContent.data.uiOutput.templateUri).toBe(TEST_WIDGET_URI);
+      expect(overview.structuredContent.data.uiOutput.templateUrl).toBe(TEST_WIDGET_URL);
+      expect(overview._meta.codstats.templateName).toBe("widget");
 
       const rank = await client.callTool({
         name: "codstats_open",
@@ -472,6 +472,36 @@ describe("ChatGPT MCP CodStats app", () => {
     });
   });
 
+  it("returns neutral internal tool errors with upstream request ids", async () => {
+    globalThis.fetch = async (input) => {
+      const url = new URL(input);
+
+      if (url.pathname === "/api/app/profile") {
+        return new Response("upstream gateway failure", {
+          status: 502,
+          headers: {
+            "Content-Type": "text/plain",
+            "X-Request-Id": "req_upstream_123",
+          },
+        });
+      }
+
+      return jsonResponse(404, contractError(CHATGPT_APP_ERROR_CODES.notFound, "not found"));
+    };
+
+    await withMcpClient(async ({ client }) => {
+      const result = await client.callTool({
+        name: "codstats_get_settings",
+        arguments: {},
+      });
+
+      expect(result.isError).toBe(true);
+      expect(result.structuredContent.error.code).toBe(CHATGPT_APP_ERROR_CODES.internal);
+      expect(result.structuredContent.error.requestId).toBe("req_upstream_123");
+      expect(result.content?.[0]?.text).toBe("CodStats data is temporarily unavailable.");
+    });
+  });
+
   it("requires explicit confirmation before disconnect", async () => {
     let disconnectCallCount = 0;
 
@@ -542,6 +572,28 @@ describe("ChatGPT MCP CodStats app", () => {
     }
   });
 
+  it("renders the widget dashboard sections and strict CSP directives", async () => {
+    const response = await getWidgetTemplateRoute();
+    const html = await response.text();
+    const csp = response.headers.get("content-security-policy") ?? "";
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("text/html");
+    expect(html).toContain('data-widget-section="current-session"');
+    expect(html).toContain('data-widget-section="rank-progress"');
+    expect(html).toContain('data-widget-section="recent-matches"');
+    expect(html).toContain('data-widget-section="connection"');
+    expect(html).toContain('id="widget-session-sr"');
+    expect(html).toContain('id="widget-rank-current"');
+    expect(html).toContain('id="widget-matches-list"');
+    expect(html).toContain('id="widget-connection-status"');
+    expect(csp).toContain("default-src 'none'");
+    expect(csp).toContain("frame-ancestors https://chatgpt.com https://chat.openai.com");
+    expect(csp).toContain("object-src 'none'");
+    expect(csp).toContain("base-uri 'none'");
+    expect(csp).toContain("form-action 'none'");
+  });
+
   it("matches template HTML snapshots", () => {
     const templates = ["widget", "session", "matches", "rank", "settings"];
 
@@ -559,5 +611,70 @@ describe("ChatGPT MCP CodStats app", () => {
     const contentType = response.headers.get("content-type") ?? "";
 
     expect(contentType).not.toContain("text/html");
+  });
+
+  it("returns event-stream for /mcp when event-stream is accepted", async () => {
+    const initPayload = {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: {
+        protocolVersion: "2025-03-26",
+        capabilities: {},
+        clientInfo: {
+          name: "codstats-test-client",
+          version: "1.0.0",
+        },
+      },
+    };
+
+    const response = await postMcpRoute(
+      new Request(`${TEST_ORIGIN}/mcp`, {
+        method: "POST",
+        headers: {
+          Accept: "text/event-stream",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(initPayload),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")?.toLowerCase()).toContain(
+      "text/event-stream",
+    );
+    expect(response.headers.get("content-type")?.toLowerCase()).not.toContain("text/html");
+  });
+
+  it("returns json for /mcp when json-only accept is requested", async () => {
+    const initPayload = {
+      jsonrpc: "2.0",
+      id: 2,
+      method: "initialize",
+      params: {
+        protocolVersion: "2025-03-26",
+        capabilities: {},
+        clientInfo: {
+          name: "codstats-json-client",
+          version: "1.0.0",
+        },
+      },
+    };
+
+    const response = await postMcpRoute(
+      new Request(`${TEST_ORIGIN}/mcp`, {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(initPayload),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")?.toLowerCase()).toContain(
+      "application/json",
+    );
   });
 });

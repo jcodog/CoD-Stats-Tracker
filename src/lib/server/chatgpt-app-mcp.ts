@@ -109,17 +109,36 @@ function buildTextContent(text: string): Array<{ type: "text"; text: string }> {
 function buildToolError(
   code: ChatGptAppErrorCode,
   message: string,
-  wwwAuthenticate?: string,
+  options?: {
+    wwwAuthenticate?: string;
+    requestId?: string;
+    details?: Record<string, unknown>;
+  },
 ): CallToolResult {
+  const neutralText =
+    code === CHATGPT_APP_ERROR_CODES.internal
+      ? "CodStats data is temporarily unavailable."
+      : message;
+  const meta: Record<string, unknown> = {};
+
+  if (options?.wwwAuthenticate) {
+    meta["mcp/www_authenticate"] = [options.wwwAuthenticate];
+  }
+
+  if (options?.requestId) {
+    meta.codstats = {
+      requestId: options.requestId,
+    };
+  }
+
   return {
     isError: true,
-    structuredContent: createChatGptAppErrorPayload(code, message),
-    content: buildTextContent(message),
-    _meta: wwwAuthenticate
-      ? {
-          "mcp/www_authenticate": [wwwAuthenticate],
-        }
-      : undefined,
+    structuredContent: createChatGptAppErrorPayload(code, message, {
+      requestId: options?.requestId,
+      details: options?.details,
+    }),
+    content: buildTextContent(neutralText),
+    _meta: Object.keys(meta).length > 0 ? meta : undefined,
   };
 }
 
@@ -129,6 +148,32 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   }
 
   return value as Record<string, unknown>;
+}
+
+function asArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function asString(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function asNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function asInteger(value: unknown): number | null {
+  const parsed = asNumber(value);
+  return parsed === null ? null : Math.trunc(parsed);
+}
+
+function asBoolean(value: unknown): boolean {
+  return value === true;
 }
 
 function getHeaderValue(
@@ -226,6 +271,41 @@ function summarizeContractView(payload: ContractSuccess) {
   }
 }
 
+function getResponseRequestId(response: Response): string | undefined {
+  const candidates = [
+    response.headers.get("x-request-id"),
+    response.headers.get("request-id"),
+    response.headers.get("x-vercel-id"),
+  ];
+
+  for (const candidate of candidates) {
+    const normalized = candidate?.trim();
+    if (normalized) {
+      return normalized;
+    }
+  }
+
+  return undefined;
+}
+
+function logContractApiFailure(args: {
+  endpointPath: string;
+  method: string;
+  reason: string;
+  status?: number;
+  requestId?: string;
+  message?: string;
+}) {
+  console.error("[chatgpt-app] upstream API failure", {
+    endpointPath: args.endpointPath,
+    method: args.method,
+    reason: args.reason,
+    status: args.status,
+    requestId: args.requestId,
+    message: args.message,
+  });
+}
+
 async function requestContractApi(
   extra: ToolExtra,
   endpointPath: string,
@@ -234,6 +314,7 @@ async function requestContractApi(
   const apiOrigin = resolveApiOrigin(extra);
   const endpointUrl = new URL(endpointPath, apiOrigin);
   const authorization = getHeaderValue(extra.requestInfo?.headers, "authorization");
+  const method = init?.method ?? "GET";
 
   const headers: Record<string, string> = {
     Accept: "application/json",
@@ -251,32 +332,185 @@ async function requestContractApi(
 
   try {
     response = await fetch(endpointUrl, {
-      method: init?.method ?? "GET",
+      method,
       cache: "no-store",
       signal: extra.signal,
       headers,
       body: init?.body,
     });
   } catch (error) {
+    logContractApiFailure({
+      endpointPath,
+      method,
+      reason: "network_failure",
+      message: error instanceof Error ? error.message : String(error),
+    });
+
     return {
       ok: false,
       result: buildToolError(
         CHATGPT_APP_ERROR_CODES.internal,
-        error instanceof Error ? error.message : "Unable to reach CodStats API.",
+        "Unable to reach CodStats API.",
+        {
+          details: {
+            reason: "network_failure",
+          },
+        },
       ),
     };
   }
 
-  let payloadRecord: Record<string, unknown> | null = null;
+  const requestId = getResponseRequestId(response);
+  const wwwAuthenticate = response.headers.get("www-authenticate") ?? undefined;
+  const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
 
-  try {
-    payloadRecord = asRecord(await response.json());
-  } catch {
-    payloadRecord = null;
+  if (!contentType.includes("application/json")) {
+    if (!response.ok && wwwAuthenticate) {
+      logContractApiFailure({
+        endpointPath,
+        method,
+        reason: "oauth_challenge_non_json",
+        status: response.status,
+        requestId,
+      });
+
+      return {
+        ok: false,
+        result: buildToolError(CHATGPT_APP_ERROR_CODES.unauthorized, "Authentication required.", {
+          wwwAuthenticate,
+          requestId,
+          details: {
+            reason: "oauth_challenge",
+            status: response.status,
+          },
+        }),
+      };
+    }
+
+    logContractApiFailure({
+      endpointPath,
+      method,
+      reason: "non_json_response",
+      status: response.status,
+      requestId,
+      message: contentType,
+    });
+
+    return {
+      ok: false,
+      result: buildToolError(
+        CHATGPT_APP_ERROR_CODES.internal,
+        response.ok
+          ? "CodStats API returned non-JSON response."
+          : `CodStats API request failed with status ${response.status}.`,
+        {
+          requestId,
+          details: {
+            reason: "non_json_response",
+            status: response.status,
+          },
+          ...(wwwAuthenticate
+            ? {
+                wwwAuthenticate,
+              }
+            : {}),
+        },
+      ),
+    };
   }
 
-  const parsedSuccess = payloadRecord ? parseContractSuccess(payloadRecord) : null;
-  const parsedError = payloadRecord ? parseContractError(payloadRecord) : null;
+  let parsedJson: unknown;
+
+  try {
+    parsedJson = await response.json();
+  } catch {
+    logContractApiFailure({
+      endpointPath,
+      method,
+      reason: "json_parse_failure",
+      status: response.status,
+      requestId,
+    });
+
+    return {
+      ok: false,
+      result: buildToolError(
+        CHATGPT_APP_ERROR_CODES.internal,
+        "CodStats API returned malformed JSON.",
+        {
+          requestId,
+          details: {
+            reason: "json_parse_failure",
+            status: response.status,
+          },
+          ...(wwwAuthenticate
+            ? {
+                wwwAuthenticate,
+              }
+            : {}),
+        },
+      ),
+    };
+  }
+
+  const payloadRecord = asRecord(parsedJson);
+
+  if (!payloadRecord) {
+    if (!response.ok && wwwAuthenticate) {
+      logContractApiFailure({
+        endpointPath,
+        method,
+        reason: "oauth_challenge_non_contract",
+        status: response.status,
+        requestId,
+      });
+
+      return {
+        ok: false,
+        result: buildToolError(CHATGPT_APP_ERROR_CODES.unauthorized, "Authentication required.", {
+          wwwAuthenticate,
+          requestId,
+          details: {
+            reason: "oauth_challenge",
+            status: response.status,
+          },
+        }),
+      };
+    }
+
+    logContractApiFailure({
+      endpointPath,
+      method,
+      reason: "non_object_json",
+      status: response.status,
+      requestId,
+    });
+
+    return {
+      ok: false,
+      result: buildToolError(
+        CHATGPT_APP_ERROR_CODES.internal,
+        response.ok
+          ? "CodStats API returned malformed contract payload."
+          : `CodStats API request failed with status ${response.status}.`,
+        {
+          requestId,
+          details: {
+            reason: "non_object_json",
+            status: response.status,
+          },
+          ...(wwwAuthenticate
+            ? {
+                wwwAuthenticate,
+              }
+            : {}),
+        },
+      ),
+    };
+  }
+
+  const parsedSuccess = parseContractSuccess(payloadRecord);
+  const parsedError = parseContractError(payloadRecord);
 
   if (response.ok && parsedSuccess) {
     return {
@@ -291,27 +525,89 @@ async function requestContractApi(
       result: buildToolError(
         parsedError.error.code,
         parsedError.error.message,
-        response.headers.get("www-authenticate") ?? undefined,
+        {
+          requestId,
+          ...(wwwAuthenticate
+            ? {
+                wwwAuthenticate,
+              }
+            : {}),
+          details: {
+            reason: "contract_error_payload",
+            status: response.status,
+          },
+        },
       ),
     };
   }
 
+  if (!response.ok && wwwAuthenticate) {
+    logContractApiFailure({
+      endpointPath,
+      method,
+      reason: "oauth_challenge_unparsed",
+      status: response.status,
+      requestId,
+    });
+
+    return {
+      ok: false,
+      result: buildToolError(CHATGPT_APP_ERROR_CODES.unauthorized, "Authentication required.", {
+        wwwAuthenticate,
+        requestId,
+        details: {
+          reason: "oauth_challenge",
+          status: response.status,
+        },
+      }),
+    };
+  }
+
   if (!response.ok) {
+    logContractApiFailure({
+      endpointPath,
+      method,
+      reason: "http_error",
+      status: response.status,
+      requestId,
+    });
+
     return {
       ok: false,
       result: buildToolError(
         CHATGPT_APP_ERROR_CODES.internal,
         `CodStats API request failed with status ${response.status}.`,
-        response.headers.get("www-authenticate") ?? undefined,
+        {
+          requestId,
+          details: {
+            reason: "http_error",
+            status: response.status,
+          },
+        },
       ),
     };
   }
+
+  logContractApiFailure({
+    endpointPath,
+    method,
+    reason: "malformed_contract_payload",
+    status: response.status,
+    requestId,
+  });
 
   return {
     ok: false,
     result: buildToolError(
       CHATGPT_APP_ERROR_CODES.internal,
       "CodStats API returned malformed contract payload.",
+      {
+        requestId,
+        details: {
+          reason: "malformed_contract_payload",
+          status: response.status,
+        },
+      },
     ),
   };
 }
@@ -380,6 +676,185 @@ function withHistoryQuery(params: { cursor?: string; limit?: number }) {
     : "/api/app/stats/matches";
 }
 
+type DashboardSnapshot = {
+  session: {
+    srCurrent: number | null;
+    srChange: number | null;
+    matches: number | null;
+    wins: number | null;
+    losses: number | null;
+    kd: number | null;
+    kills: number | null;
+    deaths: number | null;
+    bestStreak: number | null;
+    startedAt: number | null;
+  };
+  rank: {
+    currentRank: string | null;
+    currentSr: number | null;
+    nextDivisionTarget: string | null;
+    nextRankTarget: string | null;
+    srNeeded: number | null;
+  };
+  recentMatches: Array<{
+    mode: string | null;
+    outcome: string | null;
+    srDelta: number | null;
+    kd: number | null;
+    playedAt: number | null;
+  }>;
+  connection: {
+    connected: boolean;
+    status: string;
+    actionsHint: string;
+  };
+};
+
+function createEmptyDashboardSnapshot(): DashboardSnapshot {
+  return {
+    session: {
+      srCurrent: null,
+      srChange: null,
+      matches: null,
+      wins: null,
+      losses: null,
+      kd: null,
+      kills: null,
+      deaths: null,
+      bestStreak: null,
+      startedAt: null,
+    },
+    rank: {
+      currentRank: null,
+      currentSr: null,
+      nextDivisionTarget: null,
+      nextRankTarget: null,
+      srNeeded: null,
+    },
+    recentMatches: [],
+    connection: {
+      connected: false,
+      status: "Disconnected",
+      actionsHint: "Open settings to connect your CodStats account.",
+    },
+  };
+}
+
+function buildRankLabel(value: Record<string, unknown> | null): string | null {
+  if (!value) {
+    return null;
+  }
+
+  const rank = asString(value.rank);
+  if (!rank) {
+    return null;
+  }
+
+  const division = asString(value.division);
+  return division ? `${rank} ${division}` : rank;
+}
+
+function hydrateDashboardSession(snapshot: DashboardSnapshot, payload: ContractSuccess) {
+  const data = asRecord(payload.data);
+  const session = asRecord(data?.session);
+
+  if (!session) {
+    return;
+  }
+
+  const wins = asInteger(session.wins);
+  const losses = asInteger(session.losses);
+
+  snapshot.session.srCurrent = asNumber(session.srCurrent);
+  snapshot.session.srChange =
+    asNumber(session.srChange) ?? asNumber(session.srDelta) ?? asNumber(session.delta);
+  snapshot.session.wins = wins;
+  snapshot.session.losses = losses;
+  snapshot.session.matches =
+    wins !== null && losses !== null ? Math.max(0, wins + losses) : asInteger(session.matches);
+  snapshot.session.kd = asNumber(session.kd);
+  snapshot.session.kills = asInteger(session.kills);
+  snapshot.session.deaths = asInteger(session.deaths);
+  snapshot.session.bestStreak = asInteger(session.bestStreak);
+  snapshot.session.startedAt = asNumber(session.startedAt);
+}
+
+function hydrateDashboardRank(snapshot: DashboardSnapshot, payload: ContractSuccess) {
+  const data = asRecord(payload.data);
+  const current = asRecord(data?.current);
+  const nextDivision = asRecord(data?.nextDivision);
+  const nextRank = asRecord(data?.nextRank);
+
+  snapshot.rank.currentRank = buildRankLabel(current);
+  snapshot.rank.currentSr = asNumber(data?.currentSr);
+  snapshot.rank.nextDivisionTarget = buildRankLabel(nextDivision);
+  snapshot.rank.nextRankTarget = buildRankLabel(nextRank);
+  snapshot.rank.srNeeded =
+    asInteger(nextDivision?.srNeeded) ?? asInteger(nextRank?.srNeeded) ?? null;
+}
+
+function hydrateDashboardMatches(snapshot: DashboardSnapshot, payload: ContractSuccess) {
+  const data = asRecord(payload.data);
+
+  snapshot.recentMatches = asArray(data?.items)
+    .map((item) => asRecord(item))
+    .filter((item): item is Record<string, unknown> => item !== null)
+    .slice(0, 5)
+    .map((item) => ({
+      mode: asString(item.mode),
+      outcome: asString(item.outcome),
+      srDelta:
+        asNumber(item.srDelta) ?? asNumber(item.srChange) ?? asNumber(item.delta),
+      kd: asNumber(item.kd),
+      playedAt: asNumber(item.playedAt),
+    }));
+}
+
+function hydrateDashboardConnection(snapshot: DashboardSnapshot, payload: ContractSuccess) {
+  const data = asRecord(payload.data);
+  const connected = asBoolean(data?.connected);
+
+  snapshot.connection.connected = connected;
+  snapshot.connection.status = connected ? "Connected" : "Disconnected";
+  snapshot.connection.actionsHint = connected
+    ? "Open settings to review connection details. Disconnect revokes this ChatGPT link."
+    : "Open settings to connect your CodStats account. Disconnect becomes available once linked.";
+}
+
+async function buildOpenDashboardSnapshot(extra: ToolExtra): Promise<DashboardSnapshot> {
+  const snapshot = createEmptyDashboardSnapshot();
+  const authorization = getHeaderValue(extra.requestInfo?.headers, "authorization");
+
+  if (!authorization) {
+    return snapshot;
+  }
+
+  const [sessionResult, rankResult, matchesResult, settingsResult] = await Promise.all([
+    requestContractApi(extra, "/api/app/stats/session/current"),
+    requestContractApi(extra, "/api/app/stats/rank/progress"),
+    requestContractApi(extra, withHistoryQuery({ limit: 5 })),
+    requestContractApi(extra, "/api/app/profile"),
+  ]);
+
+  if (sessionResult.ok) {
+    hydrateDashboardSession(snapshot, sessionResult.payload);
+  }
+
+  if (rankResult.ok) {
+    hydrateDashboardRank(snapshot, rankResult.payload);
+  }
+
+  if (matchesResult.ok) {
+    hydrateDashboardMatches(snapshot, matchesResult.payload);
+  }
+
+  if (settingsResult.ok) {
+    hydrateDashboardConnection(snapshot, settingsResult.payload);
+  }
+
+  return snapshot;
+}
+
 export function createChatGptAppMcpServer(
   options: CreateChatGptAppMcpServerOptions = {},
 ) {
@@ -434,9 +909,11 @@ export function createChatGptAppMcpServer(
         securitySchemes: NO_AUTH_SECURITY_SCHEMES,
       }),
     },
-    async ({ tab }) => {
+    async ({ tab }, extra) => {
+      const dashboard = await buildOpenDashboardSnapshot(extra);
       const payload = createChatGptAppSuccessPayload(CHATGPT_APP_VIEWS.uiOpen, {
         tab: tab ?? "overview",
+        dashboard,
       });
       const withUi = attachCodstatsUiToPayload(payload, requestOrigin);
 

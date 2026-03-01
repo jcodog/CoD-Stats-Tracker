@@ -4,7 +4,9 @@ import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 export const CHATGPT_APP_PUBLIC_ROUTE_PATTERNS = [
   "/mcp(.*)",
   "/.well-known/oauth-authorization-server(.*)",
+  "/.well-known/openid-configuration(.*)",
   "/.well-known/oauth-protected-resource(.*)",
+  "/.well-known/oauth-protected-resource/mcp(.*)",
   "/oauth/authorize(.*)",
   "/oauth/token(.*)",
   "/oauth/revoke(.*)",

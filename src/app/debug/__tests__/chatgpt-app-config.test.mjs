@@ -73,8 +73,14 @@ describe("/debug/chatgpt-app-config", () => {
     expect(body.discoveryUrls.authorizationServer).toBe(
       `${TEST_ISSUER}/.well-known/oauth-authorization-server`,
     );
+    expect(body.discoveryUrls.openIdConfiguration).toBe(
+      `${TEST_ISSUER}/.well-known/openid-configuration`,
+    );
     expect(body.discoveryUrls.protectedResource).toBe(
       `${TEST_ISSUER}/.well-known/oauth-protected-resource`,
+    );
+    expect(body.discoveryUrls.protectedResourceMcp).toBe(
+      `${TEST_ISSUER}/.well-known/oauth-protected-resource/mcp`,
     );
     expect(body.mcpUrl).toBe(`${TEST_ISSUER}/mcp`);
     expect(body.jwtSecret).toBeUndefined();

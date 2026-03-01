@@ -110,6 +110,33 @@ async function verifyAuthorizationServerMetadata(baseUrl) {
   return payload;
 }
 
+async function verifyOpenIdConfiguration(baseUrl, expectedIssuer) {
+  const url = new URL("/.well-known/openid-configuration", baseUrl);
+  const payload = await fetchJson(url);
+
+  if (expectedIssuer) {
+    assertCondition(
+      payload.issuer === expectedIssuer,
+      `openid metadata issuer must equal ${expectedIssuer}`,
+    );
+  }
+
+  assertCondition(
+    typeof payload.authorization_endpoint === "string",
+    "openid metadata missing authorization_endpoint",
+  );
+  assertCondition(
+    typeof payload.token_endpoint === "string",
+    "openid metadata missing token_endpoint",
+  );
+  assertCondition(
+    Array.isArray(payload.response_types_supported),
+    "openid metadata missing response_types_supported",
+  );
+
+  return payload;
+}
+
 async function verifyProtectedResourceMetadata(baseUrl, expectedIssuer) {
   const url = new URL("/.well-known/oauth-protected-resource", baseUrl);
   const payload = await fetchJson(url);
@@ -123,6 +150,29 @@ async function verifyProtectedResourceMetadata(baseUrl, expectedIssuer) {
     assertCondition(
       payload.authorization_servers.includes(expectedIssuer),
       `protected resource metadata does not include issuer ${expectedIssuer}`,
+    );
+  }
+
+  return payload;
+}
+
+async function verifyMcpProtectedResourceMetadata(baseUrl, expectedIssuer) {
+  const url = new URL("/.well-known/oauth-protected-resource/mcp", baseUrl);
+  const payload = await fetchJson(url);
+
+  assertCondition(
+    typeof payload.resource === "string" && payload.resource.endsWith("/mcp"),
+    "mcp protected resource metadata must expose resource ending in /mcp",
+  );
+  assertCondition(
+    Array.isArray(payload.authorization_servers),
+    "mcp protected resource metadata missing authorization_servers",
+  );
+
+  if (expectedIssuer) {
+    assertCondition(
+      payload.authorization_servers.includes(expectedIssuer),
+      `mcp protected resource metadata does not include issuer ${expectedIssuer}`,
     );
   }
 
@@ -276,6 +326,27 @@ async function main() {
     "OAuth protected resource metadata",
     async () => {
       const payload = await verifyProtectedResourceMetadata(
+        baseUrl,
+        authorizationMetadata?.issuer,
+      );
+      return `resource=${payload.resource}`;
+    },
+    failures,
+  );
+
+  await runCheck(
+    "OpenID configuration metadata",
+    async () => {
+      const payload = await verifyOpenIdConfiguration(baseUrl, authorizationMetadata?.issuer);
+      return `issuer=${payload.issuer}`;
+    },
+    failures,
+  );
+
+  await runCheck(
+    "MCP protected resource metadata",
+    async () => {
+      const payload = await verifyMcpProtectedResourceMetadata(
         baseUrl,
         authorizationMetadata?.issuer,
       );

@@ -269,31 +269,130 @@
 
     setText("widget-tab-pill", tabLabel);
 
-    let subtitle = "Choose a panel to load your ranked data.";
+    let subtitle = "Live ranked snapshot for your linked account.";
     if (tab === "matches") {
-      subtitle = "Match feed is selected. Load cards with SR deltas and K D.";
+      subtitle = "Focused on match history and momentum shifts.";
     }
     if (tab === "rank") {
-      subtitle = "Rank progress is selected. Load ladder targets and SR progress.";
+      subtitle = "Focused on rank climb targets and SR thresholds.";
     }
     if (tab === "settings") {
-      subtitle = "Settings is selected. Check connection status and account plan.";
+      subtitle = "Focused on account link health and control actions.";
     }
 
     setText("widget-subtitle", subtitle);
 
-    const targetTool =
-      tab === "matches"
-        ? "codstats_get_match_history"
-        : tab === "rank"
-          ? "codstats_get_rank_progress"
-          : tab === "settings"
-            ? "codstats_get_settings"
-            : "codstats_get_current_session";
+    const session = asObject(viewModel.session) || {};
+    const rank = asObject(viewModel.rank) || {};
+    const connection = asObject(viewModel.connection) || {};
+    const recentMatches = asArray(viewModel.recentMatches)
+      .map((entry) => asObject(entry))
+      .filter((entry) => entry !== null)
+      .slice(0, 5);
 
-    const cards = document.querySelectorAll(".codstats-action-card[data-tool]");
-    for (const card of cards) {
-      card.classList.toggle("codstats-action-active", card.getAttribute("data-tool") === targetTool);
+    const wins = toInteger(session.wins);
+    const losses = toInteger(session.losses);
+
+    setText("widget-session-sr", formatInteger(session.srCurrent));
+    setText("widget-session-sr-change", formatDelta(session.srChange));
+    setText("widget-session-matches", formatInteger(session.matches));
+    setText(
+      "widget-session-wl",
+      wins === null || losses === null
+        ? "--"
+        : `${NUMBER_FORMAT.format(wins)}-${NUMBER_FORMAT.format(losses)}`,
+    );
+    setText("widget-session-kd", formatDecimal(session.kd, 2));
+    setText("widget-session-kills", formatInteger(session.kills));
+    setText("widget-session-deaths", formatInteger(session.deaths));
+    setText("widget-session-best-streak", formatInteger(session.bestStreak));
+    setText("widget-session-started-at", formatDateTime(session.startedAt));
+    setPolarityClass("widget-session-sr-change", session.srChange);
+
+    setText("widget-rank-current", toText(rank.currentRank) || "--");
+    setText("widget-rank-current-sr", formatInteger(rank.currentSr));
+    setText("widget-rank-next-division", toText(rank.nextDivisionTarget) || "--");
+    setText("widget-rank-next-rank", toText(rank.nextRankTarget) || "--");
+    setText(
+      "widget-rank-sr-needed",
+      toInteger(rank.srNeeded) === null
+        ? "--"
+        : `${NUMBER_FORMAT.format(toInteger(rank.srNeeded))} SR`,
+    );
+
+    const matchListNode = document.getElementById("widget-matches-list");
+    const matchTemplate = document.getElementById("codstats-widget-match-row-template");
+
+    if (matchListNode) {
+      matchListNode.textContent = "";
+
+      for (const entry of recentMatches) {
+        let row = null;
+
+        if (matchTemplate && matchTemplate.content) {
+          row = matchTemplate.content.firstElementChild.cloneNode(true);
+        }
+
+        if (!row) {
+          row = document.createElement("li");
+          row.className = "codstats-widget-match-row";
+        }
+
+        const mode = toText(entry.mode) || "Ranked";
+        const outcome = toText(entry.outcome);
+        const summary = outcome ? `${titleCase(mode)} | ${titleCase(outcome)}` : titleCase(mode);
+        const srValue = toInteger(entry.srDelta);
+
+        const summaryNode = row.querySelector("[data-field='summary']");
+        const srNode = row.querySelector("[data-field='srDelta']");
+        const kdNode = row.querySelector("[data-field='kd']");
+        const playedAtNode = row.querySelector("[data-field='playedAt']");
+
+        if (summaryNode) {
+          summaryNode.textContent = summary;
+        }
+
+        if (srNode) {
+          srNode.textContent = formatDelta(srValue);
+          srNode.classList.remove("codstats-positive", "codstats-negative");
+          if (srValue !== null) {
+            srNode.classList.add(srValue >= 0 ? "codstats-positive" : "codstats-negative");
+          }
+        }
+
+        if (kdNode) {
+          kdNode.textContent = `KD ${formatDecimal(entry.kd, 2)}`;
+        }
+
+        if (playedAtNode) {
+          playedAtNode.textContent = formatDateTime(entry.playedAt);
+        }
+
+        matchListNode.appendChild(row);
+      }
+    }
+
+    setHidden("widget-matches-empty", recentMatches.length > 0);
+
+    const connected = toBoolean(connection.connected);
+    const statusText = toText(connection.status) || (connected ? "Connected" : "Disconnected");
+    const actionsHint =
+      toText(connection.actionsHint) ||
+      (connected
+        ? "Open settings to review scopes. Use disconnect to revoke this ChatGPT link."
+        : "Open settings to connect your CodStats account.");
+
+    setText("widget-connection-status", statusText);
+    setText("widget-actions-hint", actionsHint);
+
+    const statusNode = document.getElementById("widget-connection-status");
+    if (statusNode) {
+      statusNode.classList.toggle("codstats-pill-accent", connected);
+    }
+
+    const disconnectButton = document.getElementById("widget-disconnect-button");
+    if (disconnectButton) {
+      disconnectButton.disabled = !connected;
     }
   }
 

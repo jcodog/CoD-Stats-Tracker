@@ -1,7 +1,9 @@
 import { afterAll, beforeEach, describe, expect, it } from "bun:test";
 
+import { GET as getOpenIdConfiguration } from "../../.well-known/openid-configuration/route.ts";
 import { GET as getAuthorizationServerMetadata } from "../../.well-known/oauth-authorization-server/route.ts";
 import { GET as getProtectedResourceMetadata } from "../../.well-known/oauth-protected-resource/route.ts";
+import { GET as getMcpProtectedResourceMetadata } from "../../.well-known/oauth-protected-resource/mcp/route.ts";
 
 const TEST_ORIGIN = "https://app.example.com";
 const ALT_ORIGIN = "https://other.example.com";
@@ -84,6 +86,31 @@ describe("OAuth metadata endpoints are public JSON routes", () => {
     expect(body.scopes_supported).toContain("offline_access");
   });
 
+  it("serves openid discovery metadata without auth redirects", async () => {
+    const response = await getOpenIdConfiguration(
+      new Request(`${TEST_ORIGIN}/.well-known/openid-configuration`),
+    );
+    const body = await response.json();
+    const issuer = process.env.OAUTH_ISSUER;
+
+    if (!issuer) {
+      throw new Error("Test is missing OAUTH_ISSUER");
+    }
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("application/json");
+    expect(response.headers.get("content-type")).not.toContain("text/html");
+    expect(body.issuer).toBe(issuer);
+    expect(body.authorization_endpoint).toBe(new URL("/oauth/authorize", issuer).toString());
+    expect(body.token_endpoint).toBe(new URL("/oauth/token", issuer).toString());
+    expect(body.registration_endpoint).toBe(new URL("/oauth/register", issuer).toString());
+    expect(body.response_types_supported).toContain("code");
+    expect(body.subject_types_supported).toContain("public");
+    expect(body.code_challenge_methods_supported).toContain("S256");
+    expect(body.scopes_supported).toContain("profile.read");
+    expect(body.scopes_supported).toContain("stats.read");
+  });
+
   it("defaults OAUTH_RESOURCE to OAUTH_ISSUER in protected resource metadata", async () => {
     const response = await getProtectedResourceMetadata(
       new Request(`${TEST_ORIGIN}/.well-known/oauth-protected-resource`),
@@ -117,6 +144,27 @@ describe("OAuth metadata endpoints are public JSON routes", () => {
 
     expect(response.status).toBe(200);
     expect(body.resource).toBe("https://resource.example.com");
+  });
+
+  it("serves mcp protected resource metadata using canonical /mcp resource URL", async () => {
+    const response = await getMcpProtectedResourceMetadata(
+      new Request(`${TEST_ORIGIN}/.well-known/oauth-protected-resource/mcp`),
+    );
+    const body = await response.json();
+    const issuer = process.env.OAUTH_ISSUER;
+
+    if (!issuer) {
+      throw new Error("Test is missing OAUTH_ISSUER");
+    }
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("application/json");
+    expect(response.headers.get("content-type")).not.toContain("text/html");
+    expect(body.resource).toBe(new URL("/mcp", issuer).toString());
+    expect(body.authorization_servers).toEqual([issuer]);
+    expect(body.scopes_supported).toContain("profile.read");
+    expect(body.scopes_supported).toContain("stats.read");
+    expect(body.scopes_supported).toContain("offline_access");
   });
 
   it("fails with a clear error in production when request origin mismatches OAUTH_ISSUER", async () => {

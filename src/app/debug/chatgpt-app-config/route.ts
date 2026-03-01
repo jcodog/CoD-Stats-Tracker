@@ -70,9 +70,17 @@ export async function GET(request: Request) {
           oauthConfig.issuer,
           "/.well-known/oauth-authorization-server",
         ),
+        openIdConfiguration: buildOAuthAbsoluteUrlFromIssuer(
+          oauthConfig.issuer,
+          "/.well-known/openid-configuration",
+        ),
         protectedResource: buildOAuthAbsoluteUrlFromIssuer(
           oauthConfig.issuer,
           "/.well-known/oauth-protected-resource",
+        ),
+        protectedResourceMcp: buildOAuthAbsoluteUrlFromIssuer(
+          oauthConfig.issuer,
+          "/.well-known/oauth-protected-resource/mcp",
         ),
       },
       mcpUrl: buildOAuthAbsoluteUrlFromIssuer(oauthConfig.issuer, "/mcp"),

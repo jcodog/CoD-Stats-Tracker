@@ -123,7 +123,7 @@ async function main() {
       "codstats_open returned unexpected tab",
     );
     assertCondition(
-      openResult.structuredContent?.data?.uiOutput?.templateUri === TEMPLATE_URIS.session,
+      openResult.structuredContent?.data?.uiOutput?.templateUri === TEMPLATE_URIS.widget,
       "codstats_open returned unexpected uiOutput.templateUri",
     );
 

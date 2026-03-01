@@ -15,6 +15,11 @@ const MCP_CORS_HEADERS: Readonly<Record<string, string>> = {
   "Cache-Control": "no-store",
 };
 
+type AcceptState = {
+  acceptsEventStream: boolean;
+  acceptsJson: boolean;
+};
+
 function withCorsHeaders(response: Response) {
   const headers = new Headers(response.headers);
 
@@ -50,19 +55,70 @@ function internalErrorResponse(requestId: string) {
   );
 }
 
+function parseAcceptState(request: Request): AcceptState {
+  const acceptHeader = request.headers.get("accept")?.toLowerCase() ?? "";
+
+  return {
+    acceptsEventStream: acceptHeader.includes("text/event-stream"),
+    acceptsJson: acceptHeader.includes("application/json"),
+  };
+}
+
+function normalizeMcpRequestAcceptHeader(request: Request, state: AcceptState) {
+  if (request.method !== "POST") {
+    return request;
+  }
+
+  const headerValues = [request.headers.get("accept")?.trim() ?? ""].filter(
+    (value) => value.length > 0,
+  );
+
+  if (!state.acceptsJson) {
+    headerValues.push("application/json");
+  }
+
+  if (!state.acceptsEventStream) {
+    headerValues.push("text/event-stream");
+  }
+
+  if (headerValues.length === 0) {
+    return request;
+  }
+
+  const nextHeaders = new Headers(request.headers);
+  nextHeaders.set("accept", headerValues.join(", "));
+
+  return new Request(request, {
+    headers: nextHeaders,
+  });
+}
+
+function shouldEnableJsonResponse(request: Request, state: AcceptState) {
+  if (request.method !== "POST") {
+    return false;
+  }
+
+  return state.acceptsJson && !state.acceptsEventStream;
+}
+
 async function handleMcpRequest(request: Request) {
   const requestId = createChatGptAppRequestId();
+  const acceptState = parseAcceptState(request);
+  const normalizedRequest = normalizeMcpRequestAcceptHeader(request, acceptState);
   const server = createChatGptAppMcpServer({
     requestOrigin: new URL(request.url).origin,
   });
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
-    enableJsonResponse: true,
+    enableJsonResponse: shouldEnableJsonResponse(request, acceptState),
   });
+  let shouldCloseImmediately = true;
 
   try {
     await server.connect(transport);
-    const response = await transport.handleRequest(request);
+    const response = await transport.handleRequest(normalizedRequest);
+    const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
+    shouldCloseImmediately = !contentType.includes("text/event-stream");
     return withCorsHeaders(response);
   } catch (error) {
     console.error("MCP route error", {
@@ -71,9 +127,12 @@ async function handleMcpRequest(request: Request) {
       path: new URL(request.url).pathname,
       error: error instanceof Error ? error.message : String(error),
     });
+    shouldCloseImmediately = true;
     return internalErrorResponse(requestId);
   } finally {
-    await Promise.allSettled([transport.close(), server.close()]);
+    if (shouldCloseImmediately) {
+      await Promise.allSettled([transport.close(), server.close()]);
+    }
   }
 }
 
