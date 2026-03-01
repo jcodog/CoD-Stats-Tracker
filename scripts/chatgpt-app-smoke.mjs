@@ -17,7 +17,18 @@ const REQUIRED_TOOLS = [
 
 const TEMPLATE_URIS = {
   widget: "ui://codstats/widget.html",
+  session: "ui://codstats/session.html",
+  matches: "ui://codstats/matches.html",
+  rank: "ui://codstats/rank.html",
   settings: "ui://codstats/settings.html",
+};
+
+const TOOL_TEMPLATE_URIS = {
+  codstats_get_current_session: TEMPLATE_URIS.session,
+  codstats_get_last_session: TEMPLATE_URIS.session,
+  codstats_get_match_history: TEMPLATE_URIS.matches,
+  codstats_get_rank_progress: TEMPLATE_URIS.rank,
+  codstats_get_settings: TEMPLATE_URIS.settings,
 };
 
 function parseArgValue(name, fallback) {
@@ -112,7 +123,7 @@ async function main() {
       "codstats_open returned unexpected tab",
     );
     assertCondition(
-      openResult.structuredContent?.data?.uiOutput?.templateUri === TEMPLATE_URIS.widget,
+      openResult.structuredContent?.data?.uiOutput?.templateUri === TEMPLATE_URIS.session,
       "codstats_open returned unexpected uiOutput.templateUri",
     );
 
@@ -135,6 +146,14 @@ async function main() {
 
       if (bearerToken) {
         assertCondition(!isToolError(result), `${tool} failed with bearer token`);
+
+        const expectedTemplateUri = TOOL_TEMPLATE_URIS[tool];
+        if (expectedTemplateUri) {
+          assertCondition(
+            result.structuredContent?.data?.uiOutput?.templateUri === expectedTemplateUri,
+            `${tool} returned unexpected uiOutput.templateUri`,
+          );
+        }
       } else {
         assertCondition(isToolError(result), `${tool} should require authentication`);
         assertCondition(

@@ -6,12 +6,16 @@ const PRODUCTION_APP_HOSTNAMES = new Set([
 const CODSTATS_TEMPLATE_PATHS = {
   widget: "/ui/codstats/widget.html",
   session: "/ui/codstats/session.html",
+  matches: "/ui/codstats/matches.html",
+  rank: "/ui/codstats/rank.html",
   settings: "/ui/codstats/settings.html",
 } as const;
 
 export const CODSTATS_TEMPLATE_URIS = {
   widget: "ui://codstats/widget.html",
   session: "ui://codstats/session.html",
+  matches: "ui://codstats/matches.html",
+  rank: "ui://codstats/rank.html",
   settings: "ui://codstats/settings.html",
 } as const;
 
@@ -105,6 +109,8 @@ export function getCodstatsTemplateUrls(requestOriginInput?: RequestOriginInput)
   return {
     widget: getCodstatsTemplateUrl("widget", requestOriginInput),
     session: getCodstatsTemplateUrl("session", requestOriginInput),
+    matches: getCodstatsTemplateUrl("matches", requestOriginInput),
+    rank: getCodstatsTemplateUrl("rank", requestOriginInput),
     settings: getCodstatsTemplateUrl("settings", requestOriginInput),
   };
 }

@@ -1,63 +1,71 @@
-import {
-  getAppPublicOrigin,
-  getCodstatsTemplateResourceUri,
-  getCodstatsTemplateUrl,
-  type CodstatsTemplateName,
-} from "@/lib/server/app-public-origin";
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
 
-type CodstatsTemplateRecord = {
-  title: string;
-  description: string;
-};
+exports[`ChatGPT MCP CodStats app matches template HTML snapshots: widget-template 1`] = `
+"<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>CodStats Command Center</title>
+    <link rel="canonical" href="https://stats-dev.cleoai.cloud/ui/codstats/widget.html" />
+    <link rel="stylesheet" href="https://stats-dev.cleoai.cloud/ui/codstats/styles.css" />
+    <script src="https://stats-dev.cleoai.cloud/ui/codstats/app.js" defer></script>
+  </head>
+  <body>
+    
+    <main class="codstats-shell" data-template="widget">
+      <header class="codstats-header">
+        <div>
+          <p class="codstats-eyebrow">CodStats</p>
+          <h1 class="codstats-title">Command Center</h1>
+          <p class="codstats-subtitle" id="widget-subtitle">Choose a panel to load your ranked data.</p>
+        </div>
+        <span class="codstats-pill codstats-pill-accent" id="widget-tab-pill">Overview</span>
+      </header>
 
-type RequestOriginInput = Request | URL | string | null | undefined;
+      <section class="codstats-grid codstats-grid-two">
+        <button type="button" class="codstats-action-card" data-tool="codstats_get_current_session">
+          <span class="codstats-action-title">Current Session</span>
+          <span class="codstats-action-copy">Open live SR, W L, KD, and session highlights.</span>
+        </button>
 
-const CODSTATS_TEMPLATES: Record<CodstatsTemplateName, CodstatsTemplateRecord> = {
-  widget: {
-    title: "CodStats Command Center",
-    description: "CodStats launch panel for quick access to sessions, matches, rank, and settings.",
-  },
-  session: {
-    title: "CodStats Session",
-    description: "Live or recent ranked session view with SR, KD, and compact highlights.",
-  },
-  matches: {
-    title: "CodStats Match History",
-    description: "Paginated ranked match feed with SR deltas and performance chips.",
-  },
-  rank: {
-    title: "CodStats Rank Progress",
-    description: "Rank progress board with ladder ranges and SR targets to climb.",
-  },
-  settings: {
-    title: "CodStats Settings",
-    description: "Connection status panel for linked account details and disconnect actions.",
-  },
-};
+        <button type="button" class="codstats-action-card" data-tool="codstats_get_match_history" data-tool-args='{"limit":15}'>
+          <span class="codstats-action-title">Match History</span>
+          <span class="codstats-action-copy">Load the latest ranked cards with pagination.</span>
+        </button>
 
-const CODSTATS_TEMPLATE_CSP_HEADER = [
-  "default-src 'none'",
-  "frame-ancestors https://chatgpt.com https://chat.openai.com",
-  "connect-src 'self'",
-  "img-src 'self' data:",
-  "font-src 'self'",
-  "style-src 'self'",
-  "script-src 'self'",
-  "media-src 'self'",
-  "frame-src 'none'",
-  "object-src 'none'",
-  "base-uri 'none'",
-  "form-action 'none'",
-].join("; ");
+        <button type="button" class="codstats-action-card" data-tool="codstats_get_rank_progress">
+          <span class="codstats-action-title">Rank Progress</span>
+          <span class="codstats-action-copy">View exact SR targets for next division and rank.</span>
+        </button>
 
-function getCodstatsAssetUrl(assetPath: string, requestOriginInput?: RequestOriginInput) {
-  return `${getAppPublicOrigin(requestOriginInput)}${assetPath}`;
-}
+        <button type="button" class="codstats-action-card" data-tool="codstats_get_settings">
+          <span class="codstats-action-title">Settings</span>
+          <span class="codstats-action-copy">Check connection status and account plan.</span>
+        </button>
+      </section>
 
-function renderTemplateBody(templateName: CodstatsTemplateName) {
-  switch (templateName) {
-    case "session":
-      return `
+      <p class="codstats-note">Use quick actions to keep chat output concise and UI first.</p>
+    </main>
+  </body>
+</html>"
+`;
+
+exports[`ChatGPT MCP CodStats app matches template HTML snapshots: session-template 1`] = `
+"<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>CodStats Session</title>
+    <link rel="canonical" href="https://stats-dev.cleoai.cloud/ui/codstats/session.html" />
+    <link rel="stylesheet" href="https://stats-dev.cleoai.cloud/ui/codstats/styles.css" />
+    <script src="https://stats-dev.cleoai.cloud/ui/codstats/app.js" defer></script>
+  </head>
+  <body>
+    
     <main class="codstats-shell" data-template="session">
       <header class="codstats-header">
         <div>
@@ -127,9 +135,25 @@ function renderTemplateBody(templateName: CodstatsTemplateName) {
           <button type="button" class="codstats-btn" data-tool="codstats_get_last_session">Load Last Session</button>
         </div>
       </section>
-    </main>`;
-    case "matches":
-      return `
+    </main>
+  </body>
+</html>"
+`;
+
+exports[`ChatGPT MCP CodStats app matches template HTML snapshots: matches-template 1`] = `
+"<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>CodStats Match History</title>
+    <link rel="canonical" href="https://stats-dev.cleoai.cloud/ui/codstats/matches.html" />
+    <link rel="stylesheet" href="https://stats-dev.cleoai.cloud/ui/codstats/styles.css" />
+    <script src="https://stats-dev.cleoai.cloud/ui/codstats/app.js" defer></script>
+  </head>
+  <body>
+    
     <main class="codstats-shell" data-template="matches">
       <header class="codstats-header">
         <div>
@@ -165,9 +189,25 @@ function renderTemplateBody(templateName: CodstatsTemplateName) {
         <p class="codstats-note" id="matches-next-hint">Use codstats_get_match_history to request the next page.</p>
         <button type="button" class="codstats-btn codstats-btn-secondary is-hidden" id="matches-next-button">Load Next Page</button>
       </footer>
-    </main>`;
-    case "rank":
-      return `
+    </main>
+  </body>
+</html>"
+`;
+
+exports[`ChatGPT MCP CodStats app matches template HTML snapshots: rank-template 1`] = `
+"<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>CodStats Rank Progress</title>
+    <link rel="canonical" href="https://stats-dev.cleoai.cloud/ui/codstats/rank.html" />
+    <link rel="stylesheet" href="https://stats-dev.cleoai.cloud/ui/codstats/styles.css" />
+    <script src="https://stats-dev.cleoai.cloud/ui/codstats/app.js" defer></script>
+  </head>
+  <body>
+    
     <main class="codstats-shell" data-template="rank">
       <header class="codstats-header">
         <div>
@@ -228,9 +268,25 @@ function renderTemplateBody(templateName: CodstatsTemplateName) {
           <p class="codstats-note" id="rank-next-range">--</p>
         </article>
       </section>
-    </main>`;
-    case "settings":
-      return `
+    </main>
+  </body>
+</html>"
+`;
+
+exports[`ChatGPT MCP CodStats app matches template HTML snapshots: settings-template 1`] = `
+"<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>CodStats Settings</title>
+    <link rel="canonical" href="https://stats-dev.cleoai.cloud/ui/codstats/settings.html" />
+    <link rel="stylesheet" href="https://stats-dev.cleoai.cloud/ui/codstats/styles.css" />
+    <script src="https://stats-dev.cleoai.cloud/ui/codstats/app.js" defer></script>
+  </head>
+  <body>
+    
     <main class="codstats-shell" data-template="settings">
       <header class="codstats-header">
         <div>
@@ -277,128 +333,7 @@ function renderTemplateBody(templateName: CodstatsTemplateName) {
       </section>
 
       <p class="codstats-note" id="settings-feedback">Disconnect requires confirmation.</p>
-    </main>`;
-    case "widget":
-    default:
-      return `
-    <main class="codstats-shell" data-template="widget">
-      <header class="codstats-header">
-        <div>
-          <p class="codstats-eyebrow">CodStats</p>
-          <h1 class="codstats-title">Command Center</h1>
-          <p class="codstats-subtitle" id="widget-subtitle">Choose a panel to load your ranked data.</p>
-        </div>
-        <span class="codstats-pill codstats-pill-accent" id="widget-tab-pill">Overview</span>
-      </header>
-
-      <section class="codstats-grid codstats-grid-two">
-        <button type="button" class="codstats-action-card" data-tool="codstats_get_current_session">
-          <span class="codstats-action-title">Current Session</span>
-          <span class="codstats-action-copy">Open live SR, W L, KD, and session highlights.</span>
-        </button>
-
-        <button type="button" class="codstats-action-card" data-tool="codstats_get_match_history" data-tool-args='{"limit":15}'>
-          <span class="codstats-action-title">Match History</span>
-          <span class="codstats-action-copy">Load the latest ranked cards with pagination.</span>
-        </button>
-
-        <button type="button" class="codstats-action-card" data-tool="codstats_get_rank_progress">
-          <span class="codstats-action-title">Rank Progress</span>
-          <span class="codstats-action-copy">View exact SR targets for next division and rank.</span>
-        </button>
-
-        <button type="button" class="codstats-action-card" data-tool="codstats_get_settings">
-          <span class="codstats-action-title">Settings</span>
-          <span class="codstats-action-copy">Check connection status and account plan.</span>
-        </button>
-      </section>
-
-      <p class="codstats-note">Use quick actions to keep chat output concise and UI first.</p>
-    </main>`;
-  }
-}
-
-export function renderCodstatsTemplateHtml(
-  templateName: CodstatsTemplateName,
-  requestOriginInput?: RequestOriginInput,
-) {
-  const hostedTemplateUrl = getCodstatsTemplateUrl(templateName, requestOriginInput);
-  const stylesheetUrl = getCodstatsAssetUrl("/ui/codstats/styles.css", requestOriginInput);
-  const scriptUrl = getCodstatsAssetUrl("/ui/codstats/app.js", requestOriginInput);
-  const { title } = CODSTATS_TEMPLATES[templateName];
-
-  return `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="color-scheme" content="dark" />
-    <title>${title}</title>
-    <link rel="canonical" href="${hostedTemplateUrl}" />
-    <link rel="stylesheet" href="${stylesheetUrl}" />
-    <script src="${scriptUrl}" defer></script>
-  </head>
-  <body>
-    ${renderTemplateBody(templateName)}
+    </main>
   </body>
-</html>`;
-}
-
-export function getCodstatsTemplateCspHeader() {
-  return CODSTATS_TEMPLATE_CSP_HEADER;
-}
-
-export function getCodstatsTemplateCatalog(requestOriginInput?: RequestOriginInput) {
-  return (Object.keys(CODSTATS_TEMPLATES) as CodstatsTemplateName[]).map(
-    (templateName) => ({
-      name: templateName,
-      title: CODSTATS_TEMPLATES[templateName].title,
-      description: CODSTATS_TEMPLATES[templateName].description,
-      resourceUri: getCodstatsTemplateResourceUri(templateName),
-      hostedUrl: getCodstatsTemplateUrl(templateName, requestOriginInput),
-    }),
-  );
-}
-
-export function getCodstatsTemplateResourceMeta(requestOriginInput?: RequestOriginInput) {
-  const templateOrigin = new URL(getCodstatsTemplateUrl("widget", requestOriginInput)).origin;
-
-  return {
-    ui: {
-      prefersBorder: true,
-      domain: templateOrigin,
-      csp: {
-        connectDomains: [templateOrigin],
-        resourceDomains: [templateOrigin],
-        frameDomains: [],
-        baseUriDomains: [templateOrigin],
-      },
-    },
-    "openai/widgetDescription":
-      "CodStats esports dashboard for ranked sessions, match history, rank progress, and settings.",
-    "openai/widgetPrefersBorder": true,
-    "openai/widgetDomain": templateOrigin,
-    "openai/widgetCSP": {
-      connect_domains: [templateOrigin],
-      resource_domains: [templateOrigin],
-      frame_domains: [],
-      redirect_domains: [templateOrigin],
-    },
-  };
-}
-
-export function createCodstatsTemplateHtmlResponse(
-  templateName: CodstatsTemplateName,
-  requestOriginInput?: RequestOriginInput,
-) {
-  return new Response(renderCodstatsTemplateHtml(templateName, requestOriginInput), {
-    status: 200,
-    headers: {
-      "Cache-Control": "no-store",
-      "Content-Type": "text/html; charset=utf-8",
-      "Content-Security-Policy": getCodstatsTemplateCspHeader(),
-      "Referrer-Policy": "no-referrer",
-      "X-Content-Type-Options": "nosniff",
-    },
-  });
-}
+</html>"
+`;

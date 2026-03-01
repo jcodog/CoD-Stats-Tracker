@@ -33,6 +33,7 @@ import {
   getCodstatsTemplateResourceMeta,
   renderCodstatsTemplateHtml,
 } from "@/lib/server/chatgpt-app-ui-templates";
+import { attachCodstatsUiToPayload } from "@/lib/server/chatgpt-app-ui";
 import { CHATGPT_APP_TOOL_SECURITY_SCHEMES } from "@/lib/server/chatgpt-app-scopes";
 
 type ToolExtra = RequestHandlerExtra<ServerRequest, ServerNotification>;
@@ -56,8 +57,8 @@ const TOOL_TEMPLATE_MAP = {
   codstats_open: "widget",
   codstats_get_current_session: "session",
   codstats_get_last_session: "session",
-  codstats_get_match_history: "widget",
-  codstats_get_rank_progress: "widget",
+  codstats_get_match_history: "matches",
+  codstats_get_rank_progress: "rank",
   codstats_get_settings: "settings",
 } as const satisfies Partial<Record<string, CodstatsTemplateName>>;
 
@@ -75,12 +76,6 @@ const CHATGPT_APP_TOOL_NAMES = [
 
 type ChatGptAppToolName = (typeof CHATGPT_APP_TOOL_NAMES)[number];
 
-type ToolUiOutput = {
-  templateUri: string;
-  templateUrl: string;
-  kind: "dashboard" | "session" | "manage_connection";
-};
-
 export type ChatGptAppToolTemplateDebugEntry = {
   name: ChatGptAppToolName;
   resourceUri: string | null;
@@ -92,82 +87,6 @@ function getToolTemplateName(toolName: ChatGptAppToolName): CodstatsTemplateName
   const templateMap =
     TOOL_TEMPLATE_MAP as Partial<Record<ChatGptAppToolName, CodstatsTemplateName>>;
   return templateMap[toolName] ?? null;
-}
-
-function createToolUiOutput(
-  templateName: CodstatsTemplateName,
-  kind: ToolUiOutput["kind"],
-  requestOrigin?: string,
-): ToolUiOutput {
-  return {
-    templateUri: getCodstatsTemplateResourceUri(templateName),
-    templateUrl: getCodstatsTemplateUrl(templateName, requestOrigin),
-    kind,
-  };
-}
-
-function withToolUiOutput(
-  payload: ContractSuccess,
-  requestOrigin?: string,
-): ContractSuccess {
-  const payloadData = asRecord(payload.data) ?? {};
-
-  if (payload.view === CHATGPT_APP_VIEWS.uiOpen) {
-    return {
-      ...payload,
-      data: {
-        ...payloadData,
-        uiOutput: createToolUiOutput("widget", "dashboard", requestOrigin),
-      },
-    };
-  }
-
-  if (payload.view === CHATGPT_APP_VIEWS.settings) {
-    return {
-      ...payload,
-      data: {
-        ...payloadData,
-        uiOutput: createToolUiOutput("settings", "manage_connection", requestOrigin),
-      },
-    };
-  }
-
-  if (payload.view === CHATGPT_APP_VIEWS.sessionCurrent && payloadData.active === true) {
-    return {
-      ...payload,
-      data: {
-        ...payloadData,
-        uiOutput: createToolUiOutput("session", "session", requestOrigin),
-      },
-    };
-  }
-
-  if (payload.view === CHATGPT_APP_VIEWS.sessionLast && payloadData.found === true) {
-    return {
-      ...payload,
-      data: {
-        ...payloadData,
-        uiOutput: createToolUiOutput("session", "session", requestOrigin),
-      },
-    };
-  }
-
-  if (
-    payload.view === CHATGPT_APP_VIEWS.matchesHistory ||
-    payload.view === CHATGPT_APP_VIEWS.matchesDetail ||
-    payload.view === CHATGPT_APP_VIEWS.rankLadder ||
-    payload.view === CHATGPT_APP_VIEWS.rankProgress
-  ) {
-    return {
-      ...payload,
-      data: {
-        ...payloadData,
-        uiOutput: createToolUiOutput("widget", "dashboard", requestOrigin),
-      },
-    };
-  }
-
-  return payload;
 }
 
 export function getChatGptAppToolTemplateDebugEntries(requestOrigin?: string) {
@@ -283,27 +202,27 @@ function parseContractError(payload: Record<string, unknown>): ContractError | n
 function summarizeContractView(payload: ContractSuccess) {
   switch (payload.view) {
     case CHATGPT_APP_VIEWS.uiOpen:
-      return "Opened CodStats.";
+      return "CodStats opened.";
     case CHATGPT_APP_VIEWS.sessionCurrent:
       return payload.data.active === false
-        ? "No active session is currently running."
-        : "Loaded your active session.";
+        ? "No active session."
+        : "Current session loaded.";
     case CHATGPT_APP_VIEWS.sessionLast:
       return payload.data.found === false
-        ? "No completed session was found yet."
-        : "Loaded your last completed session.";
+        ? "No completed session found."
+        : "Last session loaded.";
     case CHATGPT_APP_VIEWS.matchesHistory:
-      return "Loaded match history.";
+      return "Match history loaded.";
     case CHATGPT_APP_VIEWS.matchesDetail:
-      return "Loaded match details.";
+      return "Match details loaded.";
     case CHATGPT_APP_VIEWS.rankLadder:
-      return "Loaded rank ladder ranges.";
+      return "Rank ladder loaded.";
     case CHATGPT_APP_VIEWS.rankProgress:
-      return "Loaded rank progress.";
+      return "Rank progress loaded.";
     case CHATGPT_APP_VIEWS.settings:
-      return "Loaded CodStats settings.";
+      return "Settings loaded.";
     default:
-      return "Loaded CodStats data.";
+      return "CodStats data loaded.";
   }
 }
 
@@ -402,18 +321,19 @@ async function fetchContractToolPayload(
   endpointPath: string,
   requestOrigin: string,
   init?: RequestInit,
-): Promise<CallToolResult | { structuredContent: ContractSuccess; content: { type: "text"; text: string }[] }> {
+): Promise<CallToolResult> {
   const result = await requestContractApi(extra, endpointPath, init);
 
   if (!result.ok) {
     return result.result;
   }
 
-  const enrichedPayload = withToolUiOutput(result.payload, requestOrigin);
+  const withUi = attachCodstatsUiToPayload(result.payload, requestOrigin);
 
   return {
-    structuredContent: enrichedPayload,
-    content: buildTextContent(summarizeContractView(enrichedPayload)),
+    structuredContent: withUi.structuredContent,
+    content: buildTextContent(summarizeContractView(withUi.structuredContent)),
+    _meta: withUi.meta,
   };
 }
 
@@ -518,10 +438,12 @@ export function createChatGptAppMcpServer(
       const payload = createChatGptAppSuccessPayload(CHATGPT_APP_VIEWS.uiOpen, {
         tab: tab ?? "overview",
       });
+      const withUi = attachCodstatsUiToPayload(payload, requestOrigin);
 
       return {
-        structuredContent: withToolUiOutput(payload, requestOrigin),
-        content: buildTextContent("Opened CodStats."),
+        structuredContent: withUi.structuredContent,
+        content: buildTextContent("CodStats opened."),
+        _meta: withUi.meta,
       };
     },
   );
@@ -584,7 +506,7 @@ export function createChatGptAppMcpServer(
         readOnlyHint: true,
       },
       _meta: createToolMeta({
-        templateName: "widget",
+        templateName: "matches",
         securitySchemes: CHATGPT_APP_TOOL_SECURITY_SCHEMES.matchHistory,
       }),
     },
@@ -652,7 +574,7 @@ export function createChatGptAppMcpServer(
         readOnlyHint: true,
       },
       _meta: createToolMeta({
-        templateName: "widget",
+        templateName: "rank",
         securitySchemes: CHATGPT_APP_TOOL_SECURITY_SCHEMES.rankProgress,
       }),
     },

@@ -4,7 +4,13 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 
 import { GET as getMcpRoute } from "../../../app/mcp/route.ts";
+import { GET as getWidgetTemplateRoute } from "../../../app/ui/codstats/widget.html/route.ts";
+import { GET as getSessionTemplateRoute } from "../../../app/ui/codstats/session.html/route.ts";
+import { GET as getMatchesTemplateRoute } from "../../../app/ui/codstats/matches.html/route.ts";
+import { GET as getRankTemplateRoute } from "../../../app/ui/codstats/rank.html/route.ts";
+import { GET as getSettingsTemplateRoute } from "../../../app/ui/codstats/settings.html/route.ts";
 import { createChatGptAppMcpServer } from "../chatgpt-app-mcp.ts";
+import { renderCodstatsTemplateHtml } from "../chatgpt-app-ui-templates.ts";
 import {
   CHATGPT_APP_ERROR_CODES,
   CHATGPT_APP_VIEWS,
@@ -14,10 +20,14 @@ const TEST_ORIGIN = "https://codstats.test";
 const TEST_APP_PUBLIC_ORIGIN = "https://stats-dev.cleoai.cloud";
 const TEST_WIDGET_URL = `${TEST_APP_PUBLIC_ORIGIN}/ui/codstats/widget.html`;
 const TEST_SESSION_URL = `${TEST_APP_PUBLIC_ORIGIN}/ui/codstats/session.html`;
+const TEST_MATCHES_URL = `${TEST_APP_PUBLIC_ORIGIN}/ui/codstats/matches.html`;
+const TEST_RANK_URL = `${TEST_APP_PUBLIC_ORIGIN}/ui/codstats/rank.html`;
 const TEST_SETTINGS_URL = `${TEST_APP_PUBLIC_ORIGIN}/ui/codstats/settings.html`;
 
 const TEST_WIDGET_URI = "ui://codstats/widget.html";
 const TEST_SESSION_URI = "ui://codstats/session.html";
+const TEST_MATCHES_URI = "ui://codstats/matches.html";
+const TEST_RANK_URI = "ui://codstats/rank.html";
 const TEST_SETTINGS_URI = "ui://codstats/settings.html";
 
 const originalFetch = globalThis.fetch;
@@ -151,8 +161,8 @@ describe("ChatGPT MCP CodStats app", () => {
         codstats_open: TEST_WIDGET_URI,
         codstats_get_current_session: TEST_SESSION_URI,
         codstats_get_last_session: TEST_SESSION_URI,
-        codstats_get_match_history: TEST_WIDGET_URI,
-        codstats_get_rank_progress: TEST_WIDGET_URI,
+        codstats_get_match_history: TEST_MATCHES_URI,
+        codstats_get_rank_progress: TEST_RANK_URI,
         codstats_get_settings: TEST_SETTINGS_URI,
       };
 
@@ -211,8 +221,41 @@ describe("ChatGPT MCP CodStats app", () => {
       expect(result.structuredContent.data.active).toBe(true);
       expect(result.structuredContent.data.uiOutput.templateUri).toBe(TEST_SESSION_URI);
       expect(result.structuredContent.data.uiOutput.templateUrl).toBe(TEST_SESSION_URL);
+      expect(result._meta.codstats.templateName).toBe("session");
+      expect(result._meta.codstats.viewModel.source).toBe("current");
       expect(currentCalls).toBe(1);
       expect(lastCalls).toBe(0);
+    });
+  });
+
+  it("supports codstats_open template switching by tab", async () => {
+    await withMcpClient(async ({ client }) => {
+      const overview = await client.callTool({
+        name: "codstats_open",
+        arguments: {
+          tab: "overview",
+        },
+      });
+
+      expect(overview.isError).not.toBe(true);
+      expectContractShape(overview.structuredContent, CHATGPT_APP_VIEWS.uiOpen);
+      expect(overview.structuredContent.data.uiOutput.templateUri).toBe(TEST_SESSION_URI);
+      expect(overview.structuredContent.data.uiOutput.templateUrl).toBe(TEST_SESSION_URL);
+      expect(overview._meta.codstats.templateName).toBe("session");
+
+      const rank = await client.callTool({
+        name: "codstats_open",
+        arguments: {
+          tab: "rank",
+        },
+      });
+
+      expect(rank.isError).not.toBe(true);
+      expect(rank.structuredContent.data.tab).toBe("rank");
+      expect(rank.structuredContent.data.uiOutput.templateUri).toBe(TEST_WIDGET_URI);
+      expect(rank.structuredContent.data.uiOutput.templateUrl).toBe(TEST_WIDGET_URL);
+      expect(rank._meta.codstats.templateName).toBe("widget");
+      expect(rank.content?.[0]?.text).toBe("CodStats opened.");
     });
   });
 
@@ -259,6 +302,44 @@ describe("ChatGPT MCP CodStats app", () => {
       expectContractShape(result.structuredContent, CHATGPT_APP_VIEWS.matchesHistory);
       expect(Array.isArray(result.structuredContent.data.items)).toBe(true);
       expect(result.structuredContent.data.hasMore).toBe(false);
+      expect(result.structuredContent.data.uiOutput.templateUri).toBe(TEST_MATCHES_URI);
+      expect(result.structuredContent.data.uiOutput.templateUrl).toBe(TEST_MATCHES_URL);
+      expect(result._meta.codstats.templateName).toBe("matches");
+      expect(Array.isArray(result._meta.codstats.viewModel.items)).toBe(true);
+      expect(result.content?.[0]?.text).toBe("Match history loaded.");
+      expect(result.content?.[0]?.text.split("\n").length).toBe(1);
+    });
+  });
+
+  it("attaches session template metadata for missing last session", async () => {
+    globalThis.fetch = async (input) => {
+      const url = new URL(input);
+
+      if (url.pathname === "/api/app/stats/session/last") {
+        return jsonResponse(
+          200,
+          contractSuccess(CHATGPT_APP_VIEWS.sessionLast, {
+            found: false,
+          }),
+        );
+      }
+
+      return jsonResponse(404, contractError(CHATGPT_APP_ERROR_CODES.notFound, "not found"));
+    };
+
+    await withMcpClient(async ({ client }) => {
+      const result = await client.callTool({
+        name: "codstats_get_last_session",
+        arguments: {},
+      });
+
+      expect(result.isError).not.toBe(true);
+      expectContractShape(result.structuredContent, CHATGPT_APP_VIEWS.sessionLast);
+      expect(result.structuredContent.data.found).toBe(false);
+      expect(result.structuredContent.data.uiOutput.templateUri).toBe(TEST_SESSION_URI);
+      expect(result._meta.codstats.templateName).toBe("session");
+      expect(result._meta.codstats.viewModel.source).toBe("last");
+      expect(result.content?.[0]?.text).toBe("No completed session found.");
     });
   });
 
@@ -314,8 +395,12 @@ describe("ChatGPT MCP CodStats app", () => {
       expect(result.structuredContent.data.nextDivision.srNeeded).toBe(250);
       expect(result.structuredContent.data.nextRank.srNeeded).toBe(250);
       expect(result.structuredContent.data.prevDivision.srBack).toBe(251);
-      expect(result.structuredContent.data.uiOutput.templateUri).toBe(TEST_WIDGET_URI);
-      expect(result.structuredContent.data.uiOutput.templateUrl).toBe(TEST_WIDGET_URL);
+      expect(result.structuredContent.data.uiOutput.templateUri).toBe(TEST_RANK_URI);
+      expect(result.structuredContent.data.uiOutput.templateUrl).toBe(TEST_RANK_URL);
+      expect(result._meta.codstats.templateName).toBe("rank");
+      expect(result._meta.codstats.viewModel.current.rank).toBe("Gold");
+      expect(typeof result.content?.[0]?.text).toBe("string");
+      expect(result.content?.[0]?.text.length).toBeLessThan(80);
     });
   });
 
@@ -351,6 +436,9 @@ describe("ChatGPT MCP CodStats app", () => {
       expect(result.structuredContent.data.user.plan).toBe("premium");
       expect(result.structuredContent.data.uiOutput.templateUri).toBe(TEST_SETTINGS_URI);
       expect(result.structuredContent.data.uiOutput.templateUrl).toBe(TEST_SETTINGS_URL);
+      expect(result._meta.codstats.templateName).toBe("settings");
+      expect(result._meta.codstats.viewModel.connectionStatus).toBe("Connected");
+      expect(result.content?.[0]?.text).toBe("Settings loaded.");
     });
   });
 
@@ -430,6 +518,40 @@ describe("ChatGPT MCP CodStats app", () => {
       expect(approved.structuredContent.data.disconnected).toBe(true);
       expect(disconnectCallCount).toBe(1);
     });
+  });
+
+  it("serves template routes as HTML with CSP", async () => {
+    const templateRoutes = [
+      { name: "widget", handler: getWidgetTemplateRoute },
+      { name: "session", handler: getSessionTemplateRoute },
+      { name: "matches", handler: getMatchesTemplateRoute },
+      { name: "rank", handler: getRankTemplateRoute },
+      { name: "settings", handler: getSettingsTemplateRoute },
+    ];
+
+    for (const route of templateRoutes) {
+      const response = await route.handler();
+      const contentType = response.headers.get("content-type") ?? "";
+      const csp = response.headers.get("content-security-policy") ?? "";
+
+      expect(response.status).toBe(200);
+      expect(contentType.toLowerCase()).toContain("text/html");
+      expect(csp).toContain("default-src 'none'");
+      expect(csp).toContain("script-src 'self'");
+      expect(csp).toContain("style-src 'self'");
+    }
+  });
+
+  it("matches template HTML snapshots", () => {
+    const templates = ["widget", "session", "matches", "rank", "settings"];
+
+    for (const templateName of templates) {
+      const html = renderCodstatsTemplateHtml(templateName, TEST_APP_PUBLIC_ORIGIN);
+      expect(html).toContain("codstats-shell");
+      expect(html).toContain("/ui/codstats/styles.css");
+      expect(html).toContain("/ui/codstats/app.js");
+      expect(html).toMatchSnapshot(`${templateName}-template`);
+    }
   });
 
   it("serves /mcp without HTML login pages", async () => {

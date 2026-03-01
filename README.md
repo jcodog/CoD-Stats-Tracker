@@ -65,6 +65,7 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 
 Required env vars:
 
+- `APP_PUBLIC_ORIGIN` (canonical HTTPS app origin used for MCP template URLs and UI metadata)
 - `OAUTH_JWT_SECRET`
 - `OAUTH_ALLOWED_REDIRECT_URIS` (comma-separated exact allowlist)
 - `OAUTH_ISSUER` (canonical HTTPS app origin; discovery `issuer` must match this exactly)
@@ -95,6 +96,12 @@ Minimum scopes by App API endpoint:
 
 - `GET /api/app/profile` -> `profile.read`
 - `POST /api/app/disconnect` -> `profile.read`
+- `GET /api/app/stats/session/current` -> `stats.read`
+- `GET /api/app/stats/session/last` -> `stats.read`
+- `GET /api/app/stats/matches` -> `stats.read`
+- `GET /api/app/stats/matches/:id` -> `stats.read`
+- `GET /api/app/stats/rank/ladder` -> `stats.read`
+- `GET /api/app/stats/rank/progress` -> `stats.read`
 - `GET /api/app/stats/summary` -> `stats.read`
 - `GET /api/app/stats/daily` -> `stats.read`
 - `GET /api/app/stats/recent` -> `stats.read`
@@ -164,22 +171,34 @@ The MCP endpoint is served at:
 
 Tools exposed by the connector:
 
-- `codstats_open` (render the compact dashboard UI)
-- `codstats_get_home` (loads Today, last session, and recent matches)
+- `codstats_open` (opens the app shell, routes by selected tab)
+- `codstats_get_current_session` (loads current session stats)
+- `codstats_get_last_session` (loads the most recent completed session)
+- `codstats_get_match_history` (loads recent matches with pagination cursor)
+- `codstats_get_match` (loads one match by match id)
+- `codstats_get_rank_ladder` (loads explicit SR ladder ranges)
+- `codstats_get_rank_progress` (loads rank and SR progress)
 - `codstats_get_settings` (loads connected user details)
 - `codstats_disconnect` (revokes the current app connection)
 
-### ChatGPT App Widget Verification
+### ChatGPT App UI Verification
 
-The Apps SDK verifier requires UI resource metadata on `ui://codstats/widget.html`.
+The Apps SDK verifier requires resource metadata for every registered UI template:
 
-- `ui.domain` is derived from the hostname of `OAUTH_ISSUER` (hostname only, no protocol).
+- `ui://codstats/widget.html`
+- `ui://codstats/session.html`
+- `ui://codstats/matches.html`
+- `ui://codstats/rank.html`
+- `ui://codstats/settings.html`
+
+- `ui.domain` is set to the `APP_PUBLIC_ORIGIN` origin.
 - `ui.csp` is a minimal allowlist object:
-  - `connectDomains` includes the `OAUTH_ISSUER` origin.
-  - `resourceDomains` includes the `OAUTH_ISSUER` origin.
-  - `frameDomains` and `baseUriDomains` default to empty arrays.
+  - `connectDomains` includes the `APP_PUBLIC_ORIGIN` origin.
+  - `resourceDomains` includes the `APP_PUBLIC_ORIGIN` origin.
+  - `baseUriDomains` includes the `APP_PUBLIC_ORIGIN` origin.
+  - `frameDomains` remains an empty array.
 
-Set `OAUTH_ISSUER` to your canonical app URL for verification (for example `https://stats-dev.cleoai.cloud` or `https://stats.cleoai.cloud`). This metadata is required by ext-apps UI resource validation.
+Set `APP_PUBLIC_ORIGIN` and `OAUTH_ISSUER` to your canonical app URL (for example `https://stats-dev.cleoai.cloud` or `https://stats.cleoai.cloud`). These values should match in normal deployments.
 
 ### Public endpoint checks
 
@@ -219,14 +238,14 @@ Expected fields: `oauthIssuer`, `widgetDomain`, `widgetCsp`, `discoveryUrls`, `m
 2. Automated preflight script:
 
 ```bash
-npm run verify:chatgpt-app -- --base-url https://<domain>
+bun run verify:chatgpt-app -- --base-url https://<domain>
 ```
 
-The script prints `PASS`/`FAIL` lines for discovery metadata, MCP content-type safety, and widget `_meta.ui` readiness.
+The script prints `PASS`/`FAIL` lines for discovery metadata, MCP content-type safety, template HTML route safety, and tool-template metadata wiring.
 
 ### Run locally
 
-1. Start your app with `npm run dev`.
+1. Start your app with `bun run dev`.
 2. Expose port 3000 over HTTPS (for example, `ngrok http 3000`).
 3. In ChatGPT, enable developer mode: `Settings -> Apps & Connectors -> Advanced settings -> Developer mode`.
 4. Create a connector with URL `https://<your-public-host>/mcp`.
@@ -234,34 +253,40 @@ The script prints `PASS`/`FAIL` lines for discovery metadata, MCP content-type s
 
 ### What to verify in developer mode
 
-- Home tab triggers calls to:
-  - `GET /api/app/stats/summary`
-  - `GET /api/app/stats/recent`
-- Settings tab triggers call to:
+- `codstats_open` with tab `overview` returns session template metadata and a session-style view model.
+- Session actions call:
+  - `GET /api/app/stats/session/current`
+  - `GET /api/app/stats/session/last`
+- Match actions call:
+  - `GET /api/app/stats/matches`
+  - `GET /api/app/stats/matches/:id` (detail lookups)
+- Rank actions call:
+  - `GET /api/app/stats/rank/progress`
+  - `GET /api/app/stats/rank/ladder`
+- Settings and disconnect call:
   - `GET /api/app/profile`
-- Disconnect button triggers call to:
   - `POST /api/app/disconnect`
 - Loading and error states appear correctly when requests are pending or fail.
 
 ### Local automated test
 
 - Run all ChatGPT app tests:
-  - `npm run test:app`
+  - `bun run test:app`
 - Run API route tests only:
-  - `npm run test:app:api`
+  - `bun run test:app:api`
 - Run debug route tests only:
-  - `npm run test:app:debug`
+  - `bun run test:app:debug`
 - Run OAuth endpoint tests only:
-  - `npm run test:app:oauth`
+  - `bun run test:app:oauth`
 - Run MCP server/tool tests only:
-  - `npm run test:app:mcp`
+  - `bun run test:app:mcp`
 
 ### Smoke test against running server
 
-- Start the app locally (`npm run dev`) and expose HTTPS.
+- Start the app locally (`bun run dev`) and expose HTTPS.
 - Run smoke checks:
-  - `npm run test:app:smoke -- --base-url https://<your-public-host>`
+  - `bun run test:app:smoke -- --base-url https://<your-public-host>`
 - Optional authenticated smoke mode:
-  - `CHATGPT_APP_BEARER_TOKEN=<access_token> npm run test:app:smoke -- --base-url https://<your-public-host>`
+  - `CHATGPT_APP_BEARER_TOKEN=<access_token> bun run test:app:smoke -- --base-url https://<your-public-host>`
 - Optional destructive disconnect validation (disabled by default):
-  - `CHATGPT_APP_BEARER_TOKEN=<access_token> CHATGPT_APP_ALLOW_DISCONNECT=true npm run test:app:smoke -- --base-url https://<your-public-host>`
+  - `CHATGPT_APP_BEARER_TOKEN=<access_token> CHATGPT_APP_ALLOW_DISCONNECT=true bun run test:app:smoke -- --base-url https://<your-public-host>`

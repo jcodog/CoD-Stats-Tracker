@@ -11,6 +11,8 @@ export const CHATGPT_APP_PUBLIC_ROUTE_PATTERNS = [
   "/oauth/register(.*)",
   "/ui/codstats/widget.html(.*)",
   "/ui/codstats/session.html(.*)",
+  "/ui/codstats/matches.html(.*)",
+  "/ui/codstats/rank.html(.*)",
   "/ui/codstats/settings.html(.*)",
   "/api/app(.*)",
 ];

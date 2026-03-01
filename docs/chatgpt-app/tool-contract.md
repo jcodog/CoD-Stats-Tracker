@@ -221,9 +221,31 @@ Attach template metadata to:
 - `codstats_get_rank_progress`
 - `codstats_get_settings`
 
-Template URL must use:
+Do not attach template metadata to:
 
-`${APP_PUBLIC_ORIGIN}/ui/codstats/widget.html`
+- `codstats_get_match`
+- `codstats_get_rank_ladder`
+- `codstats_disconnect`
+
+Template mapping:
+
+- `codstats_open` -> descriptor metadata points to `ui://codstats/widget.html`
+- `codstats_get_current_session` -> `ui://codstats/session.html`
+- `codstats_get_last_session` -> `ui://codstats/session.html`
+- `codstats_get_match_history` -> `ui://codstats/matches.html`
+- `codstats_get_rank_progress` -> `ui://codstats/rank.html`
+- `codstats_get_settings` -> `ui://codstats/settings.html`
+
+Hosted template URLs must use `${APP_PUBLIC_ORIGIN}/ui/codstats/*.html`.
+
+UI hydration rules:
+
+- `structuredContent` remains the canonical contract payload.
+- UI-enabled results include `structuredContent.data.uiOutput` with `templateUri`, `templateUrl`, and `kind`.
+- Tool fallback `content` must be a single short line.
+- Tool result `_meta.codstats.viewModel` contains template-specific UI data for rendering.
+- Widgets read data through the Apps SDK bridge (`window.openai.toolOutput` and `window.openai.toolResponseMetadata`).
+- `codstats_open` may return session `uiOutput.templateUri` at runtime for `tab=overview` while keeping widget descriptor metadata for compatibility.
 
 ---
 

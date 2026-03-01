@@ -22,6 +22,15 @@ const defaultDeps: ProfileRouteDeps = {
   touchConnectionLastUsedAt: touchChatGptConnectionLastUsedAt,
 };
 
+function maskDiscordId(discordId: string) {
+  const normalizedDiscordId = discordId.trim();
+  if (normalizedDiscordId.length <= 4) {
+    return "****";
+  }
+
+  return `${normalizedDiscordId.slice(0, 2)}****${normalizedDiscordId.slice(-2)}`;
+}
+
 export async function handleProfileGet(
   request: Request,
   deps: ProfileRouteDeps = defaultDeps,
@@ -49,12 +58,20 @@ export async function handleProfileGet(
     authResult.auth.user.chatgptLinked === true &&
     authResult.auth.user.connectionStatus === "active";
 
+  const lastSyncAt =
+    typeof authResult.auth.user.connectionLastUsedAt === "number"
+      ? authResult.auth.user.connectionLastUsedAt
+      : null;
+
   return createChatGptAppSuccessResponse(CHATGPT_APP_VIEWS.settings, {
       connected: true,
       chatgptLinked,
+      connectionStatus: authResult.auth.user.connectionStatus,
       user: {
         name: normalizedUserName,
         plan: normalizedPlan,
+        discordIdMasked: maskDiscordId(authResult.auth.user.discordId),
+        lastSyncAt,
       },
     });
 }

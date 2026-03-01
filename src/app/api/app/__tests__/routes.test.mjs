@@ -25,6 +25,7 @@ const ACTIVE_USER = {
   chatgptLinked: true,
   connectionStatus: "active",
   connectionScopes: ["profile.read", "stats.read"],
+  connectionLastUsedAt: 1_700_000_000_000,
 };
 
 const VERIFIED_TOKEN = {
@@ -136,6 +137,10 @@ describe("proxy public route allowlist", () => {
       "/debug/chatgpt-app-config",
       "/mcp",
       "/ui/codstats/widget.html",
+      "/ui/codstats/session.html",
+      "/ui/codstats/matches.html",
+      "/ui/codstats/rank.html",
+      "/ui/codstats/settings.html",
       "/.well-known/oauth-authorization-server",
       "/.well-known/oauth-protected-resource",
       "/oauth/authorize",
@@ -474,6 +479,8 @@ describe("/api/app/profile", () => {
     expect(body.data.connected).toBe(true);
     expect(body.data.user.name).toBe("Test User");
     expect(body.data.user.plan).toBe("free");
+    expect(body.data.user.discordIdMasked).toBe("di****23");
+    expect(body.data.user.lastSyncAt).toBe(1_700_000_000_000);
     expect(body.data.user.discordId).toBeUndefined();
   });
 });

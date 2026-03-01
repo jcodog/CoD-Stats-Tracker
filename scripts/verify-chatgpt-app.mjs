@@ -6,12 +6,16 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 const TEMPLATE_PATHS = {
   widget: "/ui/codstats/widget.html",
   session: "/ui/codstats/session.html",
+  matches: "/ui/codstats/matches.html",
+  rank: "/ui/codstats/rank.html",
   settings: "/ui/codstats/settings.html",
 };
 
 const TEMPLATE_URIS = {
   widget: "ui://codstats/widget.html",
   session: "ui://codstats/session.html",
+  matches: "ui://codstats/matches.html",
+  rank: "ui://codstats/rank.html",
   settings: "ui://codstats/settings.html",
 };
 
@@ -19,8 +23,8 @@ const TOOL_TEMPLATE_URIS = {
   codstats_open: TEMPLATE_URIS.widget,
   codstats_get_current_session: TEMPLATE_URIS.session,
   codstats_get_last_session: TEMPLATE_URIS.session,
-  codstats_get_match_history: TEMPLATE_URIS.widget,
-  codstats_get_rank_progress: TEMPLATE_URIS.widget,
+  codstats_get_match_history: TEMPLATE_URIS.matches,
+  codstats_get_rank_progress: TEMPLATE_URIS.rank,
   codstats_get_settings: TEMPLATE_URIS.settings,
 };
 

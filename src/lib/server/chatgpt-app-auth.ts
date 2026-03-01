@@ -34,6 +34,9 @@ type AppUserRecord = {
   chatgptLinked: boolean;
   connectionStatus: "active" | "revoked" | null;
   connectionScopes: string[];
+  connectionLinkedAt?: number | null;
+  connectionRevokedAt?: number | null;
+  connectionLastUsedAt?: number | null;
 };
 
 type AuthFailureParams = {
