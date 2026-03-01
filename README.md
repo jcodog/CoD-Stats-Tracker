@@ -73,7 +73,7 @@ Optional env vars:
 - `OAUTH_AUDIENCE` (defaults to `OAUTH_RESOURCE`; if set, must match `OAUTH_RESOURCE`)
 - `OAUTH_CLIENT_ID` + `OAUTH_CLIENT_SECRET` (set both for static client mode; omit both for dynamic client registration only)
 - `OAUTH_RESOURCE` (canonical resource identifier; defaults to request origin)
-- `OAUTH_ISSUER` (defaults to request origin)
+- `OAUTH_ISSUER` (defaults to request origin for OAuth metadata, but set this explicitly for ChatGPT widget verification)
 - `OAUTH_ALLOWED_SCOPES` (comma-separated, e.g. `profile.read,stats.read`)
 - `OAUTH_RESOURCE_DOCUMENTATION`
 
@@ -163,6 +163,18 @@ Tools exposed by the connector:
 - `codstats_get_home` (loads Today, last session, and recent matches)
 - `codstats_get_settings` (loads connected user details)
 - `codstats_disconnect` (revokes the current app connection)
+
+### ChatGPT App Widget Verification
+
+The Apps SDK verifier requires UI resource metadata on `ui://codstats/widget.html`.
+
+- `ui.domain` is derived from the hostname of `OAUTH_ISSUER` (hostname only, no protocol).
+- `ui.csp` is a minimal allowlist object:
+  - `connectDomains` includes the `OAUTH_ISSUER` origin.
+  - `resourceDomains` includes the `OAUTH_ISSUER` origin.
+  - `frameDomains` and `baseUriDomains` default to empty arrays.
+
+Set `OAUTH_ISSUER` to your canonical app URL for verification (for example `https://stats-dev.cleoai.cloud` or `https://stats.cleoai.cloud`). This metadata is required by ext-apps UI resource validation.
 
 ### Run locally
 

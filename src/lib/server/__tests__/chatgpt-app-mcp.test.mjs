@@ -9,9 +9,11 @@ const TEST_ORIGIN = "https://codstats.test";
 
 const originalFetch = globalThis.fetch;
 const previousOauthResource = process.env.OAUTH_RESOURCE;
+const previousOauthIssuer = process.env.OAUTH_ISSUER;
 
 beforeAll(() => {
   process.env.OAUTH_RESOURCE = TEST_ORIGIN;
+  process.env.OAUTH_ISSUER = TEST_ORIGIN;
 });
 
 afterAll(() => {
@@ -19,6 +21,12 @@ afterAll(() => {
     delete process.env.OAUTH_RESOURCE;
   } else {
     process.env.OAUTH_RESOURCE = previousOauthResource;
+  }
+
+  if (previousOauthIssuer === undefined) {
+    delete process.env.OAUTH_ISSUER;
+  } else {
+    process.env.OAUTH_ISSUER = previousOauthIssuer;
   }
 });
 
@@ -168,6 +176,26 @@ describe("ChatGPT MCP CodStats app", () => {
       expect(result.structuredContent.recentMatches).toHaveLength(8);
       expect(result.structuredContent.lastSession.sessionUuid).toBe("session-last");
       expect(result.structuredContent.overall.bestStreak).toBe(8);
+    });
+  });
+
+  it("serves verifier-compliant widget metadata", async () => {
+    await withMcpClient(async ({ client }) => {
+      const resource = await client.readResource({
+        uri: "ui://codstats/widget.html",
+      });
+
+      const widget = resource.contents.find(
+        (content) => content.uri === "ui://codstats/widget.html",
+      );
+
+      expect(widget).toBeTruthy();
+      expect(widget?._meta?.ui?.prefersBorder).toBe(true);
+      expect(widget?._meta?.ui?.domain).toBe("codstats.test");
+      expect(widget?._meta?.ui?.csp?.resourceDomains).toEqual([TEST_ORIGIN]);
+      expect(widget?._meta?.ui?.csp?.connectDomains).toEqual([TEST_ORIGIN]);
+      expect(widget?._meta?.ui?.csp?.frameDomains).toEqual([]);
+      expect(widget?._meta?.ui?.csp?.baseUriDomains).toEqual([]);
     });
   });
 

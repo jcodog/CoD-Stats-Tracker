@@ -14,6 +14,7 @@ import type {
 import { z } from "zod";
 
 import { CHATGPT_APP_TOOL_SECURITY_SCHEMES } from "@/lib/server/chatgpt-app-scopes";
+import { resolveWidgetUiMeta } from "@/lib/server/widget-meta";
 
 const WIDGET_RESOURCE_URI = "ui://codstats/widget.html";
 
@@ -1297,6 +1298,8 @@ function createToolMeta(args: {
 }
 
 export function createChatGptAppMcpServer() {
+  const widgetUiMeta = resolveWidgetUiMeta();
+
   const server = new McpServer({
     name: "codstats-app",
     version: "1.0.0",
@@ -1318,6 +1321,8 @@ export function createChatGptAppMcpServer() {
           _meta: {
             ui: {
               prefersBorder: true,
+              domain: widgetUiMeta.domain,
+              csp: widgetUiMeta.csp,
             },
             "openai/widgetDescription":
               "Compact CodStats dashboard with today stats, last session, recent matches, and connection settings.",
