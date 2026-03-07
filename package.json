@@ -5,9 +5,9 @@
   "packageManager": "bun@1.3.10",
   "scripts": {
     "build": "turbo build",
-    "convex:codegen": "turbo run convex:codegen",
-    "convex:dev": "turbo run convex:dev",
-    "convex:deploy": "turbo run convex:deploy",
+    "convex:codegen": "turbo run codegen --filter=@workspace/backend",
+    "convex:dev": "turbo run dev --filter=@workspace/backend",
+    "convex:deploy": "turbo run deploy --filter=@workspace/backend",
     "dev": "turbo run dev",
     "format": "turbo run format",
     "lint": "turbo run lint",

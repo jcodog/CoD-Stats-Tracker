@@ -4,9 +4,9 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "convex:codegen": "convex codegen",
-    "convex:dev": "convex dev",
-    "convex:deploy": "convex deploy -y",
+    "codegen": "convex codegen",
+    "dev": "convex dev",
+    "deploy": "convex deploy -y",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit"
   },
