@@ -11,7 +11,6 @@ import type { ColumnDef } from "@tanstack/react-table"
 import {
   IconDotsVertical,
   IconPlugConnected,
-  IconSettings,
 } from "@tabler/icons-react"
 import type {
   StaffBillingDashboard,
@@ -943,10 +942,6 @@ export function StaffBillingView({
   return (
     <div className="flex flex-1 flex-col gap-8">
       <div className="flex flex-col gap-2">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <IconSettings />
-          Staff and admin billing controls
-        </div>
         <h1 className="text-3xl font-semibold tracking-tight">Billing operations</h1>
         <p className="max-w-3xl text-sm text-muted-foreground">
           Edit the Convex billing catalog, preview operational impact, and keep

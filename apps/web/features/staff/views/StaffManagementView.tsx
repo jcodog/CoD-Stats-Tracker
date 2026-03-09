@@ -1,11 +1,7 @@
 "use client"
 
-import { useState } from "react"
-import {
-  IconAlertTriangle,
-  IconDotsVertical,
-  IconShieldCheck,
-} from "@tabler/icons-react"
+import { useState, type ReactNode } from "react"
+import { IconAlertTriangle, IconDotsVertical } from "@tabler/icons-react"
 import {
   getAssignableRolesForActorRole,
   isAdminCapableRole,
@@ -55,6 +51,7 @@ import {
   TableHeader,
   TableRow,
 } from "@workspace/ui/components/table"
+import { cn } from "@workspace/ui/lib/utils"
 import { toast } from "sonner"
 
 import {
@@ -66,36 +63,56 @@ import {
 import { StaffDataTable } from "@/features/staff/components/StaffDataTable"
 import type { ManagementActionRequest } from "@/features/staff/lib/staff-schemas"
 
+function DirectoryBadge({
+  children,
+  variant = "muted",
+}: {
+  children: ReactNode
+  variant?: "destructive" | "muted" | "outline"
+}) {
+  return (
+    <Badge
+      className={cn(
+        "rounded-md px-1.5 font-normal shadow-none",
+        variant === "outline" && "border-border/60 text-muted-foreground"
+      )}
+      variant={variant}
+    >
+      {children}
+    </Badge>
+  )
+}
+
 function RoleBadge({
   role,
 }: {
   role: StaffManagementUserRecord["clerkRole"] | StaffManagementUserRecord["convexRole"]
 }) {
   if (!role) {
-    return <Badge variant="outline">Missing</Badge>
+    return <DirectoryBadge variant="outline">Missing</DirectoryBadge>
   }
 
   if (role === "super_admin") {
-    return <Badge>Super admin</Badge>
+    return <DirectoryBadge>Super admin</DirectoryBadge>
   }
 
   if (role === "admin") {
-    return <Badge variant="secondary">Admin</Badge>
+    return <DirectoryBadge>Admin</DirectoryBadge>
   }
 
   if (role === "staff") {
-    return <Badge variant="secondary">Staff</Badge>
+    return <DirectoryBadge>Staff</DirectoryBadge>
   }
 
-  return <Badge variant="outline">User</Badge>
+  return <DirectoryBadge variant="outline">User</DirectoryBadge>
 }
 
 function RoleStatusBadge({ user }: { user: StaffManagementUserRecord }) {
   if (user.roleStatus === "matched") {
-    return <Badge variant="secondary">Aligned</Badge>
+    return <DirectoryBadge>Aligned</DirectoryBadge>
   }
 
-  return <Badge variant="destructive">Attention</Badge>
+  return <DirectoryBadge variant="destructive">Attention</DirectoryBadge>
 }
 
 function buildRoleOptionLabel(role: AssignableUserRole) {
@@ -183,13 +200,15 @@ export function StaffManagementView({
       accessorKey: "displayName",
       cell: ({ row }: { row: { original: StaffManagementUserRecord } }) => (
         <div className="flex flex-col gap-1">
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
             <div className="font-medium">{row.original.displayName}</div>
             {row.original.isCurrentUser ? (
-              <Badge variant="outline">Current session</Badge>
+              <DirectoryBadge variant="outline">Current session</DirectoryBadge>
             ) : null}
             {row.original.isReservedSuperAdmin ? (
-              <Badge variant="outline">Reserved super-admin</Badge>
+              <DirectoryBadge variant="outline">
+                Reserved super-admin
+              </DirectoryBadge>
             ) : null}
           </div>
           <div className="text-xs text-muted-foreground">
@@ -301,12 +320,6 @@ export function StaffManagementView({
   return (
     <div className="flex flex-1 flex-col gap-8">
       <div className="flex flex-col gap-2">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <IconShieldCheck />
-          {data.currentActorRole === "super_admin"
-            ? "Super-admin controls"
-            : "Admin controls"}
-        </div>
         <h1 className="text-3xl font-semibold tracking-tight">
           Staff management
         </h1>

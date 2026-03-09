@@ -32,10 +32,6 @@ export function StaffOverviewView({
   return (
     <div className="flex flex-1 flex-col gap-8">
       <div className="flex flex-col gap-2">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Badge variant="outline">Internal</Badge>
-          Staff area
-        </div>
         <h1 className="text-3xl font-semibold tracking-tight">Operations hub</h1>
         <p className="max-w-3xl text-sm text-muted-foreground">
           Use management for RBAC changes and billing for catalog, Stripe sync,
