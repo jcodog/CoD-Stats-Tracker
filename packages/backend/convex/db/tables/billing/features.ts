@@ -6,6 +6,8 @@ export const billingFeatures = defineTable({
   name: v.string(),
   description: v.string(),
 
+  stripeFeatureId: v.optional(v.string()),
+
   category: v.optional(v.string()),
   active: v.boolean(),
   sortOrder: v.number(),

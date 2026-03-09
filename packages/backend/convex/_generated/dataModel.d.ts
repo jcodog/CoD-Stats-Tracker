@@ -108,6 +108,7 @@ export type DataModel = {
       key: string;
       name: string;
       sortOrder: number;
+      stripeFeatureId?: string;
       updatedAt: number;
       _id: Id<"billingFeatures">;
       _creationTime: number;
@@ -122,6 +123,7 @@ export type DataModel = {
       | "key"
       | "name"
       | "sortOrder"
+      | "stripeFeatureId"
       | "updatedAt";
     indexes: {
       by_id: ["_id"];

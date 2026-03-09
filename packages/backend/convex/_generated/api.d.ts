@@ -199,6 +199,42 @@ export declare const api: {
     };
   };
   queries: {
+    billing: {
+      entitlements: {
+        currentUserHasFeature: FunctionReference<
+          "query",
+          "public",
+          { featureKey: string },
+          any
+        >;
+        getCurrentUserEntitlements: FunctionReference<
+          "query",
+          "public",
+          {},
+          any
+        >;
+      };
+      state: {
+        getCurrentUserBillingCustomer: FunctionReference<
+          "query",
+          "public",
+          {},
+          any
+        >;
+        getCurrentUserBillingState: FunctionReference<
+          "query",
+          "public",
+          {},
+          any
+        >;
+        getCurrentUserSubscription: FunctionReference<
+          "query",
+          "public",
+          {},
+          any
+        >;
+      };
+    };
     chatgpt: {
       getActiveSessionByDiscordId: FunctionReference<
         "query",
@@ -420,6 +456,11 @@ export declare const api: {
  */
 export declare const internal: {
   actions: {
+    billing: {
+      syncCatalogToStripe: {
+        syncCatalogToStripe: FunctionReference<"action", "internal", {}, any>;
+      };
+    };
     featureFlags: {
       sync: {
         syncFromVercel: FunctionReference<"action", "internal", {}, any>;
@@ -437,6 +478,27 @@ export declare const internal: {
     };
   };
   mutations: {
+    billing: {
+      catalog: {
+        updateFeatureStripeId: FunctionReference<
+          "mutation",
+          "internal",
+          { featureKey: string; stripeFeatureId: string },
+          any
+        >;
+        updatePlanStripeIds: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            monthlyPriceId?: string;
+            planKey: string;
+            stripeProductId?: string;
+            yearlyPriceId?: string;
+          },
+          any
+        >;
+      };
+    };
     featureFlags: {
       internal: {
         upsertFromVercel: FunctionReference<
@@ -487,6 +549,21 @@ export declare const internal: {
         { data: any },
         any
       >;
+    };
+  };
+  queries: {
+    billing: {
+      catalog: {
+        getBillingFeatures: FunctionReference<"query", "internal", {}, any>;
+        getBillingPlans: FunctionReference<"query", "internal", {}, any>;
+        getPlanFeatures: FunctionReference<
+          "query",
+          "internal",
+          { planKey: string },
+          any
+        >;
+        getPricingCatalog: FunctionReference<"query", "internal", {}, any>;
+      };
     };
   };
 };
