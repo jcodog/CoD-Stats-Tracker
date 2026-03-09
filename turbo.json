@@ -16,7 +16,8 @@
     "REDIS_URL",
     "VERCEL",
     "VERCEL_*",
-    "FLAGS"
+    "FLAGS",
+    "FLAGS_SECRET"
   ],
   "tasks": {
     "codegen": {
@@ -61,7 +62,8 @@
         "REDIS_URL",
         "VERCEL",
         "VERCEL_*",
-        "FLAGS"
+        "FLAGS",
+        "FLAGS_SECRET"
       ]
     },
     "build": {
@@ -73,7 +75,9 @@
         "NEXT_PUBLIC_*",
         "NODE_ENV",
         "OAUTH_*",
-        "REDIS_URL"
+        "REDIS_URL",
+        "FLAGS",
+        "FLAGS_SECRET"
       ],
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
