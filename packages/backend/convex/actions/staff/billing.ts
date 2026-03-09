@@ -174,6 +174,44 @@ function validatePriceAmount(value: number, label: string) {
   return value
 }
 
+function normalizeCatalogKeyList(values: string[], label: string) {
+  return Array.from(
+    new Set(values.map((value) => validateCatalogKey(value, label)))
+  ).sort((left, right) => left.localeCompare(right))
+}
+
+function getFeatureKeyDelta(args: {
+  nextFeatureKeys: string[]
+  previousFeatureKeys: string[]
+}) {
+  const previousFeatureKeys = new Set(args.previousFeatureKeys)
+  const nextFeatureKeys = new Set(args.nextFeatureKeys)
+
+  return {
+    addedFeatureKeys: args.nextFeatureKeys.filter(
+      (featureKey) => !previousFeatureKeys.has(featureKey)
+    ),
+    removedFeatureKeys: args.previousFeatureKeys.filter(
+      (featureKey) => !nextFeatureKeys.has(featureKey)
+    ),
+  }
+}
+
+function getPlanKeyDelta(args: {
+  nextPlanKeys: string[]
+  previousPlanKeys: string[]
+}) {
+  const previousPlanKeys = new Set(args.previousPlanKeys)
+  const nextPlanKeys = new Set(args.nextPlanKeys)
+
+  return {
+    addedPlanKeys: args.nextPlanKeys.filter((planKey) => !previousPlanKeys.has(planKey)),
+    removedPlanKeys: args.previousPlanKeys.filter(
+      (planKey) => !nextPlanKeys.has(planKey)
+    ),
+  }
+}
+
 function buildSubscriptionRows(args: {
   customers: Array<{
     clerkUserId: string
@@ -705,8 +743,54 @@ export const previewPriceReplacement = action({
           ? `Replacing the ${args.interval} price for ${plan.name} will create a new Stripe price, archive the superseded price, and leave ${impactedSubscriptions.length} active subscription(s) on the old price until you migrate or cancel them separately.`
           : `Replacing the ${args.interval} price for ${plan.name} will create a new Stripe price and archive the superseded price.`,
       warnings:
-        impactedSubscriptions.length > 0
-          ? ["Existing subscriptions will stay on their current Stripe price after this replacement."]
+        [
+          impactedSubscriptions.length > 0
+            ? "Existing subscriptions will stay on their current Stripe price after this replacement."
+            : null,
+          args.interval === "month"
+            ? "The new monthly price becomes the Stripe product default before the previous monthly price is archived."
+            : "Monthly pricing remains the Stripe product default after this yearly replacement.",
+        ].filter((warning): warning is string => warning !== null),
+    })
+  },
+})
+
+export const previewPlanFeatureSync = action({
+  args: {
+    featureKeys: v.array(v.string()),
+    planKey: v.string(),
+  },
+  handler: async (ctx, args): Promise<StaffImpactPreview> => {
+    await requireAuthorizedStaffAction(ctx, "staff")
+    const records = await ctx.runQuery(internal.queries.staff.internal.getBillingRecords, {})
+    const dashboard = buildBillingDashboard(records)
+    const plan = dashboard.plans.find((entry) => entry.key === args.planKey)
+
+    if (!plan) {
+      throw new Error(`Billing plan ${args.planKey} was not found.`)
+    }
+
+    const nextFeatureKeys = normalizeCatalogKeyList(args.featureKeys, "Feature key")
+    const { addedFeatureKeys, removedFeatureKeys } = getFeatureKeyDelta({
+      nextFeatureKeys,
+      previousFeatureKeys: plan.includedFeatureKeys,
+    })
+    const impactedSubscriptions = dashboard.subscriptions.filter(
+      (subscription) => subscription.planKey === plan.key
+    )
+
+    return buildImpactPreview({
+      confirmationToken: `${plan.key}:${nextFeatureKeys.length}`,
+      impactedSubscriptions,
+      summary:
+        addedFeatureKeys.length === 0 && removedFeatureKeys.length === 0
+          ? `No plan-feature changes are queued for ${plan.name}.`
+          : `Saving ${plan.name} will attach ${addedFeatureKeys.length} feature(s) and remove ${removedFeatureKeys.length} feature(s) for ${impactedSubscriptions.length} active subscription(s) on this plan.`,
+      warnings:
+        impactedSubscriptions.length > 0 && removedFeatureKeys.length > 0
+          ? [
+              "Detached features are removed from future entitlement and marketing sync output for this plan.",
+            ]
           : [],
     })
   },
@@ -848,6 +932,16 @@ export const archiveFeature = action({
       throw new Error(`Type ${feature.key} to confirm the archive operation.`)
     }
 
+    const dashboard = buildBillingDashboard(records)
+    const existingFeature = dashboard.features.find((entry) => entry.key === feature.key)
+
+    await ctx.runMutation(
+      internal.mutations.staff.internal.syncPlanFeatureAssignmentsForFeature,
+      {
+        featureKey: feature.key,
+        planKeys: [],
+      }
+    )
     await ctx.runMutation(internal.mutations.staff.internal.setFeatureActiveState, {
       active: false,
       archivedAt: Date.now(),
@@ -868,6 +962,13 @@ export const archiveFeature = action({
       actorName: operator.actorDisplayName,
       actorRole: operator.actorRole,
       ctx,
+      details: JSON.stringify(
+        {
+          detachedPlanKeys: existingFeature?.linkedPlanKeys ?? [],
+        },
+        null,
+        2
+      ),
       entityId: feature.key,
       entityLabel: feature.name,
       entityType: "billingFeature",
@@ -912,6 +1013,48 @@ export const previewFeatureAssignmentChange = action({
       warnings:
         impactedSubscriptions.length > 0
           ? ["Detach changes are effective only after Stripe synchronization completes."]
+          : [],
+    })
+  },
+})
+
+export const previewFeatureAssignmentSync = action({
+  args: {
+    featureKey: v.string(),
+    planKeys: v.array(v.string()),
+  },
+  handler: async (ctx, args): Promise<StaffImpactPreview> => {
+    await requireAuthorizedStaffAction(ctx, "staff")
+    const records = await ctx.runQuery(internal.queries.staff.internal.getBillingRecords, {})
+    const dashboard = buildBillingDashboard(records)
+    const feature = dashboard.features.find((entry) => entry.key === args.featureKey)
+
+    if (!feature) {
+      throw new Error(`Billing feature ${args.featureKey} was not found.`)
+    }
+
+    const nextPlanKeys = normalizeCatalogKeyList(args.planKeys, "Plan key")
+    const { addedPlanKeys, removedPlanKeys } = getPlanKeyDelta({
+      nextPlanKeys,
+      previousPlanKeys: feature.linkedPlanKeys,
+    })
+    const impactedSubscriptions = dashboard.subscriptions.filter((subscription) =>
+      removedPlanKeys.includes(subscription.planKey) ||
+      addedPlanKeys.includes(subscription.planKey)
+    )
+
+    return buildImpactPreview({
+      confirmationToken: `${feature.key}:${nextPlanKeys.length}`,
+      impactedSubscriptions,
+      summary:
+        addedPlanKeys.length === 0 && removedPlanKeys.length === 0
+          ? `No assignment changes are queued for ${feature.name}.`
+          : `Saving ${feature.name} will attach it to ${addedPlanKeys.length} plan(s) and remove it from ${removedPlanKeys.length} plan(s), affecting ${impactedSubscriptions.length} active subscription(s).`,
+      warnings:
+        impactedSubscriptions.length > 0 && removedPlanKeys.length > 0
+          ? [
+              "Detach changes are applied during the next Stripe catalog sync and do not migrate existing subscriptions to a new plan.",
+            ]
           : [],
     })
   },
@@ -982,11 +1125,91 @@ export const setFeatureAssignment = action({
   },
 })
 
+export const syncFeatureAssignments = action({
+  args: {
+    featureKey: v.string(),
+    planKeys: v.array(v.string()),
+  },
+  handler: async (ctx, args): Promise<StaffMutationResponse> => {
+    const operator = await requireAuthorizedStaffAction(ctx, "staff")
+    const records = await ctx.runQuery(internal.queries.staff.internal.getBillingRecords, {})
+    const dashboard = buildBillingDashboard(records)
+    const feature = dashboard.features.find((entry) => entry.key === args.featureKey)
+
+    if (!feature) {
+      throw new Error(`Billing feature ${args.featureKey} was not found.`)
+    }
+
+    const nextPlanKeys = normalizeCatalogKeyList(args.planKeys, "Plan key")
+    const plansByKey = new Map(records.plans.map((plan: { key: string }) => [plan.key, plan]))
+
+    if (!feature.active && nextPlanKeys.length > 0) {
+      throw new Error("Archived features cannot be assigned to plans.")
+    }
+
+    for (const planKey of nextPlanKeys) {
+      if (!plansByKey.has(planKey)) {
+        throw new Error(`Billing plan ${planKey} was not found.`)
+      }
+    }
+
+    const { addedPlanKeys, removedPlanKeys } = getPlanKeyDelta({
+      nextPlanKeys,
+      previousPlanKeys: feature.linkedPlanKeys,
+    })
+
+    await ctx.runMutation(
+      internal.mutations.staff.internal.syncPlanFeatureAssignmentsForFeature,
+      {
+        featureKey: feature.key,
+        planKeys: nextPlanKeys,
+      }
+    )
+
+    const syncSummary = await attemptCatalogSync({
+      ctx,
+      entityId: feature.key,
+      entityLabel: feature.name,
+      operator,
+      summaryLabel: `Assignments for ${feature.name} updated.`,
+    })
+
+    await recordAuditLog({
+      action: "billing.assignment.synced",
+      actorClerkUserId: operator.actorClerkUserId,
+      actorName: operator.actorDisplayName,
+      actorRole: operator.actorRole,
+      ctx,
+      details: JSON.stringify(
+        {
+          addedPlanKeys,
+          nextPlanKeys,
+          previousPlanKeys: feature.linkedPlanKeys,
+          removedPlanKeys,
+        },
+        null,
+        2
+      ),
+      entityId: feature.key,
+      entityLabel: feature.name,
+      entityType: "billingAssignment",
+      result: syncSummary?.result === "error" ? "warning" : "success",
+      summary: `Updated plan assignments for ${feature.name}.`,
+    })
+
+    return buildMutationResponse({
+      summary: `Updated plan assignments for ${feature.name}.`,
+      syncSummary,
+    })
+  },
+})
+
 export const upsertPlan = action({
   args: {
     active: v.boolean(),
     currency: v.string(),
     description: v.string(),
+    featureKeys: v.array(v.string()),
     key: v.string(),
     monthlyPriceAmount: v.number(),
     name: v.string(),
@@ -997,12 +1220,25 @@ export const upsertPlan = action({
   handler: async (ctx, args): Promise<StaffMutationResponse> => {
     const operator = await requireAuthorizedStaffAction(ctx, "staff")
     const records = await ctx.runQuery(internal.queries.staff.internal.getBillingRecords, {})
-    const existingPlan = records.plans.find((plan: { key: string }) => plan.key === args.key)
-    const dashboard = buildBillingDashboard(records)
     const normalizedKey = validateCatalogKey(args.key, "Plan key")
+    const existingPlan = records.plans.find(
+      (plan: { key: string }) => plan.key === normalizedKey
+    )
+    const dashboard = buildBillingDashboard(records)
+    const currentPlan = dashboard.plans.find((plan) => plan.key === normalizedKey)
     const normalizedName = validateDisplayName(args.name, "Plan name")
     const normalizedCurrency = normalizeCurrency(args.currency)
     const normalizedDescription = normalizeDescription(args.description)
+    const normalizedFeatureKeys = normalizeCatalogKeyList(args.featureKeys, "Feature key")
+    const featuresByKey = new Map<
+      string,
+      { active: boolean; key: string; name: string }
+    >(
+      records.features.map((feature: { active: boolean; key: string; name: string }) => [
+        feature.key,
+        feature,
+      ])
+    )
     const monthlyPriceAmount =
       args.planType === "free"
         ? 0
@@ -1023,6 +1259,18 @@ export const upsertPlan = action({
       )
     }
 
+    for (const featureKey of normalizedFeatureKeys) {
+      const feature = featuresByKey.get(featureKey)
+
+      if (!feature) {
+        throw new Error(`Billing feature ${featureKey} was not found.`)
+      }
+
+      if (!feature.active) {
+        throw new Error(`Archived billing feature ${feature.name} cannot be assigned to a plan.`)
+      }
+    }
+
     await ctx.runMutation(internal.mutations.staff.internal.upsertPlan, {
       active: args.active,
       currency: normalizedCurrency,
@@ -1034,6 +1282,13 @@ export const upsertPlan = action({
       sortOrder: args.sortOrder,
       yearlyPriceAmount,
     })
+    await ctx.runMutation(
+      internal.mutations.staff.internal.syncPlanFeatureAssignmentsForPlan,
+      {
+        featureKeys: normalizedFeatureKeys,
+        planKey: normalizedKey,
+      }
+    )
 
     const syncSummary = await attemptCatalogSync({
       ctx,
@@ -1055,13 +1310,20 @@ export const upsertPlan = action({
             active: args.active,
             currency: normalizedCurrency,
             description: normalizedDescription,
+            featureKeys: normalizedFeatureKeys,
             monthlyPriceAmount,
             name: normalizedName,
             planType: args.planType,
             sortOrder: args.sortOrder,
             yearlyPriceAmount,
           },
-          before: existingPlan ?? null,
+          before:
+            existingPlan === undefined
+              ? null
+              : {
+                  ...existingPlan,
+                  featureKeys: currentPlan?.includedFeatureKeys ?? [],
+                },
         },
         null,
         2
@@ -1097,8 +1359,10 @@ export const upsertFeature = action({
   handler: async (ctx, args): Promise<StaffMutationResponse> => {
     const operator = await requireAuthorizedStaffAction(ctx, "staff")
     const records = await ctx.runQuery(internal.queries.staff.internal.getBillingRecords, {})
-    const existingFeature = records.features.find((feature: { key: string }) => feature.key === args.key)
     const normalizedKey = validateCatalogKey(args.key, "Feature key")
+    const existingFeature = records.features.find(
+      (feature: { key: string }) => feature.key === normalizedKey
+    )
     const normalizedName = validateDisplayName(args.name, "Feature name")
     const normalizedDescription = normalizeDescription(args.description)
     const normalizedCategory = args.category?.trim() || undefined

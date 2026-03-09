@@ -54,7 +54,7 @@ import { toast } from "sonner"
 
 import {
   StaffClientError,
-  runManagementAction,
+  useStaffManagementClient,
   useStaffManagementDashboard,
   useStaffMutation,
 } from "@/features/staff/lib/staff-client"
@@ -126,6 +126,7 @@ export function StaffManagementView({
 }) {
   const router = useRouter()
   const { data } = useStaffManagementDashboard(initialData)
+  const managementClient = useStaffManagementClient()
   const [pendingRoleChange, setPendingRoleChange] = useState<{
     nextRole: "user" | "staff" | "admin"
     user: StaffManagementUserRecord
@@ -140,7 +141,8 @@ export function StaffManagementView({
     StaffMutationResponse
   >({
     invalidate: ["management"],
-    mutationFn: (request) => runManagementAction<StaffMutationResponse>(request),
+    mutationFn: (request) =>
+      managementClient.runAction<StaffMutationResponse>(request),
   })
 
   const columns = [

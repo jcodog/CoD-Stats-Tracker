@@ -51,8 +51,22 @@ export const billingActionSchema = z.discriminatedUnion("action", [
     }),
   }),
   z.object({
+    action: z.literal("previewFeatureAssignmentSync"),
+    input: z.object({
+      featureKey: catalogKeySchema,
+      planKeys: z.array(catalogKeySchema),
+    }),
+  }),
+  z.object({
     action: z.literal("previewPlanArchive"),
     input: z.object({
+      planKey: catalogKeySchema,
+    }),
+  }),
+  z.object({
+    action: z.literal("previewPlanFeatureSync"),
+    input: z.object({
+      featureKeys: z.array(catalogKeySchema),
       planKey: catalogKeySchema,
     }),
   }),
@@ -75,6 +89,13 @@ export const billingActionSchema = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("runCatalogSync"),
     input: z.object({}).optional().default({}),
+  }),
+  z.object({
+    action: z.literal("syncFeatureAssignments"),
+    input: z.object({
+      featureKey: catalogKeySchema,
+      planKeys: z.array(catalogKeySchema),
+    }),
   }),
   z.object({
     action: z.literal("setFeatureAssignment"),
@@ -102,6 +123,7 @@ export const billingActionSchema = z.discriminatedUnion("action", [
       active: z.boolean(),
       currency: z.string().trim().length(3),
       description: z.string().trim().max(320),
+      featureKeys: z.array(catalogKeySchema),
       key: catalogKeySchema,
       monthlyPriceAmount: z.number().int().nonnegative(),
       name: textSchema,
@@ -114,4 +136,3 @@ export const billingActionSchema = z.discriminatedUnion("action", [
 
 export type BillingActionRequest = z.infer<typeof billingActionSchema>
 export type ManagementActionRequest = z.infer<typeof managementActionSchema>
-

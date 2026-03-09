@@ -52,10 +52,22 @@ export declare const api: {
           { enabled: boolean; featureKey: string; planKey: string },
           any
         >;
+        previewFeatureAssignmentSync: FunctionReference<
+          "action",
+          "public",
+          { featureKey: string; planKeys: Array<string> },
+          any
+        >;
         previewPlanArchive: FunctionReference<
           "action",
           "public",
           { planKey: string },
+          any
+        >;
+        previewPlanFeatureSync: FunctionReference<
+          "action",
+          "public",
+          { featureKeys: Array<string>; planKey: string },
           any
         >;
         previewPriceReplacement: FunctionReference<
@@ -82,6 +94,12 @@ export declare const api: {
           { enabled: boolean; featureKey: string; planKey: string },
           any
         >;
+        syncFeatureAssignments: FunctionReference<
+          "action",
+          "public",
+          { featureKey: string; planKeys: Array<string> },
+          any
+        >;
         upsertFeature: FunctionReference<
           "action",
           "public",
@@ -103,6 +121,7 @@ export declare const api: {
             active: boolean;
             currency: string;
             description: string;
+            featureKeys: Array<string>;
             key: string;
             monthlyPriceAmount: number;
             name: string;
@@ -669,6 +688,18 @@ export declare const internal: {
           "mutation",
           "internal",
           { clerkUserId: string; role: "user" | "staff" | "admin" },
+          any
+        >;
+        syncPlanFeatureAssignmentsForFeature: FunctionReference<
+          "mutation",
+          "internal",
+          { featureKey: string; planKeys: Array<string> },
+          any
+        >;
+        syncPlanFeatureAssignmentsForPlan: FunctionReference<
+          "mutation",
+          "internal",
+          { featureKeys: Array<string>; planKey: string },
           any
         >;
         updateSubscriptionsAfterCancel: FunctionReference<

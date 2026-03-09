@@ -1,6 +1,9 @@
 "use client"
 
+import type { ConvexReactClient } from "convex/react"
+import { useConvex, useConvexAuth } from "convex/react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { api } from "@workspace/backend/convex/_generated/api"
 import type {
   StaffBillingDashboard,
   StaffImpactPreview,
@@ -11,6 +14,10 @@ import type {
 import type {
   BillingActionRequest,
   ManagementActionRequest,
+} from "@/features/staff/lib/staff-schemas"
+import {
+  billingActionSchema,
+  managementActionSchema,
 } from "@/features/staff/lib/staff-schemas"
 
 export class StaffClientError extends Error {
@@ -24,28 +31,22 @@ export class StaffClientError extends Error {
   }
 }
 
-async function readJson<T>(input: RequestInfo, init?: RequestInit): Promise<T> {
-  const response = await fetch(input, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {}),
-    },
-  })
-  const data = await response.json().catch(() => null)
-
-  if (!response.ok) {
-    throw new StaffClientError(
-      (data as { supportMessage?: string; message?: string } | null)
-        ?.supportMessage ??
-        (data as { message?: string } | null)?.message ??
-        "Staff request failed.",
-      response.status,
-      data
-    )
+function toStaffClientError(error: unknown) {
+  if (error instanceof StaffClientError) {
+    return error
   }
 
-  return data as T
+  const message =
+    error instanceof Error ? error.message : "Staff request failed."
+  const status =
+    typeof error === "object" &&
+    error !== null &&
+    "status" in error &&
+    typeof error.status === "number"
+      ? error.status
+      : 500
+
+  return new StaffClientError(message, status, error)
 }
 
 export const staffQueryKeys = {
@@ -53,46 +54,169 @@ export const staffQueryKeys = {
   management: ["staff", "management"] as const,
 }
 
-export async function fetchStaffManagementDashboard() {
-  return readJson<StaffManagementDashboard>("/api/staff/management")
+async function callManagementDashboard(
+  convex: ConvexReactClient
+): Promise<StaffManagementDashboard> {
+  try {
+    return await convex.action(api.actions.staff.management.getDashboard, {})
+  } catch (error) {
+    throw toStaffClientError(error)
+  }
 }
 
-export async function fetchStaffBillingDashboard() {
-  return readJson<StaffBillingDashboard>("/api/staff/billing")
+async function callBillingDashboard(
+  convex: ConvexReactClient
+): Promise<StaffBillingDashboard> {
+  try {
+    return await convex.action(api.actions.staff.billing.getDashboard, {})
+  } catch (error) {
+    throw toStaffClientError(error)
+  }
 }
 
-export async function runManagementAction<T = StaffMutationResponse>(
+async function callManagementAction<T>(
+  convex: ConvexReactClient,
   request: ManagementActionRequest
 ) {
-  return readJson<T>("/api/staff/management/actions", {
-    body: JSON.stringify(request),
-    method: "POST",
-  })
+  const action = managementActionSchema.parse(request)
+
+  try {
+    switch (action.action) {
+      case "updateUserRole":
+        return (await convex.action(
+          api.actions.staff.management.updateUserRole,
+          action.input
+        )) as T
+    }
+  } catch (error) {
+    throw toStaffClientError(error)
+  }
 }
 
-export async function runBillingAction<T = StaffMutationResponse>(
+async function callBillingAction<T>(
+  convex: ConvexReactClient,
   request: BillingActionRequest
 ) {
-  return readJson<T>("/api/staff/billing/actions", {
-    body: JSON.stringify(request),
-    method: "POST",
-  })
+  const action = billingActionSchema.parse(request)
+
+  try {
+    switch (action.action) {
+      case "archiveFeature":
+        return (await convex.action(
+          api.actions.staff.billing.archiveFeature,
+          action.input
+        )) as T
+      case "archivePlan":
+        return (await convex.action(
+          api.actions.staff.billing.archivePlan,
+          action.input
+        )) as T
+      case "previewFeatureArchive":
+        return (await convex.action(
+          api.actions.staff.billing.previewFeatureArchive,
+          action.input
+        )) as T
+      case "previewFeatureAssignmentChange":
+        return (await convex.action(
+          api.actions.staff.billing.previewFeatureAssignmentChange,
+          action.input
+        )) as T
+      case "previewFeatureAssignmentSync":
+        return (await convex.action(
+          api.actions.staff.billing.previewFeatureAssignmentSync,
+          action.input
+        )) as T
+      case "previewPlanArchive":
+        return (await convex.action(
+          api.actions.staff.billing.previewPlanArchive,
+          action.input
+        )) as T
+      case "previewPlanFeatureSync":
+        return (await convex.action(
+          api.actions.staff.billing.previewPlanFeatureSync,
+          action.input
+        )) as T
+      case "previewPriceReplacement":
+        return (await convex.action(
+          api.actions.staff.billing.previewPriceReplacement,
+          action.input
+        )) as T
+      case "replacePlanPrice":
+        return (await convex.action(
+          api.actions.staff.billing.replacePlanPrice,
+          action.input
+        )) as T
+      case "runCatalogSync":
+        return (await convex.action(
+          api.actions.staff.billing.runCatalogSync,
+          {}
+        )) as T
+      case "syncFeatureAssignments":
+        return (await convex.action(
+          api.actions.staff.billing.syncFeatureAssignments,
+          action.input
+        )) as T
+      case "setFeatureAssignment":
+        return (await convex.action(
+          api.actions.staff.billing.setFeatureAssignment,
+          action.input
+        )) as T
+      case "upsertFeature":
+        return (await convex.action(
+          api.actions.staff.billing.upsertFeature,
+          action.input
+        )) as T
+      case "upsertPlan":
+        return (await convex.action(
+          api.actions.staff.billing.upsertPlan,
+          action.input
+        )) as T
+    }
+  } catch (error) {
+    throw toStaffClientError(error)
+  }
 }
 
 export function useStaffManagementDashboard(initialData: StaffManagementDashboard) {
+  const convex = useConvex()
+  const { isAuthenticated, isLoading } = useConvexAuth()
+
   return useQuery({
+    enabled: !isLoading && isAuthenticated,
     initialData,
-    queryFn: fetchStaffManagementDashboard,
+    queryFn: () => callManagementDashboard(convex),
     queryKey: staffQueryKeys.management,
   })
 }
 
 export function useStaffBillingDashboard(initialData: StaffBillingDashboard) {
+  const convex = useConvex()
+  const { isAuthenticated, isLoading } = useConvexAuth()
+
   return useQuery({
+    enabled: !isLoading && isAuthenticated,
     initialData,
-    queryFn: fetchStaffBillingDashboard,
+    queryFn: () => callBillingDashboard(convex),
     queryKey: staffQueryKeys.billing,
   })
+}
+
+export function useStaffManagementClient() {
+  const convex = useConvex()
+
+  return {
+    runAction: <T = StaffMutationResponse>(request: ManagementActionRequest) =>
+      callManagementAction<T>(convex, request),
+  }
+}
+
+export function useStaffBillingClient() {
+  const convex = useConvex()
+
+  return {
+    runAction: <T = StaffMutationResponse>(request: BillingActionRequest) =>
+      callBillingAction<T>(convex, request),
+  }
 }
 
 export function useInvalidateStaffQueries() {
@@ -130,4 +254,3 @@ export function useStaffMutation<TVariables, TResult>(args: {
 }
 
 export type StaffPreviewResponse = StaffImpactPreview
-

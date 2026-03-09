@@ -1,5 +1,5 @@
 import type { Doc } from "../../_generated/dataModel"
-import { internalMutation } from "../../_generated/server"
+import { internalMutation, type MutationCtx } from "../../_generated/server"
 import { v } from "convex/values"
 
 const roleValidator = v.union(
@@ -56,6 +56,132 @@ type BillingFeaturePatch = Partial<
     | "updatedAt"
   >
 >
+
+function uniqueKeys(values: string[]) {
+  return Array.from(new Set(values))
+}
+
+async function syncPlanFeatureAssignmentsByPlan(args: {
+  ctx: MutationCtx
+  featureKeys: string[]
+  planKey: string
+}) {
+  const existingAssignments = await args.ctx.db
+    .query("billingPlanFeatures")
+    .withIndex("by_planKey", (query) => query.eq("planKey", args.planKey))
+    .collect()
+  const desiredFeatureKeys = new Set(uniqueKeys(args.featureKeys))
+  const existingAssignmentsByFeatureKey = new Map(
+    existingAssignments.map((assignment) => [assignment.featureKey, assignment])
+  )
+  const attachedFeatureKeys: string[] = []
+  const detachedFeatureKeys: string[] = []
+  const now = Date.now()
+
+  for (const featureKey of desiredFeatureKeys) {
+    const existingAssignment = existingAssignmentsByFeatureKey.get(featureKey)
+
+    if (!existingAssignment) {
+      await args.ctx.db.insert("billingPlanFeatures", {
+        createdAt: now,
+        enabled: true,
+        featureKey,
+        planKey: args.planKey,
+        updatedAt: now,
+      })
+      attachedFeatureKeys.push(featureKey)
+      continue
+    }
+
+    if (existingAssignment.enabled) {
+      continue
+    }
+
+    await args.ctx.db.patch(existingAssignment._id, {
+      enabled: true,
+      updatedAt: now,
+    })
+    attachedFeatureKeys.push(featureKey)
+  }
+
+  for (const existingAssignment of existingAssignments) {
+    if (!existingAssignment.enabled || desiredFeatureKeys.has(existingAssignment.featureKey)) {
+      continue
+    }
+
+    await args.ctx.db.patch(existingAssignment._id, {
+      enabled: false,
+      updatedAt: now,
+    })
+    detachedFeatureKeys.push(existingAssignment.featureKey)
+  }
+
+  return {
+    attachedFeatureKeys,
+    detachedFeatureKeys,
+  }
+}
+
+async function syncPlanFeatureAssignmentsByFeature(args: {
+  ctx: MutationCtx
+  featureKey: string
+  planKeys: string[]
+}) {
+  const existingAssignments = await args.ctx.db
+    .query("billingPlanFeatures")
+    .withIndex("by_featureKey", (query) => query.eq("featureKey", args.featureKey))
+    .collect()
+  const desiredPlanKeys = new Set(uniqueKeys(args.planKeys))
+  const existingAssignmentsByPlanKey = new Map(
+    existingAssignments.map((assignment) => [assignment.planKey, assignment])
+  )
+  const attachedPlanKeys: string[] = []
+  const detachedPlanKeys: string[] = []
+  const now = Date.now()
+
+  for (const planKey of desiredPlanKeys) {
+    const existingAssignment = existingAssignmentsByPlanKey.get(planKey)
+
+    if (!existingAssignment) {
+      await args.ctx.db.insert("billingPlanFeatures", {
+        createdAt: now,
+        enabled: true,
+        featureKey: args.featureKey,
+        planKey,
+        updatedAt: now,
+      })
+      attachedPlanKeys.push(planKey)
+      continue
+    }
+
+    if (existingAssignment.enabled) {
+      continue
+    }
+
+    await args.ctx.db.patch(existingAssignment._id, {
+      enabled: true,
+      updatedAt: now,
+    })
+    attachedPlanKeys.push(planKey)
+  }
+
+  for (const existingAssignment of existingAssignments) {
+    if (!existingAssignment.enabled || desiredPlanKeys.has(existingAssignment.planKey)) {
+      continue
+    }
+
+    await args.ctx.db.patch(existingAssignment._id, {
+      enabled: false,
+      updatedAt: now,
+    })
+    detachedPlanKeys.push(existingAssignment.planKey)
+  }
+
+  return {
+    attachedPlanKeys,
+    detachedPlanKeys,
+  }
+}
 
 export const insertAuditLog = internalMutation({
   args: {
@@ -340,6 +466,34 @@ export const setPlanFeatureAssignment = internalMutation({
   },
 })
 
+export const syncPlanFeatureAssignmentsForPlan = internalMutation({
+  args: {
+    featureKeys: v.array(v.string()),
+    planKey: v.string(),
+  },
+  handler: async (ctx, args) => {
+    return await syncPlanFeatureAssignmentsByPlan({
+      ctx,
+      featureKeys: args.featureKeys,
+      planKey: args.planKey,
+    })
+  },
+})
+
+export const syncPlanFeatureAssignmentsForFeature = internalMutation({
+  args: {
+    featureKey: v.string(),
+    planKeys: v.array(v.string()),
+  },
+  handler: async (ctx, args) => {
+    return await syncPlanFeatureAssignmentsByFeature({
+      ctx,
+      featureKey: args.featureKey,
+      planKeys: args.planKeys,
+    })
+  },
+})
+
 export const updateSubscriptionsAfterCancel = internalMutation({
   args: {
     updates: v.array(
@@ -375,4 +529,3 @@ export const updateSubscriptionsAfterCancel = internalMutation({
     }
   },
 })
-

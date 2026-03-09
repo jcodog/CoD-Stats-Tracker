@@ -20,6 +20,7 @@ type StripeFeatureMatchSource = "stored_id" | "lookup_key" | "metadata" | "name"
 type StripeProductMatchSource = "stored_id" | "metadata" | "name"
 
 type SyncWarningCode =
+  | "default_price_archive_skipped"
   | "inactive_feature_missing_in_stripe"
   | "inactive_plan_missing_in_stripe"
   | "invalid_marketing_feature_name"
@@ -117,7 +118,7 @@ type ProductUpsertResult = {
 }
 
 type PriceEnsureResult = {
-  archivedPrices: Stripe.Price[]
+  archiveCandidates: Stripe.Price[]
   created: boolean
   price: Stripe.Price | null
   reactivated: boolean
@@ -1095,15 +1096,27 @@ async function archivePrices(params: {
   keepPriceId: string
   planKey: string
   prices: Stripe.Price[]
+  protectedPriceIds?: string[]
   productId: string
   stripe: Stripe
   warnings: SyncWarning[]
 }) {
   const archivedPrices: Stripe.Price[] = []
   const lookupKey = getPriceLookupKey(params.planKey, params.interval)
+  const protectedPriceIds = new Set(params.protectedPriceIds ?? [])
 
   for (const price of dedupeById(params.prices)) {
     if (price.id === params.keepPriceId || !price.active) {
+      continue
+    }
+
+    if (protectedPriceIds.has(price.id)) {
+      addWarning(params.warnings, {
+        code: "default_price_archive_skipped",
+        message: `Skipping archival for Stripe price ${price.id} because it is still the default price for product ${params.productId}`,
+        planKey: params.planKey,
+        stripeObjectId: price.id,
+      })
       continue
     }
 
@@ -1176,7 +1189,7 @@ async function ensureRecurringPrice(params: {
 
       if (changes.length === 0) {
         return {
-          archivedPrices: [],
+          archiveCandidates: [],
           created: false,
           price: storedPrice,
           reactivated: false,
@@ -1184,13 +1197,25 @@ async function ensureRecurringPrice(params: {
         }
       }
 
-      const lookupKeyPrices = await collectList(
-        params.stripe.prices.list({
-          limit: STRIPE_PAGE_SIZE,
-          lookup_keys: [lookupKey],
-          type: "recurring",
-        })
-      )
+      const [lookupKeyPrices, productPrices] = await Promise.all([
+        collectList(
+          params.stripe.prices.list({
+            limit: STRIPE_PAGE_SIZE,
+            lookup_keys: [lookupKey],
+            type: "recurring",
+          })
+        ),
+        collectList(
+          params.stripe.prices.list({
+            limit: STRIPE_PAGE_SIZE,
+            product: params.productId,
+            recurring: {
+              interval: params.interval,
+            },
+            type: "recurring",
+          })
+        ),
+      ])
       const updatedPrice = await params.stripe.prices.update(
         storedPrice.id,
         buildPriceUpdateParams({
@@ -1199,18 +1224,9 @@ async function ensureRecurringPrice(params: {
           planKey: params.planKey,
         })
       )
-      const archivedPrices = await archivePrices({
-        interval: params.interval,
-        keepPriceId: updatedPrice.id,
-        planKey: params.planKey,
-        prices: lookupKeyPrices,
-        productId: params.productId,
-        stripe: params.stripe,
-        warnings: params.warnings,
-      })
 
       return {
-        archivedPrices,
+        archiveCandidates: [...lookupKeyPrices, ...productPrices],
         created: false,
         price: updatedPrice,
         reactivated: !storedPrice.active && updatedPrice.active,
@@ -1282,18 +1298,8 @@ async function ensureRecurringPrice(params: {
             })
           )
 
-    const archivedPrices = await archivePrices({
-      interval: params.interval,
-      keepPriceId: finalPrice.id,
-      planKey: params.planKey,
-      prices: [...pricesToArchive, ...lookupKeyPrices],
-      productId: params.productId,
-      stripe: params.stripe,
-      warnings: params.warnings,
-    })
-
     return {
-      archivedPrices,
+      archiveCandidates: [...pricesToArchive, ...lookupKeyPrices, ...productPrices],
       created: false,
       price: finalPrice,
       reactivated: !exactMatch.active && finalPrice.active,
@@ -1309,7 +1315,7 @@ async function ensureRecurringPrice(params: {
     })
 
     return {
-      archivedPrices: [],
+      archiveCandidates: [...pricesToArchive, ...lookupKeyPrices, ...productPrices],
       created: false,
       price: null,
       reactivated: false,
@@ -1339,18 +1345,8 @@ async function ensureRecurringPrice(params: {
     unit_amount: params.amount,
   })
 
-  const archivedPrices = await archivePrices({
-    interval: params.interval,
-    keepPriceId: createdPrice.id,
-    planKey: params.planKey,
-    prices: [...pricesToArchive, ...lookupKeyPrices],
-    productId: params.productId,
-    stripe: params.stripe,
-    warnings: params.warnings,
-  })
-
   return {
-    archivedPrices,
+    archiveCandidates: [...pricesToArchive, ...lookupKeyPrices, ...productPrices],
     created: true,
     price: createdPrice,
     reactivated: false,
@@ -1690,29 +1686,16 @@ export const syncCatalogToStripe = internalAction({
         }
       }
 
-      for (const archivedPrice of [
-        ...monthlyPrice.archivedPrices,
-        ...yearlyPrice.archivedPrices,
-      ]) {
-        const archivedInterval =
-          archivedPrice.recurring?.interval === "year" ? "year" : "month"
-
-        pricesArchived.set(`${plan.key}:${archivedPrice.id}`, {
-          amount: archivedPrice.unit_amount ?? 0,
-          currency: archivedPrice.currency,
-          interval: archivedInterval,
-          planKey: plan.key,
-          stripePriceId: archivedPrice.id,
-        })
-      }
+      let syncedProduct = productResult.product
 
       if (plan.active && monthlyPrice.price) {
-        const currentDefaultPriceId = getDefaultPriceId(productResult.product)
+        const currentDefaultPriceId = getDefaultPriceId(syncedProduct)
 
         if (currentDefaultPriceId !== monthlyPrice.price.id) {
-          const updatedProduct = await stripe.products.update(productResult.product.id, {
+          const updatedProduct = await stripe.products.update(syncedProduct.id, {
             default_price: monthlyPrice.price.id,
           })
+          syncedProduct = updatedProduct
 
           upsertItemById(stripeProducts, updatedProduct)
 
@@ -1727,10 +1710,47 @@ export const syncCatalogToStripe = internalAction({
         }
       }
 
+      const protectedPriceIds = [
+        getDefaultPriceId(syncedProduct),
+      ].filter((priceId): priceId is string => Boolean(priceId))
+      const archivedMonthlyPrices = await archivePrices({
+        interval: "month",
+        keepPriceId: monthlyPrice.price?.id ?? "",
+        planKey: plan.key,
+        prices: monthlyPrice.archiveCandidates,
+        productId: syncedProduct.id,
+        protectedPriceIds,
+        stripe,
+        warnings,
+      })
+      const archivedYearlyPrices = await archivePrices({
+        interval: "year",
+        keepPriceId: yearlyPrice.price?.id ?? "",
+        planKey: plan.key,
+        prices: yearlyPrice.archiveCandidates,
+        productId: syncedProduct.id,
+        protectedPriceIds,
+        stripe,
+        warnings,
+      })
+
+      for (const archivedPrice of [...archivedMonthlyPrices, ...archivedYearlyPrices]) {
+        const archivedInterval =
+          archivedPrice.recurring?.interval === "year" ? "year" : "month"
+
+        pricesArchived.set(`${plan.key}:${archivedPrice.id}`, {
+          amount: archivedPrice.unit_amount ?? 0,
+          currency: archivedPrice.currency,
+          interval: archivedInterval,
+          planKey: plan.key,
+          stripePriceId: archivedPrice.id,
+        })
+      }
+
       await ctx.runMutation(internal.mutations.billing.catalog.updatePlanStripeIds, {
         monthlyPriceId: monthlyPrice.price?.id,
         planKey: plan.key,
-        stripeProductId: productResult.product.id,
+        stripeProductId: syncedProduct.id,
         yearlyPriceId: yearlyPrice.price?.id,
       })
     }

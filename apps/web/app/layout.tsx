@@ -35,13 +35,13 @@ export default function RootLayout({
       suppressHydrationWarning
       className={cn(inter.variable, fontMono.variable)}
     >
-      <body className="flex min-h-screen min-w-full h-full w-full flex-col antialiased">
+      <body className="flex h-full min-h-screen w-full min-w-full flex-col antialiased">
         <ThemeProvider>
           <ClerkProvider>
             <ConvexClientProvider>
               <TanstackQueryProvider>
                 {children}
-                <Toaster richColors position="top-right" />
+                <Toaster richColors position="top-right" closeButton />
               </TanstackQueryProvider>
             </ConvexClientProvider>
           </ClerkProvider>

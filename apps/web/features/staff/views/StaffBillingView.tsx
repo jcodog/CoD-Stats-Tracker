@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, type Dispatch, type SetStateAction } from "react"
 import type { ColumnDef } from "@tanstack/react-table"
 import {
   IconDotsVertical,
@@ -23,6 +23,18 @@ import {
   CardHeader,
   CardTitle,
 } from "@workspace/ui/components/card"
+import {
+  Combobox,
+  ComboboxChip,
+  ComboboxChips,
+  ComboboxChipsInput,
+  ComboboxCollection,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxItem,
+  ComboboxList,
+  useComboboxAnchor,
+} from "@workspace/ui/components/combobox"
 import {
   Dialog,
   DialogContent,
@@ -66,19 +78,20 @@ import {
 import { Textarea } from "@workspace/ui/components/textarea"
 import { toast } from "sonner"
 
+import { StaffDataTable } from "@/features/staff/components/StaffDataTable"
+import type { BillingActionRequest } from "@/features/staff/lib/staff-schemas"
 import {
   StaffClientError,
-  runBillingAction,
+  useStaffBillingClient,
   useStaffBillingDashboard,
   useStaffMutation,
 } from "@/features/staff/lib/staff-client"
-import { StaffDataTable } from "@/features/staff/components/StaffDataTable"
-import type { BillingActionRequest } from "@/features/staff/lib/staff-schemas"
 
 type PlanFormState = {
   active: boolean
   currency: string
   description: string
+  featureKeys: string[]
   key: string
   monthlyPriceAmount: string
   mode: "create" | "edit"
@@ -120,11 +133,32 @@ type ArchiveFeatureState = {
   preview: StaffImpactPreview | null
 }
 
-type AssignmentState = {
-  enabled: boolean
-  feature: StaffBillingFeatureRecord
+type PlanFeatureSyncState = {
+  addedFeatureKeys: string[]
   plan: StaffBillingPlanRecord
-  preview: StaffImpactPreview | null
+  planForm: PlanFormState
+  preview: StaffImpactPreview
+  removedFeatureKeys: string[]
+}
+
+type AssignmentEditorState = {
+  featureKey: string
+  planKeys: string[]
+}
+
+type FeatureAssignmentSyncState = {
+  addedPlanKeys: string[]
+  feature: StaffBillingFeatureRecord
+  planKeys: string[]
+  preview: StaffImpactPreview
+  removedPlanKeys: string[]
+}
+
+type MultiSelectOption = {
+  description?: string
+  disabled?: boolean
+  label: string
+  value: string
 }
 
 function formatCurrencyAmount(amount: number, currency: string) {
@@ -132,6 +166,31 @@ function formatCurrencyAmount(amount: number, currency: string) {
     currency: currency.toUpperCase(),
     style: "currency",
   }).format(amount / 100)
+}
+
+function normalizeKeys(values: string[]) {
+  return Array.from(new Set(values)).sort((left, right) => left.localeCompare(right))
+}
+
+function sameKeySet(left: string[], right: string[]) {
+  const normalizedLeft = normalizeKeys(left)
+  const normalizedRight = normalizeKeys(right)
+
+  if (normalizedLeft.length !== normalizedRight.length) {
+    return false
+  }
+
+  return normalizedLeft.every((value, index) => value === normalizedRight[index])
+}
+
+function diffKeys(args: { next: string[]; previous: string[] }) {
+  const previousValues = new Set(args.previous)
+  const nextValues = new Set(args.next)
+
+  return {
+    added: args.next.filter((value) => !previousValues.has(value)),
+    removed: args.previous.filter((value) => !nextValues.has(value)),
+  }
 }
 
 function SyncStatusBadge({ status }: { status: StaffBillingPlanRecord["syncStatus"] }) {
@@ -169,25 +228,230 @@ function MetricCard({
   )
 }
 
+function ImpactSummary({
+  preview,
+}: {
+  preview: StaffImpactPreview | null
+}) {
+  if (!preview) {
+    return (
+      <div className="rounded-lg border border-border/70 bg-muted/30 px-3 py-3 text-sm text-muted-foreground">
+        Loading operational impact preview...
+      </div>
+    )
+  }
+
+  return (
+    <div className="rounded-lg border border-border/70 bg-muted/30 px-3 py-3 text-sm">
+      <p className="font-medium">{preview.summary}</p>
+      <p className="mt-2 text-muted-foreground">
+        {preview.counts.activeSubscriptions} active subscription(s) across{" "}
+        {preview.counts.affectedUsers} user(s) are in scope.
+      </p>
+      {preview.warnings.length > 0 ? (
+        <ul className="mt-3 space-y-1 text-sm text-amber-700 dark:text-amber-300">
+          {preview.warnings.map((warning) => (
+            <li key={warning}>{warning}</li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  )
+}
+
+function ChangeSummary(args: {
+  addedLabel: string
+  addedValues: string[]
+  labelByKey: Map<string, string>
+  removedLabel: string
+  removedValues: string[]
+}) {
+  if (args.addedValues.length === 0 && args.removedValues.length === 0) {
+    return (
+      <div className="rounded-lg border border-border/70 bg-muted/30 px-3 py-3 text-sm text-muted-foreground">
+        No assignment changes are queued.
+      </div>
+    )
+  }
+
+  return (
+    <div className="grid gap-3 md:grid-cols-2">
+      <div className="rounded-lg border border-border/70 bg-muted/30 px-3 py-3">
+        <div className="text-sm font-medium">{args.addedLabel}</div>
+        <div className="mt-2 flex flex-wrap gap-1">
+          {args.addedValues.length > 0 ? (
+            args.addedValues.map((value) => (
+              <Badge key={value} variant="secondary">
+                {args.labelByKey.get(value) ?? value}
+              </Badge>
+            ))
+          ) : (
+            <span className="text-sm text-muted-foreground">None</span>
+          )}
+        </div>
+      </div>
+      <div className="rounded-lg border border-border/70 bg-muted/30 px-3 py-3">
+        <div className="text-sm font-medium">{args.removedLabel}</div>
+        <div className="mt-2 flex flex-wrap gap-1">
+          {args.removedValues.length > 0 ? (
+            args.removedValues.map((value) => (
+              <Badge key={value} variant="outline">
+                {args.labelByKey.get(value) ?? value}
+              </Badge>
+            ))
+          ) : (
+            <span className="text-sm text-muted-foreground">None</span>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function MultiSelectCombobox(args: {
+  emptyLabel: string
+  onChange: (values: string[]) => void
+  options: MultiSelectOption[]
+  placeholder: string
+  value: string[]
+}) {
+  const anchorRef = useComboboxAnchor()
+  const [query, setQuery] = useState("")
+  const selectedOptions = args.options.filter((option) =>
+    args.value.includes(option.value)
+  )
+  const availableOptions = args.options.filter((option) => {
+    if (!query.trim()) {
+      return true
+    }
+
+    const normalizedQuery = query.trim().toLowerCase()
+
+    return (
+      option.label.toLowerCase().includes(normalizedQuery) ||
+      option.value.toLowerCase().includes(normalizedQuery)
+    )
+  })
+
+  return (
+    <Combobox
+      items={availableOptions}
+      itemToStringLabel={(item: MultiSelectOption) => item.label}
+      itemToStringValue={(item: MultiSelectOption) => item.value}
+      isItemEqualToValue={(item: MultiSelectOption, value: MultiSelectOption) =>
+        item.value === value.value
+      }
+      multiple
+      onInputValueChange={setQuery}
+      onValueChange={(values) =>
+        args.onChange(
+          normalizeKeys(
+            Array.isArray(values) ? values.map((value) => value.value) : []
+          )
+        )
+      }
+      value={selectedOptions}
+    >
+      <ComboboxChips className="min-h-11" ref={anchorRef}>
+        {selectedOptions.map((option) => (
+          <ComboboxChip key={option.value}>
+            {option.label}
+          </ComboboxChip>
+        ))}
+        <ComboboxChipsInput className="min-w-24" placeholder={args.placeholder} />
+      </ComboboxChips>
+      <ComboboxContent anchor={anchorRef}>
+        <ComboboxList>
+          <ComboboxEmpty>{args.emptyLabel}</ComboboxEmpty>
+          <ComboboxCollection>
+            {(item: MultiSelectOption, index: number) => (
+              <ComboboxItem
+                disabled={item.disabled}
+                index={index}
+                key={item.value}
+                value={item}
+              >
+                <div className="flex flex-col">
+                  <span>{item.label}</span>
+                  {item.description ? (
+                    <span className="text-xs text-muted-foreground">
+                      {item.description}
+                    </span>
+                  ) : null}
+                </div>
+              </ComboboxItem>
+            )}
+          </ComboboxCollection>
+        </ComboboxList>
+      </ComboboxContent>
+    </Combobox>
+  )
+}
+
 export function StaffBillingView({
   initialData,
 }: {
   initialData: StaffBillingDashboard
 }) {
   const { data } = useStaffBillingDashboard(initialData)
+  const billingClient = useStaffBillingClient()
   const [planForm, setPlanForm] = useState<PlanFormState | null>(null)
   const [featureForm, setFeatureForm] = useState<FeatureFormState | null>(null)
   const [archivePlanState, setArchivePlanState] = useState<ArchivePlanState | null>(null)
   const [replacePriceState, setReplacePriceState] = useState<ReplacePriceState | null>(null)
-  const [archiveFeatureState, setArchiveFeatureState] = useState<ArchiveFeatureState | null>(null)
-  const [assignmentState, setAssignmentState] = useState<AssignmentState | null>(null)
-  const billingMutation = useStaffMutation<
-    BillingActionRequest,
-    StaffMutationResponse
-  >({
-    invalidate: ["billing"],
-    mutationFn: (request) => runBillingAction<StaffMutationResponse>(request),
+  const [archiveFeatureState, setArchiveFeatureState] =
+    useState<ArchiveFeatureState | null>(null)
+  const [planFeatureSyncState, setPlanFeatureSyncState] =
+    useState<PlanFeatureSyncState | null>(null)
+  const [assignmentEditor, setAssignmentEditor] = useState<AssignmentEditorState>(() => {
+    const initialFeature =
+      initialData.features.find((feature) => feature.active) ?? initialData.features[0]
+
+    return {
+      featureKey: initialFeature?.key ?? "",
+      planKeys: initialFeature?.linkedPlanKeys ?? [],
+    }
   })
+  const [featureAssignmentSyncState, setFeatureAssignmentSyncState] =
+    useState<FeatureAssignmentSyncState | null>(null)
+  const billingMutation = useStaffMutation<BillingActionRequest, StaffMutationResponse>({
+    invalidate: ["billing"],
+    mutationFn: (request) => billingClient.runAction<StaffMutationResponse>(request),
+  })
+  const featureLabelByKey = new Map<string, string>(
+    data.features.map((feature) => [feature.key, feature.name])
+  )
+  const planLabelByKey = new Map<string, string>(
+    data.plans.map((plan) => [plan.key, plan.name])
+  )
+  const featureOptions: MultiSelectOption[] = data.features
+    .filter((feature) => feature.active)
+    .map((feature) => ({
+      description:
+        feature.appliesTo === "both"
+          ? "Entitlement and marketing"
+          : feature.appliesTo,
+      label: feature.name,
+      value: feature.key,
+    }))
+  const planOptions: MultiSelectOption[] = data.plans.map((plan) => ({
+    description: `${plan.activeSubscriptionCount} active subscription(s)`,
+    label: plan.name,
+    value: plan.key,
+  }))
+  const defaultAssignmentFeature =
+    data.features.find((feature) => feature.active) ?? data.features[0] ?? null
+  const selectedAssignmentFeature =
+    data.features.find((feature) => feature.key === assignmentEditor.featureKey) ??
+    defaultAssignmentFeature
+  const assignmentPlanKeys =
+    selectedAssignmentFeature?.key === assignmentEditor.featureKey
+      ? assignmentEditor.planKeys
+      : selectedAssignmentFeature?.linkedPlanKeys ?? []
+  const assignmentChanged = selectedAssignmentFeature
+    ? !sameKeySet(selectedAssignmentFeature.linkedPlanKeys, assignmentPlanKeys)
+    : false
+
   const planColumns: Array<ColumnDef<StaffBillingPlanRecord>> = [
     {
       accessorKey: "name",
@@ -211,7 +475,9 @@ export function StaffBillingView({
     {
       cell: ({ row }) => (
         <div className="flex flex-col gap-1">
-          <span>{formatCurrencyAmount(row.original.monthlyPriceAmount, row.original.currency)} / month</span>
+          <span>
+            {formatCurrencyAmount(row.original.monthlyPriceAmount, row.original.currency)} / month
+          </span>
           <span className="text-xs text-muted-foreground">
             {formatCurrencyAmount(row.original.yearlyPriceAmount, row.original.currency)} / year
           </span>
@@ -222,15 +488,18 @@ export function StaffBillingView({
     },
     {
       accessorKey: "includedFeatureKeys",
-      cell: ({ getValue }) => {
-        const featureKeys = getValue<string[]>()
-
-        return (
-          <span className="text-sm text-muted-foreground">
-            {featureKeys.length > 0 ? featureKeys.join(", ") : "No features"}
-          </span>
-        )
-      },
+      cell: ({ getValue }) =>
+        getValue<string[]>().length > 0 ? (
+          <div className="flex flex-wrap gap-1">
+            {getValue<string[]>().map((featureKey) => (
+              <Badge key={featureKey} variant="outline">
+                {featureLabelByKey.get(featureKey) ?? featureKey}
+              </Badge>
+            ))}
+          </div>
+        ) : (
+          <span className="text-sm text-muted-foreground">No features</span>
+        ),
       header: "Included features",
     },
     {
@@ -269,7 +538,9 @@ export function StaffBillingView({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuGroup>
-              <DropdownMenuItem onClick={() => setPlanForm(makePlanFormState("edit", row.original))}>
+              <DropdownMenuItem
+                onClick={() => setPlanForm(makePlanFormState("edit", row.original))}
+              >
                 Edit plan
               </DropdownMenuItem>
               {row.original.planType === "paid" ? (
@@ -337,11 +608,18 @@ export function StaffBillingView({
     },
     {
       accessorKey: "linkedPlanKeys",
-      cell: ({ getValue }) => (
-        <span className="text-sm text-muted-foreground">
-          {getValue<string[]>().length > 0 ? getValue<string[]>().join(", ") : "No plans"}
-        </span>
-      ),
+      cell: ({ getValue }) =>
+        getValue<string[]>().length > 0 ? (
+          <div className="flex flex-wrap gap-1">
+            {getValue<string[]>().map((planKey) => (
+              <Badge key={planKey} variant="outline">
+                {planLabelByKey.get(planKey) ?? planKey}
+              </Badge>
+            ))}
+          </div>
+        ) : (
+          <span className="text-sm text-muted-foreground">No plans</span>
+        ),
       header: "Linked plans",
     },
     {
@@ -367,7 +645,9 @@ export function StaffBillingView({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuGroup>
-              <DropdownMenuItem onClick={() => setFeatureForm(makeFeatureFormState("edit", row.original))}>
+              <DropdownMenuItem
+                onClick={() => setFeatureForm(makeFeatureFormState("edit", row.original))}
+              >
                 Edit feature
               </DropdownMenuItem>
               {row.original.active ? (
@@ -413,17 +693,13 @@ export function StaffBillingView({
     })
 
     try {
-      const preview = await runBillingAction<StaffImpactPreview>({
+      const preview = await billingClient.runAction<StaffImpactPreview>({
         action: "previewPlanArchive",
         input: { planKey: plan.key },
       })
-      setArchivePlanState((current) =>
-        current ? { ...current, preview } : current
-      )
+      setArchivePlanState((current) => (current ? { ...current, preview } : current))
     } catch (error) {
-      toast.error(
-        error instanceof StaffClientError ? error.message : "Preview failed."
-      )
+      toast.error(error instanceof StaffClientError ? error.message : "Preview failed.")
     }
   }
 
@@ -442,17 +718,13 @@ export function StaffBillingView({
     })
 
     try {
-      const preview = await runBillingAction<StaffImpactPreview>({
+      const preview = await billingClient.runAction<StaffImpactPreview>({
         action: "previewPriceReplacement",
         input: { interval, planKey: plan.key },
       })
-      setReplacePriceState((current) =>
-        current ? { ...current, preview } : current
-      )
+      setReplacePriceState((current) => (current ? { ...current, preview } : current))
     } catch (error) {
-      toast.error(
-        error instanceof StaffClientError ? error.message : "Preview failed."
-      )
+      toast.error(error instanceof StaffClientError ? error.message : "Preview failed.")
     }
   }
 
@@ -464,45 +736,34 @@ export function StaffBillingView({
     })
 
     try {
-      const preview = await runBillingAction<StaffImpactPreview>({
+      const preview = await billingClient.runAction<StaffImpactPreview>({
         action: "previewFeatureArchive",
         input: { featureKey: feature.key },
       })
-      setArchiveFeatureState((current) =>
-        current ? { ...current, preview } : current
-      )
+      setArchiveFeatureState((current) => (current ? { ...current, preview } : current))
     } catch (error) {
-      toast.error(
-        error instanceof StaffClientError ? error.message : "Preview failed."
-      )
+      toast.error(error instanceof StaffClientError ? error.message : "Preview failed.")
     }
   }
 
-  async function openAssignmentDialog(
-    plan: StaffBillingPlanRecord,
-    feature: StaffBillingFeatureRecord,
-    enabled: boolean
-  ) {
-    setAssignmentState({
-      enabled,
-      feature,
-      plan,
-      preview: null,
+  async function persistPlan(planToSave: PlanFormState) {
+    const result = await billingMutation.mutateAsync({
+      action: "upsertPlan",
+      input: {
+        active: planToSave.active,
+        currency: planToSave.currency,
+        description: planToSave.description,
+        featureKeys: normalizeKeys(planToSave.featureKeys),
+        key: planToSave.key,
+        monthlyPriceAmount: Number(planToSave.monthlyPriceAmount),
+        name: planToSave.name,
+        planType: planToSave.planType,
+        sortOrder: Number(planToSave.sortOrder),
+        yearlyPriceAmount: Number(planToSave.yearlyPriceAmount),
+      },
     })
-
-    try {
-      const preview = await runBillingAction<StaffImpactPreview>({
-        action: "previewFeatureAssignmentChange",
-        input: { enabled, featureKey: feature.key, planKey: plan.key },
-      })
-      setAssignmentState((current) =>
-        current ? { ...current, preview } : current
-      )
-    } catch (error) {
-      toast.error(
-        error instanceof StaffClientError ? error.message : "Preview failed."
-      )
-    }
+    await handleMutationResult(result)
+    setPlanForm(null)
   }
 
   async function submitPlanForm() {
@@ -510,23 +771,41 @@ export function StaffBillingView({
       return
     }
 
+    const existingPlan = data.plans.find((plan) => plan.key === planForm.key)
+    const nextFeatureKeys = normalizeKeys(planForm.featureKeys)
+
+    if (existingPlan && !sameKeySet(existingPlan.includedFeatureKeys, nextFeatureKeys)) {
+      try {
+        const preview = await billingClient.runAction<StaffImpactPreview>({
+          action: "previewPlanFeatureSync",
+          input: {
+            featureKeys: nextFeatureKeys,
+            planKey: existingPlan.key,
+          },
+        })
+        const { added, removed } = diffKeys({
+          next: nextFeatureKeys,
+          previous: existingPlan.includedFeatureKeys,
+        })
+
+        setPlanFeatureSyncState({
+          addedFeatureKeys: added,
+          plan: existingPlan,
+          planForm: { ...planForm, featureKeys: nextFeatureKeys },
+          preview,
+          removedFeatureKeys: removed,
+        })
+        return
+      } catch (error) {
+        toast.error(
+          error instanceof StaffClientError ? error.message : "Preview failed."
+        )
+        return
+      }
+    }
+
     try {
-      const result = await billingMutation.mutateAsync({
-        action: "upsertPlan",
-        input: {
-          active: planForm.active,
-          currency: planForm.currency,
-          description: planForm.description,
-          key: planForm.key,
-          monthlyPriceAmount: Number(planForm.monthlyPriceAmount),
-          name: planForm.name,
-          planType: planForm.planType,
-          sortOrder: Number(planForm.sortOrder),
-          yearlyPriceAmount: Number(planForm.yearlyPriceAmount),
-        },
-      })
-      await handleMutationResult(result)
-      setPlanForm(null)
+      await persistPlan({ ...planForm, featureKeys: nextFeatureKeys })
     } catch (error) {
       toast.error(
         error instanceof StaffClientError ? error.message : "Plan update failed."
@@ -569,6 +848,7 @@ export function StaffBillingView({
           active: true,
           currency: plan.currency,
           description: plan.description,
+          featureKeys: plan.includedFeatureKeys,
           key: plan.key,
           monthlyPriceAmount: plan.monthlyPriceAmount,
           name: plan.name,
@@ -615,18 +895,43 @@ export function StaffBillingView({
       })
       await handleMutationResult(result)
     } catch (error) {
-      toast.error(
-        error instanceof StaffClientError ? error.message : "Sync failed."
-      )
+      toast.error(error instanceof StaffClientError ? error.message : "Sync failed.")
     }
   }
 
-  const assignmentLookup = new Map(
-    data.assignments.map((assignment) => [
-      `${assignment.planKey}:${assignment.featureKey}`,
-      assignment.enabled,
-    ])
-  )
+  async function reviewFeatureAssignments() {
+    if (!selectedAssignmentFeature) {
+      return
+    }
+
+    const nextPlanKeys = normalizeKeys(assignmentPlanKeys)
+
+    try {
+      const preview = await billingClient.runAction<StaffImpactPreview>({
+        action: "previewFeatureAssignmentSync",
+        input: {
+          featureKey: selectedAssignmentFeature.key,
+          planKeys: nextPlanKeys,
+        },
+      })
+      const { added, removed } = diffKeys({
+        next: nextPlanKeys,
+        previous: selectedAssignmentFeature.linkedPlanKeys,
+      })
+
+      setFeatureAssignmentSyncState({
+        addedPlanKeys: added,
+        feature: selectedAssignmentFeature,
+        planKeys: nextPlanKeys,
+        preview,
+        removedPlanKeys: removed,
+      })
+    } catch (error) {
+      toast.error(
+        error instanceof StaffClientError ? error.message : "Preview failed."
+      )
+    }
+  }
 
   return (
     <div className="flex flex-1 flex-col gap-8">
@@ -714,58 +1019,143 @@ export function StaffBillingView({
         </TabsContent>
 
         <TabsContent value="assignments">
-          <Card className="border-border/70">
-            <CardHeader>
-              <CardTitle>Plan-feature matrix</CardTitle>
-              <CardDescription>
-                Review what each plan includes before changing entitlements or marketing copy.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Feature</TableHead>
-                    {data.plans.map((plan) => (
-                      <TableHead key={plan.key}>{plan.name}</TableHead>
-                    ))}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {data.features.map((feature) => (
-                    <TableRow key={feature.key}>
-                      <TableCell>
-                        <div className="flex flex-col gap-1">
-                          <span className="font-medium">{feature.name}</span>
-                          <span className="text-xs text-muted-foreground">
-                            {feature.appliesTo}
-                          </span>
-                        </div>
-                      </TableCell>
-                      {data.plans.map((plan) => {
-                        const enabled =
-                          assignmentLookup.get(`${plan.key}:${feature.key}`) ?? false
+          <div className="grid gap-6">
+            <Card className="border-border/70">
+              <CardHeader>
+                <CardTitle>Assignment editor</CardTitle>
+                <CardDescription>
+                  Pick a feature, choose every plan it should belong to, and review the impact before syncing.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-6">
+                {selectedAssignmentFeature ? (
+                  <>
+                    <div className="grid gap-4 lg:grid-cols-[minmax(0,16rem)_minmax(0,1fr)]">
+                      <Field>
+                        <FieldLabel>Feature</FieldLabel>
+                        <NativeSelect
+                          onChange={(event) => {
+                            const nextFeature = data.features.find(
+                              (feature) => feature.key === event.target.value
+                            )
 
-                        return (
-                          <TableCell key={`${plan.key}:${feature.key}`}>
-                            <Button
-                              onClick={() =>
-                                void openAssignmentDialog(plan, feature, !enabled)
-                              }
-                              size="sm"
-                              variant={enabled ? "secondary" : "outline"}
-                            >
-                              {enabled ? "Included" : "Attach"}
-                            </Button>
-                          </TableCell>
-                        )
-                      })}
+                            setAssignmentEditor({
+                              featureKey: event.target.value,
+                              planKeys: nextFeature?.linkedPlanKeys ?? [],
+                            })
+                          }}
+                          value={selectedAssignmentFeature.key}
+                        >
+                          {data.features
+                            .filter((feature) => feature.active)
+                            .map((feature) => (
+                              <NativeSelectOption key={feature.key} value={feature.key}>
+                                {feature.name}
+                              </NativeSelectOption>
+                            ))}
+                        </NativeSelect>
+                        <FieldDescription>
+                          Archived features cannot be assigned to plans.
+                        </FieldDescription>
+                      </Field>
+
+                      <Field>
+                        <FieldLabel>Assigned plans</FieldLabel>
+                        <MultiSelectCombobox
+                          emptyLabel="No plans match this search."
+                          onChange={(values) =>
+                            setAssignmentEditor((current) => ({
+                              ...current,
+                              featureKey: selectedAssignmentFeature.key,
+                              planKeys: values,
+                            }))
+                          }
+                          options={planOptions}
+                          placeholder="Search plans"
+                          value={assignmentPlanKeys}
+                        />
+                        <FieldDescription>
+                          Removing a plan here detaches the feature on the next sync. Saving uses the exact set shown above.
+                        </FieldDescription>
+                      </Field>
+                    </div>
+
+                    <div className="flex flex-col gap-3 rounded-lg border border-border/70 bg-muted/20 px-4 py-4 md:flex-row md:items-center md:justify-between">
+                      <div className="space-y-1 text-sm">
+                        <div className="font-medium">
+                          {selectedAssignmentFeature.name} is currently linked to{" "}
+                          {selectedAssignmentFeature.linkedPlanKeys.length} plan(s).
+                        </div>
+                        <div className="text-muted-foreground">
+                          Review the impact before changing entitlement or marketing coverage.
+                        </div>
+                      </div>
+                      <Button
+                        disabled={!assignmentChanged || billingMutation.isPending}
+                        onClick={() => void reviewFeatureAssignments()}
+                      >
+                        Review assignment impact
+                      </Button>
+                    </div>
+                  </>
+                ) : (
+                  <div className="rounded-lg border border-border/70 bg-muted/20 px-4 py-4 text-sm text-muted-foreground">
+                    Create an active feature before configuring assignments.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="border-border/70">
+              <CardHeader>
+                <CardTitle>Plan-feature matrix</CardTitle>
+                <CardDescription>
+                  Review what each plan includes before changing entitlements or marketing copy.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Feature</TableHead>
+                      {data.plans.map((plan) => (
+                        <TableHead key={plan.key}>{plan.name}</TableHead>
+                      ))}
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+                  </TableHeader>
+                  <TableBody>
+                    {data.features.map((feature) => (
+                      <TableRow key={feature.key}>
+                        <TableCell>
+                          <div className="flex flex-col gap-1">
+                            <span className="font-medium">{feature.name}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {feature.appliesTo}
+                            </span>
+                          </div>
+                        </TableCell>
+                        {data.plans.map((plan) => (
+                          <TableCell key={`${plan.key}:${feature.key}`}>
+                            <Badge
+                              variant={
+                                plan.includedFeatureKeys.includes(feature.key)
+                                  ? "secondary"
+                                  : "outline"
+                              }
+                            >
+                              {plan.includedFeatureKeys.includes(feature.key)
+                                ? "Included"
+                                : "Not included"}
+                            </Badge>
+                          </TableCell>
+                        ))}
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
 
         <TabsContent value="operations">
@@ -882,6 +1272,7 @@ export function StaffBillingView({
 
       <PlanFormDialog
         billingMutationPending={billingMutation.isPending}
+        featureOptions={featureOptions}
         onClose={() => setPlanForm(null)}
         onSave={() => void submitPlanForm()}
         planForm={planForm}
@@ -978,32 +1369,58 @@ export function StaffBillingView({
         setState={setArchiveFeatureState}
         state={archiveFeatureState}
       />
-      <AssignmentDialog
+      <PlanFeatureSyncDialog
         billingMutationPending={billingMutation.isPending}
-        onClose={() => setAssignmentState(null)}
+        featureLabelByKey={featureLabelByKey}
+        onClose={() => setPlanFeatureSyncState(null)}
         onConfirm={async () => {
-          if (!assignmentState) {
+          if (!planFeatureSyncState) {
+            return
+          }
+
+          try {
+            await persistPlan(planFeatureSyncState.planForm)
+            setPlanFeatureSyncState(null)
+          } catch (error) {
+            toast.error(
+              error instanceof StaffClientError ? error.message : "Plan update failed."
+            )
+          }
+        }}
+        state={planFeatureSyncState}
+      />
+      <FeatureAssignmentSyncDialog
+        billingMutationPending={billingMutation.isPending}
+        onClose={() => setFeatureAssignmentSyncState(null)}
+        onConfirm={async () => {
+          if (!featureAssignmentSyncState) {
             return
           }
 
           try {
             const result = await billingMutation.mutateAsync({
-              action: "setFeatureAssignment",
+              action: "syncFeatureAssignments",
               input: {
-                enabled: assignmentState.enabled,
-                featureKey: assignmentState.feature.key,
-                planKey: assignmentState.plan.key,
+                featureKey: featureAssignmentSyncState.feature.key,
+                planKeys: featureAssignmentSyncState.planKeys,
               },
             })
             await handleMutationResult(result)
-            setAssignmentState(null)
+            setAssignmentEditor({
+              featureKey: featureAssignmentSyncState.feature.key,
+              planKeys: featureAssignmentSyncState.planKeys,
+            })
+            setFeatureAssignmentSyncState(null)
           } catch (error) {
             toast.error(
-              error instanceof StaffClientError ? error.message : "Assignment update failed."
+              error instanceof StaffClientError
+                ? error.message
+                : "Assignment update failed."
             )
           }
         }}
-        state={assignmentState}
+        planLabelByKey={planLabelByKey}
+        state={featureAssignmentSyncState}
       />
     </div>
   )
@@ -1017,6 +1434,7 @@ function makePlanFormState(
     active: plan?.active ?? true,
     currency: plan?.currency ?? "gbp",
     description: plan?.description ?? "",
+    featureKeys: plan?.includedFeatureKeys ?? [],
     key: plan?.key ?? "",
     mode,
     monthlyPriceAmount: String(plan?.monthlyPriceAmount ?? 0),
@@ -1043,37 +1461,17 @@ function makeFeatureFormState(
   }
 }
 
-function ImpactSummary({
-  preview,
-}: {
-  preview: StaffImpactPreview | null
-}) {
-  if (!preview) {
-    return (
-      <div className="rounded-lg border border-border/70 bg-muted/30 px-3 py-3 text-sm text-muted-foreground">
-        Loading operational impact preview...
-      </div>
-    )
-  }
-
-  return (
-    <div className="rounded-lg border border-border/70 bg-muted/30 px-3 py-3 text-sm">
-      <p className="font-medium">{preview.summary}</p>
-      <p className="mt-2 text-muted-foreground">
-        {preview.counts.activeSubscriptions} active subscription(s) across{" "}
-        {preview.counts.affectedUsers} user(s) are in scope.
-      </p>
-    </div>
-  )
-}
-
 function PlanFormDialog(args: {
   billingMutationPending: boolean
+  featureOptions: MultiSelectOption[]
   onClose: () => void
   onSave: () => void
   planForm: PlanFormState | null
-  setPlanForm: React.Dispatch<React.SetStateAction<PlanFormState | null>>
+  setPlanForm: Dispatch<SetStateAction<PlanFormState | null>>
 }) {
+  const pricesLocked =
+    args.planForm?.mode === "edit" && args.planForm.planType === "paid"
+
   return (
     <Dialog open={Boolean(args.planForm)} onOpenChange={(open) => !open && args.onClose()}>
       <DialogContent>
@@ -1174,7 +1572,7 @@ function PlanFormDialog(args: {
               <Field>
                 <FieldLabel>Monthly amount (minor units)</FieldLabel>
                 <Input
-                  disabled={args.planForm.planType === "free"}
+                  disabled={args.planForm.planType === "free" || pricesLocked}
                   onChange={(event) =>
                     args.setPlanForm((current) =>
                       current
@@ -1189,7 +1587,7 @@ function PlanFormDialog(args: {
               <Field>
                 <FieldLabel>Yearly amount (minor units)</FieldLabel>
                 <Input
-                  disabled={args.planForm.planType === "free"}
+                  disabled={args.planForm.planType === "free" || pricesLocked}
                   onChange={(event) =>
                     args.setPlanForm((current) =>
                       current
@@ -1200,8 +1598,30 @@ function PlanFormDialog(args: {
                   type="number"
                   value={args.planForm.yearlyPriceAmount}
                 />
+                {pricesLocked ? (
+                  <FieldDescription>
+                    Replace existing paid prices from the plan row actions so the new monthly price becomes the Stripe default before the old one is archived.
+                  </FieldDescription>
+                ) : null}
               </Field>
             </div>
+            <Field>
+              <FieldLabel>Included features</FieldLabel>
+              <MultiSelectCombobox
+                emptyLabel="No active features match this search."
+                onChange={(values) =>
+                  args.setPlanForm((current) =>
+                    current ? { ...current, featureKeys: values } : current
+                  )
+                }
+                options={args.featureOptions}
+                placeholder="Search features"
+                value={args.planForm.featureKeys}
+              />
+              <FieldDescription>
+                Removing a feature here detaches it from the plan. Existing plan edits show impact before saving.
+              </FieldDescription>
+            </Field>
           </FieldGroup>
         ) : null}
 
@@ -1223,7 +1643,7 @@ function FeatureFormDialog(args: {
   featureForm: FeatureFormState | null
   onClose: () => void
   onSave: () => void
-  setFeatureForm: React.Dispatch<React.SetStateAction<FeatureFormState | null>>
+  setFeatureForm: Dispatch<SetStateAction<FeatureFormState | null>>
 }) {
   return (
     <Dialog open={Boolean(args.featureForm)} onOpenChange={(open) => !open && args.onClose()}>
@@ -1340,7 +1760,7 @@ function ArchivePlanDialog(args: {
   billingMutationPending: boolean
   onClose: () => void
   onConfirm: () => void
-  setState: React.Dispatch<React.SetStateAction<ArchivePlanState | null>>
+  setState: Dispatch<SetStateAction<ArchivePlanState | null>>
   state: ArchivePlanState | null
 }) {
   return (
@@ -1414,7 +1834,7 @@ function ReplacePriceDialog(args: {
   billingMutationPending: boolean
   onClose: () => void
   onConfirm: () => void
-  setState: React.Dispatch<React.SetStateAction<ReplacePriceState | null>>
+  setState: Dispatch<SetStateAction<ReplacePriceState | null>>
   state: ReplacePriceState | null
 }) {
   return (
@@ -1423,7 +1843,7 @@ function ReplacePriceDialog(args: {
         <DialogHeader>
           <DialogTitle>Replace plan price</DialogTitle>
           <DialogDescription>
-            This creates a new Stripe price and archives the superseded one.
+            This creates a new Stripe price, promotes the new monthly price to the product default when applicable, and archives the superseded price.
           </DialogDescription>
         </DialogHeader>
 
@@ -1481,7 +1901,7 @@ function ArchiveFeatureDialog(args: {
   billingMutationPending: boolean
   onClose: () => void
   onConfirm: () => void
-  setState: React.Dispatch<React.SetStateAction<ArchiveFeatureState | null>>
+  setState: Dispatch<SetStateAction<ArchiveFeatureState | null>>
   state: ArchiveFeatureState | null
 }) {
   return (
@@ -1490,7 +1910,7 @@ function ArchiveFeatureDialog(args: {
         <DialogHeader>
           <DialogTitle>Archive feature</DialogTitle>
           <DialogDescription>
-            This removes the feature from future Stripe sync output.
+            This removes the feature from plan assignments and from future Stripe sync output.
           </DialogDescription>
         </DialogHeader>
         {args.state ? (
@@ -1530,30 +1950,85 @@ function ArchiveFeatureDialog(args: {
   )
 }
 
-function AssignmentDialog(args: {
+function PlanFeatureSyncDialog(args: {
   billingMutationPending: boolean
+  featureLabelByKey: Map<string, string>
   onClose: () => void
   onConfirm: () => void
-  state: AssignmentState | null
+  state: PlanFeatureSyncState | null
 }) {
   return (
     <Dialog open={Boolean(args.state)} onOpenChange={(open) => !open && args.onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>
-            {args.state?.enabled ? "Attach feature" : "Detach feature"}
-          </DialogTitle>
+          <DialogTitle>Review feature changes</DialogTitle>
           <DialogDescription>
-            Confirm the entitlement and marketing impact before saving.
+            Confirm the subscription impact before saving this plan&apos;s included features.
           </DialogDescription>
         </DialogHeader>
-        <ImpactSummary preview={args.state?.preview ?? null} />
+
+        {args.state ? (
+          <FieldGroup>
+            <ImpactSummary preview={args.state.preview} />
+            <ChangeSummary
+              addedLabel="Features being attached"
+              addedValues={args.state.addedFeatureKeys}
+              labelByKey={args.featureLabelByKey}
+              removedLabel="Features being removed"
+              removedValues={args.state.removedFeatureKeys}
+            />
+          </FieldGroup>
+        ) : null}
+
         <DialogFooter>
           <Button onClick={args.onClose} variant="outline">
             Cancel
           </Button>
           <Button disabled={args.billingMutationPending} onClick={args.onConfirm}>
-            {args.state?.enabled ? "Attach feature" : "Detach feature"}
+            Save feature changes
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function FeatureAssignmentSyncDialog(args: {
+  billingMutationPending: boolean
+  onClose: () => void
+  onConfirm: () => void
+  planLabelByKey: Map<string, string>
+  state: FeatureAssignmentSyncState | null
+}) {
+  return (
+    <Dialog open={Boolean(args.state)} onOpenChange={(open) => !open && args.onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Review assignment changes</DialogTitle>
+          <DialogDescription>
+            Confirm the entitlement and marketing impact before updating this feature&apos;s plan coverage.
+          </DialogDescription>
+        </DialogHeader>
+
+        {args.state ? (
+          <FieldGroup>
+            <ImpactSummary preview={args.state.preview} />
+            <ChangeSummary
+              addedLabel="Plans being attached"
+              addedValues={args.state.addedPlanKeys}
+              labelByKey={args.planLabelByKey}
+              removedLabel="Plans being detached"
+              removedValues={args.state.removedPlanKeys}
+            />
+          </FieldGroup>
+        ) : null}
+
+        <DialogFooter>
+          <Button onClick={args.onClose} variant="outline">
+            Cancel
+          </Button>
+          <Button disabled={args.billingMutationPending} onClick={args.onConfirm}>
+            Save assignments
           </Button>
         </DialogFooter>
       </DialogContent>
