@@ -15,9 +15,12 @@ import type {
   StaffBillingCustomerRecord,
   StaffBillingFeatureRecord,
   StaffBillingPlanRecord,
+  StaffBillingUserLookupRecord,
+  StaffCreatorGrantRecord,
   StaffImpactPreview,
   StaffMutationResponse,
 } from "@workspace/backend/convex/lib/staffTypes"
+import type { UserRole } from "@workspace/backend/convex/lib/staffRoles"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import {
@@ -27,6 +30,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@workspace/ui/components/card"
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from "@workspace/ui/components/chart"
 import {
   Combobox,
   ComboboxChip,
@@ -74,6 +83,12 @@ import {
   TableRow,
 } from "@workspace/ui/components/table"
 import { Textarea } from "@workspace/ui/components/textarea"
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  XAxis,
+} from "recharts"
 import { toast } from "sonner"
 
 import { StaffDataTable } from "@/features/staff/components/StaffDataTable"
@@ -154,6 +169,18 @@ type FeatureAssignmentSyncState = {
   planKeys: string[]
   preview: StaffImpactPreview
   removedPlanKeys: string[]
+}
+
+type CreatorGrantDraft = {
+  endsAt: string
+  planKey: string
+  reason: string
+  targetUserId: string
+}
+
+type CreatorGrantRevokeState = {
+  reason: string
+  targetUserId: string
 }
 
 type MultiSelectOption = {
@@ -266,6 +293,108 @@ function MetricCard({
         <div className="text-2xl font-semibold tracking-tight">{value}</div>
       </CardContent>
     </Card>
+  )
+}
+
+function BillingAttentionBadge({
+  status,
+}: {
+  status:
+    | "none"
+    | "past_due"
+    | "paused"
+    | "payment_failed"
+    | "requires_action"
+}) {
+  if (status === "none") {
+    return <Badge variant="secondary">none</Badge>
+  }
+
+  if (status === "requires_action" || status === "payment_failed") {
+    return <Badge variant="destructive">{status.replaceAll("_", " ")}</Badge>
+  }
+
+  return <Badge variant="outline">{status.replaceAll("_", " ")}</Badge>
+}
+
+function BillingAccessSourceBadge({
+  source,
+}: {
+  source: "creator_grant" | "legacy_plan" | "none" | "paid_subscription"
+}) {
+  if (source === "paid_subscription") {
+    return <Badge variant="secondary">paid subscription</Badge>
+  }
+
+  if (source === "creator_grant") {
+    return <Badge variant="secondary">creator override</Badge>
+  }
+
+  if (source === "legacy_plan") {
+    return <Badge variant="outline">legacy plan</Badge>
+  }
+
+  return <Badge variant="outline">no access</Badge>
+}
+
+function WebhookStatusBadge({
+  status,
+}: {
+  status: "failed" | "ignored" | "processed" | "processing" | "received"
+}) {
+  if (status === "processed") {
+    return <Badge variant="secondary">processed</Badge>
+  }
+
+  if (status === "failed") {
+    return <Badge variant="destructive">failed</Badge>
+  }
+
+  return <Badge variant="outline">{status}</Badge>
+}
+
+function formatDayLabel(value: number) {
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "short",
+  }).format(value)
+}
+
+function matchesUserLookup(
+  user: StaffBillingUserLookupRecord,
+  query: string
+) {
+  const normalizedQuery = query.trim().toLowerCase()
+
+  if (!normalizedQuery) {
+    return true
+  }
+
+  return (
+    user.userName.toLowerCase().includes(normalizedQuery) ||
+    user.userId.toLowerCase().includes(normalizedQuery) ||
+    user.clerkUserId.toLowerCase().includes(normalizedQuery) ||
+    user.email?.toLowerCase().includes(normalizedQuery) === true ||
+    user.currentPlanKey?.toLowerCase().includes(normalizedQuery) === true
+  )
+}
+
+function getActiveCreatorGrant(
+  grants: StaffCreatorGrantRecord[],
+  targetUserId: string
+) {
+  const now = Date.now()
+
+  return (
+    grants
+      .filter(
+        (grant) =>
+          grant.userId === targetUserId &&
+          grant.active &&
+          grant.revokedAt === undefined &&
+          (grant.endsAt === undefined || grant.endsAt > now)
+      )
+      .sort((left, right) => right.createdAt - left.createdAt)[0] ?? null
   )
 }
 
@@ -430,15 +559,19 @@ function MultiSelectCombobox(args: {
 }
 
 export function StaffBillingView({
+  actorRole,
   initialData,
   section,
 }: {
+  actorRole: UserRole
   initialData: StaffBillingDashboard
   section: StaffBillingSection
 }) {
   const { data } = useStaffBillingDashboard(initialData)
   const sectionConfig = getStaffBillingSectionConfig(section)
   const billingClient = useStaffBillingClient()
+  const canManageCreatorAccess =
+    actorRole === "admin" || actorRole === "super_admin"
   const [planForm, setPlanForm] = useState<PlanFormState | null>(null)
   const [featureForm, setFeatureForm] = useState<FeatureFormState | null>(null)
   const [archivePlanState, setArchivePlanState] = useState<ArchivePlanState | null>(null)
@@ -458,6 +591,13 @@ export function StaffBillingView({
   })
   const [featureAssignmentSyncState, setFeatureAssignmentSyncState] =
     useState<FeatureAssignmentSyncState | null>(null)
+  const [creatorUserSearch, setCreatorUserSearch] = useState("")
+  const [selectedCreatorUserId, setSelectedCreatorUserId] = useState("")
+  const [creatorGrantDraft, setCreatorGrantDraft] = useState<CreatorGrantDraft | null>(
+    null
+  )
+  const [creatorGrantRevokeState, setCreatorGrantRevokeState] =
+    useState<CreatorGrantRevokeState | null>(null)
   const billingMutation = useStaffMutation<BillingActionRequest, StaffMutationResponse>({
     invalidate: ["billing"],
     mutationFn: (request) => billingClient.runAction<StaffMutationResponse>(request),
@@ -495,6 +635,28 @@ export function StaffBillingView({
   const assignmentChanged = selectedAssignmentFeature
     ? !sameKeySet(selectedAssignmentFeature.linkedPlanKeys, assignmentPlanKeys)
     : false
+  const creatorGrantPlans = data.plans.filter(
+    (plan) => plan.active && plan.planType === "paid"
+  )
+  const filteredUserDirectory = data.userDirectory
+    .filter((user) => matchesUserLookup(user, creatorUserSearch))
+    .sort((left, right) => left.userName.localeCompare(right.userName))
+    .slice(0, 8)
+  const selectedCreatorUser =
+    data.userDirectory.find((user) => user.userId === selectedCreatorUserId) ?? null
+  const selectedCreatorGrant = selectedCreatorUser
+    ? getActiveCreatorGrant(data.creatorGrants, selectedCreatorUser.userId)
+    : null
+  const webhookChartConfig = {
+    failedCount: {
+      color: "hsl(12 76% 55%)",
+      label: "Failed",
+    },
+    processedCount: {
+      color: "hsl(216 89% 56%)",
+      label: "Processed",
+    },
+  } satisfies ChartConfig
 
   const planColumns: Array<ColumnDef<StaffBillingPlanRecord>> = [
     {
@@ -754,6 +916,16 @@ export function StaffBillingView({
       header: "Plans",
     },
     {
+      accessorKey: "hasCreatorGrant",
+      cell: ({ getValue }) =>
+        getValue<boolean>() ? (
+          <Badge variant="secondary">creator override</Badge>
+        ) : (
+          <Badge variant="outline">none</Badge>
+        ),
+      header: "Creator access",
+    },
+    {
       cell: ({ row }) => (
         <div className="flex flex-col gap-1">
           <span className="font-medium">
@@ -783,9 +955,7 @@ export function StaffBillingView({
   ).length
   const archivedPlanCount = data.plans.filter((plan) => !plan.active).length
   const archivedFeatureCount = data.features.filter((feature) => !feature.active).length
-  const subscriptionAttentionCount = data.subscriptions.filter(
-    (subscription) => subscription.status === "past_due" || subscription.status === "paused"
-  ).length
+  const subscriptionAttentionCount = data.attentionSubscriptions.length
   const activeOrTrialingSubscriptionCount = data.subscriptions.filter(
     (subscription) =>
       subscription.status === "active" || subscription.status === "trialing"
@@ -798,6 +968,14 @@ export function StaffBillingView({
     .slice(0, 6)
   const recentBillingActivity = data.auditLogs.slice(0, 8)
   const recentSubscriptionRows = data.subscriptions.slice(0, 8)
+  const attentionSubscriptions = data.attentionSubscriptions.slice(0, 8)
+  const recentWebhookEvents = data.webhookEvents.slice(0, 8)
+  const activeCreatorGrantCount = data.creatorGrants.filter(
+    (grant) =>
+      grant.active &&
+      grant.revokedAt === undefined &&
+      (grant.endsAt === undefined || grant.endsAt > Date.now())
+  ).length
 
   async function handleMutationResult(result: StaffMutationResponse) {
     toast.success(result.summary)
@@ -808,6 +986,105 @@ export function StaffBillingView({
 
     if (result.syncSummary?.result === "error") {
       toast.error(result.syncSummary.summary)
+    }
+  }
+
+  function openGrantCreatorAccessDialog() {
+    if (!selectedCreatorUser) {
+      toast.error("Select a user before granting creator access.")
+      return
+    }
+
+    setCreatorGrantDraft({
+      endsAt: "",
+      planKey:
+        selectedCreatorGrant?.planKey ??
+        creatorGrantPlans[0]?.key ??
+        data.plans.find((plan) => plan.active)?.key ??
+        "",
+      reason: "",
+      targetUserId: selectedCreatorUser.userId,
+    })
+  }
+
+  function openRevokeCreatorAccessDialog() {
+    if (!selectedCreatorUser || !selectedCreatorGrant) {
+      toast.error("That user does not currently have creator access.")
+      return
+    }
+
+    setCreatorGrantRevokeState({
+      reason: "",
+      targetUserId: selectedCreatorUser.userId,
+    })
+  }
+
+  async function submitCreatorGrant() {
+    if (!creatorGrantDraft) {
+      return
+    }
+
+    const targetUser = data.userDirectory.find(
+      (user) => user.userId === creatorGrantDraft.targetUserId
+    )
+
+    if (!targetUser) {
+      toast.error("Select a valid user before granting access.")
+      return
+    }
+
+    try {
+      const endsAt = creatorGrantDraft.endsAt
+        ? new Date(creatorGrantDraft.endsAt).getTime()
+        : undefined
+
+      if (creatorGrantDraft.endsAt && !Number.isFinite(endsAt)) {
+        toast.error("Enter a valid expiry date or leave it blank.")
+        return
+      }
+
+      const result = await billingMutation.mutateAsync({
+        action: "grantCreatorAccess",
+        input: {
+          endsAt,
+          planKey: creatorGrantDraft.planKey,
+          reason: creatorGrantDraft.reason,
+          targetUserId: creatorGrantDraft.targetUserId,
+        },
+      })
+      await handleMutationResult(result)
+      setCreatorGrantDraft(null)
+      setSelectedCreatorUserId(targetUser.userId)
+    } catch (error) {
+      toast.error(
+        error instanceof StaffClientError
+          ? error.message
+          : "Unable to grant creator access."
+      )
+    }
+  }
+
+  async function submitCreatorAccessRevocation() {
+    if (!creatorGrantRevokeState) {
+      return
+    }
+
+    try {
+      const result = await billingMutation.mutateAsync({
+        action: "revokeCreatorAccess",
+        input: {
+          reason: creatorGrantRevokeState.reason,
+          targetUserId: creatorGrantRevokeState.targetUserId,
+        },
+      })
+      await handleMutationResult(result)
+      setCreatorGrantRevokeState(null)
+    } catch (error) {
+      toast.error(
+        error instanceof StaffClientError
+          ? error.message
+          : "Unable to revoke creator access."
+      )
     }
   }
 
@@ -1217,13 +1494,159 @@ export function StaffBillingView({
 
       {section === "subscriptions-overview" ? (
         <div className="grid gap-6">
-          <div className="grid gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <MetricCard
+              label="Active or trialing subscriptions"
+              value={activeOrTrialingSubscriptionCount}
+            />
+            <MetricCard
+              label="Subscriptions needing attention"
+              value={subscriptionAttentionCount}
+            />
+            <MetricCard
+              label="Active creator overrides"
+              value={activeCreatorGrantCount}
+            />
+            <MetricCard
+              label="Webhook failures"
+              value={data.webhookMetrics.failedCount}
+            />
+          </div>
+
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+            <Card className="border-border/70">
+              <CardHeader>
+                <CardTitle>Webhook health</CardTitle>
+                <CardDescription>
+                  Reconciliation health across recent Stripe webhook traffic. Failures
+                  and processing backlog should be triaged before local billing state drifts.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-6">
+                {data.webhookMetrics.timeline.length > 0 ? (
+                  <ChartContainer
+                    className="h-64 w-full"
+                    config={webhookChartConfig}
+                  >
+                    <BarChart data={data.webhookMetrics.timeline}>
+                      <CartesianGrid vertical={false} />
+                      <XAxis
+                        axisLine={false}
+                        dataKey="dayStart"
+                        minTickGap={24}
+                        tickFormatter={(value: number | string) =>
+                          formatDayLabel(Number(value))
+                        }
+                        tickLine={false}
+                      />
+                      <ChartTooltip
+                        content={
+                          <ChartTooltipContent
+                            formatter={(value, name) => (
+                              <>
+                                <span className="text-muted-foreground">
+                                  {name === "failedCount" ? "Failed" : "Processed"}
+                                </span>
+                                <span className="ml-auto font-mono font-medium">
+                                  {Number(value).toLocaleString()}
+                                </span>
+                              </>
+                            )}
+                            labelFormatter={(value: number | string) =>
+                              formatDayLabel(Number(value))
+                            }
+                          />
+                        }
+                      />
+                      <Bar
+                        dataKey="processedCount"
+                        fill="var(--color-processedCount)"
+                        radius={[8, 8, 0, 0]}
+                      />
+                      <Bar
+                        dataKey="failedCount"
+                        fill="var(--color-failedCount)"
+                        radius={[8, 8, 0, 0]}
+                      />
+                    </BarChart>
+                  </ChartContainer>
+                ) : (
+                  <div className="rounded-lg border border-border/70 bg-muted/20 px-4 py-10 text-sm text-muted-foreground">
+                    No webhook deliveries have been recorded yet.
+                  </div>
+                )}
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="rounded-lg border border-border/70 bg-muted/20 px-4 py-4">
+                    <div className="text-sm font-medium">Processing posture</div>
+                    <div className="mt-3 grid gap-2 text-sm">
+                      <div className="flex items-center justify-between gap-4">
+                        <span className="text-muted-foreground">Processed</span>
+                        <span className="font-medium">
+                          {data.webhookMetrics.processedCount}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between gap-4">
+                        <span className="text-muted-foreground">Failed</span>
+                        <span className="font-medium">
+                          {data.webhookMetrics.failedCount}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between gap-4">
+                        <span className="text-muted-foreground">Processing</span>
+                        <span className="font-medium">
+                          {data.webhookMetrics.processingCount}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between gap-4">
+                        <span className="text-muted-foreground">Ignored</span>
+                        <span className="font-medium">
+                          {data.webhookMetrics.ignoredCount}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-border/70 bg-muted/20 px-4 py-4">
+                    <div className="text-sm font-medium">Latest delivery state</div>
+                    <div className="mt-3 grid gap-2 text-sm">
+                      <div className="flex items-center justify-between gap-4">
+                        <span className="text-muted-foreground">Last received</span>
+                        <span className="font-medium">
+                          {data.webhookMetrics.lastReceivedAt
+                            ? formatDateTime(data.webhookMetrics.lastReceivedAt)
+                            : "Not yet"}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between gap-4">
+                        <span className="text-muted-foreground">Last processed</span>
+                        <span className="font-medium">
+                          {data.webhookMetrics.lastProcessedAt
+                            ? formatDateTime(data.webhookMetrics.lastProcessedAt)
+                            : "Not yet"}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between gap-4">
+                        <span className="text-muted-foreground">Raw received rows</span>
+                        <span className="font-medium">
+                          {data.webhookMetrics.receivedCount}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between gap-4">
+                        <span className="text-muted-foreground">Cancel at period end</span>
+                        <span className="font-medium">{cancelAtPeriodEndCount}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
             <Card className="border-border/70">
               <CardHeader>
                 <CardTitle>Customer footprint</CardTitle>
                 <CardDescription>
-                  Active customer coverage and the accounts currently in scope
-                  for billing support.
+                  Support coverage across billing customers, active subscriptions,
+                  and creator overrides.
                 </CardDescription>
               </CardHeader>
               <CardContent className="grid gap-4">
@@ -1246,38 +1669,10 @@ export function StaffBillingView({
                   </span>
                 </div>
                 <div className="flex items-center justify-between gap-4 text-sm">
-                  <span className="text-muted-foreground">Inactive customer records</span>
+                  <span className="text-muted-foreground">Customers with creator access</span>
                   <span className="font-medium">
-                    {data.customers.length - activeCustomerCount}
+                    {data.customers.filter((customer) => customer.hasCreatorGrant).length}
                   </span>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-border/70">
-              <CardHeader>
-                <CardTitle>Subscription health</CardTitle>
-                <CardDescription>
-                  Current subscription mix and the records most likely to
-                  require follow-up.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="grid gap-4">
-                <div className="flex items-center justify-between gap-4 text-sm">
-                  <span className="text-muted-foreground">Active or trialing</span>
-                  <span className="font-medium">
-                    {activeOrTrialingSubscriptionCount}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between gap-4 text-sm">
-                  <span className="text-muted-foreground">
-                    Subscriptions needing attention
-                  </span>
-                  <span className="font-medium">{subscriptionAttentionCount}</span>
-                </div>
-                <div className="flex items-center justify-between gap-4 text-sm">
-                  <span className="text-muted-foreground">Cancel at period end</span>
-                  <span className="font-medium">{cancelAtPeriodEndCount}</span>
                 </div>
                 <div className="flex items-center justify-between gap-4 text-sm">
                   <span className="text-muted-foreground">Tracked plans in use</span>
@@ -1285,6 +1680,133 @@ export function StaffBillingView({
                     {new Set(data.subscriptions.map((subscription) => subscription.planKey)).size}
                   </span>
                 </div>
+                <div className="flex items-center justify-between gap-4 text-sm">
+                  <span className="text-muted-foreground">Inactive customer records</span>
+                  <span className="font-medium">
+                    {data.customers.length - activeCustomerCount}
+                  </span>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
+            <Card className="border-border/70">
+              <CardHeader>
+                <CardTitle>Attention-needed subscriptions</CardTitle>
+                <CardDescription>
+                  Payment failures and action-required subscriptions that support
+                  staff should watch most closely.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="rounded-lg border border-border/70 p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>User</TableHead>
+                      <TableHead>Plan</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Attention</TableHead>
+                      <TableHead>Next date</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {attentionSubscriptions.length > 0 ? (
+                      attentionSubscriptions.map((subscription) => (
+                        <TableRow key={subscription.stripeSubscriptionId}>
+                          <TableCell>
+                            <div className="flex flex-col gap-1">
+                              <span className="font-medium">{subscription.userName}</span>
+                              <span className="text-xs text-muted-foreground">
+                                {subscription.email ?? subscription.clerkUserId}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell>{subscription.planKey}</TableCell>
+                          <TableCell>
+                            <BillingSubscriptionStatusBadge
+                              status={subscription.status}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <BillingAttentionBadge
+                              status={subscription.attentionStatus ?? "none"}
+                            />
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {subscription.currentPeriodEnd
+                              ? formatDateTime(subscription.currentPeriodEnd)
+                              : "Not set"}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell
+                          className="py-8 text-center text-sm text-muted-foreground"
+                          colSpan={5}
+                        >
+                          No subscriptions currently require support attention.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+
+            <Card className="border-border/70">
+              <CardHeader>
+                <CardTitle>Recent webhook events</CardTitle>
+                <CardDescription>
+                  Safe summaries from the event ledger for reconciliation debugging.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="rounded-lg border border-border/70 p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>When</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Summary</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {recentWebhookEvents.length > 0 ? (
+                      recentWebhookEvents.map((event) => (
+                        <TableRow key={event.id}>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {formatDateTime(event.receivedAt)}
+                          </TableCell>
+                          <TableCell className="font-medium">
+                            {event.eventType}
+                          </TableCell>
+                          <TableCell>
+                            <WebhookStatusBadge status={event.processingStatus} />
+                          </TableCell>
+                          <TableCell className="max-w-lg whitespace-normal text-sm text-muted-foreground">
+                            {event.safeSummary}
+                            {event.errorMessage ? (
+                              <span className="block text-destructive">
+                                {event.errorMessage}
+                              </span>
+                            ) : null}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell
+                          className="py-8 text-center text-sm text-muted-foreground"
+                          colSpan={4}
+                        >
+                          No webhook events are available yet.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
               </CardContent>
             </Card>
           </div>
@@ -1303,6 +1825,7 @@ export function StaffBillingView({
                     <TableHead>User</TableHead>
                     <TableHead>Plan</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Schedule</TableHead>
                     <TableHead>Current period end</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -1319,10 +1842,18 @@ export function StaffBillingView({
                           </div>
                         </TableCell>
                         <TableCell>{subscription.planKey}</TableCell>
-                        <TableCell>
+                        <TableCell className="space-y-2">
                           <BillingSubscriptionStatusBadge
                             status={subscription.status}
                           />
+                          <BillingAttentionBadge
+                            status={subscription.attentionStatus ?? "none"}
+                          />
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {subscription.scheduledChangeType
+                            ? `${subscription.scheduledChangeType.replaceAll("_", " ")} on ${subscription.scheduledChangeAt ? formatDateTime(subscription.scheduledChangeAt) : "next cycle"}`
+                            : "None"}
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
                           {subscription.currentPeriodEnd
@@ -1335,7 +1866,7 @@ export function StaffBillingView({
                     <TableRow>
                       <TableCell
                         className="py-8 text-center text-sm text-muted-foreground"
-                        colSpan={4}
+                        colSpan={5}
                       >
                         No in-scope subscription rows are available yet.
                       </TableCell>
@@ -1718,25 +2249,262 @@ export function StaffBillingView({
       ) : null}
 
       {section === "subscriptions-customers" ? (
-        <Card className="border-border/70">
-          <CardHeader>
-            <CardTitle>Customers</CardTitle>
-            <CardDescription>
-              Linked billing customers and the live plan coverage currently
-              attached to each account.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <StaffDataTable
-              columns={customerColumns}
-              data={data.customers}
-              emptyDescription="Billing customer records will appear here once subscriptions or customer sync records are created."
-              emptyTitle="No customers yet"
-              getRowId={(row) => row.stripeCustomerId}
-              searchPlaceholder="Search customers"
-            />
-          </CardContent>
-        </Card>
+        <div className="grid gap-6">
+          {canManageCreatorAccess ? (
+            <div className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+              <Card className="border-border/70">
+                <CardHeader>
+                  <CardTitle>Creator partnership access</CardTitle>
+                  <CardDescription>
+                    Grant or revoke first-class local entitlement overrides without
+                    simulating Stripe subscriptions.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="grid gap-5">
+                  <Field>
+                    <FieldLabel>User lookup</FieldLabel>
+                    <Input
+                      onChange={(event) => setCreatorUserSearch(event.target.value)}
+                      placeholder="Search by user, email, plan, Clerk ID, or Convex ID"
+                      value={creatorUserSearch}
+                    />
+                    <FieldDescription>
+                      Search the current billing-aware user directory before opening a
+                      creator override workflow.
+                    </FieldDescription>
+                  </Field>
+
+                  <div className="grid gap-3">
+                    {filteredUserDirectory.length > 0 ? (
+                      filteredUserDirectory.map((user) => {
+                        const isSelected = user.userId === selectedCreatorUserId
+
+                        return (
+                          <button
+                            className={`rounded-2xl border px-4 py-4 text-left transition ${
+                              isSelected
+                                ? "border-primary/60 bg-primary/5"
+                                : "border-border/70 bg-card/50 hover:border-primary/30"
+                            }`}
+                            key={user.userId}
+                            onClick={() => setSelectedCreatorUserId(user.userId)}
+                            type="button"
+                          >
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                              <div className="space-y-1">
+                                <div className="font-medium">{user.userName}</div>
+                                <div className="text-sm text-muted-foreground">
+                                  {user.email ?? user.clerkUserId}
+                                </div>
+                              </div>
+                              <BillingAccessSourceBadge source={user.accessSource} />
+                            </div>
+                            <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                              <span>{user.currentPlanKey ?? "no effective plan"}</span>
+                              {user.hasCreatorGrant ? (
+                                <span>creator override active</span>
+                              ) : null}
+                            </div>
+                          </button>
+                        )
+                      })
+                    ) : (
+                      <div className="rounded-lg border border-border/70 bg-muted/20 px-4 py-6 text-sm text-muted-foreground">
+                        No users match the current search.
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="border-border/70">
+                <CardHeader>
+                  <CardTitle>Selected access preview</CardTitle>
+                  <CardDescription>
+                    Review effective access before applying an override change.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="grid gap-4">
+                  {selectedCreatorUser ? (
+                    <>
+                      <div className="rounded-2xl border border-border/70 bg-muted/20 px-4 py-4">
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div className="space-y-1">
+                            <div className="font-medium">{selectedCreatorUser.userName}</div>
+                            <div className="text-sm text-muted-foreground">
+                              {selectedCreatorUser.email ?? selectedCreatorUser.clerkUserId}
+                            </div>
+                          </div>
+                          <BillingAccessSourceBadge
+                            source={selectedCreatorUser.accessSource}
+                          />
+                        </div>
+                        <div className="mt-4 grid gap-3 text-sm">
+                          <div className="flex items-center justify-between gap-4">
+                            <span className="text-muted-foreground">Effective plan</span>
+                            <span className="font-medium">
+                              {selectedCreatorUser.currentPlanKey ?? "none"}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between gap-4">
+                            <span className="text-muted-foreground">Creator override</span>
+                            <span className="font-medium">
+                              {selectedCreatorGrant ? "Active" : "Not active"}
+                            </span>
+                          </div>
+                          {selectedCreatorGrant ? (
+                            <>
+                              <div className="flex items-center justify-between gap-4">
+                                <span className="text-muted-foreground">Grant plan</span>
+                                <span className="font-medium">
+                                  {selectedCreatorGrant.planKey}
+                                </span>
+                              </div>
+                              <div className="flex items-center justify-between gap-4">
+                                <span className="text-muted-foreground">Grant expiry</span>
+                                <span className="font-medium">
+                                  {selectedCreatorGrant.endsAt
+                                    ? formatDateTime(selectedCreatorGrant.endsAt)
+                                    : "No expiry"}
+                                </span>
+                              </div>
+                            </>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl border border-border/70 bg-card/60 px-4 py-4 text-sm">
+                        {selectedCreatorGrant ? (
+                          <>
+                            <div className="font-medium">Current creator grant</div>
+                            <div className="mt-2 text-muted-foreground">
+                              {selectedCreatorGrant.reason}
+                            </div>
+                            <div className="mt-3 text-xs text-muted-foreground">
+                              Granted by {selectedCreatorGrant.grantedByName ?? "Unknown"}
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="font-medium">No active creator grant</div>
+                            <div className="mt-2 text-muted-foreground">
+                              This user currently relies on Stripe, legacy plan state,
+                              or no billing access.
+                            </div>
+                          </>
+                        )}
+                      </div>
+
+                      <div className="flex flex-col gap-3 sm:flex-row">
+                        <Button
+                          disabled={creatorGrantPlans.length === 0}
+                          onClick={openGrantCreatorAccessDialog}
+                        >
+                          Grant creator access
+                        </Button>
+                        <Button
+                          disabled={!selectedCreatorGrant}
+                          onClick={openRevokeCreatorAccessDialog}
+                          variant="outline"
+                        >
+                          Revoke creator access
+                        </Button>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="rounded-lg border border-border/70 bg-muted/20 px-4 py-6 text-sm text-muted-foreground">
+                      Select a user from the lookup list to review current billing and
+                      creator override state.
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          ) : null}
+
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
+            <Card className="border-border/70">
+              <CardHeader>
+                <CardTitle>Customers</CardTitle>
+                <CardDescription>
+                  Linked billing customers and the live plan coverage currently
+                  attached to each account.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <StaffDataTable
+                  columns={customerColumns}
+                  data={data.customers}
+                  emptyDescription="Billing customer records will appear here once subscriptions or customer sync records are created."
+                  emptyTitle="No customers yet"
+                  getRowId={(row) => row.stripeCustomerId}
+                  searchPlaceholder="Search customers"
+                />
+              </CardContent>
+            </Card>
+
+            <Card className="border-border/70">
+              <CardHeader>
+                <CardTitle>Creator grant ledger</CardTitle>
+                <CardDescription>
+                  Active and historical creator overrides with audit-friendly reason text.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="rounded-lg border border-border/70 p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>User</TableHead>
+                      <TableHead>Plan</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Window</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {data.creatorGrants.length > 0 ? (
+                      data.creatorGrants.slice(0, 10).map((grant) => (
+                        <TableRow key={grant.id}>
+                          <TableCell>
+                            <div className="flex flex-col gap-1">
+                              <span className="font-medium">{grant.userName}</span>
+                              <span className="text-xs text-muted-foreground">
+                                {grant.email ?? grant.clerkUserId}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell>{grant.planKey}</TableCell>
+                          <TableCell>
+                            <Badge variant={grant.active ? "secondary" : "outline"}>
+                              {grant.active ? "active" : "inactive"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="max-w-sm whitespace-normal text-sm text-muted-foreground">
+                            {grant.startsAt
+                              ? `From ${formatDateTime(grant.startsAt)}`
+                              : "Start not set"}
+                            {grant.endsAt
+                              ? ` until ${formatDateTime(grant.endsAt)}`
+                              : " with no expiry"}
+                            <span className="mt-1 block">{grant.reason}</span>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell
+                          className="py-8 text-center text-sm text-muted-foreground"
+                          colSpan={4}
+                        >
+                          No creator access grants are recorded yet.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
       ) : null}
 
       {section === "subscriptions-active" ? (
@@ -1745,7 +2513,7 @@ export function StaffBillingView({
             <CardTitle>Active subscriptions</CardTitle>
             <CardDescription>
               The rows below are the subscriptions most likely to be impacted by
-              plan and price operations.
+              plan, schedule, and reconciliation operations.
             </CardDescription>
           </CardHeader>
           <CardContent className="rounded-lg border border-border/70 p-0">
@@ -1755,7 +2523,9 @@ export function StaffBillingView({
                   <TableHead>User</TableHead>
                   <TableHead>Plan</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Attention</TableHead>
                   <TableHead>Price</TableHead>
+                  <TableHead>Schedule</TableHead>
                   <TableHead>Current period end</TableHead>
                 </TableRow>
               </TableHeader>
@@ -1777,8 +2547,33 @@ export function StaffBillingView({
                           status={subscription.status}
                         />
                       </TableCell>
+                      <TableCell>
+                        <BillingAttentionBadge
+                          status={subscription.attentionStatus ?? "none"}
+                        />
+                      </TableCell>
                       <TableCell className="max-w-[16rem] break-all text-xs text-muted-foreground">
                         {subscription.stripePriceId}
+                      </TableCell>
+                      <TableCell className="max-w-[18rem] whitespace-normal text-sm text-muted-foreground">
+                        {subscription.scheduledChangeType ? (
+                          <>
+                            {subscription.scheduledChangeType.replaceAll("_", " ")}
+                            {subscription.scheduledPlanKey
+                              ? ` -> ${subscription.scheduledPlanKey}`
+                              : ""}
+                            {subscription.scheduledInterval
+                              ? ` (${subscription.scheduledInterval})`
+                              : ""}
+                            {subscription.scheduledChangeAt
+                              ? ` on ${formatDateTime(subscription.scheduledChangeAt)}`
+                              : ""}
+                          </>
+                        ) : subscription.cancelAtPeriodEnd ? (
+                          "cancel at period end"
+                        ) : (
+                          "none"
+                        )}
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
                         {subscription.currentPeriodEnd
@@ -1789,14 +2584,14 @@ export function StaffBillingView({
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell
-                      className="py-8 text-center text-sm text-muted-foreground"
-                      colSpan={5}
-                    >
-                      No active subscription records are available.
-                    </TableCell>
-                  </TableRow>
-                )}
+                      <TableCell
+                        className="py-8 text-center text-sm text-muted-foreground"
+                        colSpan={7}
+                      >
+                        No active subscription records are available.
+                      </TableCell>
+                    </TableRow>
+                  )}
               </TableBody>
             </Table>
           </CardContent>
@@ -1954,6 +2749,40 @@ export function StaffBillingView({
         }}
         planLabelByKey={planLabelByKey}
         state={featureAssignmentSyncState}
+      />
+      <CreatorGrantDialog
+        billingMutationPending={billingMutation.isPending}
+        onClose={() => setCreatorGrantDraft(null)}
+        onConfirm={() => void submitCreatorGrant()}
+        planOptions={creatorGrantPlans}
+        state={creatorGrantDraft}
+        targetUser={
+          creatorGrantDraft
+            ? data.userDirectory.find(
+                (user) => user.userId === creatorGrantDraft.targetUserId
+              ) ?? null
+            : null
+        }
+        setState={setCreatorGrantDraft}
+      />
+      <RevokeCreatorAccessDialog
+        billingMutationPending={billingMutation.isPending}
+        currentGrant={
+          creatorGrantRevokeState
+            ? getActiveCreatorGrant(data.creatorGrants, creatorGrantRevokeState.targetUserId)
+            : null
+        }
+        onClose={() => setCreatorGrantRevokeState(null)}
+        onConfirm={() => void submitCreatorAccessRevocation()}
+        setState={setCreatorGrantRevokeState}
+        targetUser={
+          creatorGrantRevokeState
+            ? data.userDirectory.find(
+                (user) => user.userId === creatorGrantRevokeState.targetUserId
+              ) ?? null
+            : null
+        }
+        state={creatorGrantRevokeState}
       />
     </div>
   )
@@ -2564,6 +3393,182 @@ function FeatureAssignmentSyncDialog(args: {
           </Button>
           <Button disabled={args.billingMutationPending} onClick={args.onConfirm}>
             Save assignments
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function CreatorGrantDialog(args: {
+  billingMutationPending: boolean
+  onClose: () => void
+  onConfirm: () => void
+  planOptions: StaffBillingPlanRecord[]
+  setState: Dispatch<SetStateAction<CreatorGrantDraft | null>>
+  state: CreatorGrantDraft | null
+  targetUser: StaffBillingUserLookupRecord | null
+}) {
+  return (
+    <Dialog open={Boolean(args.state)} onOpenChange={(open) => !open && args.onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Grant creator access</DialogTitle>
+          <DialogDescription>
+            This creates a local creator partnership override and records the action
+            in billing audit logs. It does not create a synthetic Stripe subscription.
+          </DialogDescription>
+        </DialogHeader>
+
+        {args.state && args.targetUser ? (
+          <FieldGroup>
+            <div className="rounded-lg border border-border/70 bg-muted/20 px-4 py-4 text-sm">
+              <div className="font-medium">{args.targetUser.userName}</div>
+              <div className="mt-1 text-muted-foreground">
+                {args.targetUser.email ?? args.targetUser.clerkUserId}
+              </div>
+              <div className="mt-3">
+                <BillingAccessSourceBadge source={args.targetUser.accessSource} />
+              </div>
+            </div>
+            <Field>
+              <FieldLabel>Grant plan</FieldLabel>
+              <NativeSelect
+                onChange={(event) =>
+                  args.setState((current) =>
+                    current ? { ...current, planKey: event.target.value } : current
+                  )
+                }
+                value={args.state.planKey}
+              >
+                {args.planOptions.map((plan) => (
+                  <NativeSelectOption key={plan.key} value={plan.key}>
+                    {plan.name}
+                  </NativeSelectOption>
+                ))}
+              </NativeSelect>
+              <FieldDescription>
+                Select the managed plan whose features should resolve for this creator.
+              </FieldDescription>
+            </Field>
+            <Field>
+              <FieldLabel>Expiry (optional)</FieldLabel>
+              <Input
+                onChange={(event) =>
+                  args.setState((current) =>
+                    current ? { ...current, endsAt: event.target.value } : current
+                  )
+                }
+                type="datetime-local"
+                value={args.state.endsAt}
+              />
+              <FieldDescription>
+                Leave blank for an open-ended creator partnership grant.
+              </FieldDescription>
+            </Field>
+            <Field>
+              <FieldLabel>Reason</FieldLabel>
+              <Textarea
+                onChange={(event) =>
+                  args.setState((current) =>
+                    current ? { ...current, reason: event.target.value } : current
+                  )
+                }
+                placeholder="Document why this creator should receive manual access."
+                value={args.state.reason}
+              />
+              <FieldDescription>
+                Audit logs require a clear reason with enough context for later review.
+              </FieldDescription>
+            </Field>
+          </FieldGroup>
+        ) : null}
+
+        <DialogFooter>
+          <Button onClick={args.onClose} variant="outline">
+            Cancel
+          </Button>
+          <Button
+            disabled={
+              args.billingMutationPending ||
+              !args.state?.planKey ||
+              (args.state?.reason.trim().length ?? 0) < 8
+            }
+            onClick={args.onConfirm}
+          >
+            Grant access
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function RevokeCreatorAccessDialog(args: {
+  billingMutationPending: boolean
+  currentGrant: StaffCreatorGrantRecord | null
+  onClose: () => void
+  onConfirm: () => void
+  setState: Dispatch<SetStateAction<CreatorGrantRevokeState | null>>
+  state: CreatorGrantRevokeState | null
+  targetUser: StaffBillingUserLookupRecord | null
+}) {
+  return (
+    <Dialog open={Boolean(args.state)} onOpenChange={(open) => !open && args.onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Revoke creator access</DialogTitle>
+          <DialogDescription>
+            Revocation removes the local entitlement override while leaving Stripe
+            subscription state untouched.
+          </DialogDescription>
+        </DialogHeader>
+
+        {args.state && args.targetUser ? (
+          <FieldGroup>
+            <div className="rounded-lg border border-border/70 bg-muted/20 px-4 py-4 text-sm">
+              <div className="font-medium">{args.targetUser.userName}</div>
+              <div className="mt-1 text-muted-foreground">
+                {args.targetUser.email ?? args.targetUser.clerkUserId}
+              </div>
+              {args.currentGrant ? (
+                <div className="mt-3 text-muted-foreground">
+                  Current grant: {args.currentGrant.planKey}
+                  {args.currentGrant.endsAt
+                    ? ` until ${formatDateTime(args.currentGrant.endsAt)}`
+                    : " with no expiry"}
+                </div>
+              ) : null}
+            </div>
+            <Field>
+              <FieldLabel>Reason</FieldLabel>
+              <Textarea
+                onChange={(event) =>
+                  args.setState((current) =>
+                    current ? { ...current, reason: event.target.value } : current
+                  )
+                }
+                placeholder="Document why this creator override is being removed."
+                value={args.state.reason}
+              />
+            </Field>
+          </FieldGroup>
+        ) : null}
+
+        <DialogFooter>
+          <Button onClick={args.onClose} variant="outline">
+            Cancel
+          </Button>
+          <Button
+            disabled={
+              args.billingMutationPending ||
+              !args.currentGrant ||
+              (args.state?.reason.trim().length ?? 0) < 8
+            }
+            onClick={args.onConfirm}
+            variant="destructive"
+          >
+            Revoke access
           </Button>
         </DialogFooter>
       </DialogContent>

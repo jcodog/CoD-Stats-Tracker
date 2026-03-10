@@ -1,22 +1,19 @@
-import { query, QueryCtx } from "../../_generated/server"
-
-async function getCurrentUser(ctx: QueryCtx) {
-  const identity = await ctx.auth.getUserIdentity()
-
-  if (!identity) {
-    return null
-  }
-
-  return await ctx.db
-    .query("users")
-    .withIndex("by_clerkUserId", (q) => q.eq("clerkUserId", identity.subject))
-    .unique()
-}
+import { query } from "../../_generated/server"
+import { buildResolvedBillingState } from "./resolution"
 
 export const getCurrentUserBillingCustomer = query({
   args: {},
   handler: async (ctx) => {
-    const user = await getCurrentUser(ctx)
+    const identity = await ctx.auth.getUserIdentity()
+
+    if (!identity) {
+      return null
+    }
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerkUserId", (query) => query.eq("clerkUserId", identity.subject))
+      .unique()
 
     if (!user) {
       return null
@@ -24,7 +21,7 @@ export const getCurrentUserBillingCustomer = query({
 
     return await ctx.db
       .query("billingCustomers")
-      .withIndex("by_userId", (q) => q.eq("userId", user._id))
+      .withIndex("by_userId", (query) => query.eq("userId", user._id))
       .unique()
   },
 })
@@ -32,47 +29,43 @@ export const getCurrentUserBillingCustomer = query({
 export const getCurrentUserSubscription = query({
   args: {},
   handler: async (ctx) => {
-    const user = await getCurrentUser(ctx)
+    const identity = await ctx.auth.getUserIdentity()
+
+    if (!identity) {
+      return null
+    }
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerkUserId", (query) => query.eq("clerkUserId", identity.subject))
+      .unique()
 
     if (!user) {
       return null
     }
 
-    return await ctx.db
-      .query("billingSubscriptions")
-      .withIndex("by_userId", (q) => q.eq("userId", user._id))
-      .unique()
+    return (await buildResolvedBillingState(ctx, user)).subscription
   },
 })
 
 export const getCurrentUserBillingState = query({
   args: {},
   handler: async (ctx) => {
-    const user = await getCurrentUser(ctx)
+    const identity = await ctx.auth.getUserIdentity()
+
+    if (!identity) {
+      return null
+    }
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerkUserId", (query) => query.eq("clerkUserId", identity.subject))
+      .unique()
 
     if (!user) {
       return null
     }
 
-    const [customer, subscription] = await Promise.all([
-      ctx.db
-        .query("billingCustomers")
-        .withIndex("by_userId", (q) => q.eq("userId", user._id))
-        .unique(),
-      ctx.db
-        .query("billingSubscriptions")
-        .withIndex("by_userId", (q) => q.eq("userId", user._id))
-        .unique(),
-    ])
-
-    return {
-      user,
-      customer,
-      subscription,
-      effectivePlanKey: subscription?.planKey ?? user.plan,
-      isSubscribed:
-        subscription?.status === "active" ||
-        subscription?.status === "trialing",
-    }
+    return await buildResolvedBillingState(ctx, user)
   },
 })

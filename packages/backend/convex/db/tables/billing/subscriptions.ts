@@ -7,8 +7,13 @@ export const billingSubscriptions = defineTable({
 
   stripeCustomerId: v.string(),
   stripeSubscriptionId: v.string(),
+  stripeSubscriptionItemId: v.optional(v.string()),
   stripePriceId: v.string(),
   stripeProductId: v.optional(v.string()),
+  stripeScheduleId: v.optional(v.string()),
+  stripeLatestInvoiceId: v.optional(v.string()),
+  stripeLatestPaymentIntentId: v.optional(v.string()),
+  lastStripeEventId: v.optional(v.string()),
 
   planKey: v.string(),
 
@@ -24,11 +29,29 @@ export const billingSubscriptions = defineTable({
   ),
 
   interval: v.union(v.literal("month"), v.literal("year")),
+  attentionStatus: v.union(
+    v.literal("none"),
+    v.literal("payment_failed"),
+    v.literal("past_due"),
+    v.literal("requires_action"),
+    v.literal("paused")
+  ),
+  attentionUpdatedAt: v.optional(v.number()),
 
   cancelAtPeriodEnd: v.boolean(),
   currentPeriodStart: v.optional(v.number()),
   currentPeriodEnd: v.optional(v.number()),
+  cancelAt: v.optional(v.number()),
   canceledAt: v.optional(v.number()),
+  endedAt: v.optional(v.number()),
+
+  scheduledChangeType: v.optional(
+    v.union(v.literal("cancel"), v.literal("plan_change"))
+  ),
+  scheduledPlanKey: v.optional(v.string()),
+  scheduledInterval: v.optional(v.union(v.literal("month"), v.literal("year"))),
+  scheduledChangeAt: v.optional(v.number()),
+  scheduledChangeRequestedAt: v.optional(v.number()),
 
   createdAt: v.number(),
   updatedAt: v.number(),
@@ -37,3 +60,6 @@ export const billingSubscriptions = defineTable({
   .index("by_clerkUserId", ["clerkUserId"])
   .index("by_stripeCustomerId", ["stripeCustomerId"])
   .index("by_stripeSubscriptionId", ["stripeSubscriptionId"])
+  .index("by_planKey", ["planKey"])
+  .index("by_status", ["status"])
+  .index("by_attentionStatus", ["attentionStatus"])

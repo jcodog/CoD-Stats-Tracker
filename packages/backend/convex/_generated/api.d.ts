@@ -21,6 +21,41 @@ import type { GenericId as Id } from "convex/values";
  */
 export declare const api: {
   actions: {
+    billing: {
+      customer: {
+        cancelCurrentSubscription: FunctionReference<
+          "action",
+          "public",
+          {},
+          any
+        >;
+        changeSubscriptionPlan: FunctionReference<
+          "action",
+          "public",
+          { interval: "month" | "year"; planKey: string },
+          any
+        >;
+        createSubscriptionIntent: FunctionReference<
+          "action",
+          "public",
+          { attemptKey?: string; interval: "month" | "year"; planKey: string },
+          any
+        >;
+        listInvoices: FunctionReference<"action", "public", {}, any>;
+        previewSubscriptionChange: FunctionReference<
+          "action",
+          "public",
+          { interval: "month" | "year"; planKey: string },
+          any
+        >;
+        reactivateCurrentSubscription: FunctionReference<
+          "action",
+          "public",
+          {},
+          any
+        >;
+      };
+    };
     staff: {
       billing: {
         archiveFeature: FunctionReference<
@@ -40,6 +75,17 @@ export declare const api: {
           any
         >;
         getDashboard: FunctionReference<"action", "public", {}, any>;
+        grantCreatorAccess: FunctionReference<
+          "action",
+          "public",
+          {
+            endsAt?: number;
+            planKey: string;
+            reason: string;
+            targetUserId: Id<"users">;
+          },
+          any
+        >;
         previewFeatureArchive: FunctionReference<
           "action",
           "public",
@@ -85,6 +131,12 @@ export declare const api: {
             interval: "month" | "year";
             planKey: string;
           },
+          any
+        >;
+        revokeCreatorAccess: FunctionReference<
+          "action",
+          "public",
+          { reason: string; targetUserId: Id<"users"> },
           any
         >;
         runCatalogSync: FunctionReference<"action", "public", {}, any>;
@@ -326,6 +378,14 @@ export declare const api: {
   };
   queries: {
     billing: {
+      catalog: {
+        getCustomerPricingCatalog: FunctionReference<
+          "query",
+          "public",
+          {},
+          any
+        >;
+      };
       entitlements: {
         currentUserHasFeature: FunctionReference<
           "query",
@@ -334,6 +394,14 @@ export declare const api: {
           any
         >;
         getCurrentUserEntitlements: FunctionReference<
+          "query",
+          "public",
+          {},
+          any
+        >;
+      };
+      resolution: {
+        getCurrentUserResolvedBillingState: FunctionReference<
           "query",
           "public",
           {},
@@ -624,6 +692,147 @@ export declare const internal: {
           any
         >;
       };
+      state: {
+        clearSubscriptionScheduledChange: FunctionReference<
+          "mutation",
+          "internal",
+          { stripeSubscriptionId: string },
+          any
+        >;
+        grantBillingAccessGrant: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            clerkUserId: string;
+            endsAt?: number;
+            grantedByClerkUserId?: string;
+            grantedByName?: string;
+            planKey: string;
+            reason: string;
+            source: "creator_approval" | "manual" | "promo";
+            startsAt?: number;
+            userId: Id<"users">;
+          },
+          any
+        >;
+        markWebhookEventFailed: FunctionReference<
+          "mutation",
+          "internal",
+          { errorMessage: string; stripeEventId: string },
+          any
+        >;
+        markWebhookEventProcessed: FunctionReference<
+          "mutation",
+          "internal",
+          { processingStatus: "processed" | "ignored"; stripeEventId: string },
+          any
+        >;
+        markWebhookEventProcessing: FunctionReference<
+          "mutation",
+          "internal",
+          { stripeEventId: string },
+          any
+        >;
+        recordWebhookEventReceived: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            customerId?: string;
+            eventType: string;
+            invoiceId?: string;
+            paymentIntentId?: string;
+            safeSummary: string;
+            stripeEventId: string;
+            subscriptionId?: string;
+          },
+          any
+        >;
+        revokeBillingAccessGrant: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            grantId: Id<"billingAccessGrants">;
+            revokedByClerkUserId?: string;
+            revokedByName?: string;
+          },
+          any
+        >;
+        setSubscriptionScheduledChange: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            scheduledChangeAt: number;
+            scheduledChangeRequestedAt: number;
+            scheduledChangeType: "cancel" | "plan_change";
+            scheduledInterval?: "month" | "year";
+            scheduledPlanKey?: string;
+            stripeScheduleId?: string;
+            stripeSubscriptionId: string;
+          },
+          any
+        >;
+        upsertBillingCustomer: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            active: boolean;
+            clerkUserId: string;
+            email?: string;
+            name?: string;
+            stripeCustomerId: string;
+            userId: Id<"users">;
+          },
+          any
+        >;
+        upsertBillingSubscription: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            attentionStatus:
+              | "none"
+              | "payment_failed"
+              | "past_due"
+              | "requires_action"
+              | "paused";
+            attentionUpdatedAt?: number;
+            cancelAt?: number;
+            cancelAtPeriodEnd: boolean;
+            canceledAt?: number;
+            clearScheduledChange?: boolean;
+            clerkUserId: string;
+            currentPeriodEnd?: number;
+            currentPeriodStart?: number;
+            endedAt?: number;
+            interval: "month" | "year";
+            lastStripeEventId?: string;
+            planKey: string;
+            scheduledChangeAt?: number;
+            scheduledChangeRequestedAt?: number;
+            scheduledChangeType?: "cancel" | "plan_change";
+            scheduledInterval?: "month" | "year";
+            scheduledPlanKey?: string;
+            status:
+              | "incomplete"
+              | "trialing"
+              | "active"
+              | "past_due"
+              | "canceled"
+              | "unpaid"
+              | "paused"
+              | "incomplete_expired";
+            stripeCustomerId: string;
+            stripeLatestInvoiceId?: string;
+            stripeLatestPaymentIntentId?: string;
+            stripePriceId: string;
+            stripeProductId?: string;
+            stripeScheduleId?: string;
+            stripeSubscriptionId: string;
+            stripeSubscriptionItemId?: string;
+            userId: Id<"users">;
+          },
+          any
+        >;
+      };
     };
     featureFlags: {
       internal: {
@@ -802,6 +1011,57 @@ export declare const internal: {
         >;
         getPricingCatalog: FunctionReference<"query", "internal", {}, any>;
       };
+      internal: {
+        getBillingContextByStripeCustomerId: FunctionReference<
+          "query",
+          "internal",
+          { stripeCustomerId: string },
+          any
+        >;
+        getCurrentCreatorGrantByUserId: FunctionReference<
+          "query",
+          "internal",
+          { userId: Id<"users"> },
+          any
+        >;
+        getPlanByKey: FunctionReference<
+          "query",
+          "internal",
+          { planKey: string },
+          any
+        >;
+        getPlanByStripePriceId: FunctionReference<
+          "query",
+          "internal",
+          { stripePriceId: string },
+          any
+        >;
+        getUserBillingContextByClerkUserId: FunctionReference<
+          "query",
+          "internal",
+          { clerkUserId: string },
+          any
+        >;
+      };
+      resolution: {
+        resolveUserEntitlements: FunctionReference<
+          "query",
+          "internal",
+          { userId: Id<"users"> },
+          any
+        >;
+        resolveUserPlanState: FunctionReference<
+          "query",
+          "internal",
+          { userId: Id<"users"> },
+          any
+        >;
+      };
+    };
+    featureFlags: {
+      internal: {
+        getByKey: FunctionReference<"query", "internal", { key: string }, any>;
+      };
     };
     staff: {
       internal: {
@@ -812,6 +1072,12 @@ export declare const internal: {
           "query",
           "internal",
           { clerkUserId: string },
+          any
+        >;
+        getUserById: FunctionReference<
+          "query",
+          "internal",
+          { userId: Id<"users"> },
           any
         >;
       };

@@ -40,6 +40,9 @@ export function AppShell({ children }: AppShellProps) {
                 <Link href="/dashboard">Dashboard</Link>
               </Button>
               <Button asChild size="sm" variant="ghost">
+                <Link href="/settings/billing">Billing</Link>
+              </Button>
+              <Button asChild size="sm" variant="ghost">
                 <Link href="/account">Account</Link>
               </Button>
             </nav>

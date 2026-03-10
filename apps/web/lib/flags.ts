@@ -28,8 +28,13 @@ const identify = dedupe(async (): Promise<FlagEntities> => {
 
   const token = (await getToken()) ?? undefined
 
-  const [dbUser, clerkUser] = await Promise.all([
+  const [dbUser, billingState, clerkUser] = await Promise.all([
     fetchQuery(api.queries.users.current, {}, { token }),
+    fetchQuery(
+      api.queries.billing.resolution.getCurrentUserResolvedBillingState,
+      {},
+      { token }
+    ),
     currentUser(),
   ])
 
@@ -37,13 +42,21 @@ const identify = dedupe(async (): Promise<FlagEntities> => {
     clerkUser?.primaryEmailAddress?.emailAddress ??
     clerkUser?.emailAddresses?.[0]?.emailAddress
 
-  const plan: Plan = dbUser?.plan ?? "free"
   const role: Role = dbUser?.role ?? "user"
+
+  const resolvedPlan: Plan =
+    billingState?.accessSource === "creator_grant" || dbUser?.plan === "creator"
+      ? "creator"
+      : billingState?.accessSource === "paid_subscription" ||
+          billingState?.effectivePlan?.planType === "paid" ||
+          dbUser?.plan === "premium"
+        ? "premium"
+        : "free"
 
   return {
     user: {
       id: userId,
-      plan,
+      plan: resolvedPlan,
       role,
       email,
     },

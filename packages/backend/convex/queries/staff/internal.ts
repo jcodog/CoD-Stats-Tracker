@@ -35,6 +35,15 @@ export const getUserByClerkUserId = internalQuery({
   },
 })
 
+export const getUserById = internalQuery({
+  args: {
+    userId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.userId)
+  },
+})
+
 export const getManagementRecords = internalQuery({
   args: {},
   handler: async (ctx) => {
@@ -75,6 +84,8 @@ export const getBillingRecords = internalQuery({
       planFeatures,
       subscriptions,
       customers,
+      accessGrants,
+      webhookEvents,
       users,
       auditLogs,
     ] = await Promise.all([
@@ -83,6 +94,12 @@ export const getBillingRecords = internalQuery({
       ctx.db.query("billingPlanFeatures").collect(),
       ctx.db.query("billingSubscriptions").collect(),
       ctx.db.query("billingCustomers").collect(),
+      ctx.db.query("billingAccessGrants").collect(),
+      ctx.db
+        .query("billingWebhookEvents")
+        .withIndex("by_receivedAt")
+        .order("desc")
+        .take(200),
       ctx.db.query("users").collect(),
       ctx.db
         .query("staffAuditLogs")
@@ -93,12 +110,14 @@ export const getBillingRecords = internalQuery({
 
     return {
       auditLogs: auditLogs.filter((log) => log.entityType.startsWith("billing")),
+      accessGrants,
       customers,
       features: features.sort(sortBySortOrderAndKey),
       planFeatures,
       plans: plans.sort(sortBySortOrderAndKey),
       subscriptions: subscriptions.sort((left, right) => right.updatedAt - left.updatedAt),
       users: users.sort(sortUsers),
+      webhookEvents,
     }
   },
 })

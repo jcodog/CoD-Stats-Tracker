@@ -8,6 +8,7 @@ export const billingCustomers = defineTable({
   stripeCustomerId: v.string(),
 
   email: v.optional(v.string()),
+  name: v.optional(v.string()),
   active: v.boolean(),
 
   createdAt: v.number(),

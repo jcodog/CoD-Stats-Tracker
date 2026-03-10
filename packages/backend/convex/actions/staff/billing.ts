@@ -3,6 +3,7 @@
 import { v } from "convex/values"
 import { action } from "../../_generated/server"
 import { internal } from "../../_generated/api"
+import { maskIdentifier } from "../../lib/billing"
 import { requireAuthorizedStaffAction } from "../../lib/staffActionAuth"
 import { resolveBillingFeatureApplyMode, type UserRole } from "../../lib/staffRoles"
 import type {
@@ -12,9 +13,14 @@ import type {
   StaffBillingFeatureRecord,
   StaffBillingPlanRecord,
   StaffBillingSyncSummary,
+  StaffBillingUserLookupRecord,
+  StaffCreatorGrantRecord,
   StaffImpactPreview,
   StaffMutationResponse,
   StaffSubscriptionImpactRow,
+  StaffWebhookEventRecord,
+  StaffWebhookMetrics,
+  StaffWebhookTimelinePoint,
 } from "../../lib/staffTypes"
 import { getStripe } from "../../lib/stripe"
 import type { StripeCatalogSyncResult } from "../billing/syncCatalogToStripe"
@@ -58,6 +64,50 @@ function isImpactStatus(status: string): status is SubscriptionStatus {
     status === "past_due" ||
     status === "paused"
   )
+}
+
+function canViewFullBillingIdentifiers(role: UserRole) {
+  return role === "admin" || role === "super_admin"
+}
+
+function maskBillingIdentifier(
+  value: string | undefined,
+  options: {
+    full: boolean
+  }
+) {
+  return maskIdentifier(value, { full: options.full })
+}
+
+function getAccessGrantPriority(source: "creator_approval" | "manual" | "promo") {
+  switch (source) {
+    case "creator_approval":
+      return 3
+    case "manual":
+      return 2
+    case "promo":
+      return 1
+  }
+}
+
+function isActiveAccessGrant(args: {
+  active: boolean
+  endsAt?: number
+  startsAt?: number
+}, now: number) {
+  if (!args.active) {
+    return false
+  }
+
+  if (args.startsAt !== undefined && args.startsAt > now) {
+    return false
+  }
+
+  if (args.endsAt !== undefined && args.endsAt <= now) {
+    return false
+  }
+
+  return true
 }
 
 function uniqueAssignments(
@@ -214,19 +264,30 @@ function getPlanKeyDelta(args: {
 }
 
 function buildSubscriptionRows(args: {
+  fullIdentifiers: boolean
   customers: Array<{
     active: boolean
     clerkUserId: string
     email?: string
+    stripeCustomerId: string
   }>
   subscriptions: Array<{
+    attentionStatus: "none" | "past_due" | "paused" | "payment_failed" | "requires_action"
+    cancelAt?: number
     cancelAtPeriodEnd: boolean
     clerkUserId: string
     currentPeriodEnd?: number
+    currentPeriodStart?: number
     interval: "month" | "year"
     planKey: string
+    scheduledChangeAt?: number
+    scheduledChangeType?: "cancel" | "plan_change"
+    scheduledInterval?: "month" | "year"
+    scheduledPlanKey?: string
     status: string
+    stripeCustomerId: string
     stripePriceId: string
+    stripeScheduleId?: string
     stripeSubscriptionId: string
     userId: string
   }>
@@ -248,21 +309,41 @@ function buildSubscriptionRows(args: {
       const customer = customersByClerkUserId.get(subscription.clerkUserId)
 
       return {
+        attentionStatus: subscription.attentionStatus,
+        cancelAt: subscription.cancelAt,
         cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
         clerkUserId: subscription.clerkUserId,
         currentPeriodEnd: subscription.currentPeriodEnd,
+        currentPeriodStart: subscription.currentPeriodStart,
         email: customer?.email,
         interval: subscription.interval,
         planKey: subscription.planKey,
+        scheduledChangeAt: subscription.scheduledChangeAt,
+        scheduledChangeType: subscription.scheduledChangeType,
+        scheduledInterval: subscription.scheduledInterval,
+        scheduledPlanKey: subscription.scheduledPlanKey,
         status: subscription.status,
-        stripePriceId: subscription.stripePriceId,
-        stripeSubscriptionId: subscription.stripeSubscriptionId,
+        stripeCustomerId: maskBillingIdentifier(subscription.stripeCustomerId, {
+          full: args.fullIdentifiers,
+        }),
+        stripePriceId: maskBillingIdentifier(subscription.stripePriceId, {
+          full: args.fullIdentifiers,
+        }) ?? subscription.stripePriceId,
+        stripeScheduleId: maskBillingIdentifier(subscription.stripeScheduleId, {
+          full: args.fullIdentifiers,
+        }),
+        stripeSubscriptionId:
+          maskBillingIdentifier(subscription.stripeSubscriptionId, {
+            full: args.fullIdentifiers,
+          }) ?? subscription.stripeSubscriptionId,
         userName: user?.name ?? subscription.clerkUserId,
       }
     })
 }
 
 function buildCustomerRows(args: {
+  activeGrantByClerkUserId: Map<string, { active: boolean }>
+  fullIdentifiers: boolean
   customers: Array<{
     active: boolean
     clerkUserId: string
@@ -311,16 +392,249 @@ function buildCustomerRows(args: {
         clerkUserId: customer.clerkUserId,
         createdAt: customer.createdAt,
         email: customer.email,
+        hasCreatorGrant: Boolean(
+          args.activeGrantByClerkUserId.get(customer.clerkUserId)?.active
+        ),
         planKeys: Array.from(
           new Set(customerSubscriptions.map((subscription) => subscription.planKey))
         ).sort((left, right) => left.localeCompare(right)),
-        stripeCustomerId: customer.stripeCustomerId,
+        stripeCustomerId:
+          maskBillingIdentifier(customer.stripeCustomerId, {
+            full: args.fullIdentifiers,
+          }) ?? customer.stripeCustomerId,
         subscriptionCount: customerSubscriptions.length,
         updatedAt: customer.updatedAt,
         userName: user?.name ?? customer.clerkUserId,
       }
     })
     .sort((left, right) => left.userName.localeCompare(right.userName))
+}
+
+function buildWebhookMetrics(args: {
+  events: Array<{
+    processedAt?: number
+    processingStatus: "failed" | "ignored" | "processed" | "processing" | "received"
+    receivedAt: number
+  }>
+}) {
+  const timelineByDay = new Map<number, StaffWebhookTimelinePoint>()
+
+  for (const event of args.events) {
+    const day = new Date(event.receivedAt)
+    day.setHours(0, 0, 0, 0)
+    const dayStart = day.getTime()
+    const existing = timelineByDay.get(dayStart) ?? {
+      dayStart,
+      failedCount: 0,
+      processedCount: 0,
+    }
+
+    if (event.processingStatus === "failed") {
+      existing.failedCount += 1
+    }
+
+    if (event.processingStatus === "processed") {
+      existing.processedCount += 1
+    }
+
+    timelineByDay.set(dayStart, existing)
+  }
+
+  return {
+    failedCount: args.events.filter((event) => event.processingStatus === "failed").length,
+    ignoredCount: args.events.filter((event) => event.processingStatus === "ignored")
+      .length,
+    lastProcessedAt: args.events.find((event) => event.processedAt !== undefined)
+      ?.processedAt,
+    lastReceivedAt: args.events[0]?.receivedAt,
+    processedCount: args.events.filter((event) => event.processingStatus === "processed")
+      .length,
+    processingCount: args.events.filter((event) => event.processingStatus === "processing")
+      .length,
+    receivedCount: args.events.filter((event) => event.processingStatus === "received")
+      .length,
+    timeline: Array.from(timelineByDay.values()).sort(
+      (left, right) => left.dayStart - right.dayStart
+    ),
+  } satisfies StaffWebhookMetrics
+}
+
+function buildWebhookEventRows(args: {
+  events: Array<{
+    _id: string
+    customerId?: string
+    errorMessage?: string
+    eventType: string
+    invoiceId?: string
+    paymentIntentId?: string
+    processedAt?: number
+    processingStatus: "failed" | "ignored" | "processed" | "processing" | "received"
+    receivedAt: number
+    safeSummary: string
+    subscriptionId?: string
+  }>
+  fullIdentifiers: boolean
+}) {
+  return args.events.map<StaffWebhookEventRecord>((event) => ({
+    customerId: maskBillingIdentifier(event.customerId, {
+      full: args.fullIdentifiers,
+    }),
+    errorMessage: event.errorMessage,
+    eventType: event.eventType,
+    id: event._id,
+    invoiceId: maskBillingIdentifier(event.invoiceId, {
+      full: args.fullIdentifiers,
+    }),
+    paymentIntentId: maskBillingIdentifier(event.paymentIntentId, {
+      full: args.fullIdentifiers,
+    }),
+    processedAt: event.processedAt,
+    processingStatus: event.processingStatus,
+    receivedAt: event.receivedAt,
+    safeSummary: event.safeSummary,
+    subscriptionId: maskBillingIdentifier(event.subscriptionId, {
+      full: args.fullIdentifiers,
+    }),
+  }))
+}
+
+function buildUserDirectory(args: {
+  activeGrantByUserId: Map<
+    string,
+    {
+      active: boolean
+      planKey: string
+      source: "creator_approval" | "manual" | "promo"
+    }
+  >
+  customers: Array<{
+    clerkUserId: string
+    email?: string
+  }>
+  subscriptions: Array<{
+    planKey: string
+    status: string
+    updatedAt: number
+    userId: string
+  }>
+  users: Array<{
+    _id: string
+    clerkUserId: string
+    name: string
+    plan?: "creator" | "free" | "premium"
+  }>
+}) {
+  const emailByClerkUserId = new Map(
+    args.customers.map((customer) => [customer.clerkUserId, customer.email])
+  )
+  const subscriptionsByUserId = new Map<
+    string,
+    Array<(typeof args.subscriptions)[number]>
+  >()
+
+  for (const subscription of args.subscriptions) {
+    const userSubscriptions = subscriptionsByUserId.get(subscription.userId) ?? []
+    userSubscriptions.push(subscription)
+    subscriptionsByUserId.set(subscription.userId, userSubscriptions)
+  }
+
+  function getCurrentSubscriptionForUser(userId: string) {
+    const subscriptions = subscriptionsByUserId.get(userId) ?? []
+
+    return [...subscriptions].sort((left, right) => {
+      const leftPriority = isImpactStatus(left.status) ? 1 : 0
+      const rightPriority = isImpactStatus(right.status) ? 1 : 0
+
+      if (leftPriority !== rightPriority) {
+        return rightPriority - leftPriority
+      }
+
+      return right.updatedAt - left.updatedAt
+    })[0] ?? null
+  }
+
+  return args.users.map<StaffBillingUserLookupRecord>((user) => {
+    const activeGrant = args.activeGrantByUserId.get(user._id)
+    const currentSubscription = getCurrentSubscriptionForUser(user._id)
+    const hasPaidAccess =
+      currentSubscription !== null && isImpactStatus(currentSubscription.status)
+    const currentPlanKey = activeGrant
+      ? activeGrant.planKey
+      : hasPaidAccess
+        ? currentSubscription?.planKey
+        : user.plan === "creator"
+          ? "creator"
+          : user.plan === "premium"
+            ? "premium"
+            : null
+
+    return {
+      accessSource: activeGrant
+        ? "creator_grant"
+        : hasPaidAccess
+          ? "paid_subscription"
+          : currentPlanKey
+            ? "legacy_plan"
+            : "none",
+      clerkUserId: user.clerkUserId,
+      currentPlanKey,
+      email: emailByClerkUserId.get(user.clerkUserId),
+      hasCreatorGrant: Boolean(activeGrant?.active),
+      userId: user._id,
+      userName: user.name,
+    }
+  })
+}
+
+function buildCreatorGrantRows(args: {
+  customers: Array<{
+    clerkUserId: string
+    email?: string
+  }>
+  grants: Array<{
+    _id: string
+    active: boolean
+    clerkUserId: string
+    createdAt: number
+    endsAt?: number
+    grantedByClerkUserId?: string
+    grantedByName?: string
+    planKey: string
+    reason: string
+    revokedAt?: number
+    source: "creator_approval" | "manual" | "promo"
+    startsAt?: number
+    userId: string
+  }>
+  users: Array<{
+    _id: string
+    name: string
+  }>
+}) {
+  const emailByClerkUserId = new Map(
+    args.customers.map((customer) => [customer.clerkUserId, customer.email])
+  )
+  const userById = new Map(args.users.map((user) => [user._id, user]))
+
+  return args.grants
+    .map<StaffCreatorGrantRecord>((grant) => ({
+      active: grant.active,
+      clerkUserId: grant.clerkUserId,
+      createdAt: grant.createdAt,
+      email: emailByClerkUserId.get(grant.clerkUserId),
+      endsAt: grant.endsAt,
+      grantedByClerkUserId: grant.grantedByClerkUserId,
+      grantedByName: grant.grantedByName,
+      id: grant._id,
+      planKey: grant.planKey,
+      reason: grant.reason,
+      revokedAt: grant.revokedAt,
+      source: grant.source,
+      startsAt: grant.startsAt,
+      userId: grant.userId,
+      userName: userById.get(grant.userId)?.name ?? grant.clerkUserId,
+    }))
+    .sort((left, right) => right.createdAt - left.createdAt)
 }
 
 async function recordAuditLog(args: {
@@ -446,7 +760,8 @@ function buildImpactPreview(args: {
   } satisfies StaffImpactPreview
 }
 
-function buildBillingDashboard(args: {
+function buildBillingDashboard(
+  args: {
   auditLogs: Array<{
     _id: string
     action: string
@@ -468,6 +783,21 @@ function buildBillingDashboard(args: {
     email?: string
     stripeCustomerId: string
     updatedAt: number
+  }>
+  accessGrants: Array<{
+    _id: string
+    active: boolean
+    clerkUserId: string
+    createdAt: number
+    endsAt?: number
+    grantedByClerkUserId?: string
+    grantedByName?: string
+    planKey: string
+    reason: string
+    revokedAt?: number
+    source: "creator_approval" | "manual" | "promo"
+    startsAt?: number
+    userId: string
   }>
   features: Array<{
     active: boolean
@@ -501,13 +831,22 @@ function buildBillingDashboard(args: {
     yearlyPriceId?: string
   }>
   subscriptions: Array<{
+    attentionStatus: "none" | "past_due" | "paused" | "payment_failed" | "requires_action"
+    cancelAt?: number
     cancelAtPeriodEnd: boolean
     clerkUserId: string
     currentPeriodEnd?: number
+    currentPeriodStart?: number
     interval: "month" | "year"
     planKey: string
+    scheduledChangeAt?: number
+    scheduledChangeType?: "cancel" | "plan_change"
+    scheduledInterval?: "month" | "year"
+    scheduledPlanKey?: string
     status: string
+    stripeCustomerId: string
     stripePriceId: string
+    stripeScheduleId?: string
     stripeSubscriptionId: string
     userId: string
     updatedAt: number
@@ -516,15 +855,84 @@ function buildBillingDashboard(args: {
     _id: string
     clerkUserId: string
     name: string
+    plan?: "creator" | "free" | "premium"
   }>
-}) {
+  webhookEvents: Array<{
+    _id: string
+    customerId?: string
+    errorMessage?: string
+    eventType: string
+    invoiceId?: string
+    paymentIntentId?: string
+    processedAt?: number
+    processingStatus: "failed" | "ignored" | "processed" | "processing" | "received"
+    receivedAt: number
+    safeSummary: string
+    subscriptionId?: string
+  }>
+},
+  actorRole: UserRole = "staff"
+) {
   const assignments = uniqueAssignments(args.planFeatures)
+  const fullIdentifiers = canViewFullBillingIdentifiers(actorRole)
+  const now = Date.now()
+  const activeGrantByUserId = new Map<
+    string,
+    (typeof args.accessGrants)[number]
+  >()
+
+  for (const user of args.users) {
+    const activeGrant =
+      [...args.accessGrants]
+        .filter(
+          (grant) =>
+            grant.userId === user._id && isActiveAccessGrant(grant, now)
+        )
+        .sort((left, right) => {
+          const priorityDifference =
+            getAccessGrantPriority(right.source) - getAccessGrantPriority(left.source)
+
+          if (priorityDifference !== 0) {
+            return priorityDifference
+          }
+
+          return right.createdAt - left.createdAt
+        })[0] ?? null
+
+    if (activeGrant) {
+      activeGrantByUserId.set(user._id, activeGrant)
+    }
+  }
+  const activeGrantByClerkUserId = new Map(
+    Array.from(activeGrantByUserId.values()).map((grant) => [grant.clerkUserId, grant])
+  )
   const subscriptionRows = buildSubscriptionRows({
     customers: args.customers,
+    fullIdentifiers,
     subscriptions: args.subscriptions,
     users: args.users,
   })
   const customerRows = buildCustomerRows({
+    activeGrantByClerkUserId,
+    customers: args.customers,
+    fullIdentifiers,
+    subscriptions: args.subscriptions,
+    users: args.users,
+  })
+  const creatorGrantRows = buildCreatorGrantRows({
+    customers: args.customers,
+    grants: args.accessGrants,
+    users: args.users,
+  })
+  const webhookEventRows = buildWebhookEventRows({
+    events: args.webhookEvents,
+    fullIdentifiers,
+  })
+  const webhookMetrics = buildWebhookMetrics({
+    events: args.webhookEvents,
+  })
+  const userDirectory = buildUserDirectory({
+    activeGrantByUserId,
     customers: args.customers,
     subscriptions: args.subscriptions,
     users: args.users,
@@ -549,15 +957,18 @@ function buildBillingDashboard(args: {
       .map((assignment) => assignment.featureKey)
       .sort((left, right) => left.localeCompare(right))
     const planSubscriptions = subscriptionsByPlanKey.get(plan.key) ?? []
+    const rawPlanSubscriptions = args.subscriptions.filter(
+      (subscription) => subscription.planKey === plan.key
+    )
 
     return {
       active: plan.active,
       activeSubscriptionCount: planSubscriptions.length,
       archivedAt: plan.archivedAt,
-      currentMonthlySubscriptionCount: planSubscriptions.filter(
+      currentMonthlySubscriptionCount: rawPlanSubscriptions.filter(
         (subscription) => subscription.stripePriceId === plan.monthlyPriceId
       ).length,
-      currentYearlySubscriptionCount: planSubscriptions.filter(
+      currentYearlySubscriptionCount: rawPlanSubscriptions.filter(
         (subscription) => subscription.stripePriceId === plan.yearlyPriceId
       ).length,
       currency: plan.currency,
@@ -565,11 +976,15 @@ function buildBillingDashboard(args: {
       includedFeatureKeys,
       key: plan.key,
       monthlyPriceAmount: plan.monthlyPriceAmount,
-      monthlyPriceId: plan.monthlyPriceId,
+      monthlyPriceId: maskBillingIdentifier(plan.monthlyPriceId, {
+        full: fullIdentifiers,
+      }),
       name: plan.name,
       planType: plan.planType,
       sortOrder: plan.sortOrder,
-      stripeProductId: plan.stripeProductId,
+      stripeProductId: maskBillingIdentifier(plan.stripeProductId, {
+        full: fullIdentifiers,
+      }),
       syncStatus:
         plan.planType === "free"
           ? "free"
@@ -579,7 +994,9 @@ function buildBillingDashboard(args: {
               ? "attention"
               : "ready",
       yearlyPriceAmount: plan.yearlyPriceAmount,
-      yearlyPriceId: plan.yearlyPriceId,
+      yearlyPriceId: maskBillingIdentifier(plan.yearlyPriceId, {
+        full: fullIdentifiers,
+      }),
     }
   })
 
@@ -603,12 +1020,17 @@ function buildBillingDashboard(args: {
       linkedPlanKeys,
       name: feature.name,
       sortOrder: feature.sortOrder,
-      stripeFeatureId: feature.stripeFeatureId,
+      stripeFeatureId: maskBillingIdentifier(feature.stripeFeatureId, {
+        full: fullIdentifiers,
+      }),
     }
   })
 
   return {
     activeSubscriptionCount: subscriptionRows.length,
+    attentionSubscriptions: subscriptionRows
+      .filter((subscription) => subscription.attentionStatus !== "none")
+      .slice(0, 25),
     activeCustomerCount: customerRows.filter((customer) => customer.active).length,
     assignments: assignments.map((assignment) => ({
       enabled: assignment.enabled,
@@ -616,6 +1038,7 @@ function buildBillingDashboard(args: {
       planKey: assignment.planKey,
     })),
     auditLogs: args.auditLogs.slice(0, 60).map(mapAuditLogEntry),
+    creatorGrants: creatorGrantRows.slice(0, 60),
     customers: customerRows,
     features,
     generatedAt: Date.now(),
@@ -625,6 +1048,9 @@ function buildBillingDashboard(args: {
       ) ?? null,
     plans,
     subscriptions: subscriptionRows.slice(0, 60),
+    userDirectory,
+    webhookEvents: webhookEventRows.slice(0, 80),
+    webhookMetrics,
   } satisfies StaffBillingDashboard
 }
 
@@ -671,10 +1097,10 @@ async function cancelSubscriptionsAtPeriodEnd(args: {
 export const getDashboard = action({
   args: {},
   handler: async (ctx): Promise<StaffBillingDashboard> => {
-    await requireAuthorizedStaffAction(ctx, "staff")
+    const operator = await requireAuthorizedStaffAction(ctx, "staff")
     const records = await ctx.runQuery(internal.queries.staff.internal.getBillingRecords, {})
 
-    return buildBillingDashboard(records)
+    return buildBillingDashboard(records, operator.actorRole)
   },
 })
 
@@ -1495,6 +1921,145 @@ export const upsertFeature = action({
         : `Created billing feature ${normalizedName}.`,
       syncSummary,
     })
+  },
+})
+
+export const grantCreatorAccess = action({
+  args: {
+    endsAt: v.optional(v.number()),
+    planKey: v.string(),
+    reason: v.string(),
+    targetUserId: v.id("users"),
+  },
+  handler: async (ctx, args): Promise<StaffMutationResponse> => {
+    const operator = await requireAuthorizedStaffAction(ctx, "admin")
+    const targetUser = await ctx.runQuery(internal.queries.staff.internal.getUserById, {
+      userId: args.targetUserId,
+    })
+    const plan = await ctx.runQuery(internal.queries.billing.internal.getPlanByKey, {
+      planKey: args.planKey,
+    })
+    const normalizedReason = args.reason.trim()
+
+    if (!targetUser) {
+      throw new Error("The selected user was not found.")
+    }
+
+    if (!plan || !plan.active || plan.archivedAt !== undefined) {
+      throw new Error("The selected plan is not available for creator access.")
+    }
+
+    if (normalizedReason.length < 8) {
+      throw new Error("A clear reason is required before creator access can be granted.")
+    }
+
+    await ctx.runMutation(internal.mutations.billing.state.grantBillingAccessGrant, {
+      clerkUserId: targetUser.clerkUserId,
+      endsAt: args.endsAt,
+      grantedByClerkUserId: operator.actorClerkUserId,
+      grantedByName: operator.actorDisplayName,
+      planKey: plan.key,
+      reason: normalizedReason,
+      source: "creator_approval",
+      startsAt: Date.now(),
+      userId: targetUser._id,
+    })
+
+    await recordAuditLog({
+      action: "billing.creator_access.granted",
+      actorClerkUserId: operator.actorClerkUserId,
+      actorName: operator.actorDisplayName,
+      actorRole: operator.actorRole,
+      ctx,
+      details: JSON.stringify(
+        {
+          endsAt: args.endsAt,
+          planKey: plan.key,
+          reason: normalizedReason,
+          targetClerkUserId: targetUser.clerkUserId,
+          targetUserId: targetUser._id,
+        },
+        null,
+        2
+      ),
+      entityId: targetUser._id,
+      entityLabel: targetUser.name,
+      entityType: "billingAccessGrant",
+      result: "success",
+      summary: `Granted creator access for ${targetUser.name} on ${plan.name}.`,
+    })
+
+    return {
+      summary: `Granted creator access for ${targetUser.name}.`,
+      syncSummary: null,
+    }
+  },
+})
+
+export const revokeCreatorAccess = action({
+  args: {
+    reason: v.string(),
+    targetUserId: v.id("users"),
+  },
+  handler: async (ctx, args): Promise<StaffMutationResponse> => {
+    const operator = await requireAuthorizedStaffAction(ctx, "admin")
+    const targetUser = await ctx.runQuery(internal.queries.staff.internal.getUserById, {
+      userId: args.targetUserId,
+    })
+    const currentGrant = await ctx.runQuery(
+      internal.queries.billing.internal.getCurrentCreatorGrantByUserId,
+      {
+        userId: args.targetUserId,
+      }
+    )
+    const normalizedReason = args.reason.trim()
+
+    if (!targetUser) {
+      throw new Error("The selected user was not found.")
+    }
+
+    if (!currentGrant) {
+      throw new Error("That user does not currently have creator access.")
+    }
+
+    if (normalizedReason.length < 8) {
+      throw new Error("A clear reason is required before creator access can be revoked.")
+    }
+
+    await ctx.runMutation(internal.mutations.billing.state.revokeBillingAccessGrant, {
+      grantId: currentGrant._id,
+      revokedByClerkUserId: operator.actorClerkUserId,
+      revokedByName: operator.actorDisplayName,
+    })
+
+    await recordAuditLog({
+      action: "billing.creator_access.revoked",
+      actorClerkUserId: operator.actorClerkUserId,
+      actorName: operator.actorDisplayName,
+      actorRole: operator.actorRole,
+      ctx,
+      details: JSON.stringify(
+        {
+          grantId: currentGrant._id,
+          planKey: currentGrant.planKey,
+          reason: normalizedReason,
+          targetClerkUserId: targetUser.clerkUserId,
+          targetUserId: targetUser._id,
+        },
+        null,
+        2
+      ),
+      entityId: targetUser._id,
+      entityLabel: targetUser.name,
+      entityType: "billingAccessGrant",
+      result: "success",
+      summary: `Revoked creator access for ${targetUser.name}.`,
+    })
+
+    return {
+      summary: `Revoked creator access for ${targetUser.name}.`,
+      syncSummary: null,
+    }
   },
 })
 

@@ -4,6 +4,7 @@ import type { ConvexReactClient } from "convex/react"
 import { useConvex, useConvexAuth } from "convex/react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { api } from "@workspace/backend/convex/_generated/api"
+import type { Id } from "@workspace/backend/convex/_generated/dataModel"
 import type {
   StaffBillingDashboard,
   StaffImpactPreview,
@@ -111,6 +112,14 @@ async function callBillingAction<T>(
           api.actions.staff.billing.archivePlan,
           action.input
         )) as T
+      case "grantCreatorAccess":
+        return (await convex.action(
+          api.actions.staff.billing.grantCreatorAccess,
+          {
+            ...action.input,
+            targetUserId: action.input.targetUserId as Id<"users">,
+          }
+        )) as T
       case "previewFeatureArchive":
         return (await convex.action(
           api.actions.staff.billing.previewFeatureArchive,
@@ -145,6 +154,14 @@ async function callBillingAction<T>(
         return (await convex.action(
           api.actions.staff.billing.replacePlanPrice,
           action.input
+        )) as T
+      case "revokeCreatorAccess":
+        return (await convex.action(
+          api.actions.staff.billing.revokeCreatorAccess,
+          {
+            ...action.input,
+            targetUserId: action.input.targetUserId as Id<"users">,
+          }
         )) as T
       case "runCatalogSync":
         return (await convex.action(

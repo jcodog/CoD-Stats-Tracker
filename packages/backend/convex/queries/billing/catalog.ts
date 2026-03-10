@@ -1,6 +1,7 @@
 import { v } from "convex/values"
 import type { Doc } from "../../_generated/dataModel"
-import { internalQuery, type QueryCtx } from "../../_generated/server"
+import { internalQuery, query, type QueryCtx } from "../../_generated/server"
+import { buildResolvedBillingState } from "./resolution"
 
 export type BillingPlanRecord = Doc<"billingPlans">
 export type BillingFeatureRecord = Doc<"billingFeatures">
@@ -10,6 +11,34 @@ export type BillingCatalogPlan = BillingPlanRecord & {
   features: BillingFeatureRecord[]
   missingFeatureKeys: string[]
   inactiveFeatureKeys: string[]
+}
+
+function getPlanRelationship(args: {
+  currentPlan: BillingPlanRecord | null
+  currentSubscriptionInterval?: "month" | "year"
+  plan: BillingPlanRecord
+}) {
+  if (args.currentPlan?.key === args.plan.key) {
+    return "current" as const
+  }
+
+  if (args.currentPlan === null) {
+    return args.plan.planType === "paid" ? "checkout" as const : "current" as const
+  }
+
+  if (args.plan.planType !== "paid") {
+    return "downgrade" as const
+  }
+
+  if (args.plan.sortOrder > args.currentPlan.sortOrder) {
+    return "upgrade" as const
+  }
+
+  if (args.plan.sortOrder < args.currentPlan.sortOrder) {
+    return "downgrade" as const
+  }
+
+  return "switch" as const
 }
 
 function sortBySortOrderAndKey<T extends { key: string; sortOrder: number }>(
@@ -142,5 +171,84 @@ export const getPricingCatalog = internalQuery({
         inactiveFeatureKeys,
       }
     })
+  },
+})
+
+export const getCustomerPricingCatalog = query({
+  args: {},
+  handler: async (ctx) => {
+    const [plans, planFeatures, features, identity] = await Promise.all([
+      listBillingPlans(ctx),
+      ctx.db.query("billingPlanFeatures").collect(),
+      listBillingFeatures(ctx),
+      ctx.auth.getUserIdentity(),
+    ])
+    const featuresByKey = new Map(features.map((feature) => [feature.key, feature]))
+    const user = identity
+      ? await ctx.db
+          .query("users")
+          .withIndex("by_clerkUserId", (query) =>
+            query.eq("clerkUserId", identity.subject)
+          )
+          .unique()
+      : null
+    const resolvedState = user ? await buildResolvedBillingState(ctx, user) : null
+    const currentPlan = resolvedState?.effectivePlan ?? null
+    const currentInterval = resolvedState?.subscription?.interval
+
+    return {
+      currentInterval,
+      currentPlanKey: resolvedState?.effectivePlanKey ?? null,
+      plans: plans
+        .filter((plan) => plan.active && plan.archivedAt === undefined)
+        .map((plan) => {
+          const mappings = planFeatures.filter(
+            (planFeature) => planFeature.planKey === plan.key
+          )
+          const { features } = collectPlanFeatures({
+            planKey: plan.key,
+            mappings,
+            featuresByKey,
+          })
+
+          return {
+            active: plan.active,
+            description: plan.description,
+            features: features.map((feature) => ({
+              category: feature.category,
+              description: feature.description,
+              featureKey: feature.key,
+              name: feature.name,
+            })),
+            name: plan.name,
+            planKey: plan.key,
+            planType: plan.planType,
+            pricing: {
+              month:
+                plan.planType === "paid" && plan.monthlyPriceAmount > 0
+                  ? {
+                      amount: plan.monthlyPriceAmount,
+                      currency: plan.currency,
+                      interval: "month" as const,
+                    }
+                  : null,
+              year:
+                plan.planType === "paid" && plan.yearlyPriceAmount > 0
+                  ? {
+                      amount: plan.yearlyPriceAmount,
+                      currency: plan.currency,
+                      interval: "year" as const,
+                    }
+                  : null,
+            },
+            relationship: getPlanRelationship({
+              currentPlan,
+              currentSubscriptionInterval: currentInterval,
+              plan,
+            }),
+            sortOrder: plan.sortOrder,
+          }
+        }),
+    }
   },
 })

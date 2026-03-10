@@ -12,6 +12,8 @@ import { billingFeatures } from "./db/tables/billing/features"
 import { billingPlanFeatures } from "./db/tables/billing/planFeatures"
 import { billingSubscriptions } from "./db/tables/billing/subscriptions"
 import { billingEntitlements } from "./db/tables/billing/entitlements"
+import { billingAccessGrants } from "./db/tables/billing/accessGrants"
+import { billingWebhookEvents } from "./db/tables/billing/webhookEvents"
 import { staffAuditLogs } from "./db/tables/staffAuditLogs"
 
 export default defineSchema({
@@ -31,5 +33,7 @@ export default defineSchema({
   billingPlanFeatures,
   billingSubscriptions,
   billingEntitlements,
+  billingAccessGrants,
+  billingWebhookEvents,
   staffAuditLogs,
 })

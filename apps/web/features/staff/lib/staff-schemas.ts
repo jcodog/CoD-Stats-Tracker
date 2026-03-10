@@ -36,6 +36,15 @@ export const billingActionSchema = z.discriminatedUnion("action", [
     }),
   }),
   z.object({
+    action: z.literal("grantCreatorAccess"),
+    input: z.object({
+      endsAt: z.number().int().positive().optional(),
+      planKey: catalogKeySchema,
+      reason: z.string().trim().min(8).max(500),
+      targetUserId: z.string().min(1),
+    }),
+  }),
+  z.object({
     action: z.literal("previewFeatureArchive"),
     input: z.object({
       featureKey: catalogKeySchema,
@@ -83,6 +92,13 @@ export const billingActionSchema = z.discriminatedUnion("action", [
       confirmationToken: z.string().min(1),
       interval: z.enum(["month", "year"]),
       planKey: catalogKeySchema,
+    }),
+  }),
+  z.object({
+    action: z.literal("revokeCreatorAccess"),
+    input: z.object({
+      reason: z.string().trim().min(8).max(500),
+      targetUserId: z.string().min(1),
     }),
   }),
   z.object({

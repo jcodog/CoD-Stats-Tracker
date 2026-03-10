@@ -82,14 +82,23 @@ export type StaffManagementDashboard = {
 }
 
 export type StaffSubscriptionImpactRow = {
+  attentionStatus?: "none" | "past_due" | "paused" | "payment_failed" | "requires_action"
+  cancelAt?: number
   cancelAtPeriodEnd: boolean
   clerkUserId: string
   currentPeriodEnd?: number
+  currentPeriodStart?: number
   email?: string
   interval: "month" | "year"
   planKey: string
+  scheduledChangeAt?: number
+  scheduledChangeType?: "cancel" | "plan_change"
+  scheduledInterval?: "month" | "year"
+  scheduledPlanKey?: string
   status: string
+  stripeCustomerId?: string
   stripePriceId: string
+  stripeScheduleId?: string
   stripeSubscriptionId: string
   userName: string
 }
@@ -141,11 +150,71 @@ export type StaffBillingCustomerRecord = {
   clerkUserId: string
   createdAt: number
   email?: string
+  hasCreatorGrant?: boolean
   planKeys: string[]
   stripeCustomerId: string
   subscriptionCount: number
   updatedAt: number
   userName: string
+}
+
+export type StaffBillingUserLookupRecord = {
+  accessSource: "creator_grant" | "legacy_plan" | "none" | "paid_subscription"
+  clerkUserId: string
+  currentPlanKey?: string | null
+  email?: string
+  hasCreatorGrant: boolean
+  userId: string
+  userName: string
+}
+
+export type StaffCreatorGrantRecord = {
+  active: boolean
+  clerkUserId: string
+  createdAt: number
+  email?: string
+  endsAt?: number
+  grantedByClerkUserId?: string
+  grantedByName?: string
+  id: string
+  planKey: string
+  reason: string
+  revokedAt?: number
+  source: "creator_approval" | "manual" | "promo"
+  startsAt?: number
+  userId: string
+  userName: string
+}
+
+export type StaffWebhookEventRecord = {
+  customerId?: string
+  errorMessage?: string
+  eventType: string
+  id: string
+  invoiceId?: string
+  paymentIntentId?: string
+  processedAt?: number
+  processingStatus: "failed" | "ignored" | "processed" | "processing" | "received"
+  receivedAt: number
+  safeSummary: string
+  subscriptionId?: string
+}
+
+export type StaffWebhookTimelinePoint = {
+  dayStart: number
+  failedCount: number
+  processedCount: number
+}
+
+export type StaffWebhookMetrics = {
+  failedCount: number
+  ignoredCount: number
+  lastProcessedAt?: number
+  lastReceivedAt?: number
+  processedCount: number
+  processingCount: number
+  receivedCount: number
+  timeline: StaffWebhookTimelinePoint[]
 }
 
 export type StaffBillingSyncSummary = {
@@ -157,15 +226,20 @@ export type StaffBillingSyncSummary = {
 
 export type StaffBillingDashboard = {
   activeSubscriptionCount: number
+  attentionSubscriptions: StaffSubscriptionImpactRow[]
   activeCustomerCount: number
   assignments: StaffBillingAssignmentRecord[]
   auditLogs: StaffAuditLogEntry[]
+  creatorGrants: StaffCreatorGrantRecord[]
   customers: StaffBillingCustomerRecord[]
   features: StaffBillingFeatureRecord[]
   generatedAt: number
   lastSync: StaffBillingSyncSummary | null
   plans: StaffBillingPlanRecord[]
   subscriptions: StaffSubscriptionImpactRow[]
+  userDirectory: StaffBillingUserLookupRecord[]
+  webhookEvents: StaffWebhookEventRecord[]
+  webhookMetrics: StaffWebhookMetrics
 }
 
 export type StaffOverviewStatusCount = {

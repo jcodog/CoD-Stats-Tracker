@@ -18,5 +18,11 @@ export async function renderStaffBillingPage(section: StaffBillingSection) {
     token: access.convexToken,
   })
 
-  return <StaffBillingView initialData={initialData} section={section} />
+  return (
+    <StaffBillingView
+      actorRole={access.convexRole}
+      initialData={initialData}
+      section={section}
+    />
+  )
 }

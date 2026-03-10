@@ -27,12 +27,62 @@ import type { GenericId } from "convex/values";
  */
 
 export type DataModel = {
+  billingAccessGrants: {
+    document: {
+      active: boolean;
+      clerkUserId: string;
+      createdAt: number;
+      endsAt?: number;
+      grantedByClerkUserId?: string;
+      grantedByName?: string;
+      planKey: string;
+      reason: string;
+      revokedAt?: number;
+      revokedByClerkUserId?: string;
+      revokedByName?: string;
+      source: "creator_approval" | "manual" | "promo";
+      startsAt?: number;
+      updatedAt: number;
+      userId: Id<"users">;
+      _id: Id<"billingAccessGrants">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "active"
+      | "clerkUserId"
+      | "createdAt"
+      | "endsAt"
+      | "grantedByClerkUserId"
+      | "grantedByName"
+      | "planKey"
+      | "reason"
+      | "revokedAt"
+      | "revokedByClerkUserId"
+      | "revokedByName"
+      | "source"
+      | "startsAt"
+      | "updatedAt"
+      | "userId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_clerkUserId: ["clerkUserId", "_creationTime"];
+      by_planKey_active: ["planKey", "active", "_creationTime"];
+      by_userId: ["userId", "_creationTime"];
+      by_userId_active: ["userId", "active", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
   billingCustomers: {
     document: {
       active: boolean;
       clerkUserId: string;
       createdAt: number;
       email?: string;
+      name?: string;
       stripeCustomerId: string;
       updatedAt: number;
       userId: Id<"users">;
@@ -46,6 +96,7 @@ export type DataModel = {
       | "clerkUserId"
       | "createdAt"
       | "email"
+      | "name"
       | "stripeCustomerId"
       | "updatedAt"
       | "userId";
@@ -215,14 +266,29 @@ export type DataModel = {
   };
   billingSubscriptions: {
     document: {
+      attentionStatus:
+        | "none"
+        | "payment_failed"
+        | "past_due"
+        | "requires_action"
+        | "paused";
+      attentionUpdatedAt?: number;
+      cancelAt?: number;
       cancelAtPeriodEnd: boolean;
       canceledAt?: number;
       clerkUserId: string;
       createdAt: number;
       currentPeriodEnd?: number;
       currentPeriodStart?: number;
+      endedAt?: number;
       interval: "month" | "year";
+      lastStripeEventId?: string;
       planKey: string;
+      scheduledChangeAt?: number;
+      scheduledChangeRequestedAt?: number;
+      scheduledChangeType?: "cancel" | "plan_change";
+      scheduledInterval?: "month" | "year";
+      scheduledPlanKey?: string;
       status:
         | "incomplete"
         | "trialing"
@@ -233,9 +299,13 @@ export type DataModel = {
         | "paused"
         | "incomplete_expired";
       stripeCustomerId: string;
+      stripeLatestInvoiceId?: string;
+      stripeLatestPaymentIntentId?: string;
       stripePriceId: string;
       stripeProductId?: string;
+      stripeScheduleId?: string;
       stripeSubscriptionId: string;
+      stripeSubscriptionItemId?: string;
       updatedAt: number;
       userId: Id<"users">;
       _id: Id<"billingSubscriptions">;
@@ -244,28 +314,99 @@ export type DataModel = {
     fieldPaths:
       | "_creationTime"
       | "_id"
+      | "attentionStatus"
+      | "attentionUpdatedAt"
+      | "cancelAt"
       | "cancelAtPeriodEnd"
       | "canceledAt"
       | "clerkUserId"
       | "createdAt"
       | "currentPeriodEnd"
       | "currentPeriodStart"
+      | "endedAt"
       | "interval"
+      | "lastStripeEventId"
       | "planKey"
+      | "scheduledChangeAt"
+      | "scheduledChangeRequestedAt"
+      | "scheduledChangeType"
+      | "scheduledInterval"
+      | "scheduledPlanKey"
       | "status"
       | "stripeCustomerId"
+      | "stripeLatestInvoiceId"
+      | "stripeLatestPaymentIntentId"
       | "stripePriceId"
       | "stripeProductId"
+      | "stripeScheduleId"
       | "stripeSubscriptionId"
+      | "stripeSubscriptionItemId"
       | "updatedAt"
       | "userId";
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
+      by_attentionStatus: ["attentionStatus", "_creationTime"];
       by_clerkUserId: ["clerkUserId", "_creationTime"];
+      by_planKey: ["planKey", "_creationTime"];
+      by_status: ["status", "_creationTime"];
       by_stripeCustomerId: ["stripeCustomerId", "_creationTime"];
       by_stripeSubscriptionId: ["stripeSubscriptionId", "_creationTime"];
       by_userId: ["userId", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  billingWebhookEvents: {
+    document: {
+      createdAt: number;
+      customerId?: string;
+      errorMessage?: string;
+      eventType: string;
+      invoiceId?: string;
+      paymentIntentId?: string;
+      processedAt?: number;
+      processingStatus:
+        | "received"
+        | "processing"
+        | "processed"
+        | "ignored"
+        | "failed";
+      receivedAt: number;
+      safeSummary: string;
+      stripeEventId: string;
+      subscriptionId?: string;
+      updatedAt: number;
+      _id: Id<"billingWebhookEvents">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "createdAt"
+      | "customerId"
+      | "errorMessage"
+      | "eventType"
+      | "invoiceId"
+      | "paymentIntentId"
+      | "processedAt"
+      | "processingStatus"
+      | "receivedAt"
+      | "safeSummary"
+      | "stripeEventId"
+      | "subscriptionId"
+      | "updatedAt";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_eventType_receivedAt: ["eventType", "receivedAt", "_creationTime"];
+      by_processingStatus_receivedAt: [
+        "processingStatus",
+        "receivedAt",
+        "_creationTime",
+      ];
+      by_receivedAt: ["receivedAt", "_creationTime"];
+      by_stripeEventId: ["stripeEventId", "_creationTime"];
     };
     searchIndexes: {};
     vectorIndexes: {};
