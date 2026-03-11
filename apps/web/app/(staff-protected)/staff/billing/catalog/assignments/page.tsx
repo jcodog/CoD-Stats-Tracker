@@ -1,5 +1,5 @@
-import { renderStaffBillingPage } from "@/features/staff/lib/render-staff-billing-page"
+import { redirect } from "next/navigation"
 
 export default async function StaffBillingCatalogAssignmentsPage() {
-  return renderStaffBillingPage("catalog-assignments")
+  redirect("/staff/catalog/assignments")
 }

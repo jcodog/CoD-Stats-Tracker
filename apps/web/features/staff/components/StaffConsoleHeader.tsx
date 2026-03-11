@@ -6,11 +6,6 @@ import { usePathname } from "next/navigation"
 import { IconArrowBack } from "@tabler/icons-react"
 
 import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-} from "@workspace/ui/components/avatar"
-import {
   Breadcrumb,
   BreadcrumbItem,
   BreadcrumbLink,
@@ -73,18 +68,6 @@ export function StaffConsoleHeader() {
       <div className="flex h-14 items-center justify-between gap-3 px-4 md:px-6">
         <div className="flex min-w-0 items-center gap-3">
           <SidebarTrigger className="shrink-0" />
-          <Link
-            href="/staff"
-            className="inline-flex min-w-0 items-center gap-2 rounded-md text-sm font-semibold tracking-tight text-foreground transition-colors hover:text-primary focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-          >
-            <Avatar className="size-8 rounded-lg bg-primary/10">
-              <AvatarImage src="/logo.png" alt="CodStats logo" />
-              <AvatarFallback className="rounded-lg font-semibold">
-                CS
-              </AvatarFallback>
-            </Avatar>
-            <span className="truncate">{STAFF_CONSOLE_TITLE}</span>
-          </Link>
           <Separator className="hidden h-5 md:block" orientation="vertical" />
           <div className="hidden min-w-0 md:block">
             <StaffConsoleBreadcrumb items={currentRoute.breadcrumbs} />

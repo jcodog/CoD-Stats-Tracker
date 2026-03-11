@@ -7,7 +7,6 @@ import {
 import { RadioGroup } from "@workspace/ui/components/radio-group"
 import {
   Tabs,
-  TabsContent,
   TabsList,
   TabsTrigger,
 } from "@workspace/ui/components/tabs"
@@ -25,25 +24,10 @@ export function PlanSelector(args: {
   plans: PricingCatalogPlan[]
   selectedPlanKey: string
 }) {
-  function renderPlanOptions(interval: BillingInterval) {
-    return (
-      <RadioGroup
-        className="grid gap-4 lg:grid-cols-2"
-        onValueChange={args.onSelectPlan}
-        value={args.selectedPlanKey}
-      >
-        {args.plans.map((plan) => (
-          <PricingPlanCard
-            inputId={`billing-plan-${interval}-${plan.planKey}`}
-            interval={interval}
-            key={`${interval}-${plan.planKey}`}
-            plan={plan}
-            selected={args.selectedPlanKey === plan.planKey}
-          />
-        ))}
-      </RadioGroup>
-    )
-  }
+  const featureSlotCount = args.plans.reduce(
+    (max, plan) => Math.max(max, plan.features.length),
+    0
+  )
 
   return (
     <FieldSet className="gap-5">
@@ -57,13 +41,27 @@ export function PlanSelector(args: {
         }}
         value={args.interval}
       >
-        <TabsList>
+        <TabsList className="w-fit">
           <TabsTrigger value="month">Monthly</TabsTrigger>
           <TabsTrigger value="year">Yearly</TabsTrigger>
         </TabsList>
-        <TabsContent value="month">{renderPlanOptions("month")}</TabsContent>
-        <TabsContent value="year">{renderPlanOptions("year")}</TabsContent>
       </Tabs>
+      <RadioGroup
+        className="grid items-stretch gap-4 lg:grid-cols-2"
+        onValueChange={args.onSelectPlan}
+        value={args.selectedPlanKey}
+      >
+        {args.plans.map((plan) => (
+          <PricingPlanCard
+            featureSlotCount={featureSlotCount}
+            inputId={`billing-plan-${args.interval}-${plan.planKey}`}
+            interval={args.interval}
+            key={`${args.interval}-${plan.planKey}`}
+            plan={plan}
+            selected={args.selectedPlanKey === plan.planKey}
+          />
+        ))}
+      </RadioGroup>
     </FieldSet>
   )
 }

@@ -24,7 +24,7 @@ export function StaffConsoleShell({
         Skip to content
       </a>
       <StaffConsoleSidebar role={role} />
-      <SidebarInset className="min-h-0 overflow-hidden bg-background">
+      <SidebarInset className="min-h-0 overflow-hidden bg-background md:peer-data-[variant=inset]:m-1 md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ml-1">
         <StaffConsoleHeader />
         <div className="flex min-h-0 flex-1 flex-col px-4 py-6 md:px-6 md:py-8 lg:px-8">
           <main

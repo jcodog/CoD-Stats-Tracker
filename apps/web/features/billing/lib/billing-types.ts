@@ -107,6 +107,8 @@ export type BillingResolvedState = {
 export type CheckoutIntentResult = {
   alreadyExists: boolean
   clientSecret?: string
+  customerSessionClientSecret?: string
+  defaultBillingEmail?: string
   interval: BillingInterval
   planKey: string
   requiresConfirmation: boolean

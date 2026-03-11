@@ -21,6 +21,10 @@ import type {
   CreateSubscriptionIntentInput,
   SubscriptionChangeInput,
 } from "@/features/billing/lib/billing-schemas"
+import {
+  createSubscriptionIntentSchema,
+  subscriptionChangeSchema,
+} from "@/features/billing/lib/billing-schemas"
 
 export class BillingClientError extends Error {
   data: unknown
@@ -51,32 +55,6 @@ function toBillingClientError(error: unknown) {
   return new BillingClientError(message, status, error)
 }
 
-async function callBillingRoute<T>(path: string, init?: RequestInit) {
-  const response = await fetch(path, {
-    ...init,
-    credentials: "same-origin",
-    headers: {
-      "Content-Type": "application/json",
-      "x-codstats-csrf": "1",
-      ...(init?.headers ?? {}),
-    },
-  })
-
-  const payload = (await response.json().catch(() => null)) as
-    | { message?: string; ok?: boolean; result?: T }
-    | null
-
-  if (!response.ok || !payload?.ok) {
-    throw new BillingClientError(
-      payload?.message ?? "Billing request failed.",
-      response.status,
-      payload
-    )
-  }
-
-  return payload.result as T
-}
-
 async function queryPricingCatalog(convex: ConvexReactClient) {
   try {
     return (await convex.query(
@@ -99,6 +77,102 @@ async function queryBillingState(convex: ConvexReactClient) {
   }
 }
 
+async function callCreateSubscriptionIntent(
+  convex: ConvexReactClient,
+  input: CreateSubscriptionIntentInput
+) {
+  const payload = createSubscriptionIntentSchema.parse(input)
+
+  try {
+    return (await convex.action(
+      api.actions.billing.customer.createSubscriptionIntent,
+      payload
+    )) as CheckoutIntentResult
+  } catch (error) {
+    throw toBillingClientError(error)
+  }
+}
+
+async function callAbandonPendingCheckout(convex: ConvexReactClient) {
+  try {
+    return (await convex.action(
+      api.actions.billing.customer.abandonPendingCheckout,
+      {}
+    )) as {
+      abandoned: boolean
+      invoiceWasCleared?: boolean
+      status?: string
+    }
+  } catch (error) {
+    throw toBillingClientError(error)
+  }
+}
+
+async function callPreviewSubscriptionChange(
+  convex: ConvexReactClient,
+  input: SubscriptionChangeInput
+) {
+  const payload = subscriptionChangeSchema.parse(input)
+
+  try {
+    return (await convex.action(
+      api.actions.billing.customer.previewSubscriptionChange,
+      payload
+    )) as BillingChangePreview
+  } catch (error) {
+    throw toBillingClientError(error)
+  }
+}
+
+async function callChangeSubscription(
+  convex: ConvexReactClient,
+  input: SubscriptionChangeInput
+) {
+  const payload = subscriptionChangeSchema.parse(input)
+
+  try {
+    return (await convex.action(
+      api.actions.billing.customer.changeSubscriptionPlan,
+      payload
+    )) as BillingChangeResult
+  } catch (error) {
+    throw toBillingClientError(error)
+  }
+}
+
+async function callCancelSubscription(convex: ConvexReactClient) {
+  try {
+    return (await convex.action(
+      api.actions.billing.customer.cancelCurrentSubscription,
+      {}
+    )) as CancellationResult
+  } catch (error) {
+    throw toBillingClientError(error)
+  }
+}
+
+async function callReactivateSubscription(convex: ConvexReactClient) {
+  try {
+    return (await convex.action(
+      api.actions.billing.customer.reactivateCurrentSubscription,
+      {}
+    )) as ReactivationResult
+  } catch (error) {
+    throw toBillingClientError(error)
+  }
+}
+
+async function callInvoiceHistory(convex: ConvexReactClient) {
+  try {
+    return (await convex.action(
+      api.actions.billing.customer.listInvoices,
+      {}
+    )) as InvoiceHistoryEntry[]
+  } catch (error) {
+    throw toBillingClientError(error)
+  }
+}
+
 export function usePricingCatalog() {
   const convex = useConvex()
   const { isAuthenticated, isLoading } = useConvexAuth()
@@ -107,6 +181,7 @@ export function usePricingCatalog() {
     enabled: !isLoading && isAuthenticated,
     queryFn: () => queryPricingCatalog(convex),
     queryKey: billingQueryKeys.catalog,
+    staleTime: 30_000,
   })
 }
 
@@ -118,20 +193,19 @@ export function useBillingState() {
     enabled: !isLoading && isAuthenticated,
     queryFn: () => queryBillingState(convex),
     queryKey: billingQueryKeys.state,
+    staleTime: 15_000,
   })
 }
 
 export function useInvoiceHistory(args?: { enabled?: boolean }) {
+  const convex = useConvex()
   const { isAuthenticated, isLoading } = useConvexAuth()
 
   return useQuery({
     enabled: (args?.enabled ?? true) && !isLoading && isAuthenticated,
-    queryFn: () =>
-      callBillingRoute<InvoiceHistoryEntry[]>("/api/billing/invoices", {
-        headers: {},
-        method: "GET",
-      }),
+    queryFn: () => callInvoiceHistory(convex),
     queryKey: billingQueryKeys.invoices,
+    staleTime: 60_000,
   })
 }
 
@@ -150,39 +224,46 @@ export function useInvalidateBillingQueries() {
 }
 
 export function useCreateSubscriptionIntent() {
+  const convex = useConvex()
   const queryClient = useQueryClient()
 
   return useMutation({
     mutationFn: (input: CreateSubscriptionIntentInput) =>
-      callBillingRoute<CheckoutIntentResult>("/api/billing/checkout/intent", {
-        body: JSON.stringify(input),
-        method: "POST",
-      }),
+      callCreateSubscriptionIntent(convex, input),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: billingQueryKeys.state })
     },
   })
 }
 
+export function useAbandonPendingCheckout() {
+  const convex = useConvex()
+  const invalidateBilling = useInvalidateBillingQueries()
+
+  return useMutation({
+    mutationFn: () => callAbandonPendingCheckout(convex),
+    onSuccess: async () => {
+      await invalidateBilling.invalidateAll()
+    },
+  })
+}
+
 export function usePreviewSubscriptionChange() {
+  const convex = useConvex()
+
   return useMutation({
     mutationFn: (input: SubscriptionChangeInput) =>
-      callBillingRoute<BillingChangePreview>("/api/billing/subscription/preview", {
-        body: JSON.stringify(input),
-        method: "POST",
-      }),
+      callPreviewSubscriptionChange(convex, input),
   })
 }
 
 export function useUpdateSubscriptionPlan() {
+  const convex = useConvex()
   const invalidateBilling = useInvalidateBillingQueries()
 
   return useMutation({
     mutationFn: (input: SubscriptionChangeInput) =>
-      callBillingRoute<BillingChangeResult>("/api/billing/subscription/change", {
-        body: JSON.stringify(input),
-        method: "POST",
-      }),
+      callChangeSubscription(convex, input),
     onSuccess: async () => {
       await invalidateBilling.invalidateAll()
     },
@@ -190,14 +271,11 @@ export function useUpdateSubscriptionPlan() {
 }
 
 export function useCancelSubscription() {
+  const convex = useConvex()
   const invalidateBilling = useInvalidateBillingQueries()
 
   return useMutation({
-    mutationFn: () =>
-      callBillingRoute<CancellationResult>("/api/billing/subscription/cancel", {
-        body: JSON.stringify({}),
-        method: "POST",
-      }),
+    mutationFn: () => callCancelSubscription(convex),
     onSuccess: async () => {
       await invalidateBilling.invalidateAll()
     },
@@ -205,17 +283,11 @@ export function useCancelSubscription() {
 }
 
 export function useReactivateSubscription() {
+  const convex = useConvex()
   const invalidateBilling = useInvalidateBillingQueries()
 
   return useMutation({
-    mutationFn: () =>
-      callBillingRoute<ReactivationResult>(
-        "/api/billing/subscription/reactivate",
-        {
-          body: JSON.stringify({}),
-          method: "POST",
-        }
-      ),
+    mutationFn: () => callReactivateSubscription(convex),
     onSuccess: async () => {
       await invalidateBilling.invalidateAll()
     },

@@ -1,4 +1,9 @@
-import { IconLayoutDashboard, IconUsers } from "@tabler/icons-react"
+import {
+  IconCreditCard,
+  IconLayoutDashboard,
+  IconReceipt2,
+  IconUsers,
+} from "@tabler/icons-react"
 
 import {
   roleMeetsRequirement,
@@ -43,6 +48,7 @@ export type StaffNavLinkItem = {
 
 export type StaffNavCollapsibleItem = {
   group: StaffNavGroup
+  icon: StaffNavIcon
   items: readonly StaffBillingSectionConfig[]
   key: "billing-catalog" | "billing-subscriptions"
   kind: "collapsible"
@@ -97,6 +103,7 @@ const STAFF_NAV_GROUP_LABELS: Record<StaffNavGroup, string> = {
 const STAFF_BILLING_NAV_ITEMS = {
   catalog: {
     group: "billing",
+    icon: IconReceipt2,
     items: STAFF_BILLING_CATALOG_ITEMS,
     key: "billing-catalog",
     kind: "collapsible",
@@ -105,6 +112,7 @@ const STAFF_BILLING_NAV_ITEMS = {
   },
   subscriptions: {
     group: "billing",
+    icon: IconCreditCard,
     items: STAFF_BILLING_SUBSCRIPTION_ITEMS,
     key: "billing-subscriptions",
     kind: "collapsible",
@@ -122,7 +130,10 @@ export function resolveStaffRoute(pathname: string): StaffRouteContext {
     }
   }
 
-  if (pathname.startsWith("/staff/billing")) {
+  if (
+    pathname.startsWith("/staff/catalog") ||
+    pathname.startsWith("/staff/subscriptions")
+  ) {
     const section = resolveStaffBillingSectionFromPathname(pathname)
     const config = getStaffBillingSectionConfig(section)
 
@@ -187,11 +198,7 @@ export function isStaffBillingGroupOpen(
   pathname: string,
   group: keyof typeof STAFF_BILLING_NAV_ITEMS
 ) {
-  if (pathname === "/staff/billing") {
-    return true
-  }
-
-  return pathname.startsWith(`/staff/billing/${group}`)
+  return pathname.startsWith(`/staff/${group}`)
 }
 
 export function formatStaffRoleLabel(role: UserRole) {

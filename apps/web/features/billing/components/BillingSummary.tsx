@@ -27,53 +27,46 @@ export function BillingSummary(args: {
   const summaryTotal = price
     ? `${formatCurrencyAmount(price.amount, price.currency)} / ${args.interval}`
     : "Free"
-  const visibleFeatures = args.plan.features.slice(0, 6)
 
   if (args.variant === "checkout") {
     return (
-      <div className="relative">
-        <div className="relative z-10 rounded-xl border border-border/70 bg-card px-6 py-6 shadow-sm">
-          <div className="space-y-5">
-            <div className="space-y-2">
-              <CardTitle>{args.title ?? "Order summary"}</CardTitle>
-              <CardDescription>
-                {args.description ?? "Review the selected plan before confirming billing."}
-              </CardDescription>
-            </div>
-            <div className="flex items-start justify-between gap-4">
-              <div className="space-y-1">
-                <div className="text-lg font-semibold">{args.plan.name}</div>
-                <div className="text-sm text-muted-foreground">
-                  {args.plan.description}
-                </div>
+      <div className="rounded-[15px] border border-border/70 bg-muted/20 p-px shadow-sm">
+        <div className="flex flex-col rounded-[14px] bg-background/80">
+          <div className="rounded-t-[14px] rounded-b-[11px] bg-card/95 px-5 py-5 shadow-[0_1px_0_rgba(255,255,255,0.03),0_12px_24px_-18px_rgba(0,0,0,0.72)]">
+            <div className="grid gap-5">
+              <div className="space-y-2">
+                <CardTitle>{args.title ?? "Order summary"}</CardTitle>
+                <CardDescription>
+                  {args.description ??
+                    "Review the selected plan before confirming billing."}
+                </CardDescription>
               </div>
-              <Badge variant="outline">{args.interval}</Badge>
-            </div>
-            <div className="grid gap-2 border-t border-border/70 pt-4 sm:grid-cols-2">
-              {visibleFeatures.map((feature) => (
-                <div
-                  className="flex items-start gap-2 text-sm text-foreground/90"
-                  key={feature.featureKey}
-                >
-                  <span className="mt-1.5 size-1.5 rounded-full bg-primary" />
-                  <span>{feature.name}</span>
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-h-[5.75rem] min-w-0 space-y-1">
+                  <div className="text-lg font-semibold">{args.plan.name}</div>
+                  <div className="line-clamp-3 text-sm text-muted-foreground">
+                    {args.plan.description}
+                  </div>
                 </div>
-              ))}
+                <Badge variant="outline">{args.interval}</Badge>
+              </div>
             </div>
           </div>
-        </div>
 
-        {args.footer ? (
-          <div className="-mt-3 rounded-b-xl border border-border/70 bg-muted/35 px-6 pb-5 pt-7">
-            <div className="flex flex-col gap-4">
-              <div className="flex w-full items-center justify-between gap-4 text-sm">
-                <span className="text-muted-foreground">Order total</span>
-                <span className="text-base font-semibold">{summaryTotal}</span>
+          {args.footer ? (
+            <div className="px-5 pt-4 pb-4">
+              <div className="flex flex-col gap-4">
+                <div className="flex w-full items-center justify-between gap-4 text-sm">
+                  <span className="text-muted-foreground">Order total</span>
+                  <span className="text-base font-semibold">
+                    {summaryTotal}
+                  </span>
+                </div>
+                {args.footer}
               </div>
-              {args.footer}
             </div>
-          </div>
-        ) : null}
+          ) : null}
+        </div>
       </div>
     )
   }
@@ -83,7 +76,8 @@ export function BillingSummary(args: {
       <CardHeader className={cn("pb-4")}>
         <CardTitle>{args.title ?? "Order summary"}</CardTitle>
         <CardDescription>
-          {args.description ?? "Review the selected plan before confirming billing."}
+          {args.description ??
+            "Review the selected plan before confirming billing."}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
@@ -103,18 +97,6 @@ export function BillingSummary(args: {
             <span className="font-medium">{summaryTotal}</span>
           </div>
         ) : null}
-
-        <div className="grid gap-2 border-t border-border/70 pt-4 sm:grid-cols-2">
-          {visibleFeatures.map((feature) => (
-            <div
-              className="flex items-start gap-2 text-sm text-foreground/90"
-              key={feature.featureKey}
-            >
-              <span className="mt-1.5 size-1.5 rounded-full bg-primary" />
-              <span>{feature.name}</span>
-            </div>
-          ))}
-        </div>
       </CardContent>
       {args.footer ? (
         <CardFooter className="flex flex-col gap-4 border-t border-border/70 bg-muted/35 px-6 py-5">

@@ -75,13 +75,27 @@ function sanitizeStripeWebhookError(error: unknown) {
   return "Webhook processing failed.";
 }
 
+function sanitizeStripeWebhookSecret(value: string | undefined) {
+  if (!value) {
+    return undefined;
+  }
+
+  return value.trim().replace(/^['"]|['"]$/g, "");
+}
+
+function getStripeWebhookCryptoProvider() {
+  return Stripe.createSubtleCryptoProvider();
+}
+
 http.route({
   path: "/stripe-webhook",
   method: "POST",
   handler: httpAction(async (ctx, request) => {
     const stripe = getStripe();
-    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-    const signature = request.headers.get("stripe-signature");
+    const webhookSecret = sanitizeStripeWebhookSecret(
+      process.env.STRIPE_WEBHOOK_SECRET
+    );
+    const signature = request.headers.get("stripe-signature")?.trim();
 
     if (!webhookSecret) {
       console.error("Missing STRIPE_WEBHOOK_SECRET");
@@ -97,9 +111,18 @@ http.route({
     let event: Stripe.Event;
 
     try {
-      event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
+      event = await stripe.webhooks.constructEventAsync(
+        rawBody,
+        signature,
+        webhookSecret,
+        undefined,
+        getStripeWebhookCryptoProvider()
+      );
     } catch (error) {
-      console.error("Stripe webhook signature verification failed");
+      console.error(
+        "Stripe webhook signature verification failed",
+        error instanceof Error ? error.message : undefined
+      );
       return new Response(JSON.stringify({ ok: false }), { status: 400 });
     }
 

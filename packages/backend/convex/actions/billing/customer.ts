@@ -8,6 +8,7 @@ import { internal } from "../../_generated/api"
 import { action, type ActionCtx } from "../../_generated/server"
 import { reconcileStripeSubscription } from "../../lib/billingLifecycle"
 import {
+  getExpandedStripeInvoice,
   getInvoiceConfirmationSecret,
   getSetupIntentClientSecret,
   getStripeScheduleId,
@@ -72,9 +73,36 @@ function sanitizeBillingError(error: unknown) {
 
   return new BillingActionError(
     "billing_error",
-    error instanceof Error ? error.message : "Billing request failed.",
+    "Unable to complete the billing request.",
     500
   )
+}
+
+function getMetadataStripeCustomerId(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined
+  }
+
+  const metadata = value as Record<string, unknown>
+  const directValue = metadata.stripeCustomerId
+
+  if (typeof directValue === "string" && directValue.trim().startsWith("cus_")) {
+    return directValue.trim()
+  }
+
+  const billingValue = metadata.billing
+
+  if (!billingValue || typeof billingValue !== "object" || Array.isArray(billingValue)) {
+    return undefined
+  }
+
+  const nestedValue = (billingValue as Record<string, unknown>).stripeCustomerId
+
+  if (typeof nestedValue === "string" && nestedValue.trim().startsWith("cus_")) {
+    return nestedValue.trim()
+  }
+
+  return undefined
 }
 
 async function requireBillingUser(ctx: PublicActionCtx) {
@@ -121,6 +149,9 @@ async function requireBillingUser(ctx: PublicActionCtx) {
     ...billingContext,
     actorName,
     email,
+    metadataStripeCustomerId: getMetadataStripeCustomerId(
+      clerkUser.publicMetadata
+    ),
   }
 }
 
@@ -283,6 +314,44 @@ async function ensureStripeCustomer(args: {
     return args.userContext.customer.stripeCustomerId
   }
 
+  if (args.userContext.metadataStripeCustomerId) {
+    try {
+      const existingCustomer = await args.stripe.customers.retrieve(
+        args.userContext.metadataStripeCustomerId
+      )
+
+      if (!existingCustomer.deleted) {
+        await args.ctx.runMutation(
+          internal.mutations.billing.state.upsertBillingCustomer,
+          {
+            active: true,
+            clerkUserId: args.userContext.user.clerkUserId,
+            email:
+              args.email ??
+              existingCustomer.email ??
+              args.userContext.customer?.email,
+            name:
+              existingCustomer.name ??
+              args.userContext.actorName,
+            stripeCustomerId: existingCustomer.id,
+            userId: args.userContext.user._id,
+          }
+        )
+
+        return existingCustomer.id
+      }
+    } catch (error) {
+      if (
+        !(
+          error instanceof Stripe.errors.StripeInvalidRequestError &&
+          error.code === "resource_missing"
+        )
+      ) {
+        throw error
+      }
+    }
+  }
+
   const customer = await args.stripe.customers.create({
     email: args.email,
     metadata: {
@@ -409,6 +478,158 @@ function getSubscriptionCurrentPeriodEnd(subscription: Stripe.Subscription) {
   return getSubscriptionItemCurrentPeriodEnd(subscription) ?? Date.now()
 }
 
+async function createCustomerSessionClientSecret(args: {
+  customerId: string
+  stripe: Stripe
+}) {
+  try {
+    const customerSession = await args.stripe.customerSessions.create({
+      components: {
+        payment_element: {
+          enabled: true,
+          features: {
+            payment_method_redisplay: "enabled",
+            payment_method_remove: "enabled",
+            payment_method_save: "enabled",
+            payment_method_save_usage: "off_session",
+          },
+        },
+      },
+      customer: args.customerId,
+    })
+
+    return customerSession.client_secret ?? undefined
+  } catch (error) {
+    if (
+      error instanceof Stripe.errors.StripeInvalidRequestError ||
+      error instanceof Stripe.errors.StripePermissionError
+    ) {
+      return undefined
+    }
+
+    throw error
+  }
+}
+
+async function voidOrDeleteInvoiceIfPending(args: {
+  invoice: string | Stripe.Invoice | null | undefined
+  stripe: Stripe
+}) {
+  const expandedInvoice = getExpandedStripeInvoice(args.invoice)
+  const invoiceId =
+    expandedInvoice?.id ??
+    (typeof args.invoice === "string" ? args.invoice : undefined)
+
+  if (!invoiceId) {
+    return false
+  }
+
+  const invoice =
+    expandedInvoice ?? (await args.stripe.invoices.retrieve(invoiceId))
+
+  if (invoice.status === "draft") {
+    await args.stripe.invoices.del(invoice.id)
+    return true
+  }
+
+  if (invoice.status === "open") {
+    await args.stripe.invoices.voidInvoice(invoice.id)
+    return true
+  }
+
+  return false
+}
+
+async function clearPendingInvoicesForSubscription(args: {
+  stripe: Stripe
+  subscriptionId: string
+}) {
+  let invoiceWasCleared = false
+  const invoices = await args.stripe.invoices.list({
+    limit: 12,
+    subscription: args.subscriptionId,
+  })
+
+  for (const invoice of invoices.data) {
+    if (invoice.status === "draft") {
+      await args.stripe.invoices.del(invoice.id)
+      invoiceWasCleared = true
+      continue
+    }
+
+    if (invoice.status === "open") {
+      await args.stripe.invoices.voidInvoice(invoice.id)
+      invoiceWasCleared = true
+    }
+  }
+
+  return invoiceWasCleared
+}
+
+async function cancelIncompleteSubscription(args: {
+  ctx: PublicActionCtx
+  reason: "checkout_abandoned" | "replaced_before_confirmation"
+  stripe: Stripe
+  subscription: Stripe.Subscription
+  userContext: Awaited<ReturnType<typeof requireBillingUser>>
+}) {
+  const cancelledSubscription = await args.stripe.subscriptions.cancel(
+    args.subscription.id,
+    {
+      invoice_now: false,
+      prorate: false,
+    }
+  )
+  const expandedCancelledSubscription = await getExpandedSubscription({
+    stripe: args.stripe,
+    subscriptionId: cancelledSubscription.id,
+  })
+  const latestInvoiceWasCleared = await voidOrDeleteInvoiceIfPending({
+    invoice: expandedCancelledSubscription.latest_invoice,
+    stripe: args.stripe,
+  })
+  const relatedInvoicesWereCleared = await clearPendingInvoicesForSubscription({
+    stripe: args.stripe,
+    subscriptionId: expandedCancelledSubscription.id,
+  })
+  const invoiceWasCleared =
+    latestInvoiceWasCleared || relatedInvoicesWereCleared
+
+  await reconcileStripeSubscription({
+    ctx: args.ctx,
+    stripe: args.stripe,
+    subscription: expandedCancelledSubscription,
+  })
+
+  await recordBillingAuditLog({
+    action: "billing.checkout.abandoned",
+    ctx: args.ctx,
+    details: JSON.stringify(
+      {
+        invoiceWasCleared,
+        reason: args.reason,
+        stripeSubscriptionId: expandedCancelledSubscription.id,
+      },
+      null,
+      2
+    ),
+    entityId: expandedCancelledSubscription.id,
+    entityLabel: expandedCancelledSubscription.metadata.planKey ?? undefined,
+    result: "warning",
+    summary:
+      args.reason === "checkout_abandoned"
+        ? "Abandoned checkout before payment confirmation."
+        : "Replaced an incomplete checkout with a new selection before confirmation.",
+    user: args.userContext.user,
+    userName: args.userContext.actorName,
+  })
+
+  return {
+    invoiceWasCleared,
+    subscription: expandedCancelledSubscription,
+  }
+}
+
 export const createSubscriptionIntent = action({
   args: {
     attemptKey: v.optional(v.string()),
@@ -431,6 +652,10 @@ export const createSubscriptionIntent = action({
         email: userContext.email,
         stripe,
         userContext,
+      })
+      const customerSessionClientSecret = await createCustomerSessionClientSecret({
+        customerId,
+        stripe,
       })
       const existingSubscription = await getExistingStripeSubscription({
         customerId,
@@ -463,6 +688,8 @@ export const createSubscriptionIntent = action({
           return {
             alreadyExists: true,
             clientSecret: confirmationPayload.clientSecret,
+            customerSessionClientSecret,
+            defaultBillingEmail: userContext.email,
             interval: args.interval,
             planKey: plan.key,
             requiresConfirmation: confirmationPayload.clientSecret !== undefined,
@@ -471,11 +698,21 @@ export const createSubscriptionIntent = action({
           }
         }
 
-        throw new BillingActionError(
-          "existing_subscription",
-          "You already have a subscription in progress or on file. Manage it from billing settings.",
-          409
-        )
+        if (expandedSubscription.status === "incomplete") {
+          await cancelIncompleteSubscription({
+            ctx,
+            reason: "replaced_before_confirmation",
+            stripe,
+            subscription: expandedSubscription,
+            userContext,
+          })
+        } else {
+          throw new BillingActionError(
+            "existing_subscription",
+            "You already have a subscription in progress or on file. Manage it from billing settings.",
+            409
+          )
+        }
       }
 
       const subscription = await stripe.subscriptions.create(
@@ -545,11 +782,75 @@ export const createSubscriptionIntent = action({
       return {
         alreadyExists: false,
         clientSecret: confirmationPayload.clientSecret,
+        customerSessionClientSecret,
+        defaultBillingEmail: userContext.email,
         interval: args.interval,
         planKey: plan.key,
         requiresConfirmation: confirmationPayload.clientSecret !== undefined,
         secretType: confirmationPayload.secretType,
         status: subscription.status,
+      }
+    } catch (error) {
+      throw sanitizeBillingError(error)
+    }
+  },
+})
+
+export const abandonPendingCheckout = action({
+  args: {},
+  handler: async (ctx) => {
+    try {
+      const userContext = await requireBillingUser(ctx)
+      const customerId =
+        userContext.customer?.stripeCustomerId ?? userContext.metadataStripeCustomerId
+
+      if (!customerId) {
+        return {
+          abandoned: false,
+        }
+      }
+
+      const stripe = getStripe()
+      const existingSubscription = await getExistingStripeSubscription({
+        customerId,
+        stripe,
+      })
+
+      if (!existingSubscription || existingSubscription.status !== "incomplete") {
+        return {
+          abandoned: false,
+        }
+      }
+
+      const expandedSubscription = await getExpandedSubscription({
+        stripe,
+        subscriptionId: existingSubscription.id,
+      })
+
+      if (expandedSubscription.status !== "incomplete") {
+        await reconcileStripeSubscription({
+          ctx,
+          stripe,
+          subscription: expandedSubscription,
+        })
+
+        return {
+          abandoned: false,
+        }
+      }
+
+      const result = await cancelIncompleteSubscription({
+        ctx,
+        reason: "checkout_abandoned",
+        stripe,
+        subscription: expandedSubscription,
+        userContext,
+      })
+
+      return {
+        abandoned: true,
+        invoiceWasCleared: result.invoiceWasCleared,
+        status: result.subscription.status,
       }
     } catch (error) {
       throw sanitizeBillingError(error)
@@ -1087,30 +1388,34 @@ export const listInvoices = action({
         limit: 24,
       })
 
-      return invoices.data.map((invoice) => ({
-        amountDue: invoice.amount_due,
-        amountPaid: invoice.amount_paid,
-        createdAt: invoice.created * 1000,
-        currency: invoice.currency,
-        description: getInvoiceDescription(invoice),
-        hostedInvoiceUrl: invoice.hosted_invoice_url ?? undefined,
-        interval:
-          invoice.lines.data[0]?.pricing?.type === "price_details" &&
-          typeof invoice.lines.data[0].pricing.price_details?.price === "object" &&
-          invoice.lines.data[0].pricing.price_details.price.recurring?.interval ===
-            "year"
-            ? "year"
-            : invoice.lines.data[0]?.pricing?.type === "price_details" &&
-                typeof invoice.lines.data[0].pricing.price_details?.price ===
-                  "object" &&
-                invoice.lines.data[0].pricing.price_details.price.recurring
-                  ?.interval === "month"
-              ? "month"
-              : undefined,
-        invoiceNumber: invoice.number ?? undefined,
-        invoicePdfUrl: invoice.invoice_pdf ?? undefined,
-        status: invoice.status ?? "draft",
-      }))
+      return invoices.data
+        .filter(
+          (invoice) => invoice.status !== "draft" && invoice.status !== "void"
+        )
+        .map((invoice) => ({
+          amountDue: invoice.amount_due,
+          amountPaid: invoice.amount_paid,
+          createdAt: invoice.created * 1000,
+          currency: invoice.currency,
+          description: getInvoiceDescription(invoice),
+          hostedInvoiceUrl: invoice.hosted_invoice_url ?? undefined,
+          interval:
+            invoice.lines.data[0]?.pricing?.type === "price_details" &&
+            typeof invoice.lines.data[0].pricing.price_details?.price === "object" &&
+            invoice.lines.data[0].pricing.price_details.price.recurring?.interval ===
+              "year"
+              ? "year"
+              : invoice.lines.data[0]?.pricing?.type === "price_details" &&
+                  typeof invoice.lines.data[0].pricing.price_details?.price ===
+                    "object" &&
+                  invoice.lines.data[0].pricing.price_details.price.recurring
+                    ?.interval === "month"
+                ? "month"
+                : undefined,
+          invoiceNumber: invoice.number ?? undefined,
+          invoicePdfUrl: invoice.invoice_pdf ?? undefined,
+          status: invoice.status ?? "draft",
+        }))
     } catch (error) {
       throw sanitizeBillingError(error)
     }

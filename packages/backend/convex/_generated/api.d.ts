@@ -23,6 +23,7 @@ export declare const api: {
   actions: {
     billing: {
       customer: {
+        abandonPendingCheckout: FunctionReference<"action", "public", {}, any>;
         cancelCurrentSubscription: FunctionReference<
           "action",
           "public",

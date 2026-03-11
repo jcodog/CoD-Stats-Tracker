@@ -1,13 +1,7 @@
 "use client"
 
+import { IconCheck } from "@tabler/icons-react"
 import { Badge } from "@workspace/ui/components/badge"
-import {
-  Field,
-  FieldContent,
-  FieldDescription,
-  FieldLabel,
-  FieldTitle,
-} from "@workspace/ui/components/field"
 import { RadioGroupItem } from "@workspace/ui/components/radio-group"
 import { cn } from "@workspace/ui/lib/utils"
 
@@ -33,6 +27,7 @@ function getRelationshipLabel(plan: PricingCatalogPlan) {
 }
 
 export function PricingPlanCard(args: {
+  featureSlotCount?: number
   inputId: string
   interval: BillingInterval
   plan: PricingCatalogPlan
@@ -40,68 +35,109 @@ export function PricingPlanCard(args: {
 }) {
   const price =
     args.interval === "year" ? args.plan.pricing.year : args.plan.pricing.month
-  const visibleFeatures = args.plan.features.slice(0, 6)
-  const hiddenFeatureCount = Math.max(args.plan.features.length - visibleFeatures.length, 0)
+  const featureSlotCount = Math.max(
+    args.featureSlotCount ?? args.plan.features.length,
+    args.plan.features.length
+  )
+  const featureSlots = Array.from(
+    { length: featureSlotCount },
+    (_, index) => args.plan.features[index] ?? null
+  )
+
+  function handleSelectPlan() {
+    const control = document.getElementById(args.inputId)
+
+    if (control instanceof HTMLElement) {
+      control.click()
+    }
+  }
 
   return (
-    <FieldLabel
+    <div
       className={cn(
-        "rounded-xl bg-card/80 transition-colors hover:bg-card",
-        args.selected && "border-primary/35 bg-primary/6"
+        "relative block h-full rounded-[15px] border border-border/70 bg-muted/20 p-px text-left shadow-[0_1px_0_rgba(255,255,255,0.03),0_10px_24px_-18px_rgba(0,0,0,0.65)] transition-colors outline-none",
+        args.selected && "border-primary/35"
       )}
-      htmlFor={args.inputId}
+      onClick={handleSelectPlan}
     >
-      <Field className="gap-5 p-5">
-        <div className="flex items-start justify-between gap-4">
-          <FieldContent className="gap-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <FieldTitle className="text-base font-semibold">
-                {args.plan.name}
-              </FieldTitle>
-              <Badge variant={args.selected ? "secondary" : "outline"}>
-                {getRelationshipLabel(args.plan)}
-              </Badge>
+      <RadioGroupItem
+        aria-label={`Select ${args.plan.name}`}
+        className="absolute right-4 top-4 z-10 border-border/60 bg-background/55 shadow-none after:hidden focus-visible:border-primary/45 focus-visible:ring-2 focus-visible:ring-primary/15 dark:bg-background/55 data-checked:border-border/60 data-checked:bg-primary/[0.08] dark:data-checked:bg-primary/[0.08]"
+        id={args.inputId}
+        value={args.plan.planKey}
+      />
+
+      <div
+        className={cn(
+          "flex h-full flex-col rounded-[14px] bg-background/80 transition-colors",
+          args.selected && "bg-primary/[0.08]"
+        )}
+      >
+        <div className="rounded-t-[14px] rounded-b-[11px] bg-card/95 px-5 py-5 shadow-[0_1px_0_rgba(255,255,255,0.03),0_12px_24px_-18px_rgba(0,0,0,0.72)]">
+          <div className="grid min-h-[11.5rem] gap-5">
+            <div className="space-y-2 pr-8">
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="text-base font-semibold">{args.plan.name}</div>
+                <Badge variant={args.selected ? "secondary" : "outline"}>
+                  {getRelationshipLabel(args.plan)}
+                </Badge>
+              </div>
+              <div className="line-clamp-3 leading-5 text-muted-foreground">
+                {args.plan.description}
+              </div>
             </div>
-            <FieldDescription>{args.plan.description}</FieldDescription>
-          </FieldContent>
-          <RadioGroupItem
-            aria-label={`Select ${args.plan.name}`}
-            id={args.inputId}
-            value={args.plan.planKey}
-          />
+
+            <div className="flex items-end justify-between gap-4">
+              <div className="flex items-end gap-2">
+                <span className="text-3xl font-semibold tracking-tight">
+                  {price
+                    ? formatCurrencyAmount(price.amount, price.currency)
+                    : "Free"}
+                </span>
+                <span className="pb-1 text-sm text-muted-foreground">
+                  / {args.interval}
+                </span>
+              </div>
+              <div className="text-right text-xs text-muted-foreground">
+                {args.interval === "year"
+                  ? "Billed once yearly"
+                  : "Renews monthly"}
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div className="flex items-end justify-between gap-4">
-          <div className="flex items-end gap-2">
-            <span className="text-3xl font-semibold tracking-tight">
-              {price ? formatCurrencyAmount(price.amount, price.currency) : "Free"}
-            </span>
-            <span className="pb-1 text-sm text-muted-foreground">
-              / {args.interval}
-            </span>
-          </div>
-          <div className="text-right text-xs text-muted-foreground">
-            {args.interval === "year" ? "Billed once yearly" : "Renews monthly"}
+        <div className="flex-1 px-5 pt-4">
+          <div className="grid content-start gap-y-1.5">
+            {featureSlots.map((feature, index) =>
+              feature ? (
+                <div
+                  className="flex min-h-8 items-start gap-2 text-sm text-foreground/90"
+                  key={feature.featureKey}
+                >
+                  <IconCheck
+                    aria-hidden="true"
+                    className="mt-0.5 size-4 shrink-0 text-emerald-500"
+                  />
+                  <span className="leading-5">{feature.name}</span>
+                </div>
+              ) : (
+                <div
+                  aria-hidden="true"
+                  className="invisible flex min-h-8 items-start gap-2 text-sm"
+                  key={`feature-slot-${index}`}
+                >
+                  <IconCheck
+                    aria-hidden="true"
+                    className="mt-0.5 size-4 shrink-0"
+                  />
+                  <span className="leading-5">Placeholder</span>
+                </div>
+              )
+            )}
           </div>
         </div>
-
-        <div className="grid gap-2 border-t border-border/70 pt-4 sm:grid-cols-2">
-          {visibleFeatures.map((feature) => (
-            <div
-              className="flex items-start gap-2 text-sm text-foreground/90"
-              key={feature.featureKey}
-            >
-              <span className="mt-1.5 size-1.5 rounded-full bg-primary" />
-              <span>{feature.name}</span>
-            </div>
-          ))}
-          {hiddenFeatureCount > 0 ? (
-            <div className="text-sm text-muted-foreground">
-              +{hiddenFeatureCount} more feature{hiddenFeatureCount === 1 ? "" : "s"}
-            </div>
-          ) : null}
-        </div>
-      </Field>
-    </FieldLabel>
+      </div>
+    </div>
   )
 }

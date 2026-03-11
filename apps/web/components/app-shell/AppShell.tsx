@@ -1,13 +1,13 @@
-import { UserButton } from "@clerk/nextjs"
 import Link from "next/link"
 
+import { StaffNavLink } from "@/components/app-shell/StaffNavLink"
+import { UserButton } from "@clerk/nextjs"
 import {
   Avatar,
   AvatarFallback,
   AvatarImage,
 } from "@workspace/ui/components/avatar"
 import { Button } from "@workspace/ui/components/button"
-import { StaffNavLink } from "@/components/app-shell/StaffNavLink"
 
 type AppShellProps = {
   children: React.ReactNode
@@ -54,6 +54,13 @@ export function AppShell({ children }: AppShellProps) {
               showName
               userProfileMode="navigation"
               userProfileUrl="/account"
+              appearance={{
+                elements: {
+                  userButtonTrigger:
+                    "outline-none! ring-0! shadow-none! focus:ring-0! focus-visible:ring-0! focus-visible:outline-none! active:ring-0! active:outline-none! data-[state=open]:ring-0! data-[state=open]:shadow-none!",
+                  userButtonBox: "gap-2! pl-2!",
+                },
+              }}
             />
           </div>
         </div>
