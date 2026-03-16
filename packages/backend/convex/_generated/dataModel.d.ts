@@ -27,6 +27,574 @@ import type { GenericId } from "convex/values";
  */
 
 export type DataModel = {
+  billingAccessGrants: {
+    document: {
+      active: boolean;
+      clerkUserId: string;
+      createdAt: number;
+      endsAt?: number;
+      grantedByClerkUserId?: string;
+      grantedByName?: string;
+      planKey: string;
+      reason: string;
+      revokedAt?: number;
+      revokedByClerkUserId?: string;
+      revokedByName?: string;
+      source: "creator_approval" | "manual" | "promo";
+      startsAt?: number;
+      updatedAt: number;
+      userId: Id<"users">;
+      _id: Id<"billingAccessGrants">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "active"
+      | "clerkUserId"
+      | "createdAt"
+      | "endsAt"
+      | "grantedByClerkUserId"
+      | "grantedByName"
+      | "planKey"
+      | "reason"
+      | "revokedAt"
+      | "revokedByClerkUserId"
+      | "revokedByName"
+      | "source"
+      | "startsAt"
+      | "updatedAt"
+      | "userId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_clerkUserId: ["clerkUserId", "_creationTime"];
+      by_planKey_active: ["planKey", "active", "_creationTime"];
+      by_userId: ["userId", "_creationTime"];
+      by_userId_active: ["userId", "active", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  billingCustomers: {
+    document: {
+      active: boolean;
+      billingAddress?: {
+        city?: string;
+        country?: string;
+        line1?: string;
+        line2?: string;
+        postalCode?: string;
+        state?: string;
+      };
+      businessName?: string;
+      clerkUserId: string;
+      createdAt: number;
+      defaultPaymentMethodId?: string;
+      email?: string;
+      lastSyncedAt?: number;
+      name?: string;
+      phone?: string;
+      stripeCustomerId: string;
+      taxExempt?: "none" | "exempt" | "reverse";
+      taxIds?: Array<{
+        country?: string;
+        stripeTaxIdId: string;
+        type: string;
+        value: string;
+        verificationStatus?: string;
+      }>;
+      updatedAt: number;
+      userId: Id<"users">;
+      _id: Id<"billingCustomers">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "active"
+      | "billingAddress"
+      | "billingAddress.city"
+      | "billingAddress.country"
+      | "billingAddress.line1"
+      | "billingAddress.line2"
+      | "billingAddress.postalCode"
+      | "billingAddress.state"
+      | "businessName"
+      | "clerkUserId"
+      | "createdAt"
+      | "defaultPaymentMethodId"
+      | "email"
+      | "lastSyncedAt"
+      | "name"
+      | "phone"
+      | "stripeCustomerId"
+      | "taxExempt"
+      | "taxIds"
+      | "updatedAt"
+      | "userId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_active: ["active", "_creationTime"];
+      by_clerkUserId: ["clerkUserId", "_creationTime"];
+      by_stripeCustomerId: ["stripeCustomerId", "_creationTime"];
+      by_userId: ["userId", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  billingEntitlements: {
+    document: {
+      clerkUserId: string;
+      createdAt: number;
+      enabled: boolean;
+      endsAt?: number;
+      featureKey: string;
+      notes?: string;
+      source: "plan" | "manual" | "promo" | "creator_approval";
+      startsAt?: number;
+      updatedAt: number;
+      userId: Id<"users">;
+      _id: Id<"billingEntitlements">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "clerkUserId"
+      | "createdAt"
+      | "enabled"
+      | "endsAt"
+      | "featureKey"
+      | "notes"
+      | "source"
+      | "startsAt"
+      | "updatedAt"
+      | "userId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_clerkUserId: ["clerkUserId", "_creationTime"];
+      by_featureKey: ["featureKey", "_creationTime"];
+      by_userId: ["userId", "_creationTime"];
+      by_userId_featureKey: ["userId", "featureKey", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  billingFeatures: {
+    document: {
+      active: boolean;
+      appliesTo?: "entitlement" | "marketing" | "both";
+      archivedAt?: number;
+      category?: string;
+      createdAt: number;
+      description: string;
+      key: string;
+      name: string;
+      sortOrder: number;
+      stripeFeatureId?: string;
+      updatedAt: number;
+      _id: Id<"billingFeatures">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "active"
+      | "appliesTo"
+      | "archivedAt"
+      | "category"
+      | "createdAt"
+      | "description"
+      | "key"
+      | "name"
+      | "sortOrder"
+      | "stripeFeatureId"
+      | "updatedAt";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_active: ["active", "_creationTime"];
+      by_key: ["key", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  billingInvoices: {
+    document: {
+      amountDue: number;
+      amountPaid: number;
+      clerkUserId: string;
+      createdAt: number;
+      currency: string;
+      description: string;
+      hostedInvoiceUrl?: string;
+      invoiceIssuedAt: number;
+      invoiceNumber?: string;
+      invoicePdfUrl?: string;
+      paymentMethodBrand?: string;
+      paymentMethodLast4?: string;
+      paymentMethodType?: string;
+      status: string;
+      stripeCustomerId: string;
+      stripeInvoiceId: string;
+      stripeSubscriptionId?: string;
+      updatedAt: number;
+      userId: Id<"users">;
+      _id: Id<"billingInvoices">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "amountDue"
+      | "amountPaid"
+      | "clerkUserId"
+      | "createdAt"
+      | "currency"
+      | "description"
+      | "hostedInvoiceUrl"
+      | "invoiceIssuedAt"
+      | "invoiceNumber"
+      | "invoicePdfUrl"
+      | "paymentMethodBrand"
+      | "paymentMethodLast4"
+      | "paymentMethodType"
+      | "status"
+      | "stripeCustomerId"
+      | "stripeInvoiceId"
+      | "stripeSubscriptionId"
+      | "updatedAt"
+      | "userId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_stripeCustomerId: ["stripeCustomerId", "_creationTime"];
+      by_stripeInvoiceId: ["stripeInvoiceId", "_creationTime"];
+      by_userId: ["userId", "_creationTime"];
+      by_userId_and_invoiceIssuedAt: [
+        "userId",
+        "invoiceIssuedAt",
+        "_creationTime",
+      ];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  billingPaymentMethods: {
+    document: {
+      active: boolean;
+      bankName?: string;
+      billingAddress?: {
+        city?: string;
+        country?: string;
+        line1?: string;
+        line2?: string;
+        postalCode?: string;
+        state?: string;
+      };
+      brand?: string;
+      cardholderName?: string;
+      clerkUserId: string;
+      createdAt: number;
+      expMonth?: number;
+      expYear?: number;
+      isDefault: boolean;
+      last4?: string;
+      stripeCustomerId: string;
+      stripePaymentMethodId: string;
+      type: string;
+      updatedAt: number;
+      userId: Id<"users">;
+      _id: Id<"billingPaymentMethods">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "active"
+      | "bankName"
+      | "billingAddress"
+      | "billingAddress.city"
+      | "billingAddress.country"
+      | "billingAddress.line1"
+      | "billingAddress.line2"
+      | "billingAddress.postalCode"
+      | "billingAddress.state"
+      | "brand"
+      | "cardholderName"
+      | "clerkUserId"
+      | "createdAt"
+      | "expMonth"
+      | "expYear"
+      | "isDefault"
+      | "last4"
+      | "stripeCustomerId"
+      | "stripePaymentMethodId"
+      | "type"
+      | "updatedAt"
+      | "userId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_stripeCustomerId: ["stripeCustomerId", "_creationTime"];
+      by_stripePaymentMethodId: ["stripePaymentMethodId", "_creationTime"];
+      by_userId: ["userId", "_creationTime"];
+      by_userId_and_active: ["userId", "active", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  billingPlanFeatures: {
+    document: {
+      createdAt: number;
+      enabled: boolean;
+      featureKey: string;
+      planKey: string;
+      updatedAt: number;
+      _id: Id<"billingPlanFeatures">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "createdAt"
+      | "enabled"
+      | "featureKey"
+      | "planKey"
+      | "updatedAt";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_featureKey: ["featureKey", "_creationTime"];
+      by_planKey: ["planKey", "_creationTime"];
+      by_planKey_featureKey: ["planKey", "featureKey", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  billingPlans: {
+    document: {
+      active: boolean;
+      archivedAt?: number;
+      createdAt: number;
+      currency: string;
+      description: string;
+      key: string;
+      monthlyPriceAmount: number;
+      monthlyPriceId?: string;
+      name: string;
+      planType: "free" | "paid";
+      sortOrder: number;
+      stripeProductId?: string;
+      updatedAt: number;
+      yearlyPriceAmount: number;
+      yearlyPriceId?: string;
+      _id: Id<"billingPlans">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "active"
+      | "archivedAt"
+      | "createdAt"
+      | "currency"
+      | "description"
+      | "key"
+      | "monthlyPriceAmount"
+      | "monthlyPriceId"
+      | "name"
+      | "planType"
+      | "sortOrder"
+      | "stripeProductId"
+      | "updatedAt"
+      | "yearlyPriceAmount"
+      | "yearlyPriceId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_active: ["active", "_creationTime"];
+      by_key: ["key", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  billingSubscriptions: {
+    document: {
+      attentionStatus:
+        | "none"
+        | "payment_failed"
+        | "past_due"
+        | "requires_action"
+        | "paused";
+      attentionUpdatedAt?: number;
+      cancelAt?: number;
+      cancelAtPeriodEnd: boolean;
+      canceledAt?: number;
+      clerkUserId: string;
+      createdAt: number;
+      currentPeriodEnd?: number;
+      currentPeriodStart?: number;
+      defaultPaymentMethodId?: string;
+      endedAt?: number;
+      interval: "month" | "year";
+      lastStripeEventId?: string;
+      planKey: string;
+      quantity?: number;
+      scheduledChangeAt?: number;
+      scheduledChangeRequestedAt?: number;
+      scheduledChangeType?: "cancel" | "plan_change";
+      scheduledInterval?: "month" | "year";
+      scheduledPlanKey?: string;
+      startedAt?: number;
+      status:
+        | "incomplete"
+        | "trialing"
+        | "active"
+        | "past_due"
+        | "canceled"
+        | "unpaid"
+        | "paused"
+        | "incomplete_expired";
+      stripeCustomerId: string;
+      stripeLatestInvoiceId?: string;
+      stripeLatestPaymentIntentId?: string;
+      stripePriceId: string;
+      stripeProductId?: string;
+      stripeScheduleId?: string;
+      stripeSubscriptionId: string;
+      stripeSubscriptionItemId?: string;
+      trialEnd?: number;
+      trialStart?: number;
+      updatedAt: number;
+      userId: Id<"users">;
+      _id: Id<"billingSubscriptions">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "attentionStatus"
+      | "attentionUpdatedAt"
+      | "cancelAt"
+      | "cancelAtPeriodEnd"
+      | "canceledAt"
+      | "clerkUserId"
+      | "createdAt"
+      | "currentPeriodEnd"
+      | "currentPeriodStart"
+      | "defaultPaymentMethodId"
+      | "endedAt"
+      | "interval"
+      | "lastStripeEventId"
+      | "planKey"
+      | "quantity"
+      | "scheduledChangeAt"
+      | "scheduledChangeRequestedAt"
+      | "scheduledChangeType"
+      | "scheduledInterval"
+      | "scheduledPlanKey"
+      | "startedAt"
+      | "status"
+      | "stripeCustomerId"
+      | "stripeLatestInvoiceId"
+      | "stripeLatestPaymentIntentId"
+      | "stripePriceId"
+      | "stripeProductId"
+      | "stripeScheduleId"
+      | "stripeSubscriptionId"
+      | "stripeSubscriptionItemId"
+      | "trialEnd"
+      | "trialStart"
+      | "updatedAt"
+      | "userId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_attentionStatus: ["attentionStatus", "_creationTime"];
+      by_clerkUserId: ["clerkUserId", "_creationTime"];
+      by_planKey: ["planKey", "_creationTime"];
+      by_status: ["status", "_creationTime"];
+      by_stripeCustomerId: ["stripeCustomerId", "_creationTime"];
+      by_stripeSubscriptionId: ["stripeSubscriptionId", "_creationTime"];
+      by_userId: ["userId", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  billingWebhookEvents: {
+    document: {
+      createdAt: number;
+      customerId?: string;
+      deliveryCount?: number;
+      errorMessage?: string;
+      eventType: string;
+      invoiceId?: string;
+      lastDeliveryAt?: number;
+      payloadBackfilledAt?: number;
+      payloadJson?: string;
+      payloadUnavailableAt?: number;
+      payloadUnavailableReason?: string;
+      paymentIntentId?: string;
+      processedAt?: number;
+      processingAttemptCount?: number;
+      processingClaimedAt?: number;
+      processingStatus:
+        | "received"
+        | "processing"
+        | "processed"
+        | "ignored"
+        | "failed";
+      receivedAt: number;
+      safeSummary: string;
+      stripeEventId: string;
+      subscriptionId?: string;
+      updatedAt: number;
+      _id: Id<"billingWebhookEvents">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "createdAt"
+      | "customerId"
+      | "deliveryCount"
+      | "errorMessage"
+      | "eventType"
+      | "invoiceId"
+      | "lastDeliveryAt"
+      | "payloadBackfilledAt"
+      | "payloadJson"
+      | "payloadUnavailableAt"
+      | "payloadUnavailableReason"
+      | "paymentIntentId"
+      | "processedAt"
+      | "processingAttemptCount"
+      | "processingClaimedAt"
+      | "processingStatus"
+      | "receivedAt"
+      | "safeSummary"
+      | "stripeEventId"
+      | "subscriptionId"
+      | "updatedAt";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_eventType_receivedAt: ["eventType", "receivedAt", "_creationTime"];
+      by_processingStatus_receivedAt: [
+        "processingStatus",
+        "receivedAt",
+        "_creationTime",
+      ];
+      by_receivedAt: ["receivedAt", "_creationTime"];
+      by_stripeEventId: ["stripeEventId", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
   chatgptAppConnections: {
     document: {
       createdAt: number;
@@ -373,6 +941,48 @@ export type DataModel = {
     searchIndexes: {};
     vectorIndexes: {};
   };
+  staffAuditLogs: {
+    document: {
+      action: string;
+      actorClerkUserId: string;
+      actorName: string;
+      actorRole: "user" | "staff" | "admin" | "super_admin";
+      createdAt: number;
+      details?: string;
+      entityId: string;
+      entityLabel?: string;
+      entityType: string;
+      result: "success" | "warning" | "error";
+      summary: string;
+      _id: Id<"staffAuditLogs">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "action"
+      | "actorClerkUserId"
+      | "actorName"
+      | "actorRole"
+      | "createdAt"
+      | "details"
+      | "entityId"
+      | "entityLabel"
+      | "entityType"
+      | "result"
+      | "summary";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_actorClerkUserId: ["actorClerkUserId", "_creationTime"];
+      by_createdAt: ["createdAt", "_creationTime"];
+      by_entityType: ["entityType", "_creationTime"];
+      by_entityType_createdAt: ["entityType", "createdAt", "_creationTime"];
+      by_entityType_entityId: ["entityType", "entityId", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
   users: {
     document: {
       chatgptLinked: boolean;
@@ -384,7 +994,7 @@ export type DataModel = {
       discordId: string;
       name: string;
       plan: "free" | "premium" | "creator";
-      role?: "user" | "admin" | "staff";
+      role?: "user" | "admin" | "staff" | "super_admin";
       status: "active" | "disabled";
       updatedAt: number;
       _id: Id<"users">;

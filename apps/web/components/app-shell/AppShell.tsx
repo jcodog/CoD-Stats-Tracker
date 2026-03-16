@@ -1,6 +1,7 @@
-import { UserButton } from "@clerk/nextjs"
 import Link from "next/link"
 
+import { StaffNavLink } from "@/components/app-shell/StaffNavLink"
+import { UserButton } from "@clerk/nextjs"
 import {
   Avatar,
   AvatarFallback,
@@ -39,16 +40,29 @@ export function AppShell({ children }: AppShellProps) {
                 <Link href="/dashboard">Dashboard</Link>
               </Button>
               <Button asChild size="sm" variant="ghost">
+                <Link href="/settings/billing">Billing</Link>
+              </Button>
+              <Button asChild size="sm" variant="ghost">
                 <Link href="/account">Account</Link>
               </Button>
             </nav>
           </div>
 
-          <UserButton
-            showName
-            userProfileMode="navigation"
-            userProfileUrl="/account"
-          />
+          <div className="flex items-center gap-2">
+            <StaffNavLink />
+            <UserButton
+              showName
+              userProfileMode="navigation"
+              userProfileUrl="/account"
+              appearance={{
+                elements: {
+                  userButtonTrigger:
+                    "outline-none! ring-0! shadow-none! focus:ring-0! focus-visible:ring-0! focus-visible:outline-none! active:ring-0! active:outline-none! data-[state=open]:ring-0! data-[state=open]:shadow-none!",
+                  userButtonBox: "gap-2! pl-2!",
+                },
+              }}
+            />
+          </div>
         </div>
       </header>
 

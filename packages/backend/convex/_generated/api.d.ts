@@ -20,6 +20,240 @@ import type { GenericId as Id } from "convex/values";
  * ```
  */
 export declare const api: {
+  actions: {
+    billing: {
+      customer: {
+        abandonPendingCheckout: FunctionReference<"action", "public", {}, any>;
+        cancelCurrentSubscription: FunctionReference<
+          "action",
+          "public",
+          { stripeSubscriptionId?: string },
+          any
+        >;
+        changeSubscriptionPlan: FunctionReference<
+          "action",
+          "public",
+          {
+            interval: "month" | "year";
+            planKey: string;
+            prorationDate?: number;
+            stripeSubscriptionId?: string;
+          },
+          any
+        >;
+        createPaymentMethodSetupIntent: FunctionReference<
+          "action",
+          "public",
+          {},
+          any
+        >;
+        createSubscriptionIntent: FunctionReference<
+          "action",
+          "public",
+          { attemptKey?: string; interval: "month" | "year"; planKey: string },
+          any
+        >;
+        previewSubscriptionChange: FunctionReference<
+          "action",
+          "public",
+          {
+            interval: "month" | "year";
+            planKey: string;
+            prorationDate?: number;
+            stripeSubscriptionId?: string;
+          },
+          any
+        >;
+        reactivateCurrentSubscription: FunctionReference<
+          "action",
+          "public",
+          { stripeSubscriptionId?: string },
+          any
+        >;
+        removePaymentMethod: FunctionReference<
+          "action",
+          "public",
+          { paymentMethodId: string },
+          any
+        >;
+        setDefaultPaymentMethod: FunctionReference<
+          "action",
+          "public",
+          { paymentMethodId: string },
+          any
+        >;
+        syncBillingCenter: FunctionReference<"action", "public", {}, any>;
+        updateBillingProfile: FunctionReference<
+          "action",
+          "public",
+          {
+            address?: {
+              city?: string;
+              country?: string;
+              line1?: string;
+              line2?: string;
+              postalCode?: string;
+              state?: string;
+            };
+            businessName?: string;
+            email?: string;
+            name?: string;
+            phone?: string;
+          },
+          any
+        >;
+      };
+    };
+    staff: {
+      billing: {
+        archiveFeature: FunctionReference<
+          "action",
+          "public",
+          { confirmationToken: string; featureKey: string },
+          any
+        >;
+        archivePlan: FunctionReference<
+          "action",
+          "public",
+          {
+            cancelAtPeriodEnd: boolean;
+            confirmationToken: string;
+            planKey: string;
+          },
+          any
+        >;
+        getDashboard: FunctionReference<"action", "public", {}, any>;
+        getWebhookDashboard: FunctionReference<"action", "public", {}, any>;
+        getWebhookEventDetail: FunctionReference<
+          "action",
+          "public",
+          { eventId: Id<"billingWebhookEvents"> },
+          any
+        >;
+        grantCreatorAccess: FunctionReference<
+          "action",
+          "public",
+          {
+            endsAt?: number;
+            planKey: string;
+            reason: string;
+            targetUserId: Id<"users">;
+          },
+          any
+        >;
+        previewFeatureArchive: FunctionReference<
+          "action",
+          "public",
+          { featureKey: string },
+          any
+        >;
+        previewFeatureAssignmentChange: FunctionReference<
+          "action",
+          "public",
+          { enabled: boolean; featureKey: string; planKey: string },
+          any
+        >;
+        previewFeatureAssignmentSync: FunctionReference<
+          "action",
+          "public",
+          { featureKey: string; planKeys: Array<string> },
+          any
+        >;
+        previewPlanArchive: FunctionReference<
+          "action",
+          "public",
+          { planKey: string },
+          any
+        >;
+        previewPlanFeatureSync: FunctionReference<
+          "action",
+          "public",
+          { featureKeys: Array<string>; planKey: string },
+          any
+        >;
+        previewPriceReplacement: FunctionReference<
+          "action",
+          "public",
+          { interval: "month" | "year"; planKey: string },
+          any
+        >;
+        refreshWebhookLedger: FunctionReference<"action", "public", {}, any>;
+        replacePlanPrice: FunctionReference<
+          "action",
+          "public",
+          {
+            amount: number;
+            confirmationToken: string;
+            interval: "month" | "year";
+            planKey: string;
+          },
+          any
+        >;
+        revokeCreatorAccess: FunctionReference<
+          "action",
+          "public",
+          { reason: string; targetUserId: Id<"users"> },
+          any
+        >;
+        runCatalogSync: FunctionReference<"action", "public", {}, any>;
+        setFeatureAssignment: FunctionReference<
+          "action",
+          "public",
+          { enabled: boolean; featureKey: string; planKey: string },
+          any
+        >;
+        syncFeatureAssignments: FunctionReference<
+          "action",
+          "public",
+          { featureKey: string; planKeys: Array<string> },
+          any
+        >;
+        upsertFeature: FunctionReference<
+          "action",
+          "public",
+          {
+            active: boolean;
+            appliesTo: "entitlement" | "marketing" | "both";
+            category?: string;
+            description: string;
+            key: string;
+            name: string;
+            sortOrder: number;
+          },
+          any
+        >;
+        upsertPlan: FunctionReference<
+          "action",
+          "public",
+          {
+            active: boolean;
+            currency: string;
+            description: string;
+            featureKeys: Array<string>;
+            key: string;
+            monthlyPriceAmount: number;
+            name: string;
+            planType: "free" | "paid";
+            sortOrder: number;
+            yearlyPriceAmount: number;
+          },
+          any
+        >;
+      };
+      management: {
+        getDashboard: FunctionReference<"action", "public", {}, any>;
+        updateUserRole: FunctionReference<
+          "action",
+          "public",
+          { nextRole: "user" | "staff" | "admin"; targetClerkUserId: string },
+          any
+        >;
+      };
+      overview: {
+        getDashboard: FunctionReference<"action", "public", {}, any>;
+      };
+    };
+  };
   migrations: {
     stats: {
       game: {
@@ -199,6 +433,66 @@ export declare const api: {
     };
   };
   queries: {
+    billing: {
+      catalog: {
+        getCustomerPricingCatalog: FunctionReference<
+          "query",
+          "public",
+          {},
+          any
+        >;
+      };
+      center: {
+        getCurrentUserBillingCenter: FunctionReference<
+          "query",
+          "public",
+          {},
+          any
+        >;
+      };
+      entitlements: {
+        currentUserHasFeature: FunctionReference<
+          "query",
+          "public",
+          { featureKey: string },
+          any
+        >;
+        getCurrentUserEntitlements: FunctionReference<
+          "query",
+          "public",
+          {},
+          any
+        >;
+      };
+      resolution: {
+        getCurrentUserResolvedBillingState: FunctionReference<
+          "query",
+          "public",
+          {},
+          any
+        >;
+      };
+      state: {
+        getCurrentUserBillingCustomer: FunctionReference<
+          "query",
+          "public",
+          {},
+          any
+        >;
+        getCurrentUserBillingState: FunctionReference<
+          "query",
+          "public",
+          {},
+          any
+        >;
+        getCurrentUserSubscription: FunctionReference<
+          "query",
+          "public",
+          {},
+          any
+        >;
+      };
+    };
     chatgpt: {
       getActiveSessionByDiscordId: FunctionReference<
         "query",
@@ -420,6 +714,11 @@ export declare const api: {
  */
 export declare const internal: {
   actions: {
+    billing: {
+      syncCatalogToStripe: {
+        syncCatalogToStripe: FunctionReference<"action", "internal", {}, any>;
+      };
+    };
     featureFlags: {
       sync: {
         syncFromVercel: FunctionReference<"action", "internal", {}, any>;
@@ -437,6 +736,275 @@ export declare const internal: {
     };
   };
   mutations: {
+    billing: {
+      catalog: {
+        updateFeatureStripeId: FunctionReference<
+          "mutation",
+          "internal",
+          { featureKey: string; stripeFeatureId: string },
+          any
+        >;
+        updatePlanStripeIds: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            monthlyPriceId?: string;
+            planKey: string;
+            stripeProductId?: string;
+            yearlyPriceId?: string;
+          },
+          any
+        >;
+      };
+      state: {
+        claimWebhookEventProcessing: FunctionReference<
+          "mutation",
+          "internal",
+          { stripeEventId: string },
+          any
+        >;
+        clearSubscriptionScheduledChange: FunctionReference<
+          "mutation",
+          "internal",
+          { stripeSubscriptionId: string },
+          any
+        >;
+        deleteBillingSubscriptionsMissingFromSync: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            stripeCustomerId: string;
+            stripeSubscriptionIds: Array<string>;
+            userId: Id<"users">;
+          },
+          any
+        >;
+        grantBillingAccessGrant: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            clerkUserId: string;
+            endsAt?: number;
+            grantedByClerkUserId?: string;
+            grantedByName?: string;
+            planKey: string;
+            reason: string;
+            source: "creator_approval" | "manual" | "promo";
+            startsAt?: number;
+            userId: Id<"users">;
+          },
+          any
+        >;
+        markWebhookEventFailed: FunctionReference<
+          "mutation",
+          "internal",
+          { errorMessage: string; stripeEventId: string },
+          any
+        >;
+        markWebhookEventPayloadUnavailable: FunctionReference<
+          "mutation",
+          "internal",
+          { reason?: string; stripeEventId: string },
+          any
+        >;
+        markWebhookEventProcessed: FunctionReference<
+          "mutation",
+          "internal",
+          { processingStatus: "processed" | "ignored"; stripeEventId: string },
+          any
+        >;
+        recordWebhookEventReceived: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            customerId?: string;
+            eventType: string;
+            invoiceId?: string;
+            payloadJson?: string;
+            paymentIntentId?: string;
+            safeSummary: string;
+            stripeEventId: string;
+            subscriptionId?: string;
+          },
+          any
+        >;
+        revokeBillingAccessGrant: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            grantId: Id<"billingAccessGrants">;
+            revokedByClerkUserId?: string;
+            revokedByName?: string;
+          },
+          any
+        >;
+        setSubscriptionScheduledChange: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            scheduledChangeAt: number;
+            scheduledChangeRequestedAt: number;
+            scheduledChangeType: "cancel" | "plan_change";
+            scheduledInterval?: "month" | "year";
+            scheduledPlanKey?: string;
+            stripeScheduleId?: string;
+            stripeSubscriptionId: string;
+          },
+          any
+        >;
+        storeWebhookEventPayload: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            payloadBackfilledAt?: number;
+            payloadJson: string;
+            stripeEventId: string;
+          },
+          any
+        >;
+        syncBillingInvoices: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            clerkUserId: string;
+            invoices: Array<{
+              amountDue: number;
+              amountPaid: number;
+              currency: string;
+              description: string;
+              hostedInvoiceUrl?: string;
+              invoiceIssuedAt: number;
+              invoiceNumber?: string;
+              invoicePdfUrl?: string;
+              paymentMethodBrand?: string;
+              paymentMethodLast4?: string;
+              paymentMethodType?: string;
+              status: string;
+              stripeInvoiceId: string;
+              stripeSubscriptionId?: string;
+            }>;
+            stripeCustomerId: string;
+            userId: Id<"users">;
+          },
+          any
+        >;
+        syncBillingPaymentMethods: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            clerkUserId: string;
+            defaultPaymentMethodId?: string;
+            paymentMethods: Array<{
+              bankName?: string;
+              billingAddress?: {
+                city?: string;
+                country?: string;
+                line1?: string;
+                line2?: string;
+                postalCode?: string;
+                state?: string;
+              };
+              brand?: string;
+              cardholderName?: string;
+              expMonth?: number;
+              expYear?: number;
+              last4?: string;
+              stripePaymentMethodId: string;
+              type: string;
+            }>;
+            stripeCustomerId: string;
+            userId: Id<"users">;
+          },
+          any
+        >;
+        upsertBillingCustomer: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            active: boolean;
+            billingAddress?: {
+              city?: string;
+              country?: string;
+              line1?: string;
+              line2?: string;
+              postalCode?: string;
+              state?: string;
+            };
+            businessName?: string;
+            clerkUserId: string;
+            defaultPaymentMethodId?: string;
+            email?: string;
+            lastSyncedAt?: number;
+            name?: string;
+            phone?: string;
+            stripeCustomerId: string;
+            taxExempt?: "none" | "exempt" | "reverse";
+            taxIds?: Array<{
+              country?: string;
+              stripeTaxIdId: string;
+              type: string;
+              value: string;
+              verificationStatus?: string;
+            }>;
+            userId: Id<"users">;
+          },
+          any
+        >;
+        upsertBillingSubscription: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            attentionStatus:
+              | "none"
+              | "payment_failed"
+              | "past_due"
+              | "requires_action"
+              | "paused";
+            attentionUpdatedAt?: number;
+            cancelAt?: number;
+            cancelAtPeriodEnd: boolean;
+            canceledAt?: number;
+            clearScheduledChange?: boolean;
+            clerkUserId: string;
+            currentPeriodEnd?: number;
+            currentPeriodStart?: number;
+            defaultPaymentMethodId?: string;
+            endedAt?: number;
+            interval: "month" | "year";
+            lastStripeEventId?: string;
+            planKey: string;
+            quantity?: number;
+            scheduledChangeAt?: number;
+            scheduledChangeRequestedAt?: number;
+            scheduledChangeType?: "cancel" | "plan_change";
+            scheduledInterval?: "month" | "year";
+            scheduledPlanKey?: string;
+            startedAt?: number;
+            status:
+              | "incomplete"
+              | "trialing"
+              | "active"
+              | "past_due"
+              | "canceled"
+              | "unpaid"
+              | "paused"
+              | "incomplete_expired";
+            stripeCustomerId: string;
+            stripeLatestInvoiceId?: string;
+            stripeLatestPaymentIntentId?: string;
+            stripePriceId: string;
+            stripeProductId?: string;
+            stripeScheduleId?: string;
+            stripeSubscriptionId: string;
+            stripeSubscriptionItemId?: string;
+            trialEnd?: number;
+            trialStart?: number;
+            userId: Id<"users">;
+          },
+          any
+        >;
+      };
+    };
     featureFlags: {
       internal: {
         upsertFromVercel: FunctionReference<
@@ -453,6 +1021,118 @@ export declare const internal: {
             staffBypass: boolean;
             syncedAt: number;
             syncedFrom: string;
+          },
+          any
+        >;
+      };
+    };
+    staff: {
+      internal: {
+        insertAuditLog: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            action: string;
+            actorClerkUserId: string;
+            actorName: string;
+            actorRole: "user" | "staff" | "admin" | "super_admin";
+            details?: string;
+            entityId: string;
+            entityLabel?: string;
+            entityType: string;
+            result: "success" | "warning" | "error";
+            summary: string;
+          },
+          any
+        >;
+        setFeatureActiveState: FunctionReference<
+          "mutation",
+          "internal",
+          { active: boolean; archivedAt?: number; featureKey: string },
+          any
+        >;
+        setPlanActiveState: FunctionReference<
+          "mutation",
+          "internal",
+          { active: boolean; archivedAt?: number; planKey: string },
+          any
+        >;
+        setPlanFeatureAssignment: FunctionReference<
+          "mutation",
+          "internal",
+          { enabled: boolean; featureKey: string; planKey: string },
+          any
+        >;
+        setUserRole: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            clerkUserId: string;
+            role: "user" | "staff" | "admin" | "super_admin";
+          },
+          any
+        >;
+        syncPlanFeatureAssignmentsForFeature: FunctionReference<
+          "mutation",
+          "internal",
+          { featureKey: string; planKeys: Array<string> },
+          any
+        >;
+        syncPlanFeatureAssignmentsForPlan: FunctionReference<
+          "mutation",
+          "internal",
+          { featureKeys: Array<string>; planKey: string },
+          any
+        >;
+        updateSubscriptionsAfterCancel: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            updates: Array<{
+              cancelAtPeriodEnd: boolean;
+              canceledAt?: number;
+              currentPeriodEnd?: number;
+              status?:
+                | "incomplete"
+                | "trialing"
+                | "active"
+                | "past_due"
+                | "canceled"
+                | "unpaid"
+                | "paused"
+                | "incomplete_expired";
+              stripeSubscriptionId: string;
+            }>;
+          },
+          any
+        >;
+        upsertFeature: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            active: boolean;
+            appliesTo: "entitlement" | "marketing" | "both";
+            category?: string;
+            description: string;
+            key: string;
+            name: string;
+            sortOrder: number;
+          },
+          any
+        >;
+        upsertPlan: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            active: boolean;
+            currency: string;
+            description: string;
+            key: string;
+            monthlyPriceAmount: number;
+            name: string;
+            planType: "free" | "paid";
+            sortOrder: number;
+            yearlyPriceAmount: number;
           },
           any
         >;
@@ -487,6 +1167,115 @@ export declare const internal: {
         { data: any },
         any
       >;
+    };
+  };
+  queries: {
+    billing: {
+      catalog: {
+        getBillingFeatures: FunctionReference<"query", "internal", {}, any>;
+        getBillingPlans: FunctionReference<"query", "internal", {}, any>;
+        getPlanFeatures: FunctionReference<
+          "query",
+          "internal",
+          { planKey: string },
+          any
+        >;
+        getPricingCatalog: FunctionReference<"query", "internal", {}, any>;
+      };
+      internal: {
+        getBillingContextByStripeCustomerId: FunctionReference<
+          "query",
+          "internal",
+          { stripeCustomerId: string },
+          any
+        >;
+        getBillingSubscriptionByStripeSubscriptionIdForUser: FunctionReference<
+          "query",
+          "internal",
+          { stripeSubscriptionId: string; userId: Id<"users"> },
+          any
+        >;
+        getCurrentCreatorGrantByUserId: FunctionReference<
+          "query",
+          "internal",
+          { userId: Id<"users"> },
+          any
+        >;
+        getPlanByKey: FunctionReference<
+          "query",
+          "internal",
+          { planKey: string },
+          any
+        >;
+        getPlanByStripePriceId: FunctionReference<
+          "query",
+          "internal",
+          { stripePriceId: string },
+          any
+        >;
+        getUserBillingContextByClerkUserId: FunctionReference<
+          "query",
+          "internal",
+          { clerkUserId: string },
+          any
+        >;
+        listBillingSubscriptionsByUserId: FunctionReference<
+          "query",
+          "internal",
+          { userId: Id<"users"> },
+          any
+        >;
+      };
+      resolution: {
+        resolveUserEntitlements: FunctionReference<
+          "query",
+          "internal",
+          { userId: Id<"users"> },
+          any
+        >;
+        resolveUserPlanState: FunctionReference<
+          "query",
+          "internal",
+          { userId: Id<"users"> },
+          any
+        >;
+      };
+    };
+    featureFlags: {
+      internal: {
+        getByKey: FunctionReference<"query", "internal", { key: string }, any>;
+      };
+    };
+    staff: {
+      internal: {
+        getBillingRecords: FunctionReference<"query", "internal", {}, any>;
+        getBillingWebhookEventById: FunctionReference<
+          "query",
+          "internal",
+          { eventId: Id<"billingWebhookEvents"> },
+          any
+        >;
+        getBillingWebhookLedgerRecords: FunctionReference<
+          "query",
+          "internal",
+          {},
+          any
+        >;
+        getManagementRecords: FunctionReference<"query", "internal", {}, any>;
+        getOverviewRecords: FunctionReference<"query", "internal", {}, any>;
+        getUserByClerkUserId: FunctionReference<
+          "query",
+          "internal",
+          { clerkUserId: string },
+          any
+        >;
+        getUserById: FunctionReference<
+          "query",
+          "internal",
+          { userId: Id<"users"> },
+          any
+        >;
+      };
     };
   };
 };

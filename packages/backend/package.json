@@ -11,20 +11,22 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@clerk/nextjs": "^6.39.0",
-    "@modelcontextprotocol/ext-apps": "^1.1.2",
+    "@clerk/backend": "^3.2.0",
+    "@clerk/nextjs": "^7.0.4",
+    "@modelcontextprotocol/ext-apps": "^1.2.2",
     "@modelcontextprotocol/sdk": "^1.27.1",
-    "convex": "^1.32.0",
+    "convex": "^1.33.0",
     "next": "16.1.6",
     "redis": "^5.11.0",
-    "svix": "^1.86.0",
+    "stripe": "^20.4.1",
+    "svix": "^1.88.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@types/node": "^25.1.0",
+    "@types/node": "^25.5.0",
     "@workspace/eslint-config": "workspace:*",
     "@workspace/typescript-config": "workspace:*",
-    "eslint": "^9.39.2",
+    "eslint": "^10.0.3",
     "typescript": "^5.9.3"
   },
   "exports": {

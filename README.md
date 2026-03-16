@@ -1,5 +1,3 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
-
 ## Getting Started
 
 From the monorepo root, run the web app development server:
@@ -25,6 +23,26 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+
+## Billing environment
+
+Stripe billing requires server-side keys, a publishable key for Elements, and a
+server-enforced checkout flag.
+
+Example configuration:
+
+```bash
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_replace_me
+STRIPE_SECRET_KEY=sk_test_replace_me
+STRIPE_WEBHOOK_SECRET=whsec_replace_me
+```
+
+Operational notes:
+
+- The authenticated `/checkout` page, billing API routes, and billing mutations are all gated by the `checkout` flag in `apps/web/lib/flags.ts`.
+- Enable or disable `checkout` in the existing Vercel Flags / OpenFeature setup before exposing checkout to users.
+- Keep the Convex `featureFlags` record for `checkout` aligned with the Vercel flag so direct billing actions and webhook-driven billing flows follow the same rollout state.
+- Point Stripe webhook delivery at the Convex HTTP endpoint `/stripe-webhook` and use the matching `STRIPE_WEBHOOK_SECRET`.
 
 ## Type checking with tsgo
 

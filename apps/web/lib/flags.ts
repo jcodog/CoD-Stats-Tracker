@@ -5,9 +5,10 @@ import { vercelAdapter } from "@flags-sdk/vercel"
 import { auth, currentUser } from "@clerk/nextjs/server"
 import { fetchQuery } from "convex/nextjs"
 import { api } from "@workspace/backend/convex/_generated/api"
+import type { UserRole } from "@workspace/backend/convex/lib/staffRoles"
 
 export type Plan = "free" | "premium" | "creator"
-export type Role = "user" | "staff" | "admin"
+export type Role = UserRole
 
 type FlagEntities = {
   user?: {
@@ -27,8 +28,13 @@ const identify = dedupe(async (): Promise<FlagEntities> => {
 
   const token = (await getToken()) ?? undefined
 
-  const [dbUser, clerkUser] = await Promise.all([
+  const [dbUser, billingState, clerkUser] = await Promise.all([
     fetchQuery(api.queries.users.current, {}, { token }),
+    fetchQuery(
+      api.queries.billing.resolution.getCurrentUserResolvedBillingState,
+      {},
+      { token }
+    ),
     currentUser(),
   ])
 
@@ -36,13 +42,21 @@ const identify = dedupe(async (): Promise<FlagEntities> => {
     clerkUser?.primaryEmailAddress?.emailAddress ??
     clerkUser?.emailAddresses?.[0]?.emailAddress
 
-  const plan: Plan = dbUser?.plan ?? "free"
   const role: Role = dbUser?.role ?? "user"
+
+  const resolvedPlan: Plan =
+    billingState?.accessSource === "creator_grant" || dbUser?.plan === "creator"
+      ? "creator"
+      : billingState?.accessSource === "paid_subscription" ||
+          billingState?.effectivePlan?.planType === "paid" ||
+          dbUser?.plan === "premium"
+        ? "premium"
+        : "free"
 
   return {
     user: {
       id: userId,
-      plan,
+      plan: resolvedPlan,
       role,
       email,
     },
@@ -74,7 +88,7 @@ export const flags = {
   ),
   checkout: makeBooleanFlag(
     "checkout",
-    "Enables the new checkout page for the user."
+    "Enables the new checkout page for the user"
   ),
 } as const
 
