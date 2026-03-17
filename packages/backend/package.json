@@ -11,8 +11,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@clerk/backend": "^3.2.0",
-    "@clerk/nextjs": "^7.0.4",
+    "@clerk/backend": "^3.2.1",
+    "@clerk/nextjs": "^7.0.5",
     "@modelcontextprotocol/ext-apps": "^1.2.2",
     "@modelcontextprotocol/sdk": "^1.27.1",
     "convex": "^1.33.1",

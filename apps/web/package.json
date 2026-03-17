@@ -18,7 +18,7 @@
   "dependencies": {
     "@stripe/react-stripe-js": "^5.6.1",
     "@stripe/stripe-js": "^8.10.0",
-    "@clerk/nextjs": "^7.0.4",
+    "@clerk/nextjs": "^7.0.5",
     "@clerk/themes": "^2.4.57",
     "@flags-sdk/vercel": "^1.0.3",
     "@modelcontextprotocol/sdk": "^1.27.1",
