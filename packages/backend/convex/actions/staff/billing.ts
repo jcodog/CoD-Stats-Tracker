@@ -9,7 +9,13 @@ import {
   reconcileBillingCustomer,
   reconcileStripeSubscription,
 } from "../../lib/billingLifecycle"
-import { maskIdentifier } from "../../lib/billing"
+import {
+  hasManagedCreatorGrantSubscriptionAccess,
+  maskIdentifier,
+} from "../../lib/billing"
+import {
+  isStripeManagedCreatorGrantSubscription,
+} from "../../lib/billingStripe"
 import { getClerkBackendClient } from "../../lib/clerk"
 import { requireAuthorizedStaffAction } from "../../lib/staffActionAuth"
 import {
@@ -39,6 +45,15 @@ import { getStripe, STRIPE_CATALOG_APP } from "../../lib/stripe"
 import type { StripeCatalogSyncResult } from "../billing/syncCatalogToStripe"
 
 type SubscriptionStatus = "active" | "past_due" | "paused" | "trialing"
+type BillingSubscriptionStatus =
+  | "active"
+  | "canceled"
+  | "incomplete"
+  | "incomplete_expired"
+  | "past_due"
+  | "paused"
+  | "trialing"
+  | "unpaid"
 
 function mapAuditLogEntry(log: {
   _id: string
@@ -762,8 +777,11 @@ function buildUserDirectory(args: {
     email?: string
   }>
   subscriptions: Array<{
+    currentPeriodEnd?: number
+    endedAt?: number
+    managedGrantSource?: "creator_approval"
     planKey: string
-    status: string
+    status: BillingSubscriptionStatus
     updatedAt: number
     userId: string
   }>
@@ -809,9 +827,16 @@ function buildUserDirectory(args: {
   return args.users.map<StaffBillingUserLookupRecord>((user) => {
     const activeGrant = args.activeGrantByUserId.get(user._id)
     const currentSubscription = getCurrentSubscriptionForUser(user._id)
+    const hasManagedCreatorAccess =
+      currentSubscription !== null &&
+      hasManagedCreatorGrantSubscriptionAccess(currentSubscription)
     const hasPaidAccess =
-      currentSubscription !== null && isImpactStatus(currentSubscription.status)
-    const currentPlanKey = activeGrant
+      currentSubscription !== null &&
+      isImpactStatus(currentSubscription.status) &&
+      !hasManagedCreatorAccess
+    const currentPlanKey = hasManagedCreatorAccess
+      ? currentSubscription?.planKey
+      : activeGrant
       ? activeGrant.planKey
       : hasPaidAccess
         ? currentSubscription?.planKey
@@ -822,7 +847,9 @@ function buildUserDirectory(args: {
             : null
 
     return {
-      accessSource: activeGrant
+      accessSource: hasManagedCreatorAccess
+        ? "managed_grant_subscription"
+        : activeGrant
         ? "creator_grant"
         : hasPaidAccess
           ? "paid_subscription"
@@ -1105,7 +1132,7 @@ function buildBillingDashboard(
       scheduledChangeType?: "cancel" | "plan_change"
       scheduledInterval?: "month" | "year"
       scheduledPlanKey?: string
-      status: string
+      status: BillingSubscriptionStatus
       stripeCustomerId: string
       stripePriceId: string
       stripeScheduleId?: string
@@ -2509,7 +2536,7 @@ function getClerkUserEmail(clerkUser: {
   )
 }
 
-function getCreatorGrantStripePrice(plan: {
+function getCreatorGrantStripePriceSelection(plan: {
   key: string
   monthlyPriceId?: string
   yearlyPriceId?: string
@@ -2533,6 +2560,63 @@ function getCreatorGrantStripePrice(plan: {
   )
 }
 
+function getCreatorGrantStripeProductId(plan: {
+  key: string
+  stripeProductId?: string
+}) {
+  if (!plan.stripeProductId) {
+    throw new Error(
+      `The Creator plan (${plan.key}) is missing a Stripe product mapping.`
+    )
+  }
+
+  return plan.stripeProductId
+}
+
+async function resolveVerifiedCreatorGrantStripePrice(args: {
+  plan: {
+    key: string
+    monthlyPriceId?: string
+    stripeProductId?: string
+    yearlyPriceId?: string
+  }
+  stripe: Stripe
+}) {
+  const selection = getCreatorGrantStripePriceSelection(args.plan)
+  const expectedProductId = getCreatorGrantStripeProductId(args.plan)
+  const price = await args.stripe.prices.retrieve(selection.priceId, {
+    expand: ["product"],
+  })
+  const priceProductId =
+    typeof price.product === "string" ? price.product : price.product.id
+
+  if (!price.active) {
+    throw new Error(
+      `The Creator plan (${args.plan.key}) Stripe price is inactive.`
+    )
+  }
+
+  if (price.type !== "recurring" || !price.recurring) {
+    throw new Error(
+      `The Creator plan (${args.plan.key}) Stripe price must be recurring.`
+    )
+  }
+
+  if (price.recurring.interval !== selection.interval) {
+    throw new Error(
+      `The Creator plan (${args.plan.key}) Stripe price interval does not match the expected ${selection.interval} cadence.`
+    )
+  }
+
+  if (priceProductId !== expectedProductId) {
+    throw new Error(
+      `The Creator plan (${args.plan.key}) Stripe price does not belong to the configured Creator product.`
+    )
+  }
+
+  return selection
+}
+
 function isLiveStripeSubscriptionStatus(status: Stripe.Subscription.Status) {
   return (
     status !== "canceled" &&
@@ -2541,18 +2625,94 @@ function isLiveStripeSubscriptionStatus(status: Stripe.Subscription.Status) {
   )
 }
 
-function isManagedCreatorGrantSubscription(args: {
+function getManagedCreatorCouponId(planKey: string) {
+  return `cod_stats_${planKey}_complimentary_v1`
+}
+
+function buildCreatorGrantMetadata(args: {
+  endsAt?: number
+  mode: "indefinite" | "timed"
   planKey: string
-  subscription: Stripe.Subscription
-  userId: string
+  targetUser: {
+    _id: Id<"users">
+    clerkUserId: string
+  }
 }) {
-  return (
-    args.subscription.metadata.app === STRIPE_CATALOG_APP &&
-    args.subscription.metadata.managedCreatorGrant === "true" &&
-    args.subscription.metadata.grantSource === "creator_approval" &&
-    args.subscription.metadata.planKey === args.planKey &&
-    args.subscription.metadata.userId === args.userId
+  return {
+    app: STRIPE_CATALOG_APP,
+    clerkUserId: args.targetUser.clerkUserId,
+    grantEndsAt: args.endsAt ? String(args.endsAt) : "",
+    grantMode: args.mode,
+    grantSource: "creator_approval",
+    managedCreatorGrant: "true",
+    planKey: args.planKey,
+    userId: args.targetUser._id,
+  } satisfies Stripe.MetadataParam
+}
+
+async function ensureCreatorGrantCoupon(args: {
+  plan: {
+    key: string
+    stripeProductId?: string
+  }
+  stripe: Stripe
+}) {
+  const productId = getCreatorGrantStripeProductId(args.plan)
+  const couponId = getManagedCreatorCouponId(args.plan.key)
+
+  try {
+    const existingCoupon = await args.stripe.coupons.retrieve(couponId)
+    const appliesToProducts = existingCoupon.applies_to?.products ?? []
+    const hasExpectedProducts =
+      appliesToProducts.length === 1 && appliesToProducts[0] === productId
+
+    if (
+      existingCoupon.valid !== true ||
+      existingCoupon.percent_off !== 100 ||
+      existingCoupon.duration !== "forever" ||
+      !hasExpectedProducts
+    ) {
+      throw new Error(
+        "The existing complimentary Creator coupon does not match the expected Stripe configuration."
+      )
+    }
+
+    return existingCoupon.id
+  } catch (error) {
+    const isResourceMissingError =
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      error.code === "resource_missing"
+
+    if (!isResourceMissingError) {
+      throw error
+    }
+  }
+
+  const coupon = await args.stripe.coupons.create(
+    {
+      applies_to: {
+        products: [productId],
+      },
+      duration: "forever",
+      id: couponId,
+      metadata: {
+        app: STRIPE_CATALOG_APP,
+        grantMode: "indefinite",
+        grantSource: "creator_approval",
+        managedCreatorGrant: "true",
+        planKey: args.plan.key,
+      },
+      name: "Complimentary Creator access",
+      percent_off: 100,
+    },
+    {
+      idempotencyKey: `staff:creator-grant:coupon:${args.plan.key}`,
+    }
   )
+
+  return coupon.id
 }
 
 async function getExpandedCreatorGrantSubscription(args: {
@@ -2716,6 +2876,53 @@ async function listStripeSubscriptionsForCreatorGrant(args: {
   return subscriptions
 }
 
+async function getManagedCreatorGrantSubscriptionState(args: {
+  planKey: string
+  stripe: Stripe
+  stripeCustomerId: string
+  targetUserId: string
+}) {
+  const subscriptions = await listStripeSubscriptionsForCreatorGrant({
+    stripe: args.stripe,
+    stripeCustomerId: args.stripeCustomerId,
+  })
+  const liveSubscriptions = subscriptions.filter((subscription) =>
+    isLiveStripeSubscriptionStatus(subscription.status)
+  )
+  const liveManagedSubscriptions = liveSubscriptions.filter((subscription) =>
+    isStripeManagedCreatorGrantSubscription({
+      planKey: args.planKey,
+      subscription,
+      userId: args.targetUserId,
+    })
+  )
+  const conflictingSubscriptions = liveSubscriptions.filter(
+    (subscription) =>
+      !isStripeManagedCreatorGrantSubscription({
+        planKey: args.planKey,
+        subscription,
+        userId: args.targetUserId,
+      })
+  )
+
+  if (conflictingSubscriptions.length > 0) {
+    throw new Error(
+      "This user already has a live Stripe subscription. Resolve the existing billing state before granting Creator access."
+    )
+  }
+
+  if (liveManagedSubscriptions.length > 1) {
+    throw new Error(
+      "Multiple managed Creator Stripe subscriptions already exist for this user. Clean up the duplicate Stripe state before retrying."
+    )
+  }
+
+  return {
+    currentManagedSubscription: liveManagedSubscriptions[0],
+    subscriptions,
+  }
+}
+
 async function ensureTimedCreatorStripeGrant(args: {
   billingContext: CreatorGrantBillingContext
   clerkUser: {
@@ -2728,6 +2935,7 @@ async function ensureTimedCreatorStripeGrant(args: {
   plan: {
     key: string
     monthlyPriceId?: string
+    stripeProductId?: string
     yearlyPriceId?: string
   }
   stripe: Stripe
@@ -2737,7 +2945,10 @@ async function ensureTimedCreatorStripeGrant(args: {
     name: string
   }
 }) {
-  const { interval, priceId } = getCreatorGrantStripePrice(args.plan)
+  const { interval, priceId } = await resolveVerifiedCreatorGrantStripePrice({
+    plan: args.plan,
+    stripe: args.stripe,
+  })
   const stripeCustomerId = await ensureCreatorGrantStripeCustomer({
     billingContext: args.billingContext,
     clerkUser: args.clerkUser,
@@ -2745,52 +2956,21 @@ async function ensureTimedCreatorStripeGrant(args: {
     stripe: args.stripe,
     targetUser: args.targetUser,
   })
-  const subscriptions = await listStripeSubscriptionsForCreatorGrant({
-    stripe: args.stripe,
-    stripeCustomerId,
-  })
-  const liveSubscriptions = subscriptions.filter((subscription) =>
-    isLiveStripeSubscriptionStatus(subscription.status)
-  )
-  const liveManagedSubscriptions = liveSubscriptions.filter((subscription) =>
-    isManagedCreatorGrantSubscription({
+  const { currentManagedSubscription } =
+    await getManagedCreatorGrantSubscriptionState({
       planKey: args.plan.key,
-      subscription,
-      userId: args.targetUser._id,
+      stripe: args.stripe,
+      stripeCustomerId,
+      targetUserId: args.targetUser._id,
     })
-  )
-  const conflictingSubscriptions = liveSubscriptions.filter(
-    (subscription) =>
-      !isManagedCreatorGrantSubscription({
-        planKey: args.plan.key,
-        subscription,
-        userId: args.targetUser._id,
-      })
-  )
-
-  if (conflictingSubscriptions.length > 0) {
-    throw new Error(
-      "This user already has a live Stripe subscription. Resolve the existing billing state before granting timed Creator access."
-    )
-  }
-
-  if (liveManagedSubscriptions.length > 1) {
-    throw new Error(
-      "Multiple managed Creator Stripe subscriptions already exist for this user. Clean up the duplicate Stripe state before retrying."
-    )
-  }
 
   const trialEnd = Math.floor(args.endsAt / 1000)
-  const metadata = {
-    app: STRIPE_CATALOG_APP,
-    clerkUserId: args.targetUser.clerkUserId,
-    grantEndsAt: String(args.endsAt),
-    grantSource: "creator_approval",
-    managedCreatorGrant: "true",
+  const metadata = buildCreatorGrantMetadata({
+    endsAt: args.endsAt,
+    mode: "timed",
     planKey: args.plan.key,
-    userId: args.targetUser._id,
-  }
-  const currentManagedSubscription = liveManagedSubscriptions[0]
+    targetUser: args.targetUser,
+  })
   const currentManagedItemId =
     currentManagedSubscription?.items.data[0]?.id ?? undefined
 
@@ -2807,6 +2987,7 @@ async function ensureTimedCreatorStripeGrant(args: {
       ? await args.stripe.subscriptions.update(currentManagedSubscription.id, {
           cancel_at: trialEnd,
           cancel_at_period_end: false,
+          discounts: [],
           expand: [
             "customer",
             "default_payment_method",
@@ -2882,6 +3063,7 @@ async function ensureTimedCreatorStripeGrant(args: {
     action: currentManagedSubscription ? "updated" : "created",
     billingInterval: interval,
     cancelAt: subscription.cancel_at ? subscription.cancel_at * 1000 : null,
+    grantMode: "timed" as const,
     status: subscription.status,
     stripeCustomerId,
     stripePriceId: priceId,
@@ -2890,7 +3072,178 @@ async function ensureTimedCreatorStripeGrant(args: {
   }
 }
 
-async function cancelTimedCreatorStripeGrant(args: {
+async function ensureIndefiniteCreatorStripeGrant(args: {
+  billingContext: CreatorGrantBillingContext
+  clerkUser: {
+    emailAddresses?: Array<{ emailAddress?: string }>
+    primaryEmailAddress?: { emailAddress?: string } | null
+    publicMetadata: unknown
+  }
+  ctx: Parameters<typeof requireAuthorizedStaffAction>[0]
+  plan: {
+    key: string
+    monthlyPriceId?: string
+    stripeProductId?: string
+    yearlyPriceId?: string
+  }
+  stripe: Stripe
+  targetUser: {
+    _id: Id<"users">
+    clerkUserId: string
+    name: string
+  }
+}) {
+  const { interval, priceId } = await resolveVerifiedCreatorGrantStripePrice({
+    plan: args.plan,
+    stripe: args.stripe,
+  })
+  const stripeCustomerId = await ensureCreatorGrantStripeCustomer({
+    billingContext: args.billingContext,
+    clerkUser: args.clerkUser,
+    ctx: args.ctx,
+    stripe: args.stripe,
+    targetUser: args.targetUser,
+  })
+  const { currentManagedSubscription } =
+    await getManagedCreatorGrantSubscriptionState({
+      planKey: args.plan.key,
+      stripe: args.stripe,
+      stripeCustomerId,
+      targetUserId: args.targetUser._id,
+    })
+  const couponId = await ensureCreatorGrantCoupon({
+    plan: args.plan,
+    stripe: args.stripe,
+  })
+  const metadata = buildCreatorGrantMetadata({
+    mode: "indefinite",
+    planKey: args.plan.key,
+    targetUser: args.targetUser,
+  })
+  const currentManagedItemId =
+    currentManagedSubscription?.items.data[0]?.id ?? undefined
+
+  if (currentManagedSubscription && !currentManagedItemId) {
+    throw new Error(
+      "The existing managed Creator Stripe subscription is missing its primary item."
+    )
+  }
+
+  const subscription =
+    currentManagedSubscription !== undefined
+      ? await args.stripe.subscriptions.update(currentManagedSubscription.id, {
+          cancel_at: null as never,
+          cancel_at_period_end: false,
+          discounts: [{ coupon: couponId }],
+          expand: [
+            "customer",
+            "default_payment_method",
+            "items.data.price.product",
+            "latest_invoice.confirmation_secret",
+            "latest_invoice.payment_intent",
+            "pending_setup_intent",
+            "schedule",
+          ],
+          items: [
+            {
+              id: currentManagedItemId,
+              price: priceId,
+              quantity: 1,
+            },
+          ],
+          metadata,
+          proration_behavior: "none",
+          trial_end:
+            currentManagedSubscription.status === "trialing" &&
+            currentManagedSubscription.trial_end
+              ? "now"
+              : undefined,
+        } as Stripe.SubscriptionUpdateParams)
+      : await args.stripe.subscriptions.create(
+          {
+            collection_method: "charge_automatically",
+            customer: stripeCustomerId,
+            discounts: [{ coupon: couponId }],
+            expand: [
+              "customer",
+              "default_payment_method",
+              "items.data.price.product",
+              "latest_invoice.confirmation_secret",
+              "latest_invoice.payment_intent",
+              "pending_setup_intent",
+              "schedule",
+            ],
+            items: [
+              {
+                price: priceId,
+                quantity: 1,
+              },
+            ],
+            metadata,
+          },
+          {
+            idempotencyKey: [
+              "staff",
+              "creator-grant",
+              args.targetUser._id,
+              args.plan.key,
+              "indefinite",
+            ].join(":"),
+          }
+        )
+
+  await syncCreatorGrantStripeState({
+    ctx: args.ctx,
+    stripe: args.stripe,
+    stripeCustomerId,
+    subscription,
+  })
+
+  return {
+    action: currentManagedSubscription ? "updated" : "created",
+    billingInterval: interval,
+    discountCouponId: couponId,
+    grantMode: "indefinite" as const,
+    status: subscription.status,
+    stripeCustomerId,
+    stripePriceId: priceId,
+    stripeSubscriptionId: subscription.id,
+  }
+}
+
+async function ensureCreatorStripeGrant(args: {
+  billingContext: CreatorGrantBillingContext
+  clerkUser: {
+    emailAddresses?: Array<{ emailAddress?: string }>
+    primaryEmailAddress?: { emailAddress?: string } | null
+    publicMetadata: unknown
+  }
+  ctx: Parameters<typeof requireAuthorizedStaffAction>[0]
+  endsAt?: number
+  plan: {
+    key: string
+    monthlyPriceId?: string
+    stripeProductId?: string
+    yearlyPriceId?: string
+  }
+  stripe: Stripe
+  targetUser: {
+    _id: Id<"users">
+    clerkUserId: string
+    name: string
+  }
+}) {
+  if (args.endsAt !== undefined) {
+    return await ensureTimedCreatorStripeGrant({
+      ...args,
+      endsAt: args.endsAt,
+    })
+  }
+
+  return await ensureIndefiniteCreatorStripeGrant(args)
+}
+
+async function cancelCreatorStripeGrant(args: {
   billingContext: CreatorGrantBillingContext
   clerkUser: {
     publicMetadata: unknown
@@ -2923,7 +3276,7 @@ async function cancelTimedCreatorStripeGrant(args: {
   const liveManagedSubscriptions = subscriptions.filter(
     (subscription) =>
       isLiveStripeSubscriptionStatus(subscription.status) &&
-      isManagedCreatorGrantSubscription({
+      isStripeManagedCreatorGrantSubscription({
         planKey: args.planKey,
         subscription,
         userId: args.targetUser._id,
@@ -2968,6 +3321,7 @@ async function cancelTimedCreatorStripeGrant(args: {
     endedAt: expandedCanceledSubscription.ended_at
       ? expandedCanceledSubscription.ended_at * 1000
       : null,
+    grantMode: "canceled" as const,
     status: expandedCanceledSubscription.status,
     stripeCustomerId,
     stripeSubscriptionId: expandedCanceledSubscription.id,
@@ -3033,25 +3387,15 @@ export const grantCreatorAccess = action({
     const clerkUser = await getClerkBackendClient().users.getUser(
       targetUser.clerkUserId
     )
-    const stripeGrant =
-      args.endsAt !== undefined
-        ? await ensureTimedCreatorStripeGrant({
-            billingContext,
-            clerkUser,
-            ctx,
-            endsAt: args.endsAt,
-            plan,
-            stripe,
-            targetUser,
-          })
-        : await cancelTimedCreatorStripeGrant({
-            billingContext,
-            clerkUser,
-            ctx,
-            planKey: plan.key,
-            stripe,
-            targetUser,
-          })
+    const stripeGrant = await ensureCreatorStripeGrant({
+      billingContext,
+      clerkUser,
+      ctx,
+      endsAt: args.endsAt,
+      plan,
+      stripe,
+      targetUser,
+    })
 
     await ctx.runMutation(
       internal.mutations.billing.state.grantBillingAccessGrant,
@@ -3146,7 +3490,7 @@ export const revokeCreatorAccess = action({
     const clerkUser = await getClerkBackendClient().users.getUser(
       targetUser.clerkUserId
     )
-    const stripeGrant = await cancelTimedCreatorStripeGrant({
+    const stripeGrant = await cancelCreatorStripeGrant({
       billingContext,
       clerkUser,
       ctx,
@@ -3191,6 +3535,132 @@ export const revokeCreatorAccess = action({
 
     return {
       summary: `Revoked creator access for ${targetUser.name}.`,
+      syncSummary: null,
+    }
+  },
+})
+
+export const backfillCreatorGrantStripeSubscriptions = action({
+  args: {},
+  handler: async (ctx): Promise<StaffMutationResponse> => {
+    const operator = await requireAuthorizedStaffAction(ctx, "admin")
+    const records = await ctx.runQuery(
+      internal.queries.staff.internal.getBillingRecords,
+      {}
+    )
+    const plan = await ctx.runQuery(
+      internal.queries.billing.internal.getPlanByKey,
+      {
+        planKey: "creator",
+      }
+    )
+    const now = Date.now()
+
+    if (!plan || !plan.active || plan.archivedAt !== undefined) {
+      throw new Error("The Creator plan is not available for Stripe backfill.")
+    }
+
+    const activeCreatorGrants = records.accessGrants.filter(
+      (grant: (typeof records.accessGrants)[number]) =>
+        grant.active &&
+        grant.source === "creator_approval" &&
+        grant.planKey === "creator" &&
+        (grant.startsAt === undefined || grant.startsAt <= now) &&
+        (grant.endsAt === undefined || grant.endsAt > now)
+    )
+
+    const stripe = getStripe()
+    let successCount = 0
+    const failures: Array<{
+      message: string
+      targetUserId: string
+      userName: string
+    }> = []
+
+    for (const grant of activeCreatorGrants) {
+      const targetUser =
+        records.users.find(
+          (user: (typeof records.users)[number]) => user._id === grant.userId
+        ) ??
+        (await ctx.runQuery(internal.queries.staff.internal.getUserById, {
+          userId: grant.userId,
+        }))
+
+      if (!targetUser) {
+        failures.push({
+          message: "User record not found.",
+          targetUserId: grant.userId,
+          userName: grant.clerkUserId,
+        })
+        continue
+      }
+
+      try {
+        const billingContext = await ctx.runQuery(
+          internal.queries.billing.internal.getUserBillingContextByClerkUserId,
+          {
+            clerkUserId: targetUser.clerkUserId,
+          }
+        )
+        const clerkUser = await getClerkBackendClient().users.getUser(
+          targetUser.clerkUserId
+        )
+
+        await ensureCreatorStripeGrant({
+          billingContext,
+          clerkUser,
+          ctx,
+          endsAt: grant.endsAt,
+          plan,
+          stripe,
+          targetUser,
+        })
+        successCount += 1
+      } catch (error) {
+        failures.push({
+          message:
+            error instanceof Error ? error.message : "Stripe backfill failed.",
+          targetUserId: targetUser._id,
+          userName: targetUser.name,
+        })
+      }
+    }
+
+    await recordAuditLog({
+      action: "billing.creator_access.backfilled",
+      actorClerkUserId: operator.actorClerkUserId,
+      actorName: operator.actorDisplayName,
+      actorRole: operator.actorRole,
+      ctx,
+      details: JSON.stringify(
+        {
+          attemptedCount: activeCreatorGrants.length,
+          failures,
+          planKey: plan.key,
+          successCount,
+        },
+        null,
+        2
+      ),
+      entityId: `creator:${Date.now()}`,
+      entityLabel: plan.name,
+      entityType: "billingAccessGrant",
+      result: failures.length > 0 ? "warning" : "success",
+      summary:
+        failures.length > 0
+          ? `Backfilled ${successCount} Creator grant Stripe subscription(s) with ${failures.length} failure(s).`
+          : `Backfilled ${successCount} Creator grant Stripe subscription(s).`,
+    })
+
+    if (failures.length > 0) {
+      return {
+        summary: `Backfilled ${successCount} Creator grant Stripe subscription(s). ${failures.length} grant(s) still require manual follow-up.`,
+        syncSummary: null,
+      }
+    }
+
+    return {
+      summary: `Backfilled ${successCount} Creator grant Stripe subscription(s).`,
       syncSummary: null,
     }
   },

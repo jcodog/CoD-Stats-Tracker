@@ -181,6 +181,11 @@ type CreatorGrantConfirmationState = {
   targetUserIds: string[]
 }
 
+type CreatorGrantRevocationState = {
+  grant: StaffCreatorGrantRecord
+  reason: string
+}
+
 type MultiSelectOption = {
   description?: string
   disabled?: boolean
@@ -325,10 +330,19 @@ function BillingAttentionBadge({
 function BillingAccessSourceBadge({
   source,
 }: {
-  source: "creator_grant" | "legacy_plan" | "none" | "paid_subscription"
+  source:
+    | "creator_grant"
+    | "legacy_plan"
+    | "managed_grant_subscription"
+    | "none"
+    | "paid_subscription"
 }) {
   if (source === "paid_subscription") {
     return <Badge variant="secondary">paid subscription</Badge>
+  }
+
+  if (source === "managed_grant_subscription") {
+    return <Badge variant="secondary">complimentary stripe</Badge>
   }
 
   if (source === "creator_grant") {
@@ -580,12 +594,16 @@ export function StaffBillingView({
     })
   const [creatorGrantConfirmationState, setCreatorGrantConfirmationState] =
     useState<CreatorGrantConfirmationState | null>(null)
+  const [creatorGrantRevocationState, setCreatorGrantRevocationState] =
+    useState<CreatorGrantRevocationState | null>(null)
   const [catalogAuditFilters, setCatalogAuditFilters] =
     useState<StaffFilterSelection>({
       action: [],
       result: [],
     })
   const [isSubmittingCreatorGrant, setIsSubmittingCreatorGrant] =
+    useState(false)
+  const [isBackfillingCreatorGrants, setIsBackfillingCreatorGrants] =
     useState(false)
   const billingMutation = useStaffMutation<
     BillingActionRequest,
@@ -1226,6 +1244,52 @@ export function StaffBillingView({
       )
     } finally {
       setIsSubmittingCreatorGrant(false)
+    }
+  }
+
+  async function handleBackfillCreatorGrantStripeSubscriptions() {
+    setIsBackfillingCreatorGrants(true)
+
+    try {
+      const result = await billingClient.runAction<StaffMutationResponse>({
+        action: "backfillCreatorGrantStripeSubscriptions",
+        input: {},
+      })
+      await invalidateStaffQueries.invalidateBilling()
+      await handleMutationResult(result)
+    } catch (error) {
+      toast.error(
+        error instanceof StaffClientError
+          ? error.message
+          : "Unable to backfill Creator Stripe grants."
+      )
+    } finally {
+      setIsBackfillingCreatorGrants(false)
+    }
+  }
+
+  async function submitCreatorGrantRevocation() {
+    if (!creatorGrantRevocationState) {
+      return
+    }
+
+    try {
+      const result = await billingClient.runAction<StaffMutationResponse>({
+        action: "revokeCreatorAccess",
+        input: {
+          reason: creatorGrantRevocationState.reason.trim(),
+          targetUserId: creatorGrantRevocationState.grant.userId,
+        },
+      })
+      await invalidateStaffQueries.invalidateBilling()
+      await handleMutationResult(result)
+      setCreatorGrantRevocationState(null)
+    } catch (error) {
+      toast.error(
+        error instanceof StaffClientError
+          ? error.message
+          : "Unable to revoke Creator access."
+      )
     }
   }
 
@@ -2307,12 +2371,28 @@ export function StaffBillingView({
         <div className="grid gap-6">
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
             <Card className="border-border/70">
-              <CardHeader>
-                <CardTitle>Grant Creator access</CardTitle>
-                <CardDescription>
-                  Apply the managed Creator override to one or more users with a
-                  required reason and explicit confirmation.
-                </CardDescription>
+              <CardHeader className="flex flex-row items-start justify-between gap-3">
+                <div className="flex flex-col gap-1">
+                  <CardTitle>Grant Creator access</CardTitle>
+                  <CardDescription>
+                    Apply the managed Creator override to one or more users with a
+                    required reason and explicit confirmation.
+                  </CardDescription>
+                </div>
+                {canManageCreatorAccess ? (
+                  <Button
+                    disabled={isBackfillingCreatorGrants}
+                    onClick={() =>
+                      void handleBackfillCreatorGrantStripeSubscriptions()
+                    }
+                    size="sm"
+                    variant="outline"
+                  >
+                    {isBackfillingCreatorGrants
+                      ? "Backfilling..."
+                      : "Backfill Stripe state"}
+                  </Button>
+                ) : null}
               </CardHeader>
               <CardContent>
                 {canManageCreatorAccess ? (
@@ -2487,6 +2567,9 @@ export function StaffBillingView({
                     <TableHead>Plan</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Window</TableHead>
+                    {canManageCreatorAccess ? (
+                      <TableHead className="text-right">Actions</TableHead>
+                    ) : null}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -2520,13 +2603,31 @@ export function StaffBillingView({
                             : " with no expiry"}
                           <span className="mt-1 block">{grant.reason}</span>
                         </TableCell>
+                        {canManageCreatorAccess ? (
+                          <TableCell className="text-right">
+                            {grant.active ? (
+                              <Button
+                                onClick={() =>
+                                  setCreatorGrantRevocationState({
+                                    grant,
+                                    reason: "",
+                                  })
+                                }
+                                size="sm"
+                                variant="outline"
+                              >
+                                Remove access
+                              </Button>
+                            ) : null}
+                          </TableCell>
+                        ) : null}
                       </TableRow>
                     ))
                   ) : (
                     <TableRow>
                       <TableCell
                         className="py-8 text-center text-sm text-muted-foreground"
-                        colSpan={4}
+                        colSpan={canManageCreatorAccess ? 5 : 4}
                       >
                         No creator access grants are recorded yet.
                       </TableCell>
@@ -2803,6 +2904,73 @@ export function StaffBillingView({
         selectedUsers={selectedCreatorUsers}
         state={creatorGrantConfirmationState}
       />
+      <AlertDialog
+        open={Boolean(creatorGrantRevocationState)}
+        onOpenChange={(open) => !open && setCreatorGrantRevocationState(null)}
+      >
+        <AlertDialogContent className="max-w-lg">
+          <AlertDialogHeader className="items-start text-left">
+            <AlertDialogTitle>Remove Creator access</AlertDialogTitle>
+            <AlertDialogDescription>
+              This ends complimentary Creator access immediately, revokes the
+              local grant, and cancels the matching Stripe subscription
+              immediately.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          {creatorGrantRevocationState ? (
+            <FieldGroup>
+              <div className="rounded-lg border border-border/70 bg-muted/20 px-4 py-4 text-sm">
+                <div className="font-medium">
+                  {creatorGrantRevocationState.grant.userName}
+                </div>
+                <div className="mt-1 text-muted-foreground">
+                  {creatorGrantRevocationState.grant.email ??
+                    creatorGrantRevocationState.grant.clerkUserId}
+                </div>
+                <div className="mt-2 text-muted-foreground">
+                  {creatorGrantRevocationState.grant.endsAt
+                    ? `Current window ends ${formatDateTime(creatorGrantRevocationState.grant.endsAt)}.`
+                    : "Current window has no expiry."}
+                </div>
+              </div>
+              <Field>
+                <FieldLabel>Reason</FieldLabel>
+                <Textarea
+                  onChange={(event) =>
+                    setCreatorGrantRevocationState((current) =>
+                      current
+                        ? { ...current, reason: event.target.value }
+                        : current
+                    )
+                  }
+                  placeholder="Document why this Creator access should end immediately."
+                  value={creatorGrantRevocationState.reason}
+                />
+                <FieldDescription>
+                  Removal requires an audit-friendly reason.
+                </FieldDescription>
+              </Field>
+            </FieldGroup>
+          ) : null}
+
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep access</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={
+                billingMutation.isPending ||
+                (creatorGrantRevocationState?.reason.trim().length ?? 0) < 8
+              }
+              onClick={(event) => {
+                event.preventDefault()
+                void submitCreatorGrantRevocation()
+              }}
+            >
+              {billingMutation.isPending ? "Removing..." : "Remove access"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

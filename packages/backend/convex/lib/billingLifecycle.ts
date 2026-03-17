@@ -5,6 +5,9 @@ import {
   deriveAttentionStatus,
   getExpandedStripeCustomer,
   getInvoicePaymentIntentId,
+  getStripeManagedGrantEndsAt,
+  getStripeManagedGrantMode,
+  getStripeManagedGrantSource,
   getStripeInvoiceId,
   getStripePaymentIntentId,
   getStripeProductId,
@@ -453,6 +456,9 @@ export async function reconcileStripeSubscription(args: {
           : undefined,
       interval: getStripeSubscriptionInterval(args.subscription),
       lastStripeEventId: args.lastStripeEventId,
+      managedGrantEndsAt: getStripeManagedGrantEndsAt(args.subscription),
+      managedGrantMode: getStripeManagedGrantMode(args.subscription),
+      managedGrantSource: getStripeManagedGrantSource(args.subscription),
       planKey: plan.key,
       quantity: item.quantity ?? 1,
       scheduledChangeAt: scheduledChange.scheduledChangeAt,
@@ -683,6 +689,7 @@ export async function syncBillingInvoicesForCustomer(args: {
         return {
           amountDue: invoice.amount_due,
           amountPaid: invoice.amount_paid,
+          amountTotal: invoice.total,
           currency: invoice.currency,
           description:
             invoice.lines.data[0]?.description ??

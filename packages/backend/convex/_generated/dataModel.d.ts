@@ -226,6 +226,7 @@ export type DataModel = {
     document: {
       amountDue: number;
       amountPaid: number;
+      amountTotal?: number;
       clerkUserId: string;
       createdAt: number;
       currency: string;
@@ -251,6 +252,7 @@ export type DataModel = {
       | "_id"
       | "amountDue"
       | "amountPaid"
+      | "amountTotal"
       | "clerkUserId"
       | "createdAt"
       | "currency"
@@ -442,6 +444,9 @@ export type DataModel = {
       endedAt?: number;
       interval: "month" | "year";
       lastStripeEventId?: string;
+      managedGrantEndsAt?: number;
+      managedGrantMode?: "timed" | "indefinite";
+      managedGrantSource?: "creator_approval";
       planKey: string;
       quantity?: number;
       scheduledChangeAt?: number;
@@ -490,6 +495,9 @@ export type DataModel = {
       | "endedAt"
       | "interval"
       | "lastStripeEventId"
+      | "managedGrantEndsAt"
+      | "managedGrantMode"
+      | "managedGrantSource"
       | "planKey"
       | "quantity"
       | "scheduledChangeAt"

@@ -45,6 +45,10 @@ export const billingActionSchema = z.discriminatedUnion("action", [
     }),
   }),
   z.object({
+    action: z.literal("backfillCreatorGrantStripeSubscriptions"),
+    input: z.object({}).optional().default({}),
+  }),
+  z.object({
     action: z.literal("previewFeatureArchive"),
     input: z.object({
       featureKey: catalogKeySchema,

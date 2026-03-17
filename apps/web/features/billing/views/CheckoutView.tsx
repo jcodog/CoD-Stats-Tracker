@@ -85,21 +85,26 @@ export function CheckoutView({
   const hasManagedSubscription =
     billingCenterQuery.data?.portalMode === "management"
   const hasCreatorGrantAccess =
-    billingStateQuery.data?.accessSource === "creator_grant" &&
-    billingStateQuery.data.creatorGrant?.planKey === "creator"
+    (billingStateQuery.data?.accessSource === "creator_grant" ||
+      billingStateQuery.data?.accessSource === "managed_grant_subscription") &&
+    billingStateQuery.data.effectivePlanKey === "creator"
 
   function getCreatorGrantCheckoutMessage(
     billingState: BillingResolvedState | null | undefined
   ) {
-    if (!billingState || billingState.creatorGrant?.planKey !== "creator") {
-      return "This account already has Creator access through a staff grant."
+    if (!billingState || billingState.effectivePlanKey !== "creator") {
+      return "This account already has Creator complimentary access."
     }
 
-    return billingState.creatorGrant.endsAt
-      ? `This account already has Creator access through a staff grant until ${new Intl.DateTimeFormat(undefined, {
+    const endsAt =
+      billingState.subscription?.managedGrantEndsAt ??
+      billingState.creatorGrant?.endsAt
+
+    return endsAt
+      ? `This account already has Creator complimentary access until ${new Intl.DateTimeFormat(undefined, {
           dateStyle: "medium",
-        }).format(billingState.creatorGrant.endsAt)}.`
-      : "This account already has Creator access through a staff grant with no expiry."
+        }).format(endsAt)}.`
+      : "This account already has Creator complimentary access with no expiry."
   }
 
   useEffect(() => {

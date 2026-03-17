@@ -128,7 +128,7 @@ export function InvoiceHistoryTable(args: {
                         </TableCell>
                         <TableCell className="align-top font-medium">
                           {formatCurrencyAmount(
-                            invoice.amountPaid || invoice.amountDue,
+                            invoice.amountTotal,
                             invoice.currency
                           )}
                         </TableCell>
@@ -172,7 +172,7 @@ export function InvoiceHistoryTable(args: {
                       <span className="text-muted-foreground">Amount</span>
                       <span className="font-medium">
                         {formatCurrencyAmount(
-                          invoice.amountPaid || invoice.amountDue,
+                          invoice.amountTotal,
                           invoice.currency
                         )}
                       </span>

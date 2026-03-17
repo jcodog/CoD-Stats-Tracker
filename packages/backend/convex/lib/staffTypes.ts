@@ -147,6 +147,7 @@ export type StaffBillingAssignmentRecord = {
 export type StaffBillingAccessSource =
   | "creator_grant"
   | "legacy_plan"
+  | "managed_grant_subscription"
   | "none"
   | "paid_subscription"
 

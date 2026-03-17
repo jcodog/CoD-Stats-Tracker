@@ -49,6 +49,11 @@ export const billingSubscriptions = defineTable({
   startedAt: v.optional(v.number()),
   trialEnd: v.optional(v.number()),
   trialStart: v.optional(v.number()),
+  managedGrantEndsAt: v.optional(v.number()),
+  managedGrantMode: v.optional(
+    v.union(v.literal("timed"), v.literal("indefinite"))
+  ),
+  managedGrantSource: v.optional(v.literal("creator_approval")),
 
   scheduledChangeType: v.optional(
     v.union(v.literal("cancel"), v.literal("plan_change"))

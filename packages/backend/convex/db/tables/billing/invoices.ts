@@ -11,6 +11,7 @@ export const billingInvoices = defineTable({
 
   amountDue: v.number(),
   amountPaid: v.number(),
+  amountTotal: v.optional(v.number()),
   currency: v.string(),
   description: v.string(),
   hostedInvoiceUrl: v.optional(v.string()),

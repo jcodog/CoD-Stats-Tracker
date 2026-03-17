@@ -45,7 +45,9 @@ const identify = dedupe(async (): Promise<FlagEntities> => {
   const role: Role = dbUser?.role ?? "user"
 
   const resolvedPlan: Plan =
-    billingState?.accessSource === "creator_grant" || dbUser?.plan === "creator"
+    billingState?.accessSource === "creator_grant" ||
+    billingState?.accessSource === "managed_grant_subscription" ||
+    dbUser?.plan === "creator"
       ? "creator"
       : billingState?.accessSource === "paid_subscription" ||
           billingState?.effectivePlan?.planType === "paid" ||

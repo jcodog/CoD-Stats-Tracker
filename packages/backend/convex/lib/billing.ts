@@ -26,11 +26,24 @@ export const BILLING_ATTENTION_STATUSES = [
 
 export type BillingAttentionStatus = (typeof BILLING_ATTENTION_STATUSES)[number]
 
+export const BILLING_MANAGED_GRANT_MODES = ["timed", "indefinite"] as const
+
+export type BillingManagedGrantMode =
+  (typeof BILLING_MANAGED_GRANT_MODES)[number]
+
+export const BILLING_MANAGED_GRANT_SOURCES = [
+  "creator_approval",
+] as const
+
+export type BillingManagedGrantSource =
+  (typeof BILLING_MANAGED_GRANT_SOURCES)[number]
+
 export const BILLING_ACCESS_SOURCES = [
   "none",
   "legacy_plan",
   "paid_subscription",
   "creator_grant",
+  "managed_grant_subscription",
 ] as const
 
 export type BillingAccessSource = (typeof BILLING_ACCESS_SOURCES)[number]
@@ -48,6 +61,11 @@ type BillingSubscriptionLifecycleLike = {
   currentPeriodEnd?: number | null
   endedAt?: number | null
   status: BillingSubscriptionStatus
+}
+
+type BillingManagedGrantLike = BillingSubscriptionLifecycleLike & {
+  managedGrantSource?: BillingManagedGrantSource | null
+  planKey?: string | null
 }
 
 export function isBillingInterval(value: unknown): value is BillingInterval {
@@ -102,6 +120,17 @@ export function hasEffectivePaidSubscriptionAccess(
   return (
     hasPaidSubscriptionAccess(subscription.status) &&
     hasBillingSubscriptionPeriodRemaining(subscription, now)
+  )
+}
+
+export function hasManagedCreatorGrantSubscriptionAccess(
+  subscription: BillingManagedGrantLike,
+  now = Date.now()
+) {
+  return (
+    subscription.planKey === "creator" &&
+    subscription.managedGrantSource === "creator_approval" &&
+    hasEffectivePaidSubscriptionAccess(subscription, now)
   )
 }
 

@@ -1,6 +1,9 @@
 import type { Doc } from "../../_generated/dataModel"
 import { query } from "../../_generated/server"
-import { isManageableBillingSubscription } from "../../lib/billing"
+import {
+  hasManagedCreatorGrantSubscriptionAccess,
+  isManageableBillingSubscription,
+} from "../../lib/billing"
 
 type BillingCustomerRecord = Doc<"billingCustomers">
 type BillingInvoiceRecord = Doc<"billingInvoices">
@@ -110,6 +113,23 @@ function getSubscriptionAmount(
   return interval === "year" ? plan.yearlyPriceAmount : plan.monthlyPriceAmount
 }
 
+function getManagedGrantPresentation(
+  subscription: BillingSubscriptionRecord
+) {
+  if (
+    subscription.managedGrantSource !== "creator_approval" ||
+    subscription.planKey !== "creator"
+  ) {
+    return null
+  }
+
+  return {
+    endsAt: subscription.managedGrantEndsAt ?? null,
+    mode: subscription.managedGrantMode ?? null,
+    source: subscription.managedGrantSource,
+  }
+}
+
 export const getCurrentUserBillingCenter = query({
   args: {},
   handler: async (ctx) => {
@@ -205,6 +225,8 @@ export const getCurrentUserBillingCenter = query({
         return {
           amountDue: invoice.amountDue,
           amountPaid: invoice.amountPaid,
+          amountTotal:
+            invoice.amountTotal ?? invoice.amountPaid ?? invoice.amountDue,
           currency: invoice.currency,
           description: invoice.description,
           hostedInvoiceUrl: invoice.hostedInvoiceUrl ?? null,
@@ -267,7 +289,10 @@ export const getCurrentUserBillingCenter = query({
               }
             : null,
           endedAt: subscription.endedAt ?? null,
-          isManageable: isManageableBillingSubscription(subscription, now),
+          isManageable:
+            isManageableBillingSubscription(subscription, now) &&
+            !hasManagedCreatorGrantSubscriptionAccess(subscription, now),
+          managedGrant: getManagedGrantPresentation(subscription),
           planKey: subscription.planKey,
           productName: plan?.name ?? subscription.planKey,
           quantity: subscription.quantity ?? 1,

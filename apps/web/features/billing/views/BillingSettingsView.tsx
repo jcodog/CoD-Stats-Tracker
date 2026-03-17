@@ -477,19 +477,32 @@ function shouldAttemptBackgroundStripeResync(billingCenter: BillingCenterData) {
 
 function hasActiveCreatorPlanGrant(state: BillingResolvedState | null | undefined) {
   return (
-    state?.accessSource === "creator_grant" &&
-    state.creatorGrant?.planKey === "creator"
+    (state?.accessSource === "creator_grant" ||
+      state?.accessSource === "managed_grant_subscription") &&
+    state.effectivePlanKey === "creator"
   )
 }
 
-function getCreatorGrantAccessLabel(
-  creatorGrant: BillingResolvedState["creatorGrant"] | null | undefined
+function hasManagedCreatorGrantSubscription(
+  subscription: BillingCenterSubscription
 ) {
-  if (!creatorGrant?.endsAt) {
+  return (
+    subscription.planKey === "creator" &&
+    subscription.managedGrant?.source === "creator_approval"
+  )
+}
+
+function getCreatorGrantAccessLabel(args: {
+  creatorGrant?: BillingResolvedState["creatorGrant"] | null
+  managedGrant?: BillingCenterSubscription["managedGrant"] | null
+}) {
+  const endsAt = args.managedGrant?.endsAt ?? args.creatorGrant?.endsAt
+
+  if (!endsAt) {
     return "No expiry"
   }
 
-  return `Ends ${formatDateLabel(creatorGrant.endsAt)}`
+  return `Ends ${formatDateLabel(endsAt)}`
 }
 
 function BillingValue(args: {
@@ -716,6 +729,14 @@ function SubscriptionsCard(args: {
   portalMode: BillingCenterData["portalMode"]
   subscriptions: BillingCenterSubscription[]
 }) {
+  const hasManagedCreatorSubscription = args.subscriptions.some(
+    hasManagedCreatorGrantSubscription
+  )
+  const shouldRenderCreatorGrantFallback =
+    args.creatorGrantActive &&
+    args.creatorGrant &&
+    !hasManagedCreatorSubscription
+
   return (
     <Card className="border-border/70 bg-card/95 shadow-sm">
       <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -736,7 +757,7 @@ function SubscriptionsCard(args: {
         ) : null}
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
-        {args.creatorGrantActive && args.creatorGrant ? (
+        {shouldRenderCreatorGrantFallback ? (
           <div className="flex w-full flex-col gap-4 rounded-lg border border-border/70 bg-muted/10 px-4 py-4 text-left">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div className="flex flex-col gap-1">
@@ -745,126 +766,154 @@ function SubscriptionsCard(args: {
                   <Badge variant="secondary">Complimentary</Badge>
                 </div>
                 <div className="text-sm text-muted-foreground">
-                  Not billed through Stripe while complimentary access is active.
+                  Creator access is active and Stripe subscription sync is still catching up.
                 </div>
               </div>
               <span className="text-sm font-medium text-muted-foreground">
-                {getCreatorGrantAccessLabel(args.creatorGrant)}
+                {getCreatorGrantAccessLabel({
+                  creatorGrant: args.creatorGrant,
+                })}
               </span>
             </div>
 
             <div className="grid gap-3 text-sm md:grid-cols-4">
-              <BillingValue label="Billing interval" value="Complimentary" />
+              <BillingValue label="Billing interval" value="monthly" />
               <BillingValue
                 label="Renewal"
-                value={getCreatorGrantAccessLabel(args.creatorGrant)}
+                value={getCreatorGrantAccessLabel({
+                  creatorGrant: args.creatorGrant,
+                })}
               />
               <BillingValue label="Quantity" value="1" />
-              <BillingValue
-                label="Payment method"
-                value="Not billed"
-              />
+              <BillingValue label="Payment method" value="Not billed" />
             </div>
           </div>
         ) : null}
 
         {args.subscriptions.length > 0 ? (
-          args.subscriptions.map((subscription) => (
-            <div
-              className={cn(
-                "flex w-full flex-col gap-4 rounded-lg border border-border/70 bg-muted/10 px-4 py-4 text-left",
-                subscription.isManageable &&
-                  "transition-colors hover:bg-muted/20"
-              )}
-              key={subscription.stripeSubscriptionId}
-            >
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div className="flex flex-col gap-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-medium">
-                      {subscription.productName}
-                    </span>
-                    <Badge
-                      variant={getSubscriptionBadgeVariant(subscription.status)}
-                    >
-                      {formatBillingStatusLabel(subscription.status)}
-                    </Badge>
-                    {subscription.cancelAtPeriodEnd ? (
-                      <Badge variant="outline">Cancels at period end</Badge>
-                    ) : null}
+          args.subscriptions.map((subscription) => {
+            const isActiveManagedGrant =
+              subscription.managedGrant !== null &&
+              args.creatorGrantActive === true &&
+              subscription.planKey === "creator" &&
+              (subscription.status === "active" ||
+                subscription.status === "trialing" ||
+                subscription.status === "past_due")
+
+            return (
+              <div
+                className={cn(
+                  "flex w-full flex-col gap-4 rounded-lg border border-border/70 bg-muted/10 px-4 py-4 text-left",
+                  subscription.isManageable &&
+                    "transition-colors hover:bg-muted/20"
+                )}
+                key={subscription.stripeSubscriptionId}
+              >
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="flex flex-col gap-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium">
+                        {subscription.productName}
+                      </span>
+                      {subscription.managedGrant ? (
+                        <Badge variant="secondary">Complimentary</Badge>
+                      ) : null}
+                      <Badge
+                        variant={getSubscriptionBadgeVariant(subscription.status)}
+                      >
+                        {formatBillingStatusLabel(subscription.status)}
+                      </Badge>
+                      {subscription.cancelAtPeriodEnd ? (
+                        <Badge variant="outline">Cancels at period end</Badge>
+                      ) : null}
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      {getSubscriptionAmountLabel(subscription)}
+                    </div>
                   </div>
-                  <div className="text-sm text-muted-foreground">
-                    {getSubscriptionAmountLabel(subscription)}
-                  </div>
-                </div>
-                {subscription.isManageable ? (
-                  args.creatorGrantActive ? (
+                  {isActiveManagedGrant ? (
                     <span className="text-sm font-medium text-muted-foreground">
-                      Staff-managed grant
+                      {getCreatorGrantAccessLabel({
+                        managedGrant: subscription.managedGrant,
+                      })}
                     </span>
+                  ) : subscription.isManageable ? (
+                    args.creatorGrantActive ? (
+                      <span className="text-sm font-medium text-muted-foreground">
+                        Complimentary access active
+                      </span>
+                    ) : (
+                      <Button
+                        onClick={() => args.onOpenSubscription(subscription)}
+                        size="sm"
+                        variant="outline"
+                      >
+                        Manage subscription
+                      </Button>
+                    )
+                  ) : args.checkoutEnabled ? (
+                    args.creatorGrantActive ? (
+                      <span className="text-sm font-medium text-muted-foreground">
+                        Historical record
+                      </span>
+                    ) : (
+                      <Button asChild size="sm" variant="outline">
+                        <Link href="/checkout">Subscribe again</Link>
+                      </Button>
+                    )
                   ) : (
-                    <Button
-                      onClick={() => args.onOpenSubscription(subscription)}
-                      size="sm"
-                      variant="outline"
-                    >
-                      Manage subscription
-                    </Button>
-                  )
-                ) : args.checkoutEnabled ? (
-                  args.creatorGrantActive ? (
                     <span className="text-sm font-medium text-muted-foreground">
                       Historical record
                     </span>
-                  ) : (
-                    <Button asChild size="sm" variant="outline">
-                      <Link href="/checkout">Subscribe again</Link>
-                    </Button>
-                  )
-                ) : (
-                  <span className="text-sm font-medium text-muted-foreground">
-                    Historical record
-                  </span>
-                )}
-              </div>
-
-              <div className="grid gap-3 text-sm md:grid-cols-4">
-                <BillingValue
-                  label="Billing interval"
-                  value={formatBillingInterval(subscription.billingInterval)}
-                />
-                <BillingValue
-                  label="Renewal"
-                  value={getSubscriptionRenewalLabel(subscription)}
-                />
-                <BillingValue
-                  label="Quantity"
-                  value={
-                    subscription.quantity > 1 ? subscription.quantity : "1"
-                  }
-                />
-                <BillingValue
-                  label="Payment method"
-                  value={
-                    subscription.defaultPaymentMethodSummary
-                      ? getCardBrandSummary(
-                          subscription.defaultPaymentMethodSummary.brand,
-                          subscription.defaultPaymentMethodSummary.last4
-                        )
-                      : "No default payment method"
-                  }
-                />
-              </div>
-
-              {subscription.scheduledChange ? (
-                <div className="rounded-lg border border-border/70 bg-background/60 px-3 py-3 text-sm text-muted-foreground">
-                  {subscription.scheduledChange.type === "cancel"
-                    ? `Scheduled to cancel on ${formatDateLabel(subscription.scheduledChange.effectiveAt)}.`
-                    : `Scheduled to move to ${subscription.scheduledChange.planName ?? subscription.scheduledChange.planKey ?? "another plan"} on ${formatDateLabel(subscription.scheduledChange.effectiveAt)}.`}
+                  )}
                 </div>
-              ) : null}
-            </div>
-          ))
+
+                <div className="grid gap-3 text-sm md:grid-cols-4">
+                  <BillingValue
+                    label="Billing interval"
+                    value={formatBillingInterval(subscription.billingInterval)}
+                  />
+                  <BillingValue
+                    label="Renewal"
+                    value={
+                      isActiveManagedGrant
+                        ? getCreatorGrantAccessLabel({
+                            managedGrant: subscription.managedGrant,
+                          })
+                        : getSubscriptionRenewalLabel(subscription)
+                    }
+                  />
+                  <BillingValue
+                    label="Quantity"
+                    value={
+                      subscription.quantity > 1 ? subscription.quantity : "1"
+                    }
+                  />
+                  <BillingValue
+                    label="Payment method"
+                    value={
+                      subscription.managedGrant
+                        ? "Not billed"
+                        : subscription.defaultPaymentMethodSummary
+                          ? getCardBrandSummary(
+                              subscription.defaultPaymentMethodSummary.brand,
+                              subscription.defaultPaymentMethodSummary.last4
+                            )
+                          : "No default payment method"
+                    }
+                  />
+                </div>
+
+                {subscription.scheduledChange ? (
+                  <div className="rounded-lg border border-border/70 bg-background/60 px-3 py-3 text-sm text-muted-foreground">
+                    {subscription.scheduledChange.type === "cancel"
+                      ? `Scheduled to cancel on ${formatDateLabel(subscription.scheduledChange.effectiveAt)}.`
+                      : `Scheduled to move to ${subscription.scheduledChange.planName ?? subscription.scheduledChange.planKey ?? "another plan"} on ${formatDateLabel(subscription.scheduledChange.effectiveAt)}.`}
+                  </div>
+                ) : null}
+              </div>
+            )
+          })
         ) : !args.creatorGrantActive ? (
           <Empty className="border border-dashed border-border/70 bg-muted/10">
             <EmptyHeader>
@@ -872,12 +921,12 @@ function SubscriptionsCard(args: {
                 <IconFileInvoice />
               </EmptyMedia>
               <EmptyTitle>No subscriptions yet</EmptyTitle>
-              <EmptyDescription>
-                {args.creatorGrantActive
-                  ? "Creator access is currently active through a staff grant. Checkout and plan changes stay unavailable while that grant remains active."
-                  : args.checkoutEnabled
-                    ? "Start checkout to create the first managed Stripe subscription for this account."
-                  : "Checkout is currently disabled for this account."}
+                <EmptyDescription>
+                  {args.creatorGrantActive
+                    ? "Creator complimentary access is currently active. Checkout and plan changes stay unavailable while that access remains active."
+                    : args.checkoutEnabled
+                      ? "Start checkout to create the first managed Stripe subscription for this account."
+                      : "Checkout is currently disabled for this account."}
               </EmptyDescription>
             </EmptyHeader>
           </Empty>
@@ -2214,22 +2263,6 @@ export function BillingSettingsView({
           <AlertDescription>
             Subscription records are available, but pricing changes are
             temporarily unavailable until the billing catalog loads again.
-          </AlertDescription>
-        </Alert>
-      ) : null}
-
-      {billingCenter.portalMode === "acquisition" &&
-      billingCenter.subscriptions.length > 0 ? (
-        <Alert>
-          <AlertTitle>
-            {creatorGrantActive
-              ? "Creator access is already active"
-              : "Managed subscription not currently active"}
-          </AlertTitle>
-          <AlertDescription>
-            {creatorGrantActive
-              ? "Historical subscription records remain visible here. Billing checkout and plan changes are unavailable while the active Creator grant remains in place."
-              : "Historical subscription records remain visible here. Start a new checkout only if you want to create a fresh paid subscription for this account."}
           </AlertDescription>
         </Alert>
       ) : null}

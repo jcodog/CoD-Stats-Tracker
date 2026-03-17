@@ -1,6 +1,7 @@
 export type BillingAccessSource =
   | "creator_grant"
   | "legacy_plan"
+  | "managed_grant_subscription"
   | "none"
   | "paid_subscription"
 
@@ -94,6 +95,9 @@ export type BillingResolvedState = {
     currentPeriodEnd?: number
     currentPeriodStart?: number
     interval: BillingInterval
+    managedGrantEndsAt?: number
+    managedGrantMode?: "indefinite" | "timed"
+    managedGrantSource?: "creator_approval"
     planKey: string
     scheduledChangeAt?: number
     scheduledChangeType?: "cancel" | "plan_change"
@@ -169,6 +173,11 @@ export type BillingCenterSubscription = {
   } | null
   endedAt: number | null
   isManageable: boolean
+  managedGrant: {
+    endsAt: number | null
+    mode: "indefinite" | "timed" | null
+    source: "creator_approval"
+  } | null
   planKey: string
   productName: string
   quantity: number
@@ -197,6 +206,7 @@ export type BillingCenterSubscription = {
 export type BillingCenterInvoice = {
   amountDue: number
   amountPaid: number
+  amountTotal: number
   currency: string
   description: string
   hostedInvoiceUrl: string | null

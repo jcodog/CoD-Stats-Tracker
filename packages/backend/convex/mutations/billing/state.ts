@@ -26,6 +26,11 @@ const billingAttentionStatusValidator = v.union(
   v.literal("requires_action"),
   v.literal("paused")
 )
+const billingManagedGrantModeValidator = v.union(
+  v.literal("timed"),
+  v.literal("indefinite")
+)
+const billingManagedGrantSourceValidator = v.literal("creator_approval")
 const billingScheduledChangeTypeValidator = v.union(
   v.literal("cancel"),
   v.literal("plan_change")
@@ -47,6 +52,7 @@ const billingPaymentMethodSnapshotValidator = v.object({
 const billingInvoiceSnapshotValidator = v.object({
   amountDue: v.number(),
   amountPaid: v.number(),
+  amountTotal: v.number(),
   currency: v.string(),
   description: v.string(),
   hostedInvoiceUrl: v.optional(v.string()),
@@ -96,6 +102,9 @@ type BillingSubscriptionPatch = Partial<
     | "endedAt"
     | "interval"
     | "lastStripeEventId"
+    | "managedGrantEndsAt"
+    | "managedGrantMode"
+    | "managedGrantSource"
     | "planKey"
     | "quantity"
     | "scheduledChangeAt"
@@ -263,6 +272,9 @@ export const upsertBillingSubscription = internalMutation({
     endedAt: v.optional(v.number()),
     interval: billingIntervalValidator,
     lastStripeEventId: v.optional(v.string()),
+    managedGrantEndsAt: v.optional(v.number()),
+    managedGrantMode: v.optional(billingManagedGrantModeValidator),
+    managedGrantSource: v.optional(billingManagedGrantSourceValidator),
     planKey: v.string(),
     quantity: v.optional(v.number()),
     scheduledChangeAt: v.optional(v.number()),
@@ -323,6 +335,9 @@ export const upsertBillingSubscription = internalMutation({
         endedAt: args.endedAt,
         interval: args.interval,
         lastStripeEventId: args.lastStripeEventId,
+        managedGrantEndsAt: args.managedGrantEndsAt,
+        managedGrantMode: args.managedGrantMode,
+        managedGrantSource: args.managedGrantSource,
         planKey: args.planKey,
         quantity: args.quantity,
         startedAt: args.startedAt,
@@ -393,6 +408,24 @@ export const upsertBillingSubscription = internalMutation({
       args.lastStripeEventId
     ) {
       patch.lastStripeEventId = args.lastStripeEventId
+    }
+    if (
+      (existingSubscription.managedGrantEndsAt ?? undefined) !==
+      args.managedGrantEndsAt
+    ) {
+      patch.managedGrantEndsAt = args.managedGrantEndsAt
+    }
+    if (
+      (existingSubscription.managedGrantMode ?? undefined) !==
+      args.managedGrantMode
+    ) {
+      patch.managedGrantMode = args.managedGrantMode
+    }
+    if (
+      (existingSubscription.managedGrantSource ?? undefined) !==
+      args.managedGrantSource
+    ) {
+      patch.managedGrantSource = args.managedGrantSource
     }
     if (existingSubscription.planKey !== args.planKey) patch.planKey = args.planKey
     if ((existingSubscription.quantity ?? undefined) !== args.quantity) {
@@ -627,6 +660,7 @@ export const syncBillingInvoices = internalMutation({
       const nextValues = {
         amountDue: invoice.amountDue,
         amountPaid: invoice.amountPaid,
+        amountTotal: invoice.amountTotal,
         clerkUserId: args.clerkUserId,
         currency: invoice.currency,
         description: invoice.description,
@@ -660,6 +694,9 @@ export const syncBillingInvoices = internalMutation({
       }
       if (existingRecord.amountPaid !== nextValues.amountPaid) {
         patch.amountPaid = nextValues.amountPaid
+      }
+      if (existingRecord.amountTotal !== nextValues.amountTotal) {
+        patch.amountTotal = nextValues.amountTotal
       }
       if (existingRecord.clerkUserId !== nextValues.clerkUserId) {
         patch.clerkUserId = nextValues.clerkUserId

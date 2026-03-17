@@ -4,12 +4,14 @@ import type { Doc } from "../../_generated/dataModel"
 import { internalQuery, query, type QueryCtx } from "../../_generated/server"
 import {
   hasEffectivePaidSubscriptionAccess,
+  hasManagedCreatorGrantSubscriptionAccess,
   type BillingAccessSource,
   type BillingAttentionStatus,
 } from "../../lib/billing"
 import { resolveBillingFeatureApplyMode } from "../../lib/staffRoles"
 import {
   selectCurrentBillingAccessGrant,
+  selectCurrentManagedCreatorGrantSubscription,
   selectCurrentBillingSubscription,
 } from "./internal"
 
@@ -157,16 +159,26 @@ export async function buildResolvedBillingState(
     ])
 
   const subscription = selectCurrentBillingSubscription(subscriptions, now)
+  const managedGrantSubscription = selectCurrentManagedCreatorGrantSubscription(
+    subscriptions,
+    now
+  )
   const accessGrant = selectCurrentBillingAccessGrant(grants, now)
   const paidSubscriptionEligible =
     subscription !== null &&
     hasEffectivePaidSubscriptionAccess(subscription, now)
+  const managedGrantEligible =
+    managedGrantSubscription !== null &&
+    hasManagedCreatorGrantSubscriptionAccess(managedGrantSubscription, now)
   const effectivePlanKey =
+    (managedGrantEligible ? managedGrantSubscription?.planKey : undefined) ??
     accessGrant?.planKey ??
     (paidSubscriptionEligible ? subscription?.planKey : user.plan) ??
     null
   const accessSource: BillingAccessSource =
-    accessGrant !== null
+    managedGrantEligible
+      ? "managed_grant_subscription"
+      : accessGrant !== null
       ? "creator_grant"
       : paidSubscriptionEligible
         ? "paid_subscription"
@@ -227,18 +239,23 @@ export async function buildResolvedBillingState(
   return {
     accessGrant,
     accessSource,
-    attentionStatus: deriveAttentionStatus(subscription),
+    attentionStatus: deriveAttentionStatus(
+      managedGrantEligible ? managedGrantSubscription : subscription
+    ),
     creatorGrant,
     customer,
     effectiveFeatures,
     effectivePlan,
     effectivePlanKey,
     hasActiveAccess:
+      accessSource === "managed_grant_subscription" ||
       accessSource === "creator_grant" ||
       accessSource === "paid_subscription" ||
       (effectivePlanKey !== null && effectivePlanKey !== "free"),
-    subscription,
-    upcomingChange: deriveUpcomingChange(subscription),
+    subscription: managedGrantEligible ? managedGrantSubscription : subscription,
+    upcomingChange: deriveUpcomingChange(
+      managedGrantEligible ? managedGrantSubscription : subscription
+    ),
     user,
   }
 }

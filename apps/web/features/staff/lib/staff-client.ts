@@ -140,6 +140,11 @@ async function callBillingAction<T>(
 
   try {
     switch (action.action) {
+      case "backfillCreatorGrantStripeSubscriptions":
+        return (await convex.action(
+          api.actions.staff.billing.backfillCreatorGrantStripeSubscriptions,
+          {}
+        )) as T
       case "archiveFeature":
         return (await convex.action(
           api.actions.staff.billing.archiveFeature,

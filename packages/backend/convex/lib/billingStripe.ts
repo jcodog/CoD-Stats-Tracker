@@ -3,13 +3,18 @@ import Stripe from "stripe"
 import type {
   BillingAttentionStatus,
   BillingInterval,
+  BillingManagedGrantMode,
+  BillingManagedGrantSource,
   BillingSubscriptionStatus,
 } from "./billing"
 import {
+  BILLING_MANAGED_GRANT_MODES,
+  BILLING_MANAGED_GRANT_SOURCES,
   isBillingInterval,
   maskIdentifier,
   unixSecondsToMillis,
 } from "./billing"
+import { STRIPE_CATALOG_APP } from "./stripe"
 
 function isExpandedObject<T extends { id: string }>(
   value: string | T | null | undefined
@@ -30,6 +35,14 @@ function getObjectIdentifier(value: unknown) {
 
   const record = getObjectRecord(value)
   return typeof record?.id === "string" ? record.id : undefined
+}
+
+function getStripeMetadataValue(
+  metadata: Stripe.Metadata | null | undefined,
+  key: string
+) {
+  const value = metadata?.[key]
+  return typeof value === "string" && value.trim().length > 0 ? value : undefined
 }
 
 export function getStripePriceId(price: string | Stripe.Price | null | undefined) {
@@ -118,6 +131,49 @@ export function getStripeSubscriptionInterval(
   }
 
   return interval
+}
+
+export function getStripeManagedGrantSource(
+  subscription: Stripe.Subscription
+): BillingManagedGrantSource | undefined {
+  const source = getStripeMetadataValue(subscription.metadata, "grantSource")
+
+  return BILLING_MANAGED_GRANT_SOURCES.includes(
+    source as BillingManagedGrantSource
+  )
+    ? (source as BillingManagedGrantSource)
+    : undefined
+}
+
+export function getStripeManagedGrantMode(
+  subscription: Stripe.Subscription
+): BillingManagedGrantMode | undefined {
+  const mode = getStripeMetadataValue(subscription.metadata, "grantMode")
+
+  return BILLING_MANAGED_GRANT_MODES.includes(mode as BillingManagedGrantMode)
+    ? (mode as BillingManagedGrantMode)
+    : undefined
+}
+
+export function getStripeManagedGrantEndsAt(subscription: Stripe.Subscription) {
+  const endsAt = getStripeMetadataValue(subscription.metadata, "grantEndsAt")
+  const parsedValue = endsAt ? Number(endsAt) : NaN
+
+  return Number.isFinite(parsedValue) && parsedValue > 0 ? parsedValue : undefined
+}
+
+export function isStripeManagedCreatorGrantSubscription(args: {
+  planKey: string
+  subscription: Stripe.Subscription
+  userId: string
+}) {
+  return (
+    args.subscription.metadata.app === STRIPE_CATALOG_APP &&
+    args.subscription.metadata.managedCreatorGrant === "true" &&
+    getStripeManagedGrantSource(args.subscription) === "creator_approval" &&
+    args.subscription.metadata.planKey === args.planKey &&
+    args.subscription.metadata.userId === args.userId
+  )
 }
 
 export function getSubscriptionItemCurrentPeriodStart(

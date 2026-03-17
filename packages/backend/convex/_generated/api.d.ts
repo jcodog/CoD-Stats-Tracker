@@ -122,6 +122,12 @@ export declare const api: {
           },
           any
         >;
+        backfillCreatorGrantStripeSubscriptions: FunctionReference<
+          "action",
+          "public",
+          {},
+          any
+        >;
         getDashboard: FunctionReference<"action", "public", {}, any>;
         getWebhookDashboard: FunctionReference<"action", "public", {}, any>;
         getWebhookEventDetail: FunctionReference<
@@ -870,6 +876,7 @@ export declare const internal: {
             invoices: Array<{
               amountDue: number;
               amountPaid: number;
+              amountTotal: number;
               currency: string;
               description: string;
               hostedInvoiceUrl?: string;
@@ -972,6 +979,9 @@ export declare const internal: {
             endedAt?: number;
             interval: "month" | "year";
             lastStripeEventId?: string;
+            managedGrantEndsAt?: number;
+            managedGrantMode?: "timed" | "indefinite";
+            managedGrantSource?: "creator_approval";
             planKey: string;
             quantity?: number;
             scheduledChangeAt?: number;

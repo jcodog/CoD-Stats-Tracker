@@ -12,7 +12,10 @@ import {
   syncBillingInvoicesForCustomer,
   syncBillingPaymentMethodsForCustomer,
 } from "../../lib/billingLifecycle"
-import { isManageableBillingSubscription } from "../../lib/billing"
+import {
+  hasManagedCreatorGrantSubscriptionAccess,
+  isManageableBillingSubscription,
+} from "../../lib/billing"
 import {
   getExpandedStripeInvoice,
   getInvoiceConfirmationSecret,
@@ -258,7 +261,25 @@ async function assertCheckoutEnabled(ctx: PublicActionCtx) {
 function hasActiveCreatorGrant(
   userContext: Awaited<ReturnType<typeof requireBillingUser>>
 ) {
-  return userContext.accessGrant?.planKey === "creator"
+  return (
+    userContext.accessGrant?.planKey === "creator" ||
+    (userContext.subscription !== null &&
+      hasManagedCreatorGrantSubscriptionAccess(userContext.subscription))
+  )
+}
+
+function getCreatorGrantAccessWindow(
+  userContext: Awaited<ReturnType<typeof requireBillingUser>>
+) {
+  if (userContext.subscription?.managedGrantEndsAt) {
+    return ` until ${new Date(userContext.subscription.managedGrantEndsAt).toISOString()}`
+  }
+
+  if (userContext.accessGrant?.endsAt) {
+    return ` until ${new Date(userContext.accessGrant.endsAt).toISOString()}`
+  }
+
+  return ""
 }
 
 function assertCreatorGrantAllowsSelfServeBilling(args: {
@@ -269,9 +290,7 @@ function assertCreatorGrantAllowsSelfServeBilling(args: {
     return
   }
 
-  const accessWindow = args.userContext.accessGrant?.endsAt
-    ? ` until ${new Date(args.userContext.accessGrant.endsAt).toISOString()}`
-    : ""
+  const accessWindow = getCreatorGrantAccessWindow(args.userContext)
   const actionLabel =
     args.action === "checkout"
       ? "Checkout"
@@ -283,7 +302,7 @@ function assertCreatorGrantAllowsSelfServeBilling(args: {
 
   throw new BillingActionError(
     "creator_grant_locked",
-    `${actionLabel} is unavailable while a staff-managed Creator grant is active${accessWindow}.`,
+    `${actionLabel} is unavailable while complimentary Creator access is active${accessWindow}.`,
     409
   )
 }

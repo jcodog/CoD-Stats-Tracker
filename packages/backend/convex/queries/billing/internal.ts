@@ -3,6 +3,7 @@ import { v } from "convex/values"
 import type { Doc } from "../../_generated/dataModel"
 import { internalQuery, type QueryCtx } from "../../_generated/server"
 import {
+  hasManagedCreatorGrantSubscriptionAccess,
   isManageableBillingSubscription,
   type BillingSubscriptionStatus,
 } from "../../lib/billing"
@@ -39,6 +40,16 @@ export function selectCurrentBillingSubscription(
   return subscriptions
     .filter((subscription) => isManageableBillingSubscription(subscription, now))
     .sort((left, right) => {
+      const leftManagedGrant = hasManagedCreatorGrantSubscriptionAccess(left, now)
+      const rightManagedGrant = hasManagedCreatorGrantSubscriptionAccess(
+        right,
+        now
+      )
+
+      if (leftManagedGrant !== rightManagedGrant) {
+        return rightManagedGrant ? 1 : -1
+      }
+
       const priorityDifference =
         getSubscriptionPriority(right.status) -
         getSubscriptionPriority(left.status)
@@ -53,6 +64,33 @@ export function selectCurrentBillingSubscription(
 
       return right._creationTime - left._creationTime
     })[0] ?? null
+}
+
+export function selectCurrentManagedCreatorGrantSubscription(
+  subscriptions: BillingSubscriptionRecord[],
+  now = Date.now()
+) {
+  return (
+    subscriptions
+      .filter((subscription) =>
+        hasManagedCreatorGrantSubscriptionAccess(subscription, now)
+      )
+      .sort((left, right) => {
+        const priorityDifference =
+          getSubscriptionPriority(right.status) -
+          getSubscriptionPriority(left.status)
+
+        if (priorityDifference !== 0) {
+          return priorityDifference
+        }
+
+        if ((right.updatedAt ?? 0) !== (left.updatedAt ?? 0)) {
+          return (right.updatedAt ?? 0) - (left.updatedAt ?? 0)
+        }
+
+        return right._creationTime - left._creationTime
+      })[0] ?? null
+  )
 }
 
 export function isBillingAccessGrantActive(
