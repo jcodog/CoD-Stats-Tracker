@@ -27,7 +27,7 @@ export declare const api: {
         cancelCurrentSubscription: FunctionReference<
           "action",
           "public",
-          { stripeSubscriptionId?: string },
+          { mode: "immediately" | "period_end"; stripeSubscriptionId?: string },
           any
         >;
         changeSubscriptionPlan: FunctionReference<

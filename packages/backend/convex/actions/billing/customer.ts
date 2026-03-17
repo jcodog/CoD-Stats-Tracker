@@ -12,6 +12,7 @@ import {
   syncBillingInvoicesForCustomer,
   syncBillingPaymentMethodsForCustomer,
 } from "../../lib/billingLifecycle"
+import { isManageableBillingSubscription } from "../../lib/billing"
 import {
   getExpandedStripeInvoice,
   getInvoiceConfirmationSecret,
@@ -28,6 +29,10 @@ type BillingPlanRecord = Doc<"billingPlans">
 type PublicActionCtx = ActionCtx
 
 const billingIntervalValidator = v.union(v.literal("month"), v.literal("year"))
+const subscriptionCancellationModeValidator = v.union(
+  v.literal("immediately"),
+  v.literal("period_end")
+)
 const billingProfileAddressValidator = v.object({
   city: v.optional(v.string()),
   country: v.optional(v.string()),
@@ -248,6 +253,39 @@ async function assertCheckoutEnabled(ctx: PublicActionCtx) {
       403
     )
   }
+}
+
+function hasActiveCreatorGrant(
+  userContext: Awaited<ReturnType<typeof requireBillingUser>>
+) {
+  return userContext.accessGrant?.planKey === "creator"
+}
+
+function assertCreatorGrantAllowsSelfServeBilling(args: {
+  action: "cancellation" | "checkout" | "plan_change" | "reactivation"
+  userContext: Awaited<ReturnType<typeof requireBillingUser>>
+}) {
+  if (!hasActiveCreatorGrant(args.userContext)) {
+    return
+  }
+
+  const accessWindow = args.userContext.accessGrant?.endsAt
+    ? ` until ${new Date(args.userContext.accessGrant.endsAt).toISOString()}`
+    : ""
+  const actionLabel =
+    args.action === "checkout"
+      ? "Checkout"
+      : args.action === "plan_change"
+        ? "Plan changes"
+        : args.action === "reactivation"
+          ? "Subscription reactivation"
+          : "Subscription cancellation"
+
+  throw new BillingActionError(
+    "creator_grant_locked",
+    `${actionLabel} is unavailable while a staff-managed Creator grant is active${accessWindow}.`,
+    409
+  )
 }
 
 async function recordBillingAuditLog(args: {
@@ -617,6 +655,14 @@ async function getTargetSubscription(args: {
     )
   }
 
+  if (!isManageableBillingSubscription(subscription, Date.now())) {
+    throw new BillingActionError(
+      "subscription_inactive",
+      "That subscription is no longer active for this billing account.",
+      409
+    )
+  }
+
   return subscription
 }
 
@@ -675,6 +721,55 @@ async function releaseExistingSchedule(
 
 function getSubscriptionCurrentPeriodEnd(subscription: Stripe.Subscription) {
   return getSubscriptionItemCurrentPeriodEnd(subscription) ?? Date.now()
+}
+
+async function scheduleSubscriptionCancellationAtPeriodEnd(args: {
+  stripe: Stripe
+  stripeSubscriptionId: string
+}) {
+  const currentSubscription = await getExpandedSubscription({
+    stripe: args.stripe,
+    subscriptionId: args.stripeSubscriptionId,
+  })
+
+  await releaseExistingSchedule(currentSubscription, args.stripe)
+
+  const updatedSubscription = await args.stripe.subscriptions.update(
+    currentSubscription.id,
+    {
+      cancel_at_period_end: true,
+    }
+  )
+
+  return await getExpandedSubscription({
+    stripe: args.stripe,
+    subscriptionId: updatedSubscription.id,
+  })
+}
+
+async function cancelSubscriptionImmediately(args: {
+  stripe: Stripe
+  stripeSubscriptionId: string
+}) {
+  const currentSubscription = await getExpandedSubscription({
+    stripe: args.stripe,
+    subscriptionId: args.stripeSubscriptionId,
+  })
+
+  await releaseExistingSchedule(currentSubscription, args.stripe)
+
+  const canceledSubscription = await args.stripe.subscriptions.cancel(
+    currentSubscription.id,
+    {
+      invoice_now: false,
+      prorate: false,
+    }
+  )
+
+  return await getExpandedSubscription({
+    stripe: args.stripe,
+    subscriptionId: canceledSubscription.id,
+  })
 }
 
 async function createCustomerSessionClientSecret(args: {
@@ -1246,6 +1341,10 @@ export const createSubscriptionIntent = action({
       await assertCheckoutEnabled(ctx)
 
       const userContext = await requireBillingUser(ctx)
+      assertCreatorGrantAllowsSelfServeBilling({
+        action: "checkout",
+        userContext,
+      })
       const stripe = getStripe()
       const { plan, priceId } = await getPurchasablePlan({
         ctx,
@@ -1504,6 +1603,10 @@ export const previewSubscriptionChange = action({
   handler: async (ctx, args) => {
     try {
       const userContext = await requireBillingUser(ctx)
+      assertCreatorGrantAllowsSelfServeBilling({
+        action: "plan_change",
+        userContext,
+      })
       const targetSubscription = await getTargetSubscription({
         ctx,
         stripeSubscriptionId: args.stripeSubscriptionId,
@@ -1671,6 +1774,10 @@ export const changeSubscriptionPlan = action({
       await assertCheckoutEnabled(ctx)
 
       const userContext = await requireBillingUser(ctx)
+      assertCreatorGrantAllowsSelfServeBilling({
+        action: "plan_change",
+        userContext,
+      })
       const targetSubscription = await getTargetSubscription({
         ctx,
         stripeSubscriptionId: args.stripeSubscriptionId,
@@ -1699,16 +1806,11 @@ export const changeSubscriptionPlan = action({
       })
 
       if (args.planKey === "free") {
-        const updatedSubscription = await stripe.subscriptions.update(
-          currentSubscription.id,
-          {
-            cancel_at_period_end: true,
-          }
-        )
-        const expandedUpdatedSubscription = await getExpandedSubscription({
-          stripe,
-          subscriptionId: updatedSubscription.id,
-        })
+        const expandedUpdatedSubscription =
+          await scheduleSubscriptionCancellationAtPeriodEnd({
+            stripe,
+            stripeSubscriptionId: currentSubscription.id,
+          })
 
         await reconcileStripeSubscription({
           ctx,
@@ -1945,11 +2047,16 @@ export const changeSubscriptionPlan = action({
 
 export const cancelCurrentSubscription = action({
   args: {
+    mode: subscriptionCancellationModeValidator,
     stripeSubscriptionId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     try {
       const userContext = await requireBillingUser(ctx)
+      assertCreatorGrantAllowsSelfServeBilling({
+        action: "cancellation",
+        userContext,
+      })
       const targetSubscription = await getTargetSubscription({
         ctx,
         stripeSubscriptionId: args.stripeSubscriptionId,
@@ -1957,16 +2064,16 @@ export const cancelCurrentSubscription = action({
       })
 
       const stripe = getStripe()
-      const updatedSubscription = await stripe.subscriptions.update(
-        targetSubscription.stripeSubscriptionId,
-        {
-          cancel_at_period_end: true,
-        }
-      )
-      const expandedUpdatedSubscription = await getExpandedSubscription({
-        stripe,
-        subscriptionId: updatedSubscription.id,
-      })
+      const expandedUpdatedSubscription =
+        args.mode === "immediately"
+          ? await cancelSubscriptionImmediately({
+              stripe,
+              stripeSubscriptionId: targetSubscription.stripeSubscriptionId,
+            })
+          : await scheduleSubscriptionCancellationAtPeriodEnd({
+              stripe,
+              stripeSubscriptionId: targetSubscription.stripeSubscriptionId,
+            })
 
       await reconcileStripeSubscription({
         ctx,
@@ -1974,17 +2081,26 @@ export const cancelCurrentSubscription = action({
         subscription: expandedUpdatedSubscription,
       })
 
-      await ctx.runMutation(
-        internal.mutations.billing.state.setSubscriptionScheduledChange,
-        {
-          scheduledChangeAt: getSubscriptionCurrentPeriodEnd(
-            expandedUpdatedSubscription
-          ),
-          scheduledChangeRequestedAt: Date.now(),
-          scheduledChangeType: "cancel",
-          stripeSubscriptionId: expandedUpdatedSubscription.id,
-        }
-      )
+      if (args.mode === "period_end") {
+        await ctx.runMutation(
+          internal.mutations.billing.state.setSubscriptionScheduledChange,
+          {
+            scheduledChangeAt: getSubscriptionCurrentPeriodEnd(
+              expandedUpdatedSubscription
+            ),
+            scheduledChangeRequestedAt: Date.now(),
+            scheduledChangeType: "cancel",
+            stripeSubscriptionId: expandedUpdatedSubscription.id,
+          }
+        )
+      } else {
+        await ctx.runMutation(
+          internal.mutations.billing.state.clearSubscriptionScheduledChange,
+          {
+            stripeSubscriptionId: expandedUpdatedSubscription.id,
+          }
+        )
+      }
       await syncCustomerBillingSnapshot({
         ctx,
         stripe,
@@ -1992,13 +2108,20 @@ export const cancelCurrentSubscription = action({
       })
 
       await recordBillingAuditLog({
-        action: "billing.subscription.cancel_scheduled",
+        action:
+          args.mode === "immediately"
+            ? "billing.subscription.canceled"
+            : "billing.subscription.cancel_scheduled",
         ctx,
         details: JSON.stringify(
           {
-            effectiveAt: getSubscriptionCurrentPeriodEnd(
-              expandedUpdatedSubscription
-            ),
+            effectiveAt:
+              args.mode === "immediately"
+                ? expandedUpdatedSubscription.ended_at
+                  ? expandedUpdatedSubscription.ended_at * 1000
+                  : Date.now()
+                : getSubscriptionCurrentPeriodEnd(expandedUpdatedSubscription),
+            mode: args.mode,
           },
           null,
           2
@@ -2006,16 +2129,26 @@ export const cancelCurrentSubscription = action({
         entityId: expandedUpdatedSubscription.id,
         entityLabel: targetSubscription.planKey,
         result: "success",
-        summary: "Scheduled subscription cancellation at period end.",
+        summary:
+          args.mode === "immediately"
+            ? "Canceled the subscription immediately."
+            : "Scheduled subscription cancellation at period end.",
         user: userContext.user,
         userName: userContext.actorName,
       })
 
       return {
-        effectiveAt: getSubscriptionCurrentPeriodEnd(
-          expandedUpdatedSubscription
-        ),
-        mode: "cancel_at_period_end" as const,
+        effectiveAt:
+          args.mode === "immediately"
+            ? expandedUpdatedSubscription.ended_at
+              ? expandedUpdatedSubscription.ended_at * 1000
+              : Date.now()
+            : getSubscriptionCurrentPeriodEnd(expandedUpdatedSubscription),
+        mode:
+          args.mode === "immediately"
+            ? ("cancel_immediately" as const)
+            : ("cancel_at_period_end" as const),
+        status: expandedUpdatedSubscription.status,
       }
     } catch (error) {
       throw sanitizeBillingError(error)
@@ -2032,6 +2165,10 @@ export const reactivateCurrentSubscription = action({
       await assertCheckoutEnabled(ctx)
 
       const userContext = await requireBillingUser(ctx)
+      assertCreatorGrantAllowsSelfServeBilling({
+        action: "reactivation",
+        userContext,
+      })
       const targetSubscription = await getTargetSubscription({
         ctx,
         stripeSubscriptionId: args.stripeSubscriptionId,

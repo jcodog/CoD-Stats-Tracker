@@ -1,6 +1,6 @@
 import type { Doc } from "../../_generated/dataModel"
 import { query } from "../../_generated/server"
-import { isManageableSubscriptionStatus } from "../../lib/billing"
+import { isManageableBillingSubscription } from "../../lib/billing"
 
 type BillingCustomerRecord = Doc<"billingCustomers">
 type BillingInvoiceRecord = Doc<"billingInvoices">
@@ -50,20 +50,6 @@ function normalizeAddress(
   return address
 }
 
-function isManageableSubscription(
-  subscription: BillingSubscriptionRecord,
-  now: number
-) {
-  if (isManageableSubscriptionStatus(subscription.status)) {
-    return true
-  }
-
-  return (
-    subscription.status === "canceled" &&
-    (subscription.currentPeriodEnd ?? subscription.endedAt ?? 0) > now
-  )
-}
-
 function sortSubscriptions(
   left: BillingSubscriptionRecord,
   right: BillingSubscriptionRecord
@@ -107,6 +93,10 @@ function sortInvoices(left: BillingInvoiceRecord, right: BillingInvoiceRecord) {
   }
 
   return right._creationTime - left._creationTime
+}
+
+function isVisibleSubscription(subscription: BillingSubscriptionRecord) {
+  return subscription.status !== "incomplete_expired"
 }
 
 function getSubscriptionAmount(
@@ -170,10 +160,11 @@ export const getCurrentUserBillingCenter = query({
       ])
     )
     const sortedSubscriptions = [...subscriptions].sort(sortSubscriptions)
-    const visibleSubscriptions = sortedSubscriptions.filter((subscription) =>
-      isManageableSubscription(subscription, now)
+    const manageableSubscriptions = sortedSubscriptions.filter((subscription) =>
+      isManageableBillingSubscription(subscription, now)
     )
-    const manageableSubscriptionExists = visibleSubscriptions.length > 0
+    const visibleSubscriptions = sortedSubscriptions.filter(isVisibleSubscription)
+    const manageableSubscriptionExists = manageableSubscriptions.length > 0
     const visibleInvoices = [...invoices]
       .filter((invoice) => invoice.status !== "draft" && invoice.status !== "void")
       .sort(sortInvoices)
@@ -276,7 +267,7 @@ export const getCurrentUserBillingCenter = query({
               }
             : null,
           endedAt: subscription.endedAt ?? null,
-          isManageable: isManageableSubscription(subscription, now),
+          isManageable: isManageableBillingSubscription(subscription, now),
           planKey: subscription.planKey,
           productName: plan?.name ?? subscription.planKey,
           quantity: subscription.quantity ?? 1,

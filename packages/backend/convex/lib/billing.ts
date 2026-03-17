@@ -43,6 +43,13 @@ export const BILLING_SCHEDULED_CHANGE_TYPES = [
 export type BillingScheduledChangeType =
   (typeof BILLING_SCHEDULED_CHANGE_TYPES)[number]
 
+type BillingSubscriptionLifecycleLike = {
+  canceledAt?: number | null
+  currentPeriodEnd?: number | null
+  endedAt?: number | null
+  status: BillingSubscriptionStatus
+}
+
 export function isBillingInterval(value: unknown): value is BillingInterval {
   return BILLING_INTERVALS.includes(value as BillingInterval)
 }
@@ -59,10 +66,59 @@ export function hasPaidSubscriptionAccess(status: BillingSubscriptionStatus) {
   )
 }
 
+function normalizeTimestamp(value: number | null | undefined) {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined
+}
+
+export function hasBillingSubscriptionPeriodRemaining(
+  subscription: BillingSubscriptionLifecycleLike,
+  now = Date.now()
+) {
+  const endedAt = normalizeTimestamp(subscription.endedAt)
+
+  if (endedAt !== undefined && endedAt <= now) {
+    return false
+  }
+
+  const canceledAt = normalizeTimestamp(subscription.canceledAt)
+
+  if (subscription.status === "canceled" && canceledAt !== undefined) {
+    return canceledAt > now
+  }
+
+  const currentPeriodEnd = normalizeTimestamp(subscription.currentPeriodEnd)
+
+  if (currentPeriodEnd !== undefined && currentPeriodEnd <= now) {
+    return false
+  }
+
+  return true
+}
+
+export function hasEffectivePaidSubscriptionAccess(
+  subscription: BillingSubscriptionLifecycleLike,
+  now = Date.now()
+) {
+  return (
+    hasPaidSubscriptionAccess(subscription.status) &&
+    hasBillingSubscriptionPeriodRemaining(subscription, now)
+  )
+}
+
 export function isManageableSubscriptionStatus(
   status: BillingSubscriptionStatus
 ) {
   return status !== "canceled" && status !== "incomplete_expired"
+}
+
+export function isManageableBillingSubscription(
+  subscription: BillingSubscriptionLifecycleLike,
+  now = Date.now()
+) {
+  return (
+    isManageableSubscriptionStatus(subscription.status) &&
+    hasBillingSubscriptionPeriodRemaining(subscription, now)
+  )
 }
 
 export function isTerminalSubscriptionStatus(

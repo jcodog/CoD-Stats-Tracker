@@ -32,7 +32,9 @@ export function PricingPlanCard(args: {
   interval: BillingInterval
   plan: PricingCatalogPlan
   selected?: boolean
+  variant?: "checkout" | "management"
 }) {
+  const variant = args.variant ?? "management"
   const price =
     args.interval === "year" ? args.plan.pricing.year : args.plan.pricing.month
   const isFreePlan = args.plan.planType === "free" || !price
@@ -70,12 +72,12 @@ export function PricingPlanCard(args: {
 
       <div
         className={cn(
-          "flex h-full flex-col rounded-[14px] bg-background/80 transition-colors",
+          "flex h-full min-w-0 flex-col rounded-[14px] bg-background/80 transition-colors",
           args.selected && "bg-primary/[0.08]"
         )}
       >
         <div className="rounded-t-[14px] rounded-b-[11px] bg-card/95 px-5 py-5 shadow-[0_1px_0_rgba(255,255,255,0.03),0_12px_24px_-18px_rgba(0,0,0,0.72)]">
-          <div className="grid min-h-[11.5rem] gap-5">
+          <div className="grid min-h-[11.5rem] min-w-0 gap-5">
             <div className="space-y-2 pr-8">
               <div className="flex flex-wrap items-center gap-2">
                 <div className="text-base font-semibold">{args.plan.name}</div>
@@ -88,20 +90,46 @@ export function PricingPlanCard(args: {
               </div>
             </div>
 
-            <div className="flex items-end justify-between gap-4">
-              <div className="flex items-end gap-2">
-                <span className="text-3xl font-semibold tracking-tight">
+            <div
+              className={cn(
+                "flex items-end justify-between gap-4",
+                variant === "checkout" && "min-w-0"
+              )}
+            >
+              <div
+                className={cn(
+                  "flex items-end gap-2",
+                  variant === "checkout" &&
+                    "min-w-0 shrink-0 whitespace-nowrap"
+                )}
+              >
+                <span
+                  className={cn(
+                    "text-3xl font-semibold tracking-tight",
+                    variant === "checkout" && "whitespace-nowrap"
+                  )}
+                >
                   {isFreePlan
                     ? "Free"
                     : formatCurrencyAmount(price.amount, price.currency)}
                 </span>
                 {!isFreePlan ? (
-                  <span className="pb-1 text-sm text-muted-foreground">
+                  <span
+                    className={cn(
+                      "pb-1 text-sm text-muted-foreground",
+                      variant === "checkout" && "whitespace-nowrap"
+                    )}
+                  >
                     / {args.interval}
                   </span>
                 ) : null}
               </div>
-              <div className="text-right text-xs text-muted-foreground">
+              <div
+                className={cn(
+                  "text-right text-xs text-muted-foreground",
+                  variant === "checkout" && "shrink-0 whitespace-nowrap"
+                )}
+              >
                 {isFreePlan
                   ? "No renewal charge"
                   : args.interval === "year"

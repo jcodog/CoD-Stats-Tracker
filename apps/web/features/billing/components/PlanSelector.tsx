@@ -10,6 +10,7 @@ import {
   TabsList,
   TabsTrigger,
 } from "@workspace/ui/components/tabs"
+import { cn } from "@workspace/ui/lib/utils"
 
 import { PricingPlanCard } from "@/features/billing/components/PricingPlanCard"
 import type {
@@ -23,7 +24,9 @@ export function PlanSelector(args: {
   onSelectPlan: (planKey: string) => void
   plans: PricingCatalogPlan[]
   selectedPlanKey: string
+  variant?: "checkout" | "management"
 }) {
+  const variant = args.variant ?? "management"
   const featureSlotCount = args.plans.reduce(
     (max, plan) => Math.max(max, plan.features.length),
     0
@@ -47,7 +50,10 @@ export function PlanSelector(args: {
         </TabsList>
       </Tabs>
       <RadioGroup
-        className="grid items-stretch gap-4 md:grid-cols-2 xl:grid-cols-3"
+        className={cn(
+          "grid items-stretch md:grid-cols-2",
+          variant === "checkout" ? "gap-5" : "gap-4 xl:grid-cols-3"
+        )}
         onValueChange={args.onSelectPlan}
         value={args.selectedPlanKey}
       >
@@ -59,6 +65,7 @@ export function PlanSelector(args: {
             key={`${args.interval}-${plan.planKey}`}
             plan={plan}
             selected={args.selectedPlanKey === plan.planKey}
+            variant={variant}
           />
         ))}
       </RadioGroup>

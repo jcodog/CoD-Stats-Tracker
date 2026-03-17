@@ -36,10 +36,14 @@ import {
   BillingClientError,
   useAbandonPendingCheckout,
   useBillingCenter,
+  useBillingState,
   useCreateSubscriptionIntent,
   usePricingCatalog,
 } from "@/features/billing/lib/billing-client"
-import type { BillingInterval } from "@/features/billing/lib/billing-types"
+import type {
+  BillingInterval,
+  BillingResolvedState,
+} from "@/features/billing/lib/billing-types"
 import {
   getStripeElementsAppearance,
   getStripePublishableKey,
@@ -55,6 +59,7 @@ export function CheckoutView({
   const { resolvedTheme } = useTheme()
   const catalogQuery = usePricingCatalog()
   const billingCenterQuery = useBillingCenter()
+  const billingStateQuery = useBillingState()
   const createSubscriptionIntent = useCreateSubscriptionIntent()
   const abandonPendingCheckout = useAbandonPendingCheckout()
   const [selectedInterval, setSelectedInterval] =
@@ -79,6 +84,23 @@ export function CheckoutView({
     null
   const hasManagedSubscription =
     billingCenterQuery.data?.portalMode === "management"
+  const hasCreatorGrantAccess =
+    billingStateQuery.data?.accessSource === "creator_grant" &&
+    billingStateQuery.data.creatorGrant?.planKey === "creator"
+
+  function getCreatorGrantCheckoutMessage(
+    billingState: BillingResolvedState | null | undefined
+  ) {
+    if (!billingState || billingState.creatorGrant?.planKey !== "creator") {
+      return "This account already has Creator access through a staff grant."
+    }
+
+    return billingState.creatorGrant.endsAt
+      ? `This account already has Creator access through a staff grant until ${new Intl.DateTimeFormat(undefined, {
+          dateStyle: "medium",
+        }).format(billingState.creatorGrant.endsAt)}.`
+      : "This account already has Creator access through a staff grant with no expiry."
+  }
 
   useEffect(() => {
     if (!catalogQuery.data || selectedPlanKey) {
@@ -180,16 +202,24 @@ export function CheckoutView({
     )
   }
 
-  if (catalogQuery.isPending || billingCenterQuery.isPending) {
+  if (
+    catalogQuery.isPending ||
+    billingCenterQuery.isPending ||
+    billingStateQuery.isPending
+  ) {
     return (
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_24rem]">
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_23rem]">
         <Skeleton className="min-h-[28rem] rounded-3xl" />
         <Skeleton className="min-h-[28rem] rounded-3xl" />
       </div>
     )
   }
 
-  if (catalogQuery.isError || billingCenterQuery.isError) {
+  if (
+    catalogQuery.isError ||
+    billingCenterQuery.isError ||
+    billingStateQuery.isError
+  ) {
     return (
       <Alert variant="destructive">
         <AlertTitle>Billing failed to load</AlertTitle>
@@ -197,6 +227,27 @@ export function CheckoutView({
           Refresh the page or open billing settings again.
         </AlertDescription>
       </Alert>
+    )
+  }
+
+  if (hasCreatorGrantAccess) {
+    return (
+      <div className="grid gap-6">
+        <Card className="border-border/70 bg-card/95 shadow-sm">
+          <CardHeader>
+            <CardTitle>Creator access is already active</CardTitle>
+            <CardDescription>
+              {getCreatorGrantCheckoutMessage(billingStateQuery.data)} Billing
+              checkout is unavailable while that grant remains active.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button asChild>
+              <Link href="/settings/billing">Open billing</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
     )
   }
 
@@ -245,7 +296,7 @@ export function CheckoutView({
         </p>
       </div>
 
-      <div className="grid gap-8 xl:grid-cols-[minmax(0,1.08fr)_25rem]">
+      <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_23rem]">
         <div className="space-y-6">
           <PlanSelector
             interval={selectedInterval}
@@ -261,6 +312,7 @@ export function CheckoutView({
             }}
             plans={paidPlans}
             selectedPlanKey={selectedPlan.planKey}
+            variant="checkout"
           />
         </div>
 

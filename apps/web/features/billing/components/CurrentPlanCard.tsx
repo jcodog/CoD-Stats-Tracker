@@ -21,6 +21,21 @@ export function CurrentPlanCard(args: {
 }) {
   const effectivePlanName =
     args.state.effectivePlan?.name ?? args.state.effectivePlanKey ?? "Free"
+  const isCreatorGrant = args.state.accessSource === "creator_grant"
+  const accessWindowLabel = isCreatorGrant
+    ? args.state.creatorGrant?.endsAt
+      ? `Ends ${formatDateLabel(args.state.creatorGrant.endsAt)}`
+      : "No expiry"
+    : formatDateLabel(args.state.subscription?.currentPeriodEnd)
+  const canReactivateSubscription =
+    !isCreatorGrant &&
+    Boolean(args.state.subscription?.cancelAtPeriodEnd) &&
+    Boolean(args.onReactivate)
+  const canCancelSubscription =
+    !isCreatorGrant &&
+    Boolean(args.state.subscription) &&
+    args.state.subscription?.cancelAtPeriodEnd !== true &&
+    Boolean(args.onCancel)
 
   return (
     <Card className="border-border/70 bg-card/95 shadow-sm">
@@ -29,7 +44,9 @@ export function CurrentPlanCard(args: {
           <div>
             <CardTitle>{effectivePlanName}</CardTitle>
             <CardDescription>
-              Access source: {args.state.accessSource.replaceAll("_", " ")}
+              {isCreatorGrant
+                ? "Creator access is currently managed through a staff grant."
+                : `Access source: ${args.state.accessSource.replaceAll("_", " ")}`}
             </CardDescription>
           </div>
           <Badge
@@ -47,14 +64,15 @@ export function CurrentPlanCard(args: {
         <div className="flex items-center justify-between gap-3">
           <span className="text-muted-foreground">Billing interval</span>
           <span className="font-medium">
-            {args.state.subscription?.interval ?? "Not billed"}
+            {args.state.subscription?.interval ??
+              (isCreatorGrant ? "Complimentary" : "Not billed")}
           </span>
         </div>
         <div className="flex items-center justify-between gap-3">
-          <span className="text-muted-foreground">Current period ends</span>
-          <span className="font-medium">
-            {formatDateLabel(args.state.subscription?.currentPeriodEnd)}
+          <span className="text-muted-foreground">
+            {isCreatorGrant ? "Creator access" : "Current period ends"}
           </span>
+          <span className="font-medium">{accessWindowLabel}</span>
         </div>
         <div className="flex items-center justify-between gap-3">
           <span className="text-muted-foreground">Scheduled change</span>
@@ -65,17 +83,18 @@ export function CurrentPlanCard(args: {
           </span>
         </div>
       </CardContent>
-      {args.state.subscription ? (
+      {canReactivateSubscription || canCancelSubscription ? (
         <CardFooter className="gap-3">
-          {args.state.subscription.cancelAtPeriodEnd ? (
+          {canReactivateSubscription ? (
             <Button onClick={args.onReactivate} variant="outline">
               Keep subscription
             </Button>
-          ) : (
+          ) : null}
+          {canCancelSubscription ? (
             <Button onClick={args.onCancel} variant="outline">
               Cancel at period end
             </Button>
-          )}
+          ) : null}
         </CardFooter>
       ) : null}
     </Card>

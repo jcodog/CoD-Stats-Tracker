@@ -3,8 +3,14 @@
 import type Stripe from "stripe"
 import { v } from "convex/values"
 import { action } from "../../_generated/server"
+import type { Id } from "../../_generated/dataModel"
 import { internal } from "../../_generated/api"
+import {
+  reconcileBillingCustomer,
+  reconcileStripeSubscription,
+} from "../../lib/billingLifecycle"
 import { maskIdentifier } from "../../lib/billing"
+import { getClerkBackendClient } from "../../lib/clerk"
 import { requireAuthorizedStaffAction } from "../../lib/staffActionAuth"
 import {
   resolveBillingFeatureApplyMode,
@@ -29,7 +35,7 @@ import type {
   StaffWebhookMetrics,
   StaffWebhookTimelinePoint,
 } from "../../lib/staffTypes"
-import { getStripe } from "../../lib/stripe"
+import { getStripe, STRIPE_CATALOG_APP } from "../../lib/stripe"
 import type { StripeCatalogSyncResult } from "../billing/syncCatalogToStripe"
 
 type SubscriptionStatus = "active" | "past_due" | "paused" | "trialing"
@@ -2449,6 +2455,525 @@ export const upsertFeature = action({
   },
 })
 
+function getMetadataStripeCustomerId(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined
+  }
+
+  const metadata = value as Record<string, unknown>
+  const directValue = metadata.stripeCustomerId
+
+  if (
+    typeof directValue === "string" &&
+    directValue.trim().startsWith("cus_")
+  ) {
+    return directValue.trim()
+  }
+
+  const billingValue = metadata.billing
+
+  if (
+    !billingValue ||
+    typeof billingValue !== "object" ||
+    Array.isArray(billingValue)
+  ) {
+    return undefined
+  }
+
+  const nestedValue = (billingValue as Record<string, unknown>).stripeCustomerId
+
+  if (
+    typeof nestedValue === "string" &&
+    nestedValue.trim().startsWith("cus_")
+  ) {
+    return nestedValue.trim()
+  }
+
+  return undefined
+}
+
+type CreatorGrantBillingContext = {
+  customer?: {
+    stripeCustomerId?: string
+  } | null
+} | null
+
+function getClerkUserEmail(clerkUser: {
+  emailAddresses?: Array<{ emailAddress?: string }>
+  primaryEmailAddress?: { emailAddress?: string } | null
+}) {
+  return (
+    clerkUser.primaryEmailAddress?.emailAddress ??
+    clerkUser.emailAddresses?.[0]?.emailAddress ??
+    undefined
+  )
+}
+
+function getCreatorGrantStripePrice(plan: {
+  key: string
+  monthlyPriceId?: string
+  yearlyPriceId?: string
+}) {
+  if (plan.monthlyPriceId) {
+    return {
+      interval: "month" as const,
+      priceId: plan.monthlyPriceId,
+    }
+  }
+
+  if (plan.yearlyPriceId) {
+    return {
+      interval: "year" as const,
+      priceId: plan.yearlyPriceId,
+    }
+  }
+
+  throw new Error(
+    `The Creator plan (${plan.key}) is missing a Stripe price mapping.`
+  )
+}
+
+function isLiveStripeSubscriptionStatus(status: Stripe.Subscription.Status) {
+  return (
+    status !== "canceled" &&
+    status !== "incomplete_expired" &&
+    status !== "unpaid"
+  )
+}
+
+function isManagedCreatorGrantSubscription(args: {
+  planKey: string
+  subscription: Stripe.Subscription
+  userId: string
+}) {
+  return (
+    args.subscription.metadata.app === STRIPE_CATALOG_APP &&
+    args.subscription.metadata.managedCreatorGrant === "true" &&
+    args.subscription.metadata.grantSource === "creator_approval" &&
+    args.subscription.metadata.planKey === args.planKey &&
+    args.subscription.metadata.userId === args.userId
+  )
+}
+
+async function getExpandedCreatorGrantSubscription(args: {
+  stripe: Stripe
+  subscriptionId: string
+}) {
+  return await args.stripe.subscriptions.retrieve(args.subscriptionId, {
+    expand: [
+      "customer",
+      "default_payment_method",
+      "items.data.price.product",
+      "latest_invoice.confirmation_secret",
+      "latest_invoice.payment_intent",
+      "pending_setup_intent",
+      "schedule",
+    ],
+  })
+}
+
+async function syncCreatorGrantStripeState(args: {
+  ctx: Parameters<typeof requireAuthorizedStaffAction>[0]
+  stripe: Stripe
+  stripeCustomerId: string
+  subscription: Stripe.Subscription
+}) {
+  await reconcileBillingCustomer({
+    active: true,
+    ctx: args.ctx,
+    stripe: args.stripe,
+    stripeCustomerId: args.stripeCustomerId,
+  })
+  await reconcileStripeSubscription({
+    ctx: args.ctx,
+    stripe: args.stripe,
+    subscription: args.subscription,
+  })
+}
+
+async function resolveExistingCreatorGrantStripeCustomer(args: {
+  billingContext: CreatorGrantBillingContext
+  clerkUser: {
+    publicMetadata: unknown
+  }
+  ctx: Parameters<typeof requireAuthorizedStaffAction>[0]
+  stripe: Stripe
+  targetUser: {
+    _id: Id<"users">
+    clerkUserId: string
+    name: string
+  }
+}) {
+  if (args.billingContext?.customer?.stripeCustomerId) {
+    return args.billingContext.customer.stripeCustomerId
+  }
+
+  const metadataStripeCustomerId = getMetadataStripeCustomerId(
+    args.clerkUser.publicMetadata
+  )
+
+  if (!metadataStripeCustomerId) {
+    return undefined
+  }
+
+  try {
+    const customer = await args.stripe.customers.retrieve(metadataStripeCustomerId)
+
+    if ("deleted" in customer && customer.deleted) {
+      return undefined
+    }
+
+    await args.ctx.runMutation(
+      internal.mutations.billing.state.upsertBillingCustomer,
+      {
+        active: true,
+        clerkUserId: args.targetUser.clerkUserId,
+        email: customer.email ?? undefined,
+        name: customer.name ?? args.targetUser.name,
+        stripeCustomerId: customer.id,
+        userId: args.targetUser._id,
+      }
+    )
+
+    return customer.id
+  } catch (error) {
+    const isResourceMissingError =
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      error.code === "resource_missing"
+
+    if (
+      isResourceMissingError
+    ) {
+      return undefined
+    }
+
+    throw error
+  }
+}
+
+async function ensureCreatorGrantStripeCustomer(args: {
+  billingContext: CreatorGrantBillingContext
+  clerkUser: {
+    emailAddresses?: Array<{ emailAddress?: string }>
+    primaryEmailAddress?: { emailAddress?: string } | null
+    publicMetadata: unknown
+  }
+  ctx: Parameters<typeof requireAuthorizedStaffAction>[0]
+  stripe: Stripe
+  targetUser: {
+    _id: Id<"users">
+    clerkUserId: string
+    name: string
+  }
+}) {
+  const existingCustomerId = await resolveExistingCreatorGrantStripeCustomer(args)
+
+  if (existingCustomerId) {
+    return existingCustomerId
+  }
+
+  const customer = await args.stripe.customers.create({
+    email: getClerkUserEmail(args.clerkUser),
+    metadata: {
+      app: STRIPE_CATALOG_APP,
+      clerkUserId: args.targetUser.clerkUserId,
+      userId: args.targetUser._id,
+    },
+    name: args.targetUser.name,
+  })
+
+  await args.ctx.runMutation(
+    internal.mutations.billing.state.upsertBillingCustomer,
+    {
+      active: true,
+      clerkUserId: args.targetUser.clerkUserId,
+      email: getClerkUserEmail(args.clerkUser),
+      name: args.targetUser.name,
+      stripeCustomerId: customer.id,
+      userId: args.targetUser._id,
+    }
+  )
+
+  return customer.id
+}
+
+async function listStripeSubscriptionsForCreatorGrant(args: {
+  stripe: Stripe
+  stripeCustomerId: string
+}) {
+  const subscriptions: Stripe.Subscription[] = []
+
+  for await (const subscription of args.stripe.subscriptions.list({
+    customer: args.stripeCustomerId,
+    limit: 100,
+    status: "all",
+  })) {
+    subscriptions.push(subscription)
+  }
+
+  return subscriptions
+}
+
+async function ensureTimedCreatorStripeGrant(args: {
+  billingContext: CreatorGrantBillingContext
+  clerkUser: {
+    emailAddresses?: Array<{ emailAddress?: string }>
+    primaryEmailAddress?: { emailAddress?: string } | null
+    publicMetadata: unknown
+  }
+  ctx: Parameters<typeof requireAuthorizedStaffAction>[0]
+  endsAt: number
+  plan: {
+    key: string
+    monthlyPriceId?: string
+    yearlyPriceId?: string
+  }
+  stripe: Stripe
+  targetUser: {
+    _id: Id<"users">
+    clerkUserId: string
+    name: string
+  }
+}) {
+  const { interval, priceId } = getCreatorGrantStripePrice(args.plan)
+  const stripeCustomerId = await ensureCreatorGrantStripeCustomer({
+    billingContext: args.billingContext,
+    clerkUser: args.clerkUser,
+    ctx: args.ctx,
+    stripe: args.stripe,
+    targetUser: args.targetUser,
+  })
+  const subscriptions = await listStripeSubscriptionsForCreatorGrant({
+    stripe: args.stripe,
+    stripeCustomerId,
+  })
+  const liveSubscriptions = subscriptions.filter((subscription) =>
+    isLiveStripeSubscriptionStatus(subscription.status)
+  )
+  const liveManagedSubscriptions = liveSubscriptions.filter((subscription) =>
+    isManagedCreatorGrantSubscription({
+      planKey: args.plan.key,
+      subscription,
+      userId: args.targetUser._id,
+    })
+  )
+  const conflictingSubscriptions = liveSubscriptions.filter(
+    (subscription) =>
+      !isManagedCreatorGrantSubscription({
+        planKey: args.plan.key,
+        subscription,
+        userId: args.targetUser._id,
+      })
+  )
+
+  if (conflictingSubscriptions.length > 0) {
+    throw new Error(
+      "This user already has a live Stripe subscription. Resolve the existing billing state before granting timed Creator access."
+    )
+  }
+
+  if (liveManagedSubscriptions.length > 1) {
+    throw new Error(
+      "Multiple managed Creator Stripe subscriptions already exist for this user. Clean up the duplicate Stripe state before retrying."
+    )
+  }
+
+  const trialEnd = Math.floor(args.endsAt / 1000)
+  const metadata = {
+    app: STRIPE_CATALOG_APP,
+    clerkUserId: args.targetUser.clerkUserId,
+    grantEndsAt: String(args.endsAt),
+    grantSource: "creator_approval",
+    managedCreatorGrant: "true",
+    planKey: args.plan.key,
+    userId: args.targetUser._id,
+  }
+  const currentManagedSubscription = liveManagedSubscriptions[0]
+  const currentManagedItemId =
+    currentManagedSubscription?.items.data[0]?.id ?? undefined
+
+  if (currentManagedSubscription && !currentManagedItemId) {
+    throw new Error(
+      "The existing managed Creator Stripe subscription is missing its primary item."
+    )
+  }
+
+  // Timed Creator grants remain free until `endsAt`, then Stripe cancels them
+  // instead of converting the user into a paid renewal.
+  const subscription =
+    currentManagedSubscription !== undefined
+      ? await args.stripe.subscriptions.update(currentManagedSubscription.id, {
+          cancel_at: trialEnd,
+          cancel_at_period_end: false,
+          expand: [
+            "customer",
+            "default_payment_method",
+            "items.data.price.product",
+            "latest_invoice.confirmation_secret",
+            "latest_invoice.payment_intent",
+            "pending_setup_intent",
+            "schedule",
+          ],
+          items: [
+            {
+              id: currentManagedItemId,
+              price: priceId,
+              quantity: 1,
+            },
+          ],
+          metadata,
+          proration_behavior: "none",
+          trial_end: trialEnd,
+          trial_settings: {
+            end_behavior: {
+              missing_payment_method: "cancel",
+            },
+          },
+        })
+      : await args.stripe.subscriptions.create(
+          {
+            cancel_at: trialEnd,
+            collection_method: "charge_automatically",
+            customer: stripeCustomerId,
+            expand: [
+              "customer",
+              "default_payment_method",
+              "items.data.price.product",
+              "latest_invoice.confirmation_secret",
+              "latest_invoice.payment_intent",
+              "pending_setup_intent",
+              "schedule",
+            ],
+            items: [
+              {
+                price: priceId,
+                quantity: 1,
+              },
+            ],
+            metadata,
+            trial_end: trialEnd,
+            trial_settings: {
+              end_behavior: {
+                missing_payment_method: "cancel",
+              },
+            },
+          },
+          {
+            idempotencyKey: [
+              "staff",
+              "creator-grant",
+              args.targetUser._id,
+              args.plan.key,
+              String(args.endsAt),
+            ].join(":"),
+          }
+        )
+
+  await syncCreatorGrantStripeState({
+    ctx: args.ctx,
+    stripe: args.stripe,
+    stripeCustomerId,
+    subscription,
+  })
+
+  return {
+    action: currentManagedSubscription ? "updated" : "created",
+    billingInterval: interval,
+    cancelAt: subscription.cancel_at ? subscription.cancel_at * 1000 : null,
+    status: subscription.status,
+    stripeCustomerId,
+    stripePriceId: priceId,
+    stripeSubscriptionId: subscription.id,
+    trialEnd: subscription.trial_end ? subscription.trial_end * 1000 : null,
+  }
+}
+
+async function cancelTimedCreatorStripeGrant(args: {
+  billingContext: CreatorGrantBillingContext
+  clerkUser: {
+    publicMetadata: unknown
+  }
+  ctx: Parameters<typeof requireAuthorizedStaffAction>[0]
+  planKey: string
+  stripe: Stripe
+  targetUser: {
+    _id: Id<"users">
+    clerkUserId: string
+    name: string
+  }
+}) {
+  const stripeCustomerId = await resolveExistingCreatorGrantStripeCustomer({
+    billingContext: args.billingContext,
+    clerkUser: args.clerkUser,
+    ctx: args.ctx,
+    stripe: args.stripe,
+    targetUser: args.targetUser,
+  })
+
+  if (!stripeCustomerId) {
+    return null
+  }
+
+  const subscriptions = await listStripeSubscriptionsForCreatorGrant({
+    stripe: args.stripe,
+    stripeCustomerId,
+  })
+  const liveManagedSubscriptions = subscriptions.filter(
+    (subscription) =>
+      isLiveStripeSubscriptionStatus(subscription.status) &&
+      isManagedCreatorGrantSubscription({
+        planKey: args.planKey,
+        subscription,
+        userId: args.targetUser._id,
+      })
+  )
+
+  if (liveManagedSubscriptions.length > 1) {
+    throw new Error(
+      "Multiple managed Creator Stripe subscriptions already exist for this user. Clean up the duplicate Stripe state before retrying."
+    )
+  }
+
+  if (liveManagedSubscriptions.length === 0) {
+    return null
+  }
+
+  const canceledSubscription = await args.stripe.subscriptions.cancel(
+    liveManagedSubscriptions[0].id,
+    {
+      invoice_now: false,
+      prorate: false,
+    }
+  )
+  const expandedCanceledSubscription =
+    await getExpandedCreatorGrantSubscription({
+      stripe: args.stripe,
+      subscriptionId: canceledSubscription.id,
+    })
+
+  await syncCreatorGrantStripeState({
+    ctx: args.ctx,
+    stripe: args.stripe,
+    stripeCustomerId,
+    subscription: expandedCanceledSubscription,
+  })
+
+  return {
+    action: "canceled",
+    cancelAt: expandedCanceledSubscription.cancel_at
+      ? expandedCanceledSubscription.cancel_at * 1000
+      : null,
+    endedAt: expandedCanceledSubscription.ended_at
+      ? expandedCanceledSubscription.ended_at * 1000
+      : null,
+    status: expandedCanceledSubscription.status,
+    stripeCustomerId,
+    stripeSubscriptionId: expandedCanceledSubscription.id,
+  }
+}
+
 export const grantCreatorAccess = action({
   args: {
     endsAt: v.optional(v.number()),
@@ -2470,7 +2995,16 @@ export const grantCreatorAccess = action({
         planKey: args.planKey,
       }
     )
+    const billingContext = targetUser
+      ? await ctx.runQuery(
+          internal.queries.billing.internal.getUserBillingContextByClerkUserId,
+          {
+            clerkUserId: targetUser.clerkUserId,
+          }
+        )
+      : null
     const normalizedReason = args.reason.trim()
+    const now = Date.now()
 
     if (!targetUser) {
       throw new Error("The selected user was not found.")
@@ -2485,6 +3019,39 @@ export const grantCreatorAccess = action({
         "A clear reason is required before creator access can be granted."
       )
     }
+
+    if (
+      args.endsAt !== undefined &&
+      (!Number.isFinite(args.endsAt) || args.endsAt <= now)
+    ) {
+      throw new Error(
+        "Creator access expiry must be a valid future timestamp."
+      )
+    }
+
+    const stripe = getStripe()
+    const clerkUser = await getClerkBackendClient().users.getUser(
+      targetUser.clerkUserId
+    )
+    const stripeGrant =
+      args.endsAt !== undefined
+        ? await ensureTimedCreatorStripeGrant({
+            billingContext,
+            clerkUser,
+            ctx,
+            endsAt: args.endsAt,
+            plan,
+            stripe,
+            targetUser,
+          })
+        : await cancelTimedCreatorStripeGrant({
+            billingContext,
+            clerkUser,
+            ctx,
+            planKey: plan.key,
+            stripe,
+            targetUser,
+          })
 
     await ctx.runMutation(
       internal.mutations.billing.state.grantBillingAccessGrant,
@@ -2512,6 +3079,7 @@ export const grantCreatorAccess = action({
           endsAt: args.endsAt,
           planKey: plan.key,
           reason: normalizedReason,
+          stripeGrant,
           targetClerkUserId: targetUser.clerkUserId,
           targetUserId: targetUser._id,
         },
@@ -2551,6 +3119,14 @@ export const revokeCreatorAccess = action({
         userId: args.targetUserId,
       }
     )
+    const billingContext = targetUser
+      ? await ctx.runQuery(
+          internal.queries.billing.internal.getUserBillingContextByClerkUserId,
+          {
+            clerkUserId: targetUser.clerkUserId,
+          }
+        )
+      : null
     const normalizedReason = args.reason.trim()
 
     if (!targetUser) {
@@ -2566,6 +3142,18 @@ export const revokeCreatorAccess = action({
         "A clear reason is required before creator access can be revoked."
       )
     }
+
+    const clerkUser = await getClerkBackendClient().users.getUser(
+      targetUser.clerkUserId
+    )
+    const stripeGrant = await cancelTimedCreatorStripeGrant({
+      billingContext,
+      clerkUser,
+      ctx,
+      planKey: currentGrant.planKey,
+      stripe: getStripe(),
+      targetUser,
+    })
 
     await ctx.runMutation(
       internal.mutations.billing.state.revokeBillingAccessGrant,
@@ -2587,6 +3175,7 @@ export const revokeCreatorAccess = action({
           grantId: currentGrant._id,
           planKey: currentGrant.planKey,
           reason: normalizedReason,
+          stripeGrant,
           targetClerkUserId: targetUser.clerkUserId,
           targetUserId: targetUser._id,
         },

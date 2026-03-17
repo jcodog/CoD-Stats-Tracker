@@ -69,6 +69,8 @@ import { PlanSelector } from "@/features/billing/components/PlanSelector"
 import {
   BillingClientError,
   useBillingCenter,
+  useBillingState,
+  useCancelSubscription,
   useCreatePaymentMethodSetupIntent,
   usePreviewSubscriptionChange,
   usePricingCatalog,
@@ -102,6 +104,7 @@ import type {
   BillingChangePreview,
   BillingChangeResult,
   BillingInterval,
+  BillingResolvedState,
   PricingCatalogPlan,
 } from "@/features/billing/lib/billing-types"
 
@@ -127,6 +130,11 @@ type SubscriptionDialogState = {
 type SubscriptionConfirmationState = {
   clientSecret: string
   secretType: "payment_intent" | "setup_intent"
+}
+
+type SubscriptionCancellationState = {
+  mode: "immediately" | "period_end"
+  subscription: BillingCenterSubscription
 }
 
 type SubscriptionSelectionKind =
@@ -217,6 +225,18 @@ function getSubscriptionAmountLabel(subscription: BillingCenterSubscription) {
 }
 
 function getSubscriptionRenewalLabel(subscription: BillingCenterSubscription) {
+  const endedAt =
+    subscription.endedAt ??
+    subscription.canceledAt ??
+    (subscription.currentPeriodEnd &&
+    subscription.currentPeriodEnd <= Date.now()
+      ? subscription.currentPeriodEnd
+      : null)
+
+  if (endedAt) {
+    return `Ended ${formatDateLabel(endedAt)}`
+  }
+
   if (subscription.cancelAtPeriodEnd && subscription.currentPeriodEnd) {
     return `Ends ${formatDateLabel(subscription.currentPeriodEnd)}`
   }
@@ -242,6 +262,14 @@ function getSubscriptionChangeActionLabel(change: BillingChangeResult) {
   }
 
   return "Subscription updated."
+}
+
+function getSubscriptionCancellationActionLabel(change: {
+  mode: "cancel_at_period_end" | "cancel_immediately"
+}) {
+  return change.mode === "cancel_immediately"
+    ? "Subscription canceled immediately."
+    : "Subscription cancellation scheduled."
 }
 
 function getCatalogPlanPrice(
@@ -445,6 +473,23 @@ function shouldAttemptBackgroundStripeResync(billingCenter: BillingCenterData) {
     billingCenter.subscriptions.length > 0 &&
     billingCenter.invoices.length === 0
   )
+}
+
+function hasActiveCreatorPlanGrant(state: BillingResolvedState | null | undefined) {
+  return (
+    state?.accessSource === "creator_grant" &&
+    state.creatorGrant?.planKey === "creator"
+  )
+}
+
+function getCreatorGrantAccessLabel(
+  creatorGrant: BillingResolvedState["creatorGrant"] | null | undefined
+) {
+  if (!creatorGrant?.endsAt) {
+    return "No expiry"
+  }
+
+  return `Ends ${formatDateLabel(creatorGrant.endsAt)}`
 }
 
 function BillingValue(args: {
@@ -665,6 +710,8 @@ function PaymentMethodsCard(args: {
 
 function SubscriptionsCard(args: {
   checkoutEnabled: boolean
+  creatorGrant: BillingResolvedState["creatorGrant"] | null
+  creatorGrantActive?: boolean
   onOpenSubscription: (subscription: BillingCenterSubscription) => void
   portalMode: BillingCenterData["portalMode"]
   subscriptions: BillingCenterSubscription[]
@@ -675,24 +722,61 @@ function SubscriptionsCard(args: {
         <div className="flex flex-col gap-1">
           <CardTitle>Subscriptions</CardTitle>
           <CardDescription>
-            Managed Stripe subscriptions for this account, including renewal and
-            cancellation state.
+            {args.creatorGrantActive
+              ? "Active complimentary Creator access and managed Stripe subscription history for this account."
+              : "Managed Stripe subscriptions for this account, including renewal and cancellation state."}
           </CardDescription>
         </div>
-        {args.portalMode === "acquisition" && args.checkoutEnabled ? (
+        {args.portalMode === "acquisition" &&
+        args.checkoutEnabled &&
+        !args.creatorGrantActive ? (
           <Button asChild size="sm" variant="outline">
             <Link href="/checkout">Start checkout</Link>
           </Button>
         ) : null}
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
+        {args.creatorGrantActive && args.creatorGrant ? (
+          <div className="flex w-full flex-col gap-4 rounded-lg border border-border/70 bg-muted/10 px-4 py-4 text-left">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="flex flex-col gap-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-medium">Creator</span>
+                  <Badge variant="secondary">Complimentary</Badge>
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  Not billed through Stripe while complimentary access is active.
+                </div>
+              </div>
+              <span className="text-sm font-medium text-muted-foreground">
+                {getCreatorGrantAccessLabel(args.creatorGrant)}
+              </span>
+            </div>
+
+            <div className="grid gap-3 text-sm md:grid-cols-4">
+              <BillingValue label="Billing interval" value="Complimentary" />
+              <BillingValue
+                label="Renewal"
+                value={getCreatorGrantAccessLabel(args.creatorGrant)}
+              />
+              <BillingValue label="Quantity" value="1" />
+              <BillingValue
+                label="Payment method"
+                value="Not billed"
+              />
+            </div>
+          </div>
+        ) : null}
+
         {args.subscriptions.length > 0 ? (
           args.subscriptions.map((subscription) => (
-            <button
-              className="flex w-full flex-col gap-4 rounded-lg border border-border/70 bg-muted/10 px-4 py-4 text-left transition-colors hover:bg-muted/20 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            <div
+              className={cn(
+                "flex w-full flex-col gap-4 rounded-lg border border-border/70 bg-muted/10 px-4 py-4 text-left",
+                subscription.isManageable &&
+                  "transition-colors hover:bg-muted/20"
+              )}
               key={subscription.stripeSubscriptionId}
-              onClick={() => args.onOpenSubscription(subscription)}
-              type="button"
             >
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="flex flex-col gap-1">
@@ -713,9 +797,35 @@ function SubscriptionsCard(args: {
                     {getSubscriptionAmountLabel(subscription)}
                   </div>
                 </div>
-                <span className="text-sm font-medium text-muted-foreground">
-                  Manage
-                </span>
+                {subscription.isManageable ? (
+                  args.creatorGrantActive ? (
+                    <span className="text-sm font-medium text-muted-foreground">
+                      Staff-managed grant
+                    </span>
+                  ) : (
+                    <Button
+                      onClick={() => args.onOpenSubscription(subscription)}
+                      size="sm"
+                      variant="outline"
+                    >
+                      Manage subscription
+                    </Button>
+                  )
+                ) : args.checkoutEnabled ? (
+                  args.creatorGrantActive ? (
+                    <span className="text-sm font-medium text-muted-foreground">
+                      Historical record
+                    </span>
+                  ) : (
+                    <Button asChild size="sm" variant="outline">
+                      <Link href="/checkout">Subscribe again</Link>
+                    </Button>
+                  )
+                ) : (
+                  <span className="text-sm font-medium text-muted-foreground">
+                    Historical record
+                  </span>
+                )}
               </div>
 
               <div className="grid gap-3 text-sm md:grid-cols-4">
@@ -753,9 +863,9 @@ function SubscriptionsCard(args: {
                     : `Scheduled to move to ${subscription.scheduledChange.planName ?? subscription.scheduledChange.planKey ?? "another plan"} on ${formatDateLabel(subscription.scheduledChange.effectiveAt)}.`}
                 </div>
               ) : null}
-            </button>
+            </div>
           ))
-        ) : (
+        ) : !args.creatorGrantActive ? (
           <Empty className="border border-dashed border-border/70 bg-muted/10">
             <EmptyHeader>
               <EmptyMedia variant="icon">
@@ -763,13 +873,15 @@ function SubscriptionsCard(args: {
               </EmptyMedia>
               <EmptyTitle>No subscriptions yet</EmptyTitle>
               <EmptyDescription>
-                {args.checkoutEnabled
-                  ? "Start checkout to create the first managed Stripe subscription for this account."
+                {args.creatorGrantActive
+                  ? "Creator access is currently active through a staff grant. Checkout and plan changes stay unavailable while that grant remains active."
+                  : args.checkoutEnabled
+                    ? "Start checkout to create the first managed Stripe subscription for this account."
                   : "Checkout is currently disabled for this account."}
               </EmptyDescription>
             </EmptyHeader>
           </Empty>
-        )}
+        ) : null}
       </CardContent>
     </Card>
   )
@@ -1031,9 +1143,12 @@ function PaymentMethodSetupDialog(args: {
 }
 
 function SubscriptionManagementDialog(args: {
+  cancelPending: boolean
   catalogPending: boolean
   changePending: boolean
   confirmation: SubscriptionConfirmationState | null
+  onCancelAtPeriodEnd: () => void
+  onCancelImmediately: () => void
   onClose: () => void
   onPrepareChange: () => void
   onIntervalChange: (interval: BillingInterval) => void
@@ -1160,6 +1275,7 @@ function SubscriptionManagementDialog(args: {
                     onSelectPlan={args.onPlanChange}
                     plans={args.pricingPlans}
                     selectedPlanKey={args.state.planKey}
+                    variant="management"
                   />
                 </div>
 
@@ -1200,6 +1316,26 @@ function SubscriptionManagementDialog(args: {
                       {args.previewPending
                         ? "Preparing..."
                         : primaryActionLabel}
+                    </Button>
+                  ) : null}
+                  {!args.subscription.cancelAtPeriodEnd ? (
+                    <Button
+                      disabled={args.cancelPending}
+                      onClick={args.onCancelAtPeriodEnd}
+                      variant="outline"
+                    >
+                      {args.cancelPending
+                        ? "Updating..."
+                        : "Cancel at period end"}
+                    </Button>
+                  ) : null}
+                  {!args.subscription.cancelAtPeriodEnd ? (
+                    <Button
+                      disabled={args.cancelPending}
+                      onClick={args.onCancelImmediately}
+                      variant="destructive"
+                    >
+                      {args.cancelPending ? "Canceling..." : "Cancel now"}
                     </Button>
                   ) : null}
                   {args.subscription.cancelAtPeriodEnd ? (
@@ -1458,12 +1594,14 @@ export function BillingSettingsView({
 }) {
   const { resolvedTheme } = useTheme()
   const billingCenterQuery = useBillingCenter()
+  const billingStateQuery = useBillingState()
   const pricingCatalogQuery = usePricingCatalog()
   const syncBillingCenter = useSyncBillingCenter()
   const updateBillingProfile = useUpdateBillingProfile()
   const createPaymentMethodSetupIntent = useCreatePaymentMethodSetupIntent()
   const setDefaultPaymentMethod = useSetDefaultPaymentMethod()
   const removePaymentMethod = useRemovePaymentMethod()
+  const cancelSubscription = useCancelSubscription()
   const previewSubscriptionChange = usePreviewSubscriptionChange()
   const updateSubscription = useUpdateSubscriptionPlan()
   const reactivateSubscription = useReactivateSubscription()
@@ -1483,9 +1621,16 @@ export function BillingSettingsView({
     useState<BillingChangePreview | null>(null)
   const [subscriptionConfirmation, setSubscriptionConfirmation] =
     useState<SubscriptionConfirmationState | null>(null)
+  const [subscriptionCancellationState, setSubscriptionCancellationState] =
+    useState<SubscriptionCancellationState | null>(null)
   const [didAttemptStripeResync, setDidAttemptStripeResync] = useState(false)
 
   const billingCenter = billingCenterQuery.data
+  const billingState = billingStateQuery.data
+  const creatorGrantActive = hasActiveCreatorPlanGrant(billingState)
+  const primaryManageableSubscription =
+    billingCenter?.subscriptions.find((subscription) => subscription.isManageable) ??
+    null
   const baseManagementPricingPlans = ensureManagementPlanOptions(
     pricingCatalogQuery.data?.plans.filter((plan) => plan.active) ?? []
   )
@@ -1499,13 +1644,13 @@ export function BillingSettingsView({
   const managementCurrentInterval =
     subscriptionDialogState?.interval ??
     selectedSubscription?.billingInterval ??
-    billingCenter?.subscriptions[0]?.billingInterval ??
+    primaryManageableSubscription?.billingInterval ??
     "month"
   const managementPricingPlans = orderManagementPlanOptions({
     currentInterval: managementCurrentInterval,
     currentPlanKey:
       selectedSubscription?.planKey ??
-      billingCenter?.subscriptions[0]?.planKey ??
+      primaryManageableSubscription?.planKey ??
       null,
     plans: baseManagementPricingPlans.map((plan) =>
       selectedSubscription &&
@@ -1745,6 +1890,31 @@ export function BillingSettingsView({
     }
   }
 
+  async function handleConfirmSubscriptionCancellation() {
+    if (!subscriptionCancellationState) {
+      return
+    }
+
+    try {
+      const result = await cancelSubscription.mutateAsync({
+        mode: subscriptionCancellationState.mode,
+        stripeSubscriptionId:
+          subscriptionCancellationState.subscription.stripeSubscriptionId,
+      })
+      setSubscriptionCancellationState(null)
+      setSubscriptionDialogState(null)
+      setSubscriptionChangePreview(null)
+      setSubscriptionConfirmation(null)
+      toast.success(getSubscriptionCancellationActionLabel(result))
+    } catch (error) {
+      toast.error(
+        error instanceof BillingClientError
+          ? error.message
+          : "Unable to update the subscription cancellation."
+      )
+    }
+  }
+
   async function handleResumeSubscription() {
     if (!selectedSubscription) {
       return
@@ -1767,7 +1937,7 @@ export function BillingSettingsView({
     }
   }
 
-  if (billingCenterQuery.isPending) {
+  if (billingCenterQuery.isPending || billingStateQuery.isPending) {
     return (
       <div className="flex flex-col gap-6">
         <div className="flex flex-col gap-2">
@@ -1784,7 +1954,7 @@ export function BillingSettingsView({
     )
   }
 
-  if (billingCenterQuery.isError) {
+  if (billingCenterQuery.isError || billingStateQuery.isError) {
     return (
       <Alert variant="destructive">
         <AlertTitle>Billing failed to load</AlertTitle>
@@ -1852,6 +2022,8 @@ export function BillingSettingsView({
 
       <SubscriptionsCard
         checkoutEnabled={checkoutEnabled}
+        creatorGrant={creatorGrantActive ? (billingState?.creatorGrant ?? null) : null}
+        creatorGrantActive={creatorGrantActive}
         onOpenSubscription={openSubscriptionDialog}
         portalMode={billingCenter.portalMode}
         subscriptions={billingCenter.subscriptions}
@@ -1885,9 +2057,22 @@ export function BillingSettingsView({
 
       {subscriptionDialogState && selectedSubscription ? (
         <SubscriptionManagementDialog
+          cancelPending={cancelSubscription.isPending}
           catalogPending={pricingCatalogQuery.isPending}
           changePending={updateSubscription.isPending}
           confirmation={subscriptionConfirmation}
+          onCancelAtPeriodEnd={() =>
+            setSubscriptionCancellationState({
+              mode: "period_end",
+              subscription: selectedSubscription,
+            })
+          }
+          onCancelImmediately={() =>
+            setSubscriptionCancellationState({
+              mode: "immediately",
+              subscription: selectedSubscription,
+            })
+          }
           onClose={() => {
             setSubscriptionDialogState(null)
             setSubscriptionChangePreview(null)
@@ -1973,6 +2158,56 @@ export function BillingSettingsView({
         </AlertDialogContent>
       </AlertDialog>
 
+      <AlertDialog
+        onOpenChange={(open) => !open && setSubscriptionCancellationState(null)}
+        open={Boolean(subscriptionCancellationState)}
+      >
+        <AlertDialogContent className="max-w-lg">
+          <AlertDialogHeader className="items-start text-left">
+            <AlertDialogTitle>
+              {subscriptionCancellationState?.mode === "immediately"
+                ? "Cancel subscription now"
+                : "Cancel at period end"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {subscriptionCancellationState?.mode === "immediately"
+                ? "This cancels the Stripe subscription immediately and removes managed access right away."
+                : "This keeps the current subscription active until the end of the billing period, then stops renewal."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {subscriptionCancellationState ? (
+            <div className="rounded-lg border border-border/70 bg-muted/10 px-4 py-4 text-sm">
+              <div className="font-medium">
+                {subscriptionCancellationState.subscription.productName}
+              </div>
+              <div className="mt-1 text-muted-foreground">
+                {subscriptionCancellationState.mode === "immediately"
+                  ? "Use this only when the subscription should end now."
+                  : subscriptionCancellationState.subscription.currentPeriodEnd
+                    ? `Access remains in place until ${formatDateLabel(subscriptionCancellationState.subscription.currentPeriodEnd)}.`
+                    : "Access remains in place until the current billing period ends."}
+              </div>
+            </div>
+          ) : null}
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep subscription</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={cancelSubscription.isPending}
+              onClick={(event) => {
+                event.preventDefault()
+                void handleConfirmSubscriptionCancellation()
+              }}
+            >
+              {cancelSubscription.isPending
+                ? "Updating..."
+                : subscriptionCancellationState?.mode === "immediately"
+                  ? "Cancel now"
+                  : "Cancel at period end"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {pricingCatalogQuery.isError ? (
         <Alert>
           <AlertTitle>Plan catalog unavailable</AlertTitle>
@@ -1986,11 +2221,15 @@ export function BillingSettingsView({
       {billingCenter.portalMode === "acquisition" &&
       billingCenter.subscriptions.length > 0 ? (
         <Alert>
-          <AlertTitle>Managed subscription not currently active</AlertTitle>
+          <AlertTitle>
+            {creatorGrantActive
+              ? "Creator access is already active"
+              : "Managed subscription not currently active"}
+          </AlertTitle>
           <AlertDescription>
-            Historical subscription records remain visible here. Start a new
-            checkout only if you want to create a fresh paid subscription for
-            this account.
+            {creatorGrantActive
+              ? "Historical subscription records remain visible here. Billing checkout and plan changes are unavailable while the active Creator grant remains in place."
+              : "Historical subscription records remain visible here. Start a new checkout only if you want to create a fresh paid subscription for this account."}
           </AlertDescription>
         </Alert>
       ) : null}

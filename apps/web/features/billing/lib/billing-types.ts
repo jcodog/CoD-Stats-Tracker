@@ -255,8 +255,9 @@ export type BillingChangeResult = {
 }
 
 export type CancellationResult = {
-  effectiveAt: number
-  mode: "cancel_at_period_end"
+  effectiveAt: number | null
+  mode: "cancel_at_period_end" | "cancel_immediately"
+  status: string
 }
 
 export type ReactivationResult = {

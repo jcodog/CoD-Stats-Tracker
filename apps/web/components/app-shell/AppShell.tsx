@@ -1,6 +1,7 @@
 import Link from "next/link"
 
 import { StaffNavLink } from "@/components/app-shell/StaffNavLink"
+import { isFlagEnabled } from "@/lib/flags"
 import { UserButton } from "@clerk/nextjs"
 import {
   Avatar,
@@ -13,7 +14,9 @@ type AppShellProps = {
   children: React.ReactNode
 }
 
-export function AppShell({ children }: AppShellProps) {
+export async function AppShell({ children }: AppShellProps) {
+  const checkoutEnabled = await isFlagEnabled("checkout")
+
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <header className="sticky top-0 z-40 border-b border-border/70 bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/80">
@@ -39,9 +42,11 @@ export function AppShell({ children }: AppShellProps) {
               <Button asChild size="sm" variant="ghost">
                 <Link href="/dashboard">Dashboard</Link>
               </Button>
-              <Button asChild size="sm" variant="ghost">
-                <Link href="/settings/billing">Billing</Link>
-              </Button>
+              {checkoutEnabled ? (
+                <Button asChild size="sm" variant="ghost">
+                  <Link href="/settings/billing">Billing</Link>
+                </Button>
+              ) : null}
               <Button asChild size="sm" variant="ghost">
                 <Link href="/account">Account</Link>
               </Button>

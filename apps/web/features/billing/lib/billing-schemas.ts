@@ -36,6 +36,15 @@ export const subscriptionTargetSchema = z.object({
   stripeSubscriptionId: stripeSubscriptionIdSchema,
 })
 
+export const subscriptionCancellationModeSchema = z.enum([
+  "immediately",
+  "period_end",
+])
+
+export const cancelSubscriptionSchema = subscriptionTargetSchema.extend({
+  mode: subscriptionCancellationModeSchema,
+})
+
 export const updateBillingProfileSchema = z.object({
   address: billingAddressSchema.optional(),
   businessName: z.string().max(150).optional(),
@@ -66,5 +75,6 @@ export type CreateSubscriptionIntentInput = z.infer<
 >
 export type SubscriptionChangeInput = z.infer<typeof subscriptionChangeSchema>
 export type SubscriptionTargetInput = z.infer<typeof subscriptionTargetSchema>
+export type CancelSubscriptionInput = z.infer<typeof cancelSubscriptionSchema>
 export type UpdateBillingProfileInput = z.infer<typeof updateBillingProfileSchema>
 export type PaymentMethodActionInput = z.infer<typeof paymentMethodActionSchema>

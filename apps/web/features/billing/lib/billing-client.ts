@@ -22,6 +22,7 @@ import type {
 } from "@/features/billing/lib/billing-types"
 import { billingQueryKeys } from "@/features/billing/lib/billing-query-keys"
 import type {
+  CancelSubscriptionInput,
   CreateSubscriptionIntentInput,
   PaymentMethodActionInput,
   SubscriptionChangeInput,
@@ -29,6 +30,7 @@ import type {
   UpdateBillingProfileInput,
 } from "@/features/billing/lib/billing-schemas"
 import {
+  cancelSubscriptionSchema,
   createSubscriptionIntentSchema,
   paymentMethodActionSchema,
   subscriptionChangeSchema,
@@ -174,9 +176,9 @@ async function callChangeSubscription(
 
 async function callCancelSubscription(
   convex: ConvexReactClient,
-  input: SubscriptionTargetInput
+  input: CancelSubscriptionInput
 ) {
-  const payload = subscriptionTargetSchema.parse(input)
+  const payload = cancelSubscriptionSchema.parse(input)
 
   try {
     return (await convex.action(
@@ -377,7 +379,7 @@ export function useCancelSubscription() {
   const invalidateBilling = useInvalidateBillingQueries()
 
   return useMutation({
-    mutationFn: (input: SubscriptionTargetInput) =>
+    mutationFn: (input: CancelSubscriptionInput) =>
       callCancelSubscription(convex, input),
     onSuccess: async () => {
       await invalidateBilling.invalidateAll()

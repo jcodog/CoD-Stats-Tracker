@@ -3,7 +3,7 @@ import { v } from "convex/values"
 import type { Doc } from "../../_generated/dataModel"
 import { internalQuery, query, type QueryCtx } from "../../_generated/server"
 import {
-  hasPaidSubscriptionAccess,
+  hasEffectivePaidSubscriptionAccess,
   type BillingAccessSource,
   type BillingAttentionStatus,
 } from "../../lib/billing"
@@ -156,10 +156,11 @@ export async function buildResolvedBillingState(
       ctx.db.query("billingPlans").collect(),
     ])
 
-  const subscription = selectCurrentBillingSubscription(subscriptions)
+  const subscription = selectCurrentBillingSubscription(subscriptions, now)
   const accessGrant = selectCurrentBillingAccessGrant(grants, now)
   const paidSubscriptionEligible =
-    subscription !== null && hasPaidSubscriptionAccess(subscription.status)
+    subscription !== null &&
+    hasEffectivePaidSubscriptionAccess(subscription, now)
   const effectivePlanKey =
     accessGrant?.planKey ??
     (paidSubscriptionEligible ? subscription?.planKey : user.plan) ??

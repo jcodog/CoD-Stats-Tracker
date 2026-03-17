@@ -2,7 +2,10 @@ import { v } from "convex/values"
 
 import type { Doc } from "../../_generated/dataModel"
 import { internalQuery, type QueryCtx } from "../../_generated/server"
-import type { BillingSubscriptionStatus } from "../../lib/billing"
+import {
+  isManageableBillingSubscription,
+  type BillingSubscriptionStatus,
+} from "../../lib/billing"
 
 type BillingCustomerRecord = Doc<"billingCustomers">
 type BillingSubscriptionRecord = Doc<"billingSubscriptions">
@@ -30,22 +33,26 @@ function getSubscriptionPriority(status: BillingSubscriptionStatus) {
 }
 
 export function selectCurrentBillingSubscription(
-  subscriptions: BillingSubscriptionRecord[]
+  subscriptions: BillingSubscriptionRecord[],
+  now = Date.now()
 ) {
-  return [...subscriptions].sort((left, right) => {
-    const priorityDifference =
-      getSubscriptionPriority(right.status) - getSubscriptionPriority(left.status)
+  return subscriptions
+    .filter((subscription) => isManageableBillingSubscription(subscription, now))
+    .sort((left, right) => {
+      const priorityDifference =
+        getSubscriptionPriority(right.status) -
+        getSubscriptionPriority(left.status)
 
-    if (priorityDifference !== 0) {
-      return priorityDifference
-    }
+      if (priorityDifference !== 0) {
+        return priorityDifference
+      }
 
-    if ((right.updatedAt ?? 0) !== (left.updatedAt ?? 0)) {
-      return (right.updatedAt ?? 0) - (left.updatedAt ?? 0)
-    }
+      if ((right.updatedAt ?? 0) !== (left.updatedAt ?? 0)) {
+        return (right.updatedAt ?? 0) - (left.updatedAt ?? 0)
+      }
 
-    return right._creationTime - left._creationTime
-  })[0] ?? null
+      return right._creationTime - left._creationTime
+    })[0] ?? null
 }
 
 export function isBillingAccessGrantActive(
@@ -170,6 +177,7 @@ export const getUserBillingContextByClerkUserId = internalQuery({
       return null
     }
 
+    const now = Date.now()
     const [customer, subscriptions, grants] = await Promise.all([
       getBillingCustomerByUserId(ctx, user._id),
       getBillingSubscriptionsByUserId(ctx, user._id),
@@ -179,7 +187,7 @@ export const getUserBillingContextByClerkUserId = internalQuery({
     return {
       accessGrant: selectCurrentBillingAccessGrant(grants),
       customer,
-      subscription: selectCurrentBillingSubscription(subscriptions),
+      subscription: selectCurrentBillingSubscription(subscriptions, now),
       user,
     }
   },
@@ -207,6 +215,7 @@ export const getBillingContextByStripeCustomerId = internalQuery({
       return null
     }
 
+    const now = Date.now()
     const [subscriptions, grants] = await Promise.all([
       getBillingSubscriptionsByUserId(ctx, user._id),
       getBillingAccessGrantsByUserId(ctx, user._id),
@@ -215,7 +224,7 @@ export const getBillingContextByStripeCustomerId = internalQuery({
     return {
       accessGrant: selectCurrentBillingAccessGrant(grants),
       customer,
-      subscription: selectCurrentBillingSubscription(subscriptions),
+      subscription: selectCurrentBillingSubscription(subscriptions, now),
       user,
     }
   },
