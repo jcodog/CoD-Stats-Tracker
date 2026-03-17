@@ -2645,8 +2645,10 @@ function isLiveStripeSubscriptionStatus(status: Stripe.Subscription.Status) {
   )
 }
 
-function getManagedCreatorCouponId(planKey: string) {
-  return `cod_stats_${planKey}_complimentary_v1`
+const MAX_MANAGED_CREATOR_COUPON_VERSION = 20
+
+function getManagedCreatorCouponId(planKey: string, version: number) {
+  return `cod_stats_${planKey}_complimentary_v${version}`
 }
 
 function buildCreatorGrantMetadata(args: {
@@ -2678,61 +2680,75 @@ async function ensureCreatorGrantCoupon(args: {
   stripe: Stripe
 }) {
   const productId = getCreatorGrantStripeProductId(args.plan)
-  const couponId = getManagedCreatorCouponId(args.plan.key)
 
-  try {
-    const existingCoupon = await args.stripe.coupons.retrieve(couponId)
-    const appliesToProducts = existingCoupon.applies_to?.products ?? []
-    const hasExpectedProducts =
-      appliesToProducts.length === 1 && appliesToProducts[0] === productId
+  for (
+    let version = 1;
+    version <= MAX_MANAGED_CREATOR_COUPON_VERSION;
+    version += 1
+  ) {
+    const couponId = getManagedCreatorCouponId(args.plan.key, version)
 
-    if (
-      existingCoupon.valid !== true ||
-      existingCoupon.percent_off !== 100 ||
-      existingCoupon.duration !== "forever" ||
-      !hasExpectedProducts
-    ) {
-      throw new Error(
-        "The existing complimentary Creator coupon does not match the expected Stripe configuration."
-      )
+    try {
+      const existingCoupon = await args.stripe.coupons.retrieve(couponId)
+
+      if ("deleted" in existingCoupon && existingCoupon.deleted) {
+        continue
+      }
+
+      const appliesToProducts = existingCoupon.applies_to?.products ?? []
+      const hasExpectedProducts =
+        appliesToProducts.length === 1 && appliesToProducts[0] === productId
+
+      if (
+        existingCoupon.valid === true &&
+        existingCoupon.percent_off === 100 &&
+        existingCoupon.duration === "forever" &&
+        hasExpectedProducts
+      ) {
+        return existingCoupon.id
+      }
+
+      continue
+    } catch (error) {
+      const isResourceMissingError =
+        typeof error === "object" &&
+        error !== null &&
+        "code" in error &&
+        error.code === "resource_missing"
+
+      if (!isResourceMissingError) {
+        throw error
+      }
     }
 
-    return existingCoupon.id
-  } catch (error) {
-    const isResourceMissingError =
-      typeof error === "object" &&
-      error !== null &&
-      "code" in error &&
-      error.code === "resource_missing"
+    const coupon = await args.stripe.coupons.create(
+      {
+        applies_to: {
+          products: [productId],
+        },
+        duration: "forever",
+        id: couponId,
+        metadata: {
+          app: STRIPE_CATALOG_APP,
+          grantMode: "indefinite",
+          grantSource: "creator_approval",
+          managedCreatorGrant: "true",
+          planKey: args.plan.key,
+        },
+        name: "Complimentary Creator access",
+        percent_off: 100,
+      },
+      {
+        idempotencyKey: `staff:creator-grant:coupon:${args.plan.key}:v${version}`,
+      }
+    )
 
-    if (!isResourceMissingError) {
-      throw error
-    }
+    return coupon.id
   }
 
-  const coupon = await args.stripe.coupons.create(
-    {
-      applies_to: {
-        products: [productId],
-      },
-      duration: "forever",
-      id: couponId,
-      metadata: {
-        app: STRIPE_CATALOG_APP,
-        grantMode: "indefinite",
-        grantSource: "creator_approval",
-        managedCreatorGrant: "true",
-        planKey: args.plan.key,
-      },
-      name: "Complimentary Creator access",
-      percent_off: 100,
-    },
-    {
-      idempotencyKey: `staff:creator-grant:coupon:${args.plan.key}`,
-    }
+  throw new Error(
+    "Unable to reserve a compatible complimentary Creator coupon in Stripe."
   )
-
-  return coupon.id
 }
 
 async function getExpandedCreatorGrantSubscription(args: {
