@@ -414,3 +414,66 @@ export const updateQueueSettings = mutation({
     }
   },
 })
+
+export const setQueueMessageMeta = mutation({
+  args: {
+    queueId: v.id("viewerQueues"),
+    messageId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const queue = await ctx.db.get(args.queueId)
+
+    if (!queue) {
+      throw new Error("Queue not found")
+    }
+
+    await ctx.db.patch(args.queueId, {
+      messageId: args.messageId.trim(),
+      lastMessageSyncError: undefined,
+      updatedAt: Date.now(),
+    })
+
+    return { queueId: args.queueId }
+  },
+})
+
+export const setQueueMessageSyncError = mutation({
+  args: {
+    queueId: v.id("viewerQueues"),
+    error: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const queue = await ctx.db.get(args.queueId)
+
+    if (!queue) {
+      throw new Error("Queue not found")
+    }
+
+    await ctx.db.patch(args.queueId, {
+      lastMessageSyncError: args.error.trim(),
+      updatedAt: Date.now(),
+    })
+
+    return { queueId: args.queueId }
+  },
+})
+
+export const clearQueueMessageSyncError = mutation({
+  args: {
+    queueId: v.id("viewerQueues"),
+  },
+  handler: async (ctx, args) => {
+    const queue = await ctx.db.get(args.queueId)
+
+    if (!queue) {
+      throw new Error("Queue not found")
+    }
+
+    await ctx.db.patch(args.queueId, {
+      lastMessageSyncError: undefined,
+      updatedAt: Date.now(),
+    })
+
+    return { queueId: args.queueId }
+  },
+})

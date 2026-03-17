@@ -104,6 +104,24 @@ export declare const api: {
         >;
       };
     };
+    creatorTools: {
+      playingWithViewers: {
+        discord: {
+          publishQueueMessage: FunctionReference<
+            "action",
+            "public",
+            { queueId: Id<"viewerQueues"> },
+            any
+          >;
+          updateQueueMessage: FunctionReference<
+            "action",
+            "public",
+            { queueId: Id<"viewerQueues"> },
+            any
+          >;
+        };
+      };
+    };
     staff: {
       billing: {
         archiveFeature: FunctionReference<
@@ -335,6 +353,12 @@ export declare const api: {
             { queueId: Id<"viewerQueues"> },
             any
           >;
+          clearQueueMessageSyncError: FunctionReference<
+            "mutation",
+            "public",
+            { queueId: Id<"viewerQueues"> },
+            any
+          >;
           createQueue: FunctionReference<
             "mutation",
             "public",
@@ -413,6 +437,18 @@ export declare const api: {
             "mutation",
             "public",
             { isActive: boolean; queueId: Id<"viewerQueues"> },
+            any
+          >;
+          setQueueMessageMeta: FunctionReference<
+            "mutation",
+            "public",
+            { messageId: string; queueId: Id<"viewerQueues"> },
+            any
+          >;
+          setQueueMessageSyncError: FunctionReference<
+            "mutation",
+            "public",
+            { error: string; queueId: Id<"viewerQueues"> },
             any
           >;
           updateQueueSettings: FunctionReference<
