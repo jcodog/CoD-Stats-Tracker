@@ -1,6 +1,8 @@
+import { handlePingCommand } from "../../../src/lib/commands/ping"
 import { api } from "../../_generated/api"
 import { httpAction } from "../../_generated/server"
 import type {
+  APIChatInputApplicationCommandInteraction,
   APIInteraction,
   APIMessageComponentInteraction,
   APIModalSubmitInteraction,
@@ -8,6 +10,7 @@ import type {
   RESTPostAPIInteractionCallbackJSONBody,
 } from "discord-api-types/v10"
 import {
+  ApplicationCommandType,
   ComponentType,
   InteractionResponseType,
   InteractionType,
@@ -452,6 +455,32 @@ async function handleMessageComponentInteraction(
   }
 }
 
+function isChatInputCommandInteraction(
+  interaction: APIInteraction
+): interaction is APIChatInputApplicationCommandInteraction {
+  return (
+    interaction.type === InteractionType.ApplicationCommand &&
+    interaction.data.type === ApplicationCommandType.ChatInput
+  )
+}
+
+async function handleApplicationCommandInteraction(
+  interaction: APIChatInputApplicationCommandInteraction
+): Promise<Response> {
+  switch (interaction.data.name) {
+    case "ping":
+      return json(await handlePingCommand(interaction))
+    default:
+      return json({
+        type: InteractionResponseType.ChannelMessageWithSource,
+        data: {
+          content: "Unknown command.",
+          flags: MessageFlags.Ephemeral,
+        },
+      })
+  }
+}
+
 export const handleDiscordInteractions = httpAction(async (ctx, request) => {
   const rawBody = await request.text()
 
@@ -487,6 +516,10 @@ export const handleDiscordInteractions = httpAction(async (ctx, request) => {
         flags: MessageFlags.Ephemeral,
       },
     })
+  }
+
+  if (isChatInputCommandInteraction(interaction)) {
+    return handleApplicationCommandInteraction(interaction)
   }
 
   return json({
