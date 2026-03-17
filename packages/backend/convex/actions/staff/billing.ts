@@ -2651,6 +2651,46 @@ function getManagedCreatorCouponId(planKey: string, version: number) {
   return `cod_stats_${planKey}_complimentary_v${version}`
 }
 
+function buildCreatorGrantCouponIdempotencyKey(args: {
+  planKey: string
+  productId: string
+  version: number
+}) {
+  return [
+    "staff",
+    "creator-grant",
+    "coupon",
+    args.planKey,
+    args.productId,
+    `v${args.version}`,
+  ].join(":")
+}
+
+function buildCreatorGrantSubscriptionCreateIdempotencyKey(args: {
+  couponId?: string
+  endsAt?: number
+  mode: "indefinite" | "timed"
+  planKey: string
+  priceId: string
+  stripeCustomerId: string
+  targetUserId: string
+}) {
+  return [
+    "staff",
+    "creator-grant",
+    "subscription",
+    "create",
+    args.targetUserId,
+    args.planKey,
+    args.stripeCustomerId,
+    args.priceId,
+    args.mode,
+    args.mode === "timed"
+      ? String(args.endsAt)
+      : (args.couponId ?? "no-coupon"),
+  ].join(":")
+}
+
 function buildCreatorGrantMetadata(args: {
   endsAt?: number
   mode: "indefinite" | "timed"
@@ -2739,7 +2779,11 @@ async function ensureCreatorGrantCoupon(args: {
         percent_off: 100,
       },
       {
-        idempotencyKey: `staff:creator-grant:coupon:${args.plan.key}:v${version}`,
+        idempotencyKey: buildCreatorGrantCouponIdempotencyKey({
+          planKey: args.plan.key,
+          productId,
+          version,
+        }),
       }
     )
 
@@ -3078,13 +3122,14 @@ async function ensureTimedCreatorStripeGrant(args: {
             },
           },
           {
-            idempotencyKey: [
-              "staff",
-              "creator-grant",
-              args.targetUser._id,
-              args.plan.key,
-              String(args.endsAt),
-            ].join(":"),
+            idempotencyKey: buildCreatorGrantSubscriptionCreateIdempotencyKey({
+              endsAt: args.endsAt,
+              mode: "timed",
+              planKey: args.plan.key,
+              priceId,
+              stripeCustomerId,
+              targetUserId: args.targetUser._id,
+            }),
           }
         )
 
@@ -3218,13 +3263,14 @@ async function ensureIndefiniteCreatorStripeGrant(args: {
             metadata,
           },
           {
-            idempotencyKey: [
-              "staff",
-              "creator-grant",
-              args.targetUser._id,
-              args.plan.key,
-              "indefinite",
-            ].join(":"),
+            idempotencyKey: buildCreatorGrantSubscriptionCreateIdempotencyKey({
+              couponId,
+              mode: "indefinite",
+              planKey: args.plan.key,
+              priceId,
+              stripeCustomerId,
+              targetUserId: args.targetUser._id,
+            }),
           }
         )
 
