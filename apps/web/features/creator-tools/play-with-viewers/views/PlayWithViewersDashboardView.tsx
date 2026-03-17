@@ -427,6 +427,9 @@ function SelectionResultSummary({
   const hasDmStatuses = selectionResult.selectedUsers.some(
     (user) => user.dmStatus !== undefined
   )
+  const failedDmCount = selectionResult.selectedUsers.filter(
+    (user) => user.dmStatus === "failed"
+  ).length
 
   return (
     <div className="flex flex-col">
@@ -446,6 +449,20 @@ function SelectionResultSummary({
           </span>
         ) : null}
       </div>
+
+      {selectionResult.inviteMode === "discord_dm" && failedDmCount > 0 ? (
+        <div className="border-b border-border/70 px-4 py-3">
+          <Alert variant="destructive">
+            <IconAlertTriangle />
+            <AlertTitle>Manual follow-up needed</AlertTitle>
+            <AlertDescription>
+              {failedDmCount} viewer{failedDmCount === 1 ? "" : "s"} could not be
+              reached by Discord DM. Ask them to enable DMs or contact them
+              manually.
+            </AlertDescription>
+          </Alert>
+        </div>
+      ) : null}
 
       {selectionResult.inviteMode === "manual_creator_contact" ? (
         <div className="flex flex-wrap items-center gap-2 border-b border-border/70 px-4 py-3">
@@ -497,7 +514,7 @@ function SelectionResultSummary({
             </div>
 
             {user.dmFailureReason ? (
-              <p className="text-sm text-destructive">{user.dmFailureReason}</p>
+              <p className="text-sm text-muted-foreground">{user.dmFailureReason}</p>
             ) : null}
           </div>
         ))}
@@ -1538,7 +1555,7 @@ export function PlayWithViewersDashboardView({
       ) : null}
 
       <Sheet onOpenChange={setSettingsOpen} open={settingsOpen}>
-        <SheetContent className="w-full sm:max-w-lg">
+        <SheetContent className="w-full sm:max-w-xl">
           <SheetHeader>
             <SheetTitle>
               {queue ? "Queue settings" : "Create Play With Viewers queue"}

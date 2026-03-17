@@ -374,6 +374,12 @@ async function publishQueueMessageForQueue(
     { queueId }
   )
 
+  if (queue.messageId) {
+    throw new Error(
+      "Queue message is already published. Use refresh to update the existing message."
+    )
+  }
+
   const entries = await ctx.runQuery(
     internal.queries.creatorTools.playingWithViewers.queue.getQueueEntries,
     { queueId }
@@ -397,6 +403,31 @@ async function publishQueueMessageForQueue(
     }
 
     const createdMessage = (await response.json()) as { id: string }
+    const latestQueue = await ctx.runQuery(
+      internal.queries.creatorTools.playingWithViewers.queue.getQueueById,
+      { queueId }
+    )
+
+    if (latestQueue.messageId && latestQueue.messageId !== createdMessage.id) {
+      const deleteResponse = await discordBotRequest(
+        `/channels/${queue.channelId}/messages/${createdMessage.id}`,
+        {
+          method: "DELETE",
+        }
+      )
+
+      if (!deleteResponse.ok) {
+        console.error("Play With Viewers duplicate publish cleanup failed", {
+          createdMessageId: createdMessage.id,
+          queueId,
+          status: deleteResponse.status,
+        })
+      }
+
+      throw new Error(
+        "Queue message is already published. Use refresh to update the existing message."
+      )
+    }
 
     await ctx.runMutation(
       internal.mutations.creatorTools.playingWithViewers.queue.setQueueMessageMeta,
@@ -429,6 +460,10 @@ async function publishQueueMessageForQueue(
 
     throw new Error(errorMessage)
   }
+}
+
+function getCreatorFacingDirectMessageFailureMessage() {
+  return "Couldn't DM this viewer. Ask them to enable DMs or contact them manually."
 }
 
 async function updateQueueMessageForQueue(
@@ -623,9 +658,16 @@ async function notifySelectedUsersByDirectMessage(args: {
           dmStatus: "sent" as const,
         }
       } catch (error) {
+        console.error("Play With Viewers DM send failed", {
+          discordUserId: user.discordUserId,
+          errorMessage: toErrorMessage(error, "Failed to send Discord DM."),
+          queueId: args.queueId,
+          roundId: args.roundId,
+        })
+
         return {
           ...user,
-          dmFailureReason: toErrorMessage(error, "Failed to send Discord DM."),
+          dmFailureReason: getCreatorFacingDirectMessageFailureMessage(),
           dmStatus: "failed" as const,
         }
       }
