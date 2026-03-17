@@ -329,6 +329,12 @@ export declare const api: {
     creatorTools: {
       playingWithViewers: {
         queue: {
+          clearQueue: FunctionReference<
+            "mutation",
+            "public",
+            { queueId: Id<"viewerQueues"> },
+            any
+          >;
           createQueue: FunctionReference<
             "mutation",
             "public",
@@ -385,10 +391,62 @@ export declare const api: {
             },
             any
           >;
+          leaveQueue: FunctionReference<
+            "mutation",
+            "public",
+            { discordUserId: string; queueId: Id<"viewerQueues"> },
+            any
+          >;
+          removeQueueEntry: FunctionReference<
+            "mutation",
+            "public",
+            { entryId: Id<"viewerQueueEntries"> },
+            any
+          >;
           selectNextBatch: FunctionReference<
             "mutation",
             "public",
             { lobbyCode?: string; queueId: Id<"viewerQueues"> },
+            any
+          >;
+          setQueueActive: FunctionReference<
+            "mutation",
+            "public",
+            { isActive: boolean; queueId: Id<"viewerQueues"> },
+            any
+          >;
+          updateQueueSettings: FunctionReference<
+            "mutation",
+            "public",
+            {
+              creatorDisplayName: string;
+              creatorMessage?: string;
+              gameLabel: string;
+              inviteMode: "discord_dm" | "manual_creator_contact";
+              matchesPerViewer: number;
+              maxRank:
+                | "bronze"
+                | "silver"
+                | "gold"
+                | "platinum"
+                | "diamond"
+                | "crimson"
+                | "iridescent"
+                | "top250";
+              minRank:
+                | "bronze"
+                | "silver"
+                | "gold"
+                | "platinum"
+                | "diamond"
+                | "crimson"
+                | "iridescent"
+                | "top250";
+              playersPerBatch: number;
+              queueId: Id<"viewerQueues">;
+              rulesText?: string;
+              title: string;
+            },
             any
           >;
         };
