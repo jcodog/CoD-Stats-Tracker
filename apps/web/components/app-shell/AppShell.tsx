@@ -52,9 +52,6 @@ export async function AppShell({ children }: AppShellProps) {
                   <Link href="/settings/billing">Billing</Link>
                 </Button>
               ) : null}
-              <Button asChild size="sm" variant="ghost">
-                <Link href="/account">Account</Link>
-              </Button>
             </nav>
           </div>
 
