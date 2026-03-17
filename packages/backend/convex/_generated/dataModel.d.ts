@@ -1032,6 +1032,193 @@ export type DataModel = {
     searchIndexes: {};
     vectorIndexes: {};
   };
+  viewerQueueEntries: {
+    document: {
+      discordUserId: string;
+      displayName: string;
+      joinedAt: number;
+      queueId: Id<"viewerQueues">;
+      rank:
+        | "bronze"
+        | "silver"
+        | "gold"
+        | "platinum"
+        | "diamond"
+        | "crimson"
+        | "iridescent"
+        | "top250";
+      username: string;
+      _id: Id<"viewerQueueEntries">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "discordUserId"
+      | "displayName"
+      | "joinedAt"
+      | "queueId"
+      | "rank"
+      | "username";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_queueId: ["queueId", "_creationTime"];
+      by_queueId_and_discordUserId: [
+        "queueId",
+        "discordUserId",
+        "_creationTime",
+      ];
+      by_queueId_and_joinedAt: ["queueId", "joinedAt", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  viewerQueueMessageSyncs: {
+    document: {
+      createdAt: number;
+      errorMessage?: string;
+      operation: "publish" | "update" | "disable";
+      queueId: Id<"viewerQueues">;
+      status: "success" | "failed";
+      _id: Id<"viewerQueueMessageSyncs">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "createdAt"
+      | "errorMessage"
+      | "operation"
+      | "queueId"
+      | "status";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  viewerQueueRounds: {
+    document: {
+      createdAt: number;
+      lobbyCode?: string;
+      mode: "discord_dm" | "manual_creator_contact";
+      queueId: Id<"viewerQueues">;
+      selectedCount: number;
+      selectedUsers: Array<{
+        discordUserId: string;
+        displayName: string;
+        dmFailureReason?: string;
+        dmStatus?: "sent" | "failed";
+        rank:
+          | "bronze"
+          | "silver"
+          | "gold"
+          | "platinum"
+          | "diamond"
+          | "crimson"
+          | "iridescent"
+          | "top250";
+        username: string;
+      }>;
+      _id: Id<"viewerQueueRounds">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "createdAt"
+      | "lobbyCode"
+      | "mode"
+      | "queueId"
+      | "selectedCount"
+      | "selectedUsers";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_queueId: ["queueId", "_creationTime"];
+      by_queueId_and_createdAt: ["queueId", "createdAt", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  viewerQueues: {
+    document: {
+      channelId: string;
+      createdAt: number;
+      creatorDisplayName: string;
+      creatorMessage?: string;
+      creatorUserId: Id<"users">;
+      gameLabel: string;
+      guildId: string;
+      inviteMode: "discord_dm" | "manual_creator_contact";
+      isActive: boolean;
+      lastMessageSyncError?: string;
+      lastSelectedRoundId?: Id<"viewerQueueRounds">;
+      matchesPerViewer: number;
+      maxRank:
+        | "bronze"
+        | "silver"
+        | "gold"
+        | "platinum"
+        | "diamond"
+        | "crimson"
+        | "iridescent"
+        | "top250";
+      messageId?: string;
+      minRank:
+        | "bronze"
+        | "silver"
+        | "gold"
+        | "platinum"
+        | "diamond"
+        | "crimson"
+        | "iridescent"
+        | "top250";
+      playersPerBatch: number;
+      rulesText?: string;
+      title: string;
+      updatedAt: number;
+      _id: Id<"viewerQueues">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "channelId"
+      | "createdAt"
+      | "creatorDisplayName"
+      | "creatorMessage"
+      | "creatorUserId"
+      | "gameLabel"
+      | "guildId"
+      | "inviteMode"
+      | "isActive"
+      | "lastMessageSyncError"
+      | "lastSelectedRoundId"
+      | "matchesPerViewer"
+      | "maxRank"
+      | "messageId"
+      | "minRank"
+      | "playersPerBatch"
+      | "rulesText"
+      | "title"
+      | "updatedAt";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_creatorUserId: ["creatorUserId", "_creationTime"];
+      by_creatorUserId_and_guildId: [
+        "creatorUserId",
+        "guildId",
+        "_creationTime",
+      ];
+      by_guildId_and_channelId: ["guildId", "channelId", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
 };
 
 /**

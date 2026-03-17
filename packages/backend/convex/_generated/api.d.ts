@@ -326,6 +326,74 @@ export declare const api: {
         any
       >;
     };
+    creatorTools: {
+      playingWithViewers: {
+        queue: {
+          createQueue: FunctionReference<
+            "mutation",
+            "public",
+            {
+              channelId: string;
+              creatorDisplayName: string;
+              creatorMessage?: string;
+              creatorUserId: Id<"users">;
+              gameLabel: string;
+              guildId: string;
+              inviteMode: "discord_dm" | "manual_creator_contact";
+              matchesPerViewer: number;
+              maxRank:
+                | "bronze"
+                | "silver"
+                | "gold"
+                | "platinum"
+                | "diamond"
+                | "crimson"
+                | "iridescent"
+                | "top250";
+              minRank:
+                | "bronze"
+                | "silver"
+                | "gold"
+                | "platinum"
+                | "diamond"
+                | "crimson"
+                | "iridescent"
+                | "top250";
+              playersPerBatch: number;
+              rulesText?: string;
+              title: string;
+            },
+            any
+          >;
+          enqueueViewer: FunctionReference<
+            "mutation",
+            "public",
+            {
+              discordUserId: string;
+              displayName: string;
+              queueId: Id<"viewerQueues">;
+              rank:
+                | "bronze"
+                | "silver"
+                | "gold"
+                | "platinum"
+                | "diamond"
+                | "crimson"
+                | "iridescent"
+                | "top250";
+              username: string;
+            },
+            any
+          >;
+          selectNextBatch: FunctionReference<
+            "mutation",
+            "public",
+            { lobbyCode?: string; queueId: Id<"viewerQueues"> },
+            any
+          >;
+        };
+      };
+    };
     oauth: {
       createAuthorizationCode: FunctionReference<
         "mutation",
