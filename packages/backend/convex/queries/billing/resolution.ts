@@ -1,13 +1,19 @@
 import { v } from "convex/values"
 
 import type { Doc } from "../../_generated/dataModel"
-import { internalQuery, query, type QueryCtx } from "../../_generated/server"
+import {
+  internalQuery,
+  query,
+  type MutationCtx,
+  type QueryCtx,
+} from "../../_generated/server"
 import {
   hasEffectivePaidSubscriptionAccess,
   hasManagedCreatorGrantSubscriptionAccess,
   type BillingAccessSource,
   type BillingAttentionStatus,
 } from "../../lib/billing"
+import { resolveAppPlanKey } from "../../lib/billingAccess"
 import { resolveBillingFeatureApplyMode } from "../../lib/staffRoles"
 import {
   selectCurrentBillingAccessGrant,
@@ -17,7 +23,6 @@ import {
 
 type BillingFeatureRecord = Doc<"billingFeatures">
 type BillingEntitlementRecord = Doc<"billingEntitlements">
-type BillingPlanRecord = Doc<"billingPlans">
 type BillingSubscriptionRecord = Doc<"billingSubscriptions">
 type UserRecord = Doc<"users">
 
@@ -132,7 +137,7 @@ function deriveUpcomingChange(subscription: BillingSubscriptionRecord | null) {
 }
 
 export async function buildResolvedBillingState(
-  ctx: Pick<QueryCtx, "db">,
+  ctx: Pick<QueryCtx | MutationCtx, "db">,
   user: UserRecord
 ) {
   const now = Date.now()
@@ -235,10 +240,20 @@ export async function buildResolvedBillingState(
     (effectivePlanKey ? plansByKey.get(effectivePlanKey) : null) ?? null
   const creatorGrant =
     accessGrant && accessGrant.source === "creator_approval" ? accessGrant : null
+  const appPlanKey = resolveAppPlanKey({
+    accessSource,
+    effectivePlan,
+    effectivePlanKey,
+    fallbackPlanKey: user.plan,
+    grantSource: accessGrant?.source,
+    managedGrantSource: managedGrantSubscription?.managedGrantSource,
+  })
+  const hasCreatorAccess = appPlanKey === "creator"
 
   return {
     accessGrant,
     accessSource,
+    appPlanKey,
     attentionStatus: deriveAttentionStatus(
       managedGrantEligible ? managedGrantSubscription : subscription
     ),
@@ -247,11 +262,8 @@ export async function buildResolvedBillingState(
     effectiveFeatures,
     effectivePlan,
     effectivePlanKey,
-    hasActiveAccess:
-      accessSource === "managed_grant_subscription" ||
-      accessSource === "creator_grant" ||
-      accessSource === "paid_subscription" ||
-      (effectivePlanKey !== null && effectivePlanKey !== "free"),
+    hasActiveAccess: appPlanKey !== "free",
+    hasCreatorAccess,
     subscription: managedGrantEligible ? managedGrantSubscription : subscription,
     upcomingChange: deriveUpcomingChange(
       managedGrantEligible ? managedGrantSubscription : subscription

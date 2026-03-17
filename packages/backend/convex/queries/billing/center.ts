@@ -116,10 +116,7 @@ function getSubscriptionAmount(
 function getManagedGrantPresentation(
   subscription: BillingSubscriptionRecord
 ) {
-  if (
-    subscription.managedGrantSource !== "creator_approval" ||
-    subscription.planKey !== "creator"
-  ) {
+  if (subscription.managedGrantSource !== "creator_approval") {
     return null
   }
 

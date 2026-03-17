@@ -479,17 +479,14 @@ function hasActiveCreatorPlanGrant(state: BillingResolvedState | null | undefine
   return (
     (state?.accessSource === "creator_grant" ||
       state?.accessSource === "managed_grant_subscription") &&
-    state.effectivePlanKey === "creator"
+    state.hasCreatorAccess
   )
 }
 
 function hasManagedCreatorGrantSubscription(
   subscription: BillingCenterSubscription
 ) {
-  return (
-    subscription.planKey === "creator" &&
-    subscription.managedGrant?.source === "creator_approval"
-  )
+  return subscription.managedGrant?.source === "creator_approval"
 }
 
 function getCreatorGrantAccessLabel(args: {
@@ -795,7 +792,6 @@ function SubscriptionsCard(args: {
             const isActiveManagedGrant =
               subscription.managedGrant !== null &&
               args.creatorGrantActive === true &&
-              subscription.planKey === "creator" &&
               (subscription.status === "active" ||
                 subscription.status === "trialing" ||
                 subscription.status === "past_due")

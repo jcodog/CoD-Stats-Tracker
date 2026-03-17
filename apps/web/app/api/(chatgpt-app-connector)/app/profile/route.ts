@@ -52,7 +52,8 @@ export async function handleProfileGet(
       ? authResult.auth.user.name
       : "CodStats User";
 
-  const normalizedPlan = authResult.auth.user.plan === "premium" ? "premium" : "free";
+  const normalizedPlan =
+    authResult.auth.user.plan === "free" ? "free" : authResult.auth.user.plan;
 
   const chatgptLinked =
     authResult.auth.user.chatgptLinked === true &&

@@ -87,12 +87,12 @@ export function CheckoutView({
   const hasCreatorGrantAccess =
     (billingStateQuery.data?.accessSource === "creator_grant" ||
       billingStateQuery.data?.accessSource === "managed_grant_subscription") &&
-    billingStateQuery.data.effectivePlanKey === "creator"
+    billingStateQuery.data.hasCreatorAccess
 
   function getCreatorGrantCheckoutMessage(
     billingState: BillingResolvedState | null | undefined
   ) {
-    if (!billingState || billingState.effectivePlanKey !== "creator") {
+    if (!billingState || !billingState.hasCreatorAccess) {
       return "This account already has Creator complimentary access."
     }
 

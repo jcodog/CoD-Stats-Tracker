@@ -14,6 +14,10 @@ import {
   maskIdentifier,
 } from "../../lib/billing"
 import {
+  hasCreatorAccess,
+  resolveAppPlanKey,
+} from "../../lib/billingAccess"
+import {
   isStripeManagedCreatorGrantSubscription,
 } from "../../lib/billingStripe"
 import { getClerkBackendClient } from "../../lib/clerk"
@@ -437,7 +441,9 @@ function buildCustomerRows(args: {
         (subscription) => isImpactStatus(subscription.status)
       ).length
       const creatorAccessSource =
-        userLookup?.currentPlanKey === "creator" ? userLookup.accessSource : "none"
+        userLookup?.currentAppPlanKey === "creator"
+          ? userLookup.accessSource
+          : "none"
 
       return {
         active: customer.active,
@@ -840,11 +846,24 @@ function buildUserDirectory(args: {
       ? activeGrant.planKey
       : hasPaidAccess
         ? currentSubscription?.planKey
-        : user.plan === "creator"
-          ? "creator"
-          : user.plan === "premium"
-            ? "premium"
-            : null
+        : user.plan !== "free"
+          ? user.plan
+          : null
+    const currentAppPlanKey = resolveAppPlanKey({
+      accessSource: hasManagedCreatorAccess
+        ? "managed_grant_subscription"
+        : activeGrant
+          ? "creator_grant"
+          : hasPaidAccess
+            ? "paid_subscription"
+            : currentPlanKey
+              ? "legacy_plan"
+              : "none",
+      effectivePlanKey: currentPlanKey,
+      fallbackPlanKey: user.plan,
+      grantSource: activeGrant?.source,
+      managedGrantSource: currentSubscription?.managedGrantSource,
+    })
 
     return {
       accessSource: hasManagedCreatorAccess
@@ -856,6 +875,7 @@ function buildUserDirectory(args: {
           : currentPlanKey
             ? "legacy_plan"
             : "none",
+      currentAppPlanKey,
       clerkUserId: user.clerkUserId,
       currentPlanKey,
       email: emailByClerkUserId.get(user.clerkUserId),
@@ -3368,6 +3388,15 @@ export const grantCreatorAccess = action({
       throw new Error("The selected plan is not available for creator access.")
     }
 
+    if (
+      resolveAppPlanKey({
+        effectivePlan: plan,
+        effectivePlanKey: plan.key,
+      }) !== "creator"
+    ) {
+      throw new Error("Creator access grants must use the Creator billing plan.")
+    }
+
     if (normalizedReason.length < 8) {
       throw new Error(
         "A clear reason is required before creator access can be granted."
@@ -3548,12 +3577,16 @@ export const backfillCreatorGrantStripeSubscriptions = action({
       internal.queries.staff.internal.getBillingRecords,
       {}
     )
-    const plan = await ctx.runQuery(
-      internal.queries.billing.internal.getPlanByKey,
-      {
-        planKey: "creator",
-      }
-    )
+    const plan =
+      records.plans.find(
+        (entry: (typeof records.plans)[number]) =>
+          entry.active &&
+          entry.archivedAt === undefined &&
+          resolveAppPlanKey({
+            effectivePlan: entry,
+            effectivePlanKey: entry.key,
+          }) === "creator"
+      ) ?? null
     const now = Date.now()
 
     if (!plan || !plan.active || plan.archivedAt !== undefined) {
@@ -3563,8 +3596,10 @@ export const backfillCreatorGrantStripeSubscriptions = action({
     const activeCreatorGrants = records.accessGrants.filter(
       (grant: (typeof records.accessGrants)[number]) =>
         grant.active &&
-        grant.source === "creator_approval" &&
-        grant.planKey === "creator" &&
+        hasCreatorAccess({
+          effectivePlanKey: grant.planKey,
+          grantSource: grant.source,
+        }) &&
         (grant.startsAt === undefined || grant.startsAt <= now) &&
         (grant.endsAt === undefined || grant.endsAt > now)
     )

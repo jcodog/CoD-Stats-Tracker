@@ -128,7 +128,6 @@ export function hasManagedCreatorGrantSubscriptionAccess(
   now = Date.now()
 ) {
   return (
-    subscription.planKey === "creator" &&
     subscription.managedGrantSource === "creator_approval" &&
     hasEffectivePaidSubscriptionAccess(subscription, now)
   )

@@ -29,7 +29,7 @@ type AppUserRecord = {
   clerkUserId: string;
   discordId: string;
   name: string;
-  plan: "free" | "premium";
+  plan: "free" | "premium" | "creator";
   status: "active" | "disabled";
   chatgptLinked: boolean;
   connectionStatus: "active" | "revoked" | null;

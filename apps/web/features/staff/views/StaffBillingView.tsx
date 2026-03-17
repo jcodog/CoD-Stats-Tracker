@@ -14,6 +14,7 @@ import type {
   StaffImpactPreview,
   StaffMutationResponse,
 } from "@workspace/backend/convex/lib/staffTypes"
+import { resolveAppPlanKey } from "@workspace/backend/convex/lib/billingAccess"
 import type { UserRole } from "@workspace/backend/convex/lib/staffRoles"
 import {
   AlertDialog,
@@ -356,22 +357,6 @@ function BillingAccessSourceBadge({
   return <Badge variant="outline">no access</Badge>
 }
 
-function matchesUserLookup(user: StaffBillingUserLookupRecord, query: string) {
-  const normalizedQuery = query.trim().toLowerCase()
-
-  if (!normalizedQuery) {
-    return true
-  }
-
-  return (
-    user.userName.toLowerCase().includes(normalizedQuery) ||
-    user.userId.toLowerCase().includes(normalizedQuery) ||
-    user.clerkUserId.toLowerCase().includes(normalizedQuery) ||
-    user.email?.toLowerCase().includes(normalizedQuery) === true ||
-    user.currentPlanKey?.toLowerCase().includes(normalizedQuery) === true
-  )
-}
-
 function getActiveCreatorGrant(
   grants: StaffCreatorGrantRecord[],
   targetUserId: string
@@ -648,9 +633,13 @@ export function StaffBillingView({
     ? !sameKeySet(selectedAssignmentFeature.linkedPlanKeys, assignmentPlanKeys)
     : false
   const creatorAccessPlan =
-    data.plans.find((plan) => plan.active && plan.key === "creator") ??
     data.plans.find(
-      (plan) => plan.active && plan.name.trim().toLowerCase() === "creator"
+      (plan) =>
+        plan.active &&
+        resolveAppPlanKey({
+          effectivePlan: plan,
+          effectivePlanKey: plan.key,
+        }) === "creator"
     ) ??
     null
   const creatorGrantRecordsByUserId = new Map<

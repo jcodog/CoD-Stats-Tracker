@@ -1,3 +1,4 @@
+import type { AppPlanKey } from "./billingAccess"
 import type {
   AuditLogResult,
   BillingFeatureApplyMode,
@@ -170,6 +171,7 @@ export type StaffBillingCustomerRecord = {
 export type StaffBillingUserLookupRecord = {
   accessSource: StaffBillingAccessSource
   clerkUserId: string
+  currentAppPlanKey: AppPlanKey
   currentPlanKey?: string | null
   email?: string
   hasCreatorGrant: boolean

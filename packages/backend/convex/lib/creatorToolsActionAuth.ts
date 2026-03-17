@@ -3,6 +3,7 @@
 import { internal } from "../_generated/api"
 import type { Id } from "../_generated/dataModel"
 import type { ActionCtx } from "../_generated/server"
+import { hasCreatorAccessFromState } from "./billingAccess"
 import { getClerkBackendClient } from "./clerk"
 
 function hasLinkedTwitchAccount(
@@ -38,7 +39,12 @@ async function getCreatorActionActor(ctx: ActionCtx) {
     }
   )
 
-  if (billingState?.effectivePlanKey !== "creator" && user.plan !== "creator") {
+  if (
+    !hasCreatorAccessFromState({
+      fallbackPlanKey: user.plan,
+      state: billingState,
+    })
+  ) {
     throw new Error("Creator plan access is required for Play With Viewers.")
   }
 

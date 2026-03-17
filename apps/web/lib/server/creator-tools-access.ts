@@ -5,6 +5,7 @@ import { auth } from "@clerk/nextjs/server"
 import { fetchQuery } from "convex/nextjs"
 
 import { api } from "@workspace/backend/convex/_generated/api"
+import { hasCreatorAccessFromState } from "@workspace/backend/convex/lib/billingAccess"
 
 type CreatorToolsAccessState = {
   hasCreatorAccess: boolean
@@ -41,9 +42,10 @@ export const getCreatorToolsAccessState = cache(
     ])
 
     return {
-      hasCreatorAccess:
-        billingState?.effectivePlanKey === "creator" ||
-        dbUser?.plan === "creator",
+      hasCreatorAccess: hasCreatorAccessFromState({
+        fallbackPlanKey: dbUser?.plan,
+        state: billingState,
+      }),
       isSignedIn: true,
     }
   }

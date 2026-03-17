@@ -67,6 +67,7 @@ export type PricingCatalogResponse = {
 
 export type BillingResolvedState = {
   accessSource: BillingAccessSource
+  appPlanKey: "free" | "premium" | "creator"
   attentionStatus: BillingAttentionStatus
   creatorGrant?: {
     endsAt?: number
@@ -88,6 +89,7 @@ export type BillingResolvedState = {
   } | null
   effectivePlanKey: string | null
   hasActiveAccess: boolean
+  hasCreatorAccess: boolean
   subscription?: {
     attentionStatus: BillingAttentionStatus
     cancelAt?: number

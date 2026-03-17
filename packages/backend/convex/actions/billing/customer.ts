@@ -16,6 +16,7 @@ import {
   hasManagedCreatorGrantSubscriptionAccess,
   isManageableBillingSubscription,
 } from "../../lib/billing"
+import { hasCreatorAccess } from "../../lib/billingAccess"
 import {
   getExpandedStripeInvoice,
   getInvoiceConfirmationSecret,
@@ -262,7 +263,10 @@ function hasActiveCreatorGrant(
   userContext: Awaited<ReturnType<typeof requireBillingUser>>
 ) {
   return (
-    userContext.accessGrant?.planKey === "creator" ||
+    hasCreatorAccess({
+      effectivePlanKey: userContext.accessGrant?.planKey,
+      grantSource: userContext.accessGrant?.source,
+    }) ||
     (userContext.subscription !== null &&
       hasManagedCreatorGrantSubscriptionAccess(userContext.subscription))
   )

@@ -7,6 +7,7 @@ import {
   billingTaxExemptValidator,
   billingTaxIdValidator,
 } from "../../db/tables/billing/shared"
+import { buildResolvedBillingState } from "../../queries/billing/resolution"
 
 const billingIntervalValidator = v.union(v.literal("month"), v.literal("year"))
 const subscriptionStatusValidator = v.union(
@@ -159,6 +160,27 @@ async function getExistingWebhookEventRecord(args: {
       query.eq("stripeEventId", args.stripeEventId)
     )
     .unique()
+}
+
+async function syncUserBillingPlan(ctx: MutationCtx, userId: Doc<"users">["_id"]) {
+  const user = await ctx.db.get(userId)
+
+  if (!user) {
+    return null
+  }
+
+  const resolvedState = await buildResolvedBillingState(ctx, user)
+
+  if (user.plan === resolvedState.appPlanKey) {
+    return resolvedState.appPlanKey
+  }
+
+  await ctx.db.patch(user._id, {
+    plan: resolvedState.appPlanKey,
+    updatedAt: Date.now(),
+  })
+
+  return resolvedState.appPlanKey
 }
 
 export const upsertBillingCustomer = internalMutation({
@@ -321,7 +343,7 @@ export const upsertBillingSubscription = internalMutation({
           }
 
     if (!existingSubscription) {
-      return await ctx.db.insert("billingSubscriptions", {
+      const subscriptionId = await ctx.db.insert("billingSubscriptions", {
         attentionStatus: args.attentionStatus,
         attentionUpdatedAt: args.attentionUpdatedAt,
         cancelAt: args.cancelAt,
@@ -356,6 +378,10 @@ export const upsertBillingSubscription = internalMutation({
         userId: args.userId,
         ...scheduledFields,
       })
+
+      await syncUserBillingPlan(ctx, args.userId)
+
+      return subscriptionId
     }
 
     const patch: BillingSubscriptionPatch = {}
@@ -511,11 +537,15 @@ export const upsertBillingSubscription = internalMutation({
     if (existingSubscription.userId !== args.userId) patch.userId = args.userId
 
     if (!hasChanged(patch)) {
+      await syncUserBillingPlan(ctx, args.userId)
+
       return existingSubscription._id
     }
 
     patch.updatedAt = now
     await ctx.db.patch(existingSubscription._id, patch)
+
+    await syncUserBillingPlan(ctx, args.userId)
 
     return existingSubscription._id
   },
@@ -1198,10 +1228,12 @@ export const grantBillingAccessGrant = internalMutation({
         updatedAt: now,
       })
 
+      await syncUserBillingPlan(ctx, args.userId)
+
       return matchingGrant._id
     }
 
-    return await ctx.db.insert("billingAccessGrants", {
+    const grantId = await ctx.db.insert("billingAccessGrants", {
       active: true,
       clerkUserId: args.clerkUserId,
       createdAt: now,
@@ -1218,6 +1250,10 @@ export const grantBillingAccessGrant = internalMutation({
       updatedAt: now,
       userId: args.userId,
     })
+
+    await syncUserBillingPlan(ctx, args.userId)
+
+    return grantId
   },
 })
 
@@ -1245,6 +1281,8 @@ export const revokeBillingAccessGrant = internalMutation({
       revokedByName: args.revokedByName,
       updatedAt: Date.now(),
     })
+
+    await syncUserBillingPlan(ctx, grant.userId)
 
     return grant._id
   },

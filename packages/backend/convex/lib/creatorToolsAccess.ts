@@ -1,5 +1,6 @@
 import type { Id } from "../_generated/dataModel"
 import type { MutationCtx, QueryCtx } from "../_generated/server"
+import { hasCreatorAccessFromState } from "./billingAccess"
 import { buildResolvedBillingState } from "../queries/billing/resolution"
 
 type CreatorToolsDataCtx =
@@ -32,7 +33,12 @@ export async function requireCreatorToolsViewerAccess(ctx: CreatorToolsDataCtx) 
   const actor = await getCurrentUserRecord(ctx)
   const billingState = await buildResolvedBillingState(ctx, actor.user)
 
-  if (billingState.effectivePlanKey !== "creator" && actor.user.plan !== "creator") {
+  if (
+    !hasCreatorAccessFromState({
+      fallbackPlanKey: actor.user.plan,
+      state: billingState,
+    })
+  ) {
     throw new Error("Creator plan access is required for Play With Viewers.")
   }
 

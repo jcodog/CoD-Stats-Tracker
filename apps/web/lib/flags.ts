@@ -5,6 +5,7 @@ import { vercelAdapter } from "@flags-sdk/vercel"
 import { auth, currentUser } from "@clerk/nextjs/server"
 import { fetchQuery } from "convex/nextjs"
 import { api } from "@workspace/backend/convex/_generated/api"
+import { resolveAppPlanKeyFromState } from "@workspace/backend/convex/lib/billingAccess"
 import type { UserRole } from "@workspace/backend/convex/lib/staffRoles"
 
 export type Plan = "free" | "premium" | "creator"
@@ -43,17 +44,10 @@ const identify = dedupe(async (): Promise<FlagEntities> => {
     clerkUser?.emailAddresses?.[0]?.emailAddress
 
   const role: Role = dbUser?.role ?? "user"
-
-  const resolvedPlan: Plan =
-    billingState?.accessSource === "creator_grant" ||
-    billingState?.accessSource === "managed_grant_subscription" ||
-    dbUser?.plan === "creator"
-      ? "creator"
-      : billingState?.accessSource === "paid_subscription" ||
-          billingState?.effectivePlan?.planType === "paid" ||
-          dbUser?.plan === "premium"
-        ? "premium"
-        : "free"
+  const resolvedPlan: Plan = resolveAppPlanKeyFromState({
+    fallbackPlanKey: dbUser?.plan,
+    state: billingState,
+  })
 
   return {
     user: {
