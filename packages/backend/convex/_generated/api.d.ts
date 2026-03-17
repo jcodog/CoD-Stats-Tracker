@@ -178,6 +178,60 @@ export declare const api: {
             any
           >;
         };
+        queue: {
+          clearQueue: FunctionReference<
+            "action",
+            "public",
+            { queueId: Id<"viewerQueues"> },
+            any
+          >;
+          removeQueueEntry: FunctionReference<
+            "action",
+            "public",
+            { entryId: Id<"viewerQueueEntries"> },
+            any
+          >;
+          setQueueActive: FunctionReference<
+            "action",
+            "public",
+            { isActive: boolean; queueId: Id<"viewerQueues"> },
+            any
+          >;
+          updateQueueSettings: FunctionReference<
+            "action",
+            "public",
+            {
+              creatorDisplayName: string;
+              creatorMessage?: string;
+              gameLabel: string;
+              inviteMode: "discord_dm" | "manual_creator_contact";
+              matchesPerViewer: number;
+              maxRank:
+                | "bronze"
+                | "silver"
+                | "gold"
+                | "platinum"
+                | "diamond"
+                | "crimson"
+                | "iridescent"
+                | "top250";
+              minRank:
+                | "bronze"
+                | "silver"
+                | "gold"
+                | "platinum"
+                | "diamond"
+                | "crimson"
+                | "iridescent"
+                | "top250";
+              playersPerBatch: number;
+              queueId: Id<"viewerQueues">;
+              rulesText?: string;
+              title: string;
+            },
+            any
+          >;
+        };
       };
     };
     discord: {
@@ -411,194 +465,6 @@ export declare const api: {
         { userId: Id<"users"> },
         any
       >;
-    };
-    creatorTools: {
-      playingWithViewers: {
-        queue: {
-          clearQueue: FunctionReference<
-            "mutation",
-            "public",
-            { queueId: Id<"viewerQueues"> },
-            any
-          >;
-          clearQueueMessageSyncError: FunctionReference<
-            "mutation",
-            "public",
-            { queueId: Id<"viewerQueues"> },
-            any
-          >;
-          createQueue: FunctionReference<
-            "mutation",
-            "public",
-            {
-              channelId: string;
-              channelName?: string;
-              creatorDisplayName: string;
-              creatorMessage?: string;
-              creatorUserId: Id<"users">;
-              gameLabel: string;
-              guildId: string;
-              guildName?: string;
-              inviteMode: "discord_dm" | "manual_creator_contact";
-              matchesPerViewer: number;
-              maxRank:
-                | "bronze"
-                | "silver"
-                | "gold"
-                | "platinum"
-                | "diamond"
-                | "crimson"
-                | "iridescent"
-                | "top250";
-              minRank:
-                | "bronze"
-                | "silver"
-                | "gold"
-                | "platinum"
-                | "diamond"
-                | "crimson"
-                | "iridescent"
-                | "top250";
-              playersPerBatch: number;
-              rulesText?: string;
-              title: string;
-            },
-            any
-          >;
-          enqueueViewer: FunctionReference<
-            "mutation",
-            "public",
-            {
-              avatarUrl?: string;
-              discordUserId: string;
-              displayName: string;
-              queueId: Id<"viewerQueues">;
-              rank:
-                | "bronze"
-                | "silver"
-                | "gold"
-                | "platinum"
-                | "diamond"
-                | "crimson"
-                | "iridescent"
-                | "top250";
-              username: string;
-            },
-            any
-          >;
-          inviteQueueEntryNow: FunctionReference<
-            "mutation",
-            "public",
-            { entryId: Id<"viewerQueueEntries">; lobbyCode?: string },
-            any
-          >;
-          leaveQueue: FunctionReference<
-            "mutation",
-            "public",
-            { discordUserId: string; queueId: Id<"viewerQueues"> },
-            any
-          >;
-          removeQueueEntry: FunctionReference<
-            "mutation",
-            "public",
-            { entryId: Id<"viewerQueueEntries"> },
-            any
-          >;
-          selectNextBatch: FunctionReference<
-            "mutation",
-            "public",
-            { lobbyCode?: string; queueId: Id<"viewerQueues"> },
-            any
-          >;
-          setQueueActive: FunctionReference<
-            "mutation",
-            "public",
-            { isActive: boolean; queueId: Id<"viewerQueues"> },
-            any
-          >;
-          setQueueDiscordContext: FunctionReference<
-            "mutation",
-            "public",
-            {
-              channelName?: string;
-              guildName?: string;
-              queueId: Id<"viewerQueues">;
-            },
-            any
-          >;
-          setQueueMessageMeta: FunctionReference<
-            "mutation",
-            "public",
-            { messageId: string; queueId: Id<"viewerQueues"> },
-            any
-          >;
-          setQueueMessageSyncError: FunctionReference<
-            "mutation",
-            "public",
-            { error: string; queueId: Id<"viewerQueues"> },
-            any
-          >;
-          setQueueRoundSelectedUsers: FunctionReference<
-            "mutation",
-            "public",
-            {
-              roundId: Id<"viewerQueueRounds">;
-              selectedUsers: Array<{
-                avatarUrl?: string;
-                discordUserId: string;
-                displayName: string;
-                dmFailureReason?: string;
-                dmStatus?: "sent" | "failed";
-                rank:
-                  | "bronze"
-                  | "silver"
-                  | "gold"
-                  | "platinum"
-                  | "diamond"
-                  | "crimson"
-                  | "iridescent"
-                  | "top250";
-                username: string;
-              }>;
-            },
-            any
-          >;
-          updateQueueSettings: FunctionReference<
-            "mutation",
-            "public",
-            {
-              creatorDisplayName: string;
-              creatorMessage?: string;
-              gameLabel: string;
-              inviteMode: "discord_dm" | "manual_creator_contact";
-              matchesPerViewer: number;
-              maxRank:
-                | "bronze"
-                | "silver"
-                | "gold"
-                | "platinum"
-                | "diamond"
-                | "crimson"
-                | "iridescent"
-                | "top250";
-              minRank:
-                | "bronze"
-                | "silver"
-                | "gold"
-                | "platinum"
-                | "diamond"
-                | "crimson"
-                | "iridescent"
-                | "top250";
-              playersPerBatch: number;
-              queueId: Id<"viewerQueues">;
-              rulesText?: string;
-              title: string;
-            },
-            any
-          >;
-        };
-      };
     };
     oauth: {
       createAuthorizationCode: FunctionReference<
@@ -836,31 +702,8 @@ export declare const api: {
     creatorTools: {
       playingWithViewers: {
         queue: {
-          getLatestQueueRound: FunctionReference<
-            "query",
-            "public",
-            { queueId: Id<"viewerQueues"> },
-            any
-          >;
-          getQueueByCreatorUserId: FunctionReference<
-            "query",
-            "public",
-            { creatorUserId: Id<"users"> },
-            any
-          >;
-          getQueueByGuildAndChannel: FunctionReference<
-            "query",
-            "public",
-            { channelId: string; guildId: string },
-            any
-          >;
-          getQueueById: FunctionReference<
-            "query",
-            "public",
-            { queueId: Id<"viewerQueues"> },
-            any
-          >;
-          getQueueEntries: FunctionReference<
+          getCurrentCreatorQueue: FunctionReference<"query", "public", {}, any>;
+          getCurrentCreatorQueueEntries: FunctionReference<
             "query",
             "public",
             { queueId: Id<"viewerQueues"> },
@@ -1033,6 +876,18 @@ export declare const internal: {
     billing: {
       syncCatalogToStripe: {
         syncCatalogToStripe: FunctionReference<"action", "internal", {}, any>;
+      };
+    };
+    creatorTools: {
+      playingWithViewers: {
+        discord: {
+          syncQueueMessageAfterViewerInteraction: FunctionReference<
+            "action",
+            "internal",
+            { queueId: Id<"viewerQueues"> },
+            any
+          >;
+        };
       };
     };
     featureFlags: {
@@ -1325,6 +1180,194 @@ export declare const internal: {
         >;
       };
     };
+    creatorTools: {
+      playingWithViewers: {
+        queue: {
+          clearQueue: FunctionReference<
+            "mutation",
+            "internal",
+            { queueId: Id<"viewerQueues"> },
+            any
+          >;
+          clearQueueMessageSyncError: FunctionReference<
+            "mutation",
+            "internal",
+            { queueId: Id<"viewerQueues"> },
+            any
+          >;
+          createQueue: FunctionReference<
+            "mutation",
+            "internal",
+            {
+              channelId: string;
+              channelName?: string;
+              creatorDisplayName: string;
+              creatorMessage?: string;
+              creatorUserId: Id<"users">;
+              gameLabel: string;
+              guildId: string;
+              guildName?: string;
+              inviteMode: "discord_dm" | "manual_creator_contact";
+              matchesPerViewer: number;
+              maxRank:
+                | "bronze"
+                | "silver"
+                | "gold"
+                | "platinum"
+                | "diamond"
+                | "crimson"
+                | "iridescent"
+                | "top250";
+              minRank:
+                | "bronze"
+                | "silver"
+                | "gold"
+                | "platinum"
+                | "diamond"
+                | "crimson"
+                | "iridescent"
+                | "top250";
+              playersPerBatch: number;
+              rulesText?: string;
+              title: string;
+            },
+            any
+          >;
+          enqueueViewer: FunctionReference<
+            "mutation",
+            "internal",
+            {
+              avatarUrl?: string;
+              discordUserId: string;
+              displayName: string;
+              queueId: Id<"viewerQueues">;
+              rank:
+                | "bronze"
+                | "silver"
+                | "gold"
+                | "platinum"
+                | "diamond"
+                | "crimson"
+                | "iridescent"
+                | "top250";
+              username: string;
+            },
+            any
+          >;
+          inviteQueueEntryNow: FunctionReference<
+            "mutation",
+            "internal",
+            { entryId: Id<"viewerQueueEntries">; lobbyCode?: string },
+            any
+          >;
+          leaveQueue: FunctionReference<
+            "mutation",
+            "internal",
+            { discordUserId: string; queueId: Id<"viewerQueues"> },
+            any
+          >;
+          removeQueueEntry: FunctionReference<
+            "mutation",
+            "internal",
+            { entryId: Id<"viewerQueueEntries"> },
+            any
+          >;
+          selectNextBatch: FunctionReference<
+            "mutation",
+            "internal",
+            { lobbyCode?: string; queueId: Id<"viewerQueues"> },
+            any
+          >;
+          setQueueActive: FunctionReference<
+            "mutation",
+            "internal",
+            { isActive: boolean; queueId: Id<"viewerQueues"> },
+            any
+          >;
+          setQueueDiscordContext: FunctionReference<
+            "mutation",
+            "internal",
+            {
+              channelName?: string;
+              guildName?: string;
+              queueId: Id<"viewerQueues">;
+            },
+            any
+          >;
+          setQueueMessageMeta: FunctionReference<
+            "mutation",
+            "internal",
+            { messageId: string; queueId: Id<"viewerQueues"> },
+            any
+          >;
+          setQueueMessageSyncError: FunctionReference<
+            "mutation",
+            "internal",
+            { error: string; queueId: Id<"viewerQueues"> },
+            any
+          >;
+          setQueueRoundSelectedUsers: FunctionReference<
+            "mutation",
+            "internal",
+            {
+              roundId: Id<"viewerQueueRounds">;
+              selectedUsers: Array<{
+                avatarUrl?: string;
+                discordUserId: string;
+                displayName: string;
+                dmFailureReason?: string;
+                dmStatus?: "sent" | "failed";
+                rank:
+                  | "bronze"
+                  | "silver"
+                  | "gold"
+                  | "platinum"
+                  | "diamond"
+                  | "crimson"
+                  | "iridescent"
+                  | "top250";
+                username: string;
+              }>;
+            },
+            any
+          >;
+          updateQueueSettings: FunctionReference<
+            "mutation",
+            "internal",
+            {
+              creatorDisplayName: string;
+              creatorMessage?: string;
+              gameLabel: string;
+              inviteMode: "discord_dm" | "manual_creator_contact";
+              matchesPerViewer: number;
+              maxRank:
+                | "bronze"
+                | "silver"
+                | "gold"
+                | "platinum"
+                | "diamond"
+                | "crimson"
+                | "iridescent"
+                | "top250";
+              minRank:
+                | "bronze"
+                | "silver"
+                | "gold"
+                | "platinum"
+                | "diamond"
+                | "crimson"
+                | "iridescent"
+                | "top250";
+              playersPerBatch: number;
+              queueId: Id<"viewerQueues">;
+              rulesText?: string;
+              title: string;
+            },
+            any
+          >;
+        };
+      };
+    };
     featureFlags: {
       internal: {
         upsertFromVercel: FunctionReference<
@@ -1559,6 +1602,48 @@ export declare const internal: {
           { userId: Id<"users"> },
           any
         >;
+      };
+    };
+    creatorTools: {
+      playingWithViewers: {
+        queue: {
+          getLatestQueueRound: FunctionReference<
+            "query",
+            "internal",
+            { queueId: Id<"viewerQueues"> },
+            any
+          >;
+          getQueueByCreatorUserId: FunctionReference<
+            "query",
+            "internal",
+            { creatorUserId: Id<"users"> },
+            any
+          >;
+          getQueueByGuildAndChannel: FunctionReference<
+            "query",
+            "internal",
+            { channelId: string; guildId: string },
+            any
+          >;
+          getQueueById: FunctionReference<
+            "query",
+            "internal",
+            { queueId: Id<"viewerQueues"> },
+            any
+          >;
+          getQueueEntries: FunctionReference<
+            "query",
+            "internal",
+            { queueId: Id<"viewerQueues"> },
+            any
+          >;
+          getQueueEntryById: FunctionReference<
+            "query",
+            "internal",
+            { entryId: Id<"viewerQueueEntries"> },
+            any
+          >;
+        };
       };
     };
     featureFlags: {

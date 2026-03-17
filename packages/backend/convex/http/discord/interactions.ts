@@ -14,7 +14,7 @@ import {
   MessageFlags,
 } from "discord-api-types/v10"
 import { pingCommand } from "../../../src/lib/commands/ping"
-import { api } from "../../_generated/api"
+import { internal } from "../../_generated/api"
 import { httpAction } from "../../_generated/server"
 
 type ParsedCustomId =
@@ -278,7 +278,7 @@ async function handleJoinInteraction(
   queueId: string
 ): Promise<Response> {
   const queue = await ctx.runQuery(
-    api.queries.creatorTools.playingWithViewers.queue.getQueueById,
+    internal.queries.creatorTools.playingWithViewers.queue.getQueueById,
     { queueId: queueId as any }
   )
 
@@ -308,7 +308,7 @@ async function handleLeaveInteraction(
 
   try {
     await ctx.runMutation(
-      api.mutations.creatorTools.playingWithViewers.queue.leaveQueue,
+      internal.mutations.creatorTools.playingWithViewers.queue.leaveQueue,
       {
         queueId: queueId as any,
         discordUserId: user.id,
@@ -329,13 +329,17 @@ async function handleLeaveInteraction(
 
   try {
     await ctx.runAction(
-      api.actions.creatorTools.playingWithViewers.discord.updateQueueMessage,
+      internal.actions.creatorTools.playingWithViewers.discord.syncQueueMessageAfterViewerInteraction,
       {
         queueId: queueId as any,
       }
     )
-  } catch {
-    // Intentionally swallow message sync errors here for now.
+  } catch (error) {
+    console.error("Play With Viewers leave interaction sync failed", {
+      error: error instanceof Error ? error.message : "Unknown error",
+      queueId,
+      userId: user.id,
+    })
   }
 
   return json({
@@ -359,12 +363,12 @@ async function handleStatusInteraction(
   }
 
   const queue = await ctx.runQuery(
-    api.queries.creatorTools.playingWithViewers.queue.getQueueById,
+    internal.queries.creatorTools.playingWithViewers.queue.getQueueById,
     { queueId: queueId as any }
   )
 
   const entries = await ctx.runQuery(
-    api.queries.creatorTools.playingWithViewers.queue.getQueueEntries,
+    internal.queries.creatorTools.playingWithViewers.queue.getQueueEntries,
     { queueId: queueId as any }
   )
 
@@ -411,7 +415,7 @@ async function handleRankSelectInteraction(
 
   try {
     await ctx.runMutation(
-      api.mutations.creatorTools.playingWithViewers.queue.enqueueViewer,
+      internal.mutations.creatorTools.playingWithViewers.queue.enqueueViewer,
       {
         queueId: queueId as any,
         discordUserId: user.id,
@@ -436,13 +440,17 @@ async function handleRankSelectInteraction(
 
   try {
     await ctx.runAction(
-      api.actions.creatorTools.playingWithViewers.discord.updateQueueMessage,
+      internal.actions.creatorTools.playingWithViewers.discord.syncQueueMessageAfterViewerInteraction,
       {
         queueId: queueId as any,
       }
     )
-  } catch {
-    // Intentionally swallow message sync errors here for now.
+  } catch (error) {
+    console.error("Play With Viewers join interaction sync failed", {
+      error: error instanceof Error ? error.message : "Unknown error",
+      queueId,
+      userId: user.id,
+    })
   }
 
   return json({

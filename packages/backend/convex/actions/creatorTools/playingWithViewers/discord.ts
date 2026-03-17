@@ -1,10 +1,15 @@
 "use node"
 
 import { v } from "convex/values"
-import { api } from "../../../_generated/api"
+import { internal } from "../../../_generated/api"
 import type { Doc, Id } from "../../../_generated/dataModel"
-import { action, type ActionCtx } from "../../../_generated/server"
+import { action, internalAction, type ActionCtx } from "../../../_generated/server"
 import { getClerkBackendClient } from "../../../lib/clerk"
+import {
+  requireCreatorToolsActionAccess,
+  requireOwnedQueueActionAccess,
+  requireOwnedQueueEntryActionAccess,
+} from "../../../lib/creatorToolsActionAuth"
 import {
   ButtonStyle,
   ChannelType,
@@ -120,7 +125,7 @@ function renderQueueMessage({
   }
 
   if (queue.rulesText?.trim()) {
-    descriptionLines.push("", `**Rules:** ${queue.rulesText.trim()}`)
+    descriptionLines.push("", "**Rules:**", queue.rulesText.trim())
   }
 
   return {
@@ -209,32 +214,6 @@ function buildGuildIconUrl(guild: DiscordUserGuild) {
   }
 
   return `https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png?size=128`
-}
-
-async function requireAuthenticatedCreator(ctx: ActionCtx) {
-  const identity = await ctx.auth.getUserIdentity()
-
-  if (!identity) {
-    throw new Error("You must be signed in to manage Play With Viewers.")
-  }
-
-  const [user, billingState] = await Promise.all([
-    ctx.runQuery(api.queries.users.current, {}),
-    ctx.runQuery(api.queries.billing.resolution.getCurrentUserResolvedBillingState, {}),
-  ])
-
-  if (!user) {
-    throw new Error("Unable to resolve your creator account.")
-  }
-
-  if (billingState?.effectivePlanKey !== "creator" && user.plan !== "creator") {
-    throw new Error("Creator plan access is required for Play With Viewers.")
-  }
-
-  return {
-    clerkUserId: identity.subject,
-    user,
-  }
 }
 
 async function getDiscordOauthAccessToken(clerkUserId: string) {
@@ -391,12 +370,12 @@ async function publishQueueMessageForQueue(
   queueId: Id<"viewerQueues">
 ) {
   const queue = await ctx.runQuery(
-    api.queries.creatorTools.playingWithViewers.queue.getQueueById,
+    internal.queries.creatorTools.playingWithViewers.queue.getQueueById,
     { queueId }
   )
 
   const entries = await ctx.runQuery(
-    api.queries.creatorTools.playingWithViewers.queue.getQueueEntries,
+    internal.queries.creatorTools.playingWithViewers.queue.getQueueEntries,
     { queueId }
   )
 
@@ -405,38 +384,50 @@ async function publishQueueMessageForQueue(
     queueSize: entries.length,
   }) as RESTPostAPIChannelMessageJSONBody
 
-  const response = await discordBotRequest(`/channels/${queue.channelId}/messages`, {
-    method: "POST",
-    body: JSON.stringify(payload),
-  })
+  try {
+    const response = await discordBotRequest(`/channels/${queue.channelId}/messages`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    })
 
-  if (!response.ok) {
-    const errorText = await response.text()
+    if (!response.ok) {
+      const errorText = await response.text()
+
+      throw new Error(`Failed to publish queue message: ${errorText}`)
+    }
+
+    const createdMessage = (await response.json()) as { id: string }
 
     await ctx.runMutation(
-      api.mutations.creatorTools.playingWithViewers.queue.setQueueMessageSyncError,
+      internal.mutations.creatorTools.playingWithViewers.queue.setQueueMessageMeta,
       {
         queueId,
-        error: `Failed to publish queue message: ${errorText}`,
+        messageId: createdMessage.id,
       }
     )
 
-    throw new Error(`Failed to publish queue message: ${errorText}`)
-  }
-
-  const createdMessage = (await response.json()) as { id: string }
-
-  await ctx.runMutation(
-    api.mutations.creatorTools.playingWithViewers.queue.setQueueMessageMeta,
-    {
-      queueId,
+    return {
       messageId: createdMessage.id,
+      ok: true,
     }
-  )
+  } catch (error) {
+    const errorMessage = toErrorMessage(error, "Failed to publish queue message.")
 
-  return {
-    messageId: createdMessage.id,
-    ok: true,
+    console.error("Play With Viewers publishQueueMessage failed", {
+      channelId: queue.channelId,
+      errorMessage,
+      queueId,
+    })
+
+    await ctx.runMutation(
+      internal.mutations.creatorTools.playingWithViewers.queue.setQueueMessageSyncError,
+      {
+        queueId,
+        error: errorMessage,
+      }
+    )
+
+    throw new Error(errorMessage)
   }
 }
 
@@ -445,7 +436,7 @@ async function updateQueueMessageForQueue(
   queueId: Id<"viewerQueues">
 ) {
   const queue = await ctx.runQuery(
-    api.queries.creatorTools.playingWithViewers.queue.getQueueById,
+    internal.queries.creatorTools.playingWithViewers.queue.getQueueById,
     { queueId }
   )
 
@@ -454,7 +445,7 @@ async function updateQueueMessageForQueue(
   }
 
   const entries = await ctx.runQuery(
-    api.queries.creatorTools.playingWithViewers.queue.getQueueEntries,
+    internal.queries.creatorTools.playingWithViewers.queue.getQueueEntries,
     { queueId }
   )
 
@@ -463,37 +454,50 @@ async function updateQueueMessageForQueue(
     queueSize: entries.length,
   }) as RESTPatchAPIChannelMessageJSONBody
 
-  const response = await discordBotRequest(
-    `/channels/${queue.channelId}/messages/${queue.messageId}`,
-    {
-      method: "PATCH",
-      body: JSON.stringify(payload),
-    }
-  )
-
-  if (!response.ok) {
-    const errorText = await response.text()
-
-    await ctx.runMutation(
-      api.mutations.creatorTools.playingWithViewers.queue.setQueueMessageSyncError,
+  try {
+    const response = await discordBotRequest(
+      `/channels/${queue.channelId}/messages/${queue.messageId}`,
       {
-        queueId,
-        error: `Failed to update queue message: ${errorText}`,
+        method: "PATCH",
+        body: JSON.stringify(payload),
       }
     )
 
-    throw new Error(`Failed to update queue message: ${errorText}`)
-  }
+    if (!response.ok) {
+      const errorText = await response.text()
 
-  await ctx.runMutation(
-    api.mutations.creatorTools.playingWithViewers.queue.clearQueueMessageSyncError,
-    {
-      queueId,
+      throw new Error(`Failed to update queue message: ${errorText}`)
     }
-  )
 
-  return {
-    ok: true,
+    await ctx.runMutation(
+      internal.mutations.creatorTools.playingWithViewers.queue.clearQueueMessageSyncError,
+      {
+        queueId,
+      }
+    )
+
+    return {
+      ok: true,
+    }
+  } catch (error) {
+    const errorMessage = toErrorMessage(error, "Failed to update queue message.")
+
+    console.error("Play With Viewers updateQueueMessage failed", {
+      channelId: queue.channelId,
+      errorMessage,
+      messageId: queue.messageId,
+      queueId,
+    })
+
+    await ctx.runMutation(
+      internal.mutations.creatorTools.playingWithViewers.queue.setQueueMessageSyncError,
+      {
+        queueId,
+        error: errorMessage,
+      }
+    )
+
+    throw new Error(errorMessage)
   }
 }
 
@@ -588,7 +592,7 @@ async function notifySelectedUsersByDirectMessage(args: {
   selectedUsers: QueueRoundSelectedUser[]
 }) {
   const queue = await args.ctx.runQuery(
-    api.queries.creatorTools.playingWithViewers.queue.getQueueById,
+    internal.queries.creatorTools.playingWithViewers.queue.getQueueById,
     {
       queueId: args.queueId,
     }
@@ -629,7 +633,7 @@ async function notifySelectedUsersByDirectMessage(args: {
   )
 
   await args.ctx.runMutation(
-    api.mutations.creatorTools.playingWithViewers.queue.setQueueRoundSelectedUsers,
+    internal.mutations.creatorTools.playingWithViewers.queue.setQueueRoundSelectedUsers,
     {
       roundId: args.roundId,
       selectedUsers: notifiedUsers,
@@ -642,7 +646,7 @@ async function notifySelectedUsersByDirectMessage(args: {
 export const listAvailableDiscordGuilds = action({
   args: {},
   handler: async (ctx) => {
-    const { clerkUserId } = await requireAuthenticatedCreator(ctx)
+    const { clerkUserId } = await requireCreatorToolsActionAccess(ctx)
 
     return await listOwnedGuildsWithBot(clerkUserId)
   },
@@ -663,9 +667,9 @@ export const createQueueInOwnedGuild = action({
     title: v.string(),
   },
   handler: async (ctx, args) => {
-    const { clerkUserId, user } = await requireAuthenticatedCreator(ctx)
+    const { clerkUserId, user } = await requireCreatorToolsActionAccess(ctx)
     const existingQueue = await ctx.runQuery(
-      api.queries.creatorTools.playingWithViewers.queue.getQueueByCreatorUserId,
+      internal.queries.creatorTools.playingWithViewers.queue.getQueueByCreatorUserId,
       {
         creatorUserId: user._id,
       }
@@ -687,7 +691,7 @@ export const createQueueInOwnedGuild = action({
 
     const channel = await getOrCreateQueueChannel(guildId)
     const queueResult = await ctx.runMutation(
-      api.mutations.creatorTools.playingWithViewers.queue.createQueue,
+      internal.mutations.creatorTools.playingWithViewers.queue.createQueue,
       {
         channelId: channel.channelId,
         channelName: channel.channelName,
@@ -736,17 +740,7 @@ export const syncQueueDiscordContext = action({
     queueId: v.id("viewerQueues"),
   },
   handler: async (ctx, args) => {
-    const { user } = await requireAuthenticatedCreator(ctx)
-    const queue = await ctx.runQuery(
-      api.queries.creatorTools.playingWithViewers.queue.getQueueById,
-      {
-        queueId: args.queueId,
-      }
-    )
-
-    if (queue.creatorUserId !== user._id) {
-      throw new Error("You do not have access to this queue.")
-    }
+    const { queue } = await requireOwnedQueueActionAccess(ctx, args.queueId)
 
     const discordContext = await getDiscordQueueContext({
       channelId: queue.channelId,
@@ -754,7 +748,7 @@ export const syncQueueDiscordContext = action({
     })
 
     await ctx.runMutation(
-      api.mutations.creatorTools.playingWithViewers.queue.setQueueDiscordContext,
+      internal.mutations.creatorTools.playingWithViewers.queue.setQueueDiscordContext,
       {
         channelName: discordContext.channelName,
         guildName: discordContext.guildName,
@@ -772,10 +766,10 @@ export const selectNextBatchAndNotify = action({
     queueId: v.id("viewerQueues"),
   },
   handler: async (ctx, args) => {
-    await requireAuthenticatedCreator(ctx)
+    await requireOwnedQueueActionAccess(ctx, args.queueId)
 
     const result = await ctx.runMutation(
-      api.mutations.creatorTools.playingWithViewers.queue.selectNextBatch,
+      internal.mutations.creatorTools.playingWithViewers.queue.selectNextBatch,
       args
     )
     const selectedUsers = await notifySelectedUsersByDirectMessage({
@@ -800,10 +794,10 @@ export const inviteQueueEntryNowAndNotify = action({
     lobbyCode: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await requireAuthenticatedCreator(ctx)
+    await requireOwnedQueueEntryActionAccess(ctx, args.entryId)
 
     const result = await ctx.runMutation(
-      api.mutations.creatorTools.playingWithViewers.queue.inviteQueueEntryNow,
+      internal.mutations.creatorTools.playingWithViewers.queue.inviteQueueEntryNow,
       args
     )
     const selectedUsers = await notifySelectedUsersByDirectMessage({
@@ -827,11 +821,24 @@ export const publishQueueMessage = action({
     queueId: v.id("viewerQueues"),
   },
   handler: async (ctx, args) => {
+    await requireOwnedQueueActionAccess(ctx, args.queueId)
+
     return await publishQueueMessageForQueue(ctx, args.queueId)
   },
 })
 
 export const updateQueueMessage = action({
+  args: {
+    queueId: v.id("viewerQueues"),
+  },
+  handler: async (ctx, args) => {
+    await requireOwnedQueueActionAccess(ctx, args.queueId)
+
+    return await updateQueueMessageForQueue(ctx, args.queueId)
+  },
+})
+
+export const syncQueueMessageAfterViewerInteraction = internalAction({
   args: {
     queueId: v.id("viewerQueues"),
   },

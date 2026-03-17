@@ -3,7 +3,7 @@ import {
   RANK_WEIGHTS,
   type RankValue,
 } from "../../../../src/lib/playingWithViewers"
-import { mutation } from "../../../_generated/server"
+import { internalMutation } from "../../../_generated/server"
 
 const rankValidator = v.union(
   v.literal("bronze"),
@@ -86,7 +86,7 @@ const validateQueueVolumeSettings = (args: {
   }
 }
 
-export const createQueue = mutation({
+export const createQueue = internalMutation({
   args: {
     creatorUserId: v.id("users"),
     guildId: v.string(),
@@ -160,7 +160,7 @@ export const createQueue = mutation({
   },
 })
 
-export const enqueueViewer = mutation({
+export const enqueueViewer = internalMutation({
   args: {
     queueId: v.id("viewerQueues"),
     discordUserId: v.string(),
@@ -212,7 +212,7 @@ export const enqueueViewer = mutation({
   },
 })
 
-export const selectNextBatch = mutation({
+export const selectNextBatch = internalMutation({
   args: {
     queueId: v.id("viewerQueues"),
     lobbyCode: v.optional(v.string()),
@@ -283,7 +283,7 @@ export const selectNextBatch = mutation({
   },
 })
 
-export const inviteQueueEntryNow = mutation({
+export const inviteQueueEntryNow = internalMutation({
   args: {
     entryId: v.id("viewerQueueEntries"),
     lobbyCode: v.optional(v.string()),
@@ -344,7 +344,7 @@ export const inviteQueueEntryNow = mutation({
   },
 })
 
-export const setQueueActive = mutation({
+export const setQueueActive = internalMutation({
   args: {
     queueId: v.id("viewerQueues"),
     isActive: v.boolean(),
@@ -368,7 +368,7 @@ export const setQueueActive = mutation({
   },
 })
 
-export const leaveQueue = mutation({
+export const leaveQueue = internalMutation({
   args: {
     queueId: v.id("viewerQueues"),
     discordUserId: v.string(),
@@ -405,7 +405,7 @@ export const leaveQueue = mutation({
   },
 })
 
-export const removeQueueEntry = mutation({
+export const removeQueueEntry = internalMutation({
   args: {
     entryId: v.id("viewerQueueEntries"),
   },
@@ -426,7 +426,7 @@ export const removeQueueEntry = mutation({
   },
 })
 
-export const clearQueue = mutation({
+export const clearQueue = internalMutation({
   args: {
     queueId: v.id("viewerQueues"),
   },
@@ -457,7 +457,7 @@ export const clearQueue = mutation({
   },
 })
 
-export const updateQueueSettings = mutation({
+export const updateQueueSettings = internalMutation({
   args: {
     queueId: v.id("viewerQueues"),
     title: v.string(),
@@ -511,7 +511,7 @@ export const updateQueueSettings = mutation({
   },
 })
 
-export const setQueueMessageMeta = mutation({
+export const setQueueMessageMeta = internalMutation({
   args: {
     queueId: v.id("viewerQueues"),
     messageId: v.string(),
@@ -533,7 +533,7 @@ export const setQueueMessageMeta = mutation({
   },
 })
 
-export const setQueueMessageSyncError = mutation({
+export const setQueueMessageSyncError = internalMutation({
   args: {
     queueId: v.id("viewerQueues"),
     error: v.string(),
@@ -554,7 +554,7 @@ export const setQueueMessageSyncError = mutation({
   },
 })
 
-export const clearQueueMessageSyncError = mutation({
+export const clearQueueMessageSyncError = internalMutation({
   args: {
     queueId: v.id("viewerQueues"),
   },
@@ -574,7 +574,7 @@ export const clearQueueMessageSyncError = mutation({
   },
 })
 
-export const setQueueDiscordContext = mutation({
+export const setQueueDiscordContext = internalMutation({
   args: {
     queueId: v.id("viewerQueues"),
     guildName: v.optional(v.string()),
@@ -597,7 +597,7 @@ export const setQueueDiscordContext = mutation({
   },
 })
 
-export const setQueueRoundSelectedUsers = mutation({
+export const setQueueRoundSelectedUsers = internalMutation({
   args: {
     roundId: v.id("viewerQueueRounds"),
     selectedUsers: v.array(selectedQueueUserValidator),

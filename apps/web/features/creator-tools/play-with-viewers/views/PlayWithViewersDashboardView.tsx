@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { startTransition, useEffect, useMemo, useState } from "react"
-import { useAction, useMutation, useQuery } from "convex/react"
+import { useAction, useQuery } from "convex/react"
 import {
   IconAlertTriangle,
   IconArrowRight,
@@ -166,10 +166,10 @@ const relativeTimeFormatter = new Intl.RelativeTimeFormat(undefined, {
 const defaultCreatorMessage =
   "Welcome to Play With Viewers. Jump into the queue if you want a shot at joining me in the next lobby."
 const defaultRulesText = [
-  "Show respect to everyone in the lobby.",
-  "Be sportsmanlike and keep comms constructive.",
-  "No harassment, hate speech, or griefing.",
-  "Be ready when your turn comes up so the queue can keep moving.",
+  "- Show respect to everyone in the lobby.",
+  "- Be sportsmanlike and keep comms constructive.",
+  "- No harassment, hate speech, or griefing.",
+  "- Be ready when your turn comes up so the queue can keep moving.",
 ].join("\n")
 
 function getDefaultQueueFormState(name: string): QueueFormState {
@@ -515,11 +515,11 @@ export function PlayWithViewersDashboardView({
 }: PlayWithViewersDashboardViewProps) {
   const currentUser = useQuery(api.queries.users.current)
   const queue = useQuery(
-    api.queries.creatorTools.playingWithViewers.queue.getQueueByCreatorUserId,
-    currentUser?._id ? { creatorUserId: currentUser._id } : "skip"
+    api.queries.creatorTools.playingWithViewers.queue.getCurrentCreatorQueue,
+    currentUser ? {} : "skip"
   ) as ViewerQueue | null | undefined
   const queueEntries = useQuery(
-    api.queries.creatorTools.playingWithViewers.queue.getQueueEntries,
+    api.queries.creatorTools.playingWithViewers.queue.getCurrentCreatorQueueEntries,
     queue?._id ? { queueId: queue._id } : "skip"
   ) as ViewerQueueEntry[] | undefined
 
@@ -538,17 +538,17 @@ export function PlayWithViewersDashboardView({
   const inviteQueueEntryNowAndNotify = useAction(
     api.actions.creatorTools.playingWithViewers.discord.inviteQueueEntryNowAndNotify
   )
-  const updateQueueSettings = useMutation(
-    api.mutations.creatorTools.playingWithViewers.queue.updateQueueSettings
+  const updateQueueSettings = useAction(
+    api.actions.creatorTools.playingWithViewers.queue.updateQueueSettings
   )
-  const setQueueActive = useMutation(
-    api.mutations.creatorTools.playingWithViewers.queue.setQueueActive
+  const setQueueActive = useAction(
+    api.actions.creatorTools.playingWithViewers.queue.setQueueActive
   )
-  const clearQueue = useMutation(
-    api.mutations.creatorTools.playingWithViewers.queue.clearQueue
+  const clearQueue = useAction(
+    api.actions.creatorTools.playingWithViewers.queue.clearQueue
   )
-  const removeQueueEntry = useMutation(
-    api.mutations.creatorTools.playingWithViewers.queue.removeQueueEntry
+  const removeQueueEntry = useAction(
+    api.actions.creatorTools.playingWithViewers.queue.removeQueueEntry
   )
   const publishQueueMessage = useAction(
     api.actions.creatorTools.playingWithViewers.discord.publishQueueMessage
@@ -727,7 +727,9 @@ export function PlayWithViewersDashboardView({
     try {
       await refreshQueueMessage({ queueId })
     } catch {
-      // Keep the queue mutation successful even if Discord refresh fails.
+      toast.error(
+        "The queue changed, but the Discord message refresh failed. Check the sync error banner."
+      )
     }
   }
 

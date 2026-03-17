@@ -1,7 +1,8 @@
 import { v } from "convex/values"
-import { query } from "../../../_generated/server"
+import { internalQuery, query } from "../../../_generated/server"
+import { requireCreatorToolsViewerAccess } from "../../../lib/creatorToolsAccess"
 
-export const getQueueById = query({
+export const getQueueById = internalQuery({
   args: {
     queueId: v.id("viewerQueues"),
   },
@@ -16,7 +17,7 @@ export const getQueueById = query({
   },
 })
 
-export const getQueueEntries = query({
+export const getQueueEntries = internalQuery({
   args: {
     queueId: v.id("viewerQueues"),
   },
@@ -38,7 +39,7 @@ export const getQueueEntries = query({
   },
 })
 
-export const getLatestQueueRound = query({
+export const getLatestQueueRound = internalQuery({
   args: {
     queueId: v.id("viewerQueues"),
   },
@@ -63,7 +64,7 @@ export const getLatestQueueRound = query({
   },
 })
 
-export const getQueueByGuildAndChannel = query({
+export const getQueueByGuildAndChannel = internalQuery({
   args: {
     guildId: v.string(),
     channelId: v.string(),
@@ -91,7 +92,7 @@ export const getQueueByGuildAndChannel = query({
   },
 })
 
-export const getQueueByCreatorUserId = query({
+export const getQueueByCreatorUserId = internalQuery({
   args: {
     creatorUserId: v.id("users"),
   },
@@ -104,5 +105,55 @@ export const getQueueByCreatorUserId = query({
       .first()
 
     return queue
+  },
+})
+
+export const getQueueEntryById = internalQuery({
+  args: {
+    entryId: v.id("viewerQueueEntries"),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.entryId)
+  },
+})
+
+export const getCurrentCreatorQueue = query({
+  args: {},
+  handler: async (ctx) => {
+    try {
+      const { user } = await requireCreatorToolsViewerAccess(ctx)
+
+      return await ctx.db
+        .query("viewerQueues")
+        .withIndex("by_creatorUserId", (query) => query.eq("creatorUserId", user._id))
+        .first()
+    } catch {
+      return null
+    }
+  },
+})
+
+export const getCurrentCreatorQueueEntries = query({
+  args: {
+    queueId: v.id("viewerQueues"),
+  },
+  handler: async (ctx, args) => {
+    try {
+      const { user } = await requireCreatorToolsViewerAccess(ctx)
+      const queue = await ctx.db.get(args.queueId)
+
+      if (!queue || queue.creatorUserId !== user._id) {
+        return []
+      }
+
+      return await ctx.db
+        .query("viewerQueueEntries")
+        .withIndex("by_queueId_and_joinedAt", (query) =>
+          query.eq("queueId", args.queueId)
+        )
+        .collect()
+    } catch {
+      return []
+    }
   },
 })
