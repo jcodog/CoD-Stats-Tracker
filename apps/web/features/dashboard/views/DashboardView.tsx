@@ -16,12 +16,17 @@ export function DashboardView() {
         <CardHeader>
           <CardTitle className="text-2xl">This is the dashboard home</CardTitle>
           <CardDescription>
-            This is currently a work in progress for your stats. Please have
-            patience as we add new features.
+            Your stats workspace is still expanding. Creator tools now have a
+            dedicated operational surface for Play With Viewers.
           </CardDescription>
         </CardHeader>
 
         <CardContent className="flex flex-wrap items-center gap-3">
+          <Button asChild>
+            <Link href="/creator-tools/play-with-viewers">
+              Open Play With Viewers
+            </Link>
+          </Button>
           <Button asChild variant="outline">
             <Link href="/account">Manage account settings</Link>
           </Button>

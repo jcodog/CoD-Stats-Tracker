@@ -42,6 +42,11 @@ export async function AppShell({ children }: AppShellProps) {
               <Button asChild size="sm" variant="ghost">
                 <Link href="/dashboard">Dashboard</Link>
               </Button>
+              <Button asChild size="sm" variant="ghost">
+                <Link href="/creator-tools/play-with-viewers">
+                  Play With Viewers
+                </Link>
+              </Button>
               {checkoutEnabled ? (
                 <Button asChild size="sm" variant="ghost">
                   <Link href="/settings/billing">Billing</Link>

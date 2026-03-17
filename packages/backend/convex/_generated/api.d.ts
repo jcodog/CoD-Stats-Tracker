@@ -122,6 +122,16 @@ export declare const api: {
         };
       };
     };
+    discord: {
+      registerCommands: {
+        registerDiscordCommands: FunctionReference<
+          "action",
+          "public",
+          { guildId?: string; scope: "guild" | "global" },
+          any
+        >;
+      };
+    };
     staff: {
       billing: {
         archiveFeature: FunctionReference<
@@ -413,6 +423,12 @@ export declare const api: {
                 | "top250";
               username: string;
             },
+            any
+          >;
+          inviteQueueEntryNow: FunctionReference<
+            "mutation",
+            "public",
+            { entryId: Id<"viewerQueueEntries">; lobbyCode?: string },
             any
           >;
           leaveQueue: FunctionReference<

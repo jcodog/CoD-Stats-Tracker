@@ -242,6 +242,66 @@ export const selectNextBatch = mutation({
   },
 })
 
+export const inviteQueueEntryNow = mutation({
+  args: {
+    entryId: v.id("viewerQueueEntries"),
+    lobbyCode: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const entry = await ctx.db.get(args.entryId)
+
+    if (!entry) {
+      throw new Error("Queue entry not found")
+    }
+
+    const queue = await ctx.db.get(entry.queueId)
+
+    if (!queue) {
+      throw new Error("Queue not found")
+    }
+
+    const lobbyCode = args.lobbyCode?.trim()
+
+    if (queue.inviteMode === "discord_dm" && !lobbyCode) {
+      throw new Error("Lobby code is required for discord_dm mode")
+    }
+
+    const selectedUsers = [
+      {
+        discordUserId: entry.discordUserId,
+        username: entry.username,
+        displayName: entry.displayName,
+        rank: entry.rank,
+      },
+    ]
+
+    await ctx.db.delete(entry._id)
+
+    const now = Date.now()
+
+    const roundId = await ctx.db.insert("viewerQueueRounds", {
+      queueId: queue._id,
+      mode: queue.inviteMode,
+      lobbyCode: lobbyCode || undefined,
+      selectedUsers,
+      selectedCount: selectedUsers.length,
+      createdAt: now,
+    })
+
+    await ctx.db.patch(queue._id, {
+      lastSelectedRoundId: roundId,
+      updatedAt: now,
+    })
+
+    return {
+      queueId: queue._id,
+      roundId,
+      selectedCount: selectedUsers.length,
+      selectedUsers,
+    }
+  },
+})
+
 export const setQueueActive = mutation({
   args: {
     queueId: v.id("viewerQueues"),
