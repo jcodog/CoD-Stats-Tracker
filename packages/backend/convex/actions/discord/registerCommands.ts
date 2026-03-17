@@ -18,7 +18,9 @@ function getRequiredEnv(name: string): string {
   return value
 }
 
-const discordCommands: RESTPutAPIApplicationCommandsJSONBody = [pingCommand]
+const discordCommands: RESTPutAPIApplicationCommandsJSONBody = [
+  pingCommand.data,
+]
 
 export const registerDiscordCommands = action({
   args: {

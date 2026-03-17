@@ -1,6 +1,3 @@
-import { handlePingCommand } from "../../../src/lib/commands/ping"
-import { api } from "../../_generated/api"
-import { httpAction } from "../../_generated/server"
 import type {
   APIChatInputApplicationCommandInteraction,
   APIInteraction,
@@ -16,6 +13,9 @@ import {
   InteractionType,
   MessageFlags,
 } from "discord-api-types/v10"
+import { pingCommand } from "../../../src/lib/commands/ping"
+import { api } from "../../_generated/api"
+import { httpAction } from "../../_generated/server"
 
 type ParsedCustomId =
   | { kind: "join"; queueId: string }
@@ -468,8 +468,8 @@ async function handleApplicationCommandInteraction(
   interaction: APIChatInputApplicationCommandInteraction
 ): Promise<Response> {
   switch (interaction.data.name) {
-    case "ping":
-      return json(await handlePingCommand(interaction))
+    case pingCommand.data.name:
+      return json(await pingCommand.handler(interaction))
     default:
       return json({
         type: InteractionResponseType.ChannelMessageWithSource,
