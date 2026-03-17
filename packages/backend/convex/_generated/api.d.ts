@@ -107,7 +107,65 @@ export declare const api: {
     creatorTools: {
       playingWithViewers: {
         discord: {
+          createQueueInOwnedGuild: FunctionReference<
+            "action",
+            "public",
+            {
+              creatorDisplayName: string;
+              creatorMessage?: string;
+              gameLabel: string;
+              guildId: string;
+              inviteMode: "discord_dm" | "manual_creator_contact";
+              matchesPerViewer: number;
+              maxRank:
+                | "bronze"
+                | "silver"
+                | "gold"
+                | "platinum"
+                | "diamond"
+                | "crimson"
+                | "iridescent"
+                | "top250";
+              minRank:
+                | "bronze"
+                | "silver"
+                | "gold"
+                | "platinum"
+                | "diamond"
+                | "crimson"
+                | "iridescent"
+                | "top250";
+              playersPerBatch: number;
+              rulesText?: string;
+              title: string;
+            },
+            any
+          >;
+          inviteQueueEntryNowAndNotify: FunctionReference<
+            "action",
+            "public",
+            { entryId: Id<"viewerQueueEntries">; lobbyCode?: string },
+            any
+          >;
+          listAvailableDiscordGuilds: FunctionReference<
+            "action",
+            "public",
+            {},
+            any
+          >;
           publishQueueMessage: FunctionReference<
+            "action",
+            "public",
+            { queueId: Id<"viewerQueues"> },
+            any
+          >;
+          selectNextBatchAndNotify: FunctionReference<
+            "action",
+            "public",
+            { lobbyCode?: string; queueId: Id<"viewerQueues"> },
+            any
+          >;
+          syncQueueDiscordContext: FunctionReference<
             "action",
             "public",
             { queueId: Id<"viewerQueues"> },
@@ -374,11 +432,13 @@ export declare const api: {
             "public",
             {
               channelId: string;
+              channelName?: string;
               creatorDisplayName: string;
               creatorMessage?: string;
               creatorUserId: Id<"users">;
               gameLabel: string;
               guildId: string;
+              guildName?: string;
               inviteMode: "discord_dm" | "manual_creator_contact";
               matchesPerViewer: number;
               maxRank:
@@ -409,6 +469,7 @@ export declare const api: {
             "mutation",
             "public",
             {
+              avatarUrl?: string;
               discordUserId: string;
               displayName: string;
               queueId: Id<"viewerQueues">;
@@ -455,6 +516,16 @@ export declare const api: {
             { isActive: boolean; queueId: Id<"viewerQueues"> },
             any
           >;
+          setQueueDiscordContext: FunctionReference<
+            "mutation",
+            "public",
+            {
+              channelName?: string;
+              guildName?: string;
+              queueId: Id<"viewerQueues">;
+            },
+            any
+          >;
           setQueueMessageMeta: FunctionReference<
             "mutation",
             "public",
@@ -465,6 +536,31 @@ export declare const api: {
             "mutation",
             "public",
             { error: string; queueId: Id<"viewerQueues"> },
+            any
+          >;
+          setQueueRoundSelectedUsers: FunctionReference<
+            "mutation",
+            "public",
+            {
+              roundId: Id<"viewerQueueRounds">;
+              selectedUsers: Array<{
+                avatarUrl?: string;
+                discordUserId: string;
+                displayName: string;
+                dmFailureReason?: string;
+                dmStatus?: "sent" | "failed";
+                rank:
+                  | "bronze"
+                  | "silver"
+                  | "gold"
+                  | "platinum"
+                  | "diamond"
+                  | "crimson"
+                  | "iridescent"
+                  | "top250";
+                username: string;
+              }>;
+            },
             any
           >;
           updateQueueSettings: FunctionReference<

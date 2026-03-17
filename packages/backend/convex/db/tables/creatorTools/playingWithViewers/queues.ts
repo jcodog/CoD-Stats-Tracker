@@ -4,7 +4,9 @@ import { v } from "convex/values"
 export const viewerQueues = defineTable({
   creatorUserId: v.id("users"),
   guildId: v.string(),
+  guildName: v.optional(v.string()),
   channelId: v.string(),
+  channelName: v.optional(v.string()),
   messageId: v.optional(v.string()),
   title: v.string(),
   creatorDisplayName: v.string(),

@@ -1034,6 +1034,7 @@ export type DataModel = {
   };
   viewerQueueEntries: {
     document: {
+      avatarUrl?: string;
       discordUserId: string;
       displayName: string;
       joinedAt: number;
@@ -1054,6 +1055,7 @@ export type DataModel = {
     fieldPaths:
       | "_creationTime"
       | "_id"
+      | "avatarUrl"
       | "discordUserId"
       | "displayName"
       | "joinedAt"
@@ -1107,6 +1109,7 @@ export type DataModel = {
       queueId: Id<"viewerQueues">;
       selectedCount: number;
       selectedUsers: Array<{
+        avatarUrl?: string;
         discordUserId: string;
         displayName: string;
         dmFailureReason?: string;
@@ -1146,12 +1149,14 @@ export type DataModel = {
   viewerQueues: {
     document: {
       channelId: string;
+      channelName?: string;
       createdAt: number;
       creatorDisplayName: string;
       creatorMessage?: string;
       creatorUserId: Id<"users">;
       gameLabel: string;
       guildId: string;
+      guildName?: string;
       inviteMode: "discord_dm" | "manual_creator_contact";
       isActive: boolean;
       lastMessageSyncError?: string;
@@ -1187,12 +1192,14 @@ export type DataModel = {
       | "_creationTime"
       | "_id"
       | "channelId"
+      | "channelName"
       | "createdAt"
       | "creatorDisplayName"
       | "creatorMessage"
       | "creatorUserId"
       | "gameLabel"
       | "guildId"
+      | "guildName"
       | "inviteMode"
       | "isActive"
       | "lastMessageSyncError"

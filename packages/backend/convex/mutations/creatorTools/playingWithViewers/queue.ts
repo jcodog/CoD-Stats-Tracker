@@ -20,6 +20,19 @@ const inviteModeValidator = v.union(
   v.literal("discord_dm"),
   v.literal("manual_creator_contact")
 )
+const selectedQueueUserValidator = v.object({
+  discordUserId: v.string(),
+  username: v.string(),
+  displayName: v.string(),
+  avatarUrl: v.optional(v.string()),
+  rank: rankValidator,
+  dmStatus: v.optional(v.union(v.literal("sent"), v.literal("failed"))),
+  dmFailureReason: v.optional(v.string()),
+})
+const MIN_PLAYERS_PER_BATCH = 1
+const MAX_PLAYERS_PER_BATCH = 30
+const MIN_MATCHES_PER_VIEWER = 1
+const MAX_MATCHES_PER_VIEWER = 10
 
 const getRankWeight = (rank: RankValue): number => {
   return RANK_WEIGHTS[rank]
@@ -48,11 +61,38 @@ const requireNonEmptyString = (value: string, fieldName: string): string => {
   return trimmed
 }
 
+const validateQueueVolumeSettings = (args: {
+  matchesPerViewer: number
+  playersPerBatch: number
+}) => {
+  if (args.playersPerBatch < MIN_PLAYERS_PER_BATCH) {
+    throw new Error(`playersPerBatch must be at least ${MIN_PLAYERS_PER_BATCH}`)
+  }
+
+  if (args.playersPerBatch > MAX_PLAYERS_PER_BATCH) {
+    throw new Error(`playersPerBatch cannot exceed ${MAX_PLAYERS_PER_BATCH}`)
+  }
+
+  if (args.matchesPerViewer < MIN_MATCHES_PER_VIEWER) {
+    throw new Error(
+      `matchesPerViewer must be at least ${MIN_MATCHES_PER_VIEWER}`
+    )
+  }
+
+  if (args.matchesPerViewer > MAX_MATCHES_PER_VIEWER) {
+    throw new Error(
+      `matchesPerViewer cannot exceed ${MAX_MATCHES_PER_VIEWER}`
+    )
+  }
+}
+
 export const createQueue = mutation({
   args: {
     creatorUserId: v.id("users"),
     guildId: v.string(),
+    guildName: v.optional(v.string()),
     channelId: v.string(),
+    channelName: v.optional(v.string()),
     title: v.string(),
     creatorDisplayName: v.string(),
     gameLabel: v.string(),
@@ -65,13 +105,7 @@ export const createQueue = mutation({
     inviteMode: inviteModeValidator,
   },
   handler: async (ctx, args) => {
-    if (args.playersPerBatch < 1) {
-      throw new Error("playersPerBatch must be at least 1")
-    }
-
-    if (args.matchesPerViewer < 1) {
-      throw new Error("matchesPerViewer must be at least 1")
-    }
+    validateQueueVolumeSettings(args)
 
     if (!isRankRangeValid(args.minRank, args.maxRank)) {
       throw new Error("minRank cannot be higher than maxRank")
@@ -79,6 +113,8 @@ export const createQueue = mutation({
 
     const guildId = requireNonEmptyString(args.guildId, "guildId")
     const channelId = requireNonEmptyString(args.channelId, "channelId")
+    const guildName = args.guildName?.trim() || undefined
+    const channelName = args.channelName?.trim() || undefined
     const title = requireNonEmptyString(args.title, "title")
     const creatorDisplayName = requireNonEmptyString(
       args.creatorDisplayName,
@@ -102,7 +138,9 @@ export const createQueue = mutation({
     const queueId = await ctx.db.insert("viewerQueues", {
       creatorUserId: args.creatorUserId,
       guildId,
+      guildName,
       channelId,
+      channelName,
       title,
       creatorDisplayName,
       gameLabel,
@@ -128,6 +166,7 @@ export const enqueueViewer = mutation({
     discordUserId: v.string(),
     username: v.string(),
     displayName: v.string(),
+    avatarUrl: v.optional(v.string()),
     rank: rankValidator,
   },
   handler: async (ctx, args) => {
@@ -164,6 +203,7 @@ export const enqueueViewer = mutation({
       discordUserId,
       username,
       displayName,
+      avatarUrl: args.avatarUrl?.trim() || undefined,
       rank: args.rank,
       joinedAt: Date.now(),
     })
@@ -211,6 +251,7 @@ export const selectNextBatch = mutation({
       discordUserId: entry.discordUserId,
       username: entry.username,
       displayName: entry.displayName,
+      avatarUrl: entry.avatarUrl,
       rank: entry.rank,
     }))
 
@@ -271,6 +312,7 @@ export const inviteQueueEntryNow = mutation({
         discordUserId: entry.discordUserId,
         username: entry.username,
         displayName: entry.displayName,
+        avatarUrl: entry.avatarUrl,
         rank: entry.rank,
       },
     ]
@@ -436,13 +478,7 @@ export const updateQueueSettings = mutation({
       throw new Error("Queue not found")
     }
 
-    if (args.playersPerBatch < 1) {
-      throw new Error("playersPerBatch must be at least 1")
-    }
-
-    if (args.matchesPerViewer < 1) {
-      throw new Error("matchesPerViewer must be at least 1")
-    }
+    validateQueueVolumeSettings(args)
 
     if (!isRankRangeValid(args.minRank, args.maxRank)) {
       throw new Error("minRank cannot be higher than maxRank")
@@ -535,5 +571,52 @@ export const clearQueueMessageSyncError = mutation({
     })
 
     return { queueId: args.queueId }
+  },
+})
+
+export const setQueueDiscordContext = mutation({
+  args: {
+    queueId: v.id("viewerQueues"),
+    guildName: v.optional(v.string()),
+    channelName: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const queue = await ctx.db.get(args.queueId)
+
+    if (!queue) {
+      throw new Error("Queue not found")
+    }
+
+    await ctx.db.patch(args.queueId, {
+      guildName: args.guildName?.trim() || undefined,
+      channelName: args.channelName?.trim() || undefined,
+      updatedAt: Date.now(),
+    })
+
+    return { queueId: args.queueId }
+  },
+})
+
+export const setQueueRoundSelectedUsers = mutation({
+  args: {
+    roundId: v.id("viewerQueueRounds"),
+    selectedUsers: v.array(selectedQueueUserValidator),
+  },
+  handler: async (ctx, args) => {
+    const round = await ctx.db.get(args.roundId)
+
+    if (!round) {
+      throw new Error("Queue round not found")
+    }
+
+    await ctx.db.patch(args.roundId, {
+      selectedCount: args.selectedUsers.length,
+      selectedUsers: args.selectedUsers,
+    })
+
+    return {
+      roundId: args.roundId,
+      selectedCount: args.selectedUsers.length,
+    }
   },
 })

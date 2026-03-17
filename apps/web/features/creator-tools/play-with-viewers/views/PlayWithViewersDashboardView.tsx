@@ -10,6 +10,7 @@ import {
   IconBrandDiscord,
   IconBrandTwitch,
   IconCopy,
+  IconExternalLink,
   IconLock,
   IconRefresh,
   IconSettings,
@@ -39,6 +40,7 @@ import {
 import {
   Avatar,
   AvatarFallback,
+  AvatarImage,
 } from "@workspace/ui/components/avatar"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
@@ -95,6 +97,12 @@ type ViewerQueue = Doc<"viewerQueues">
 type ViewerQueueEntry = Doc<"viewerQueueEntries">
 type ViewerQueueRound = Doc<"viewerQueueRounds">
 type InviteMode = ViewerQueue["inviteMode"]
+type QueueRoundUser = ViewerQueueRound["selectedUsers"][number]
+type AvailableDiscordGuild = {
+  iconUrl: string | null
+  id: string
+  name: string
+}
 
 type QueueFormState = {
   channelId: string
@@ -120,6 +128,16 @@ type SelectionDialogState =
     }
   | null
 
+type SelectionResultState =
+  | {
+      createdAt: number
+      inviteMode: InviteMode
+      lobbyCode?: string
+      selectionKind: "batch" | "entry"
+      selectedUsers: QueueRoundUser[]
+    }
+  | null
+
 const rankOptions: Array<{ label: string; value: RankValue }> = [
   { label: "Bronze", value: "bronze" },
   { label: "Silver", value: "silver" },
@@ -136,12 +154,23 @@ const inviteModeOptions: Array<{ label: string; value: InviteMode }> = [
   { label: "Manual contact", value: "manual_creator_contact" },
 ]
 
-const playersPerBatchOptions = [1, 2, 3, 4, 5, 6, 8]
-const matchesPerViewerOptions = [1, 2, 3, 4, 5]
+const playersPerBatchOptions = Array.from({ length: 30 }, (_, index) => index + 1)
+const matchesPerViewerOptions = Array.from(
+  { length: 10 },
+  (_, index) => index + 1
+)
 const rankOrder = new Map(rankOptions.map((option, index) => [option.value, index]))
 const relativeTimeFormatter = new Intl.RelativeTimeFormat(undefined, {
   numeric: "auto",
 })
+const defaultCreatorMessage =
+  "Welcome to Play With Viewers. Jump into the queue if you want a shot at joining me in the next lobby."
+const defaultRulesText = [
+  "Show respect to everyone in the lobby.",
+  "Be sportsmanlike and keep comms constructive.",
+  "No harassment, hate speech, or griefing.",
+  "Be ready when your turn comes up so the queue can keep moving.",
+].join("\n")
 
 function getDefaultQueueFormState(name: string): QueueFormState {
   const trimmedName = name.trim()
@@ -150,15 +179,15 @@ function getDefaultQueueFormState(name: string): QueueFormState {
   return {
     channelId: "",
     creatorDisplayName: resolvedName,
-    creatorMessage: "",
-    gameLabel: "Call of Duty",
+    creatorMessage: defaultCreatorMessage,
+    gameLabel: "Call of Duty: Black Ops 7",
     guildId: "",
-    inviteMode: "manual_creator_contact",
+    inviteMode: "discord_dm",
     matchesPerViewer: "1",
     maxRank: "top250",
     minRank: "bronze",
-    playersPerBatch: "4",
-    rulesText: "",
+    playersPerBatch: "3",
+    rulesText: defaultRulesText,
     title: `Play with ${resolvedName}`,
   }
 }
@@ -238,12 +267,32 @@ function formatWaitDuration(joinedAt: number, now: number) {
   return relativeTimeFormatter.format(-deltaDays, "day")
 }
 
-function formatDiscordContext(queue: ViewerQueue | null) {
+function formatDiscordContext(
+  queue: ViewerQueue | null,
+  isResolvingContext: boolean = false
+) {
   if (!queue) {
     return "Discord channel not configured"
   }
 
-  return `Guild ${queue.guildId} / Channel ${queue.channelId}`
+  const guildName = queue.guildName?.trim()
+  const channelName = queue.channelName?.trim()
+
+  if (guildName && channelName) {
+    return `${guildName} / #${channelName}`
+  }
+
+  if (guildName) {
+    return guildName
+  }
+
+  if (channelName) {
+    return `#${channelName}`
+  }
+
+  return isResolvingContext
+    ? "Resolving Discord server and channel..."
+    : "Discord target configured"
 }
 
 function isRankRangeValid(minRank: RankValue, maxRank: RankValue) {
@@ -313,30 +362,20 @@ function QueueLoadingState() {
 
       <Skeleton className="h-14 rounded-lg" />
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
-        <Panel>
-          <div className="flex items-center justify-between border-b border-border/70 px-4 py-3">
+      <Panel>
+        <div className="flex items-center justify-between border-b border-border/70 px-4 py-3">
+          <div className="flex flex-col gap-2">
             <Skeleton className="h-4 w-40" />
-            <Skeleton className="h-4 w-20" />
+            <Skeleton className="h-4 w-52" />
           </div>
-          <div className="flex flex-col gap-2 p-4">
-            {Array.from({ length: 6 }).map((_, index) => (
-              <Skeleton key={index} className="h-11 w-full" />
-            ))}
-          </div>
-        </Panel>
-
-        <Panel>
-          <div className="border-b border-border/70 px-4 py-3">
-            <Skeleton className="h-4 w-36" />
-          </div>
-          <div className="flex flex-col gap-3 p-4">
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-10 w-full" />
-          </div>
-        </Panel>
-      </div>
+          <Skeleton className="h-5 w-24" />
+        </div>
+        <div className="flex flex-col gap-2 p-4">
+          {Array.from({ length: 6 }).map((_, index) => (
+            <Skeleton key={index} className="h-14 w-full" />
+          ))}
+        </div>
+      </Panel>
     </div>
   )
 }
@@ -372,119 +411,98 @@ function LockedState({ queueTitle }: Readonly<{ queueTitle: string }>) {
   )
 }
 
-function LatestRoundPanel({
-  latestRound,
+function SelectionResultSummary({
   onCopyMentions,
   onCopyUsernames,
+  selectionResult,
 }: Readonly<{
-  latestRound: ViewerQueueRound | null | undefined
   onCopyMentions: () => Promise<void>
   onCopyUsernames: () => Promise<void>
+  selectionResult: SelectionResultState
 }>) {
+  if (!selectionResult) {
+    return null
+  }
+
+  const hasDmStatuses = selectionResult.selectedUsers.some(
+    (user) => user.dmStatus !== undefined
+  )
+
   return (
-    <Panel>
-      <div className="flex items-start justify-between gap-3 border-b border-border/70 px-4 py-3">
-        <div className="flex flex-col gap-1">
-          <h2 className="text-sm font-medium">Latest selected batch</h2>
-          <p className="text-sm text-muted-foreground">
-            Most recent viewers moved out of the active waiting list.
-          </p>
-        </div>
-        {latestRound ? (
-          <Badge variant="outline">{latestRound.selectedCount} selected</Badge>
+    <div className="flex flex-col">
+      <div className="flex flex-wrap items-center gap-2 border-b border-border/70 px-4 py-3">
+        <Badge variant="secondary">
+          {getInviteModeLabel(selectionResult.inviteMode)}
+        </Badge>
+        <Badge variant="outline">
+          {selectionResult.selectedUsers.length} selected
+        </Badge>
+        <span className="text-sm text-muted-foreground">
+          {formatDateTime(selectionResult.createdAt)}
+        </span>
+        {selectionResult.lobbyCode ? (
+          <span className="rounded-md border border-border/70 bg-background px-2 py-1 font-mono text-xs text-foreground">
+            Lobby {selectionResult.lobbyCode}
+          </span>
         ) : null}
       </div>
-      {latestRound === undefined ? (
-        <div className="flex flex-col gap-3 p-4">
-          <Skeleton className="h-9 w-full" />
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-12 w-full" />
+
+      {selectionResult.inviteMode === "manual_creator_contact" ? (
+        <div className="flex flex-wrap items-center gap-2 border-b border-border/70 px-4 py-3">
+          <Button onClick={onCopyUsernames} size="sm" variant="outline">
+            <IconCopy data-icon="inline-start" />
+            Copy usernames
+          </Button>
+          <Button onClick={onCopyMentions} size="sm" variant="outline">
+            <IconAt data-icon="inline-start" />
+            Copy mentions
+          </Button>
         </div>
-      ) : latestRound === null ? (
-        <Empty className="min-h-64 rounded-none border-0 p-6">
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <IconUsers />
-            </EmptyMedia>
-            <EmptyTitle>No batch selected yet</EmptyTitle>
-            <EmptyDescription>
-              Run the next batch flow when you are ready to pull viewers out of
-              the queue.
-            </EmptyDescription>
-          </EmptyHeader>
-        </Empty>
-      ) : (
-        <div className="flex flex-col">
-          <div className="flex flex-wrap items-center gap-2 border-b border-border/70 px-4 py-3">
-            <Badge variant="secondary">
-              {getInviteModeLabel(latestRound.mode)}
-            </Badge>
-            <span className="text-sm text-muted-foreground">
-              {formatDateTime(latestRound.createdAt)}
-            </span>
-            {latestRound.lobbyCode ? (
-              <span className="rounded-md border border-border/70 bg-background px-2 py-1 font-mono text-xs text-foreground">
-                Lobby {latestRound.lobbyCode}
-              </span>
-            ) : null}
-          </div>
+      ) : null}
 
-          {latestRound.mode === "manual_creator_contact" ? (
-            <div className="flex flex-wrap items-center gap-2 border-b border-border/70 px-4 py-3">
-              <Button onClick={onCopyUsernames} size="sm" variant="outline">
-                <IconCopy data-icon="inline-start" />
-                Copy usernames
-              </Button>
-              <Button onClick={onCopyMentions} size="sm" variant="outline">
-                <IconAt data-icon="inline-start" />
-                Copy mentions
-              </Button>
-            </div>
-          ) : null}
-
-          <div className="flex flex-col divide-y divide-border/70">
-            {latestRound.selectedUsers.map((user) => (
-              <div
-                key={`${latestRound._id}-${user.discordUserId}`}
-                className="flex flex-col gap-2 px-4 py-3"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate font-medium text-foreground">
-                      {user.displayName}
-                    </div>
-                    <div className="truncate text-sm text-muted-foreground">
-                      @{user.username}
-                    </div>
+      <div className="flex max-h-[420px] flex-col divide-y divide-border/70 overflow-y-auto">
+        {selectionResult.selectedUsers.map((user) => (
+          <div
+            key={`${selectionResult.createdAt}-${user.discordUserId}`}
+            className="flex flex-col gap-3 px-4 py-4"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex min-w-0 items-center gap-3">
+                <Avatar className="size-9">
+                  <AvatarImage alt={user.displayName} src={user.avatarUrl} />
+                  <AvatarFallback>{getInitials(user.displayName)}</AvatarFallback>
+                </Avatar>
+                <div className="min-w-0">
+                  <div className="truncate font-medium text-foreground">
+                    {user.displayName}
                   </div>
-
-                  <div className="flex flex-wrap items-center justify-end gap-2">
-                    <Badge variant="outline">{getRankLabel(user.rank)}</Badge>
-                    {user.dmStatus ? (
-                      <Badge
-                        variant={
-                          user.dmStatus === "failed"
-                            ? "destructive"
-                            : "secondary"
-                        }
-                      >
-                        {user.dmStatus === "failed" ? "DM failed" : "DM sent"}
-                      </Badge>
-                    ) : null}
+                  <div className="truncate text-sm text-muted-foreground">
+                    @{user.username}
                   </div>
                 </div>
+              </div>
 
-                {user.dmFailureReason ? (
-                  <p className="text-sm text-destructive">
-                    {user.dmFailureReason}
-                  </p>
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <Badge variant="outline">{getRankLabel(user.rank)}</Badge>
+                {hasDmStatuses && user.dmStatus ? (
+                  <Badge
+                    variant={
+                      user.dmStatus === "failed" ? "destructive" : "secondary"
+                    }
+                  >
+                    {user.dmStatus === "failed" ? "DM failed" : "DM sent"}
+                  </Badge>
                 ) : null}
               </div>
-            ))}
+            </div>
+
+            {user.dmFailureReason ? (
+              <p className="text-sm text-destructive">{user.dmFailureReason}</p>
+            ) : null}
           </div>
-        </div>
-      )}
-    </Panel>
+        ))}
+      </div>
+    </div>
   )
 }
 
@@ -504,13 +522,21 @@ export function PlayWithViewersDashboardView({
     api.queries.creatorTools.playingWithViewers.queue.getQueueEntries,
     queue?._id ? { queueId: queue._id } : "skip"
   ) as ViewerQueueEntry[] | undefined
-  const latestRound = useQuery(
-    api.queries.creatorTools.playingWithViewers.queue.getLatestQueueRound,
-    queue?._id ? { queueId: queue._id } : "skip"
-  ) as ViewerQueueRound | null | undefined
 
-  const createQueue = useMutation(
-    api.mutations.creatorTools.playingWithViewers.queue.createQueue
+  const createQueueInOwnedGuild = useAction(
+    api.actions.creatorTools.playingWithViewers.discord.createQueueInOwnedGuild
+  )
+  const listAvailableDiscordGuilds = useAction(
+    api.actions.creatorTools.playingWithViewers.discord.listAvailableDiscordGuilds
+  )
+  const syncQueueDiscordContext = useAction(
+    api.actions.creatorTools.playingWithViewers.discord.syncQueueDiscordContext
+  )
+  const selectNextBatchAndNotify = useAction(
+    api.actions.creatorTools.playingWithViewers.discord.selectNextBatchAndNotify
+  )
+  const inviteQueueEntryNowAndNotify = useAction(
+    api.actions.creatorTools.playingWithViewers.discord.inviteQueueEntryNowAndNotify
   )
   const updateQueueSettings = useMutation(
     api.mutations.creatorTools.playingWithViewers.queue.updateQueueSettings
@@ -524,12 +550,6 @@ export function PlayWithViewersDashboardView({
   const removeQueueEntry = useMutation(
     api.mutations.creatorTools.playingWithViewers.queue.removeQueueEntry
   )
-  const selectNextBatch = useMutation(
-    api.mutations.creatorTools.playingWithViewers.queue.selectNextBatch
-  )
-  const inviteQueueEntryNow = useMutation(
-    api.mutations.creatorTools.playingWithViewers.queue.inviteQueueEntryNow
-  )
   const publishQueueMessage = useAction(
     api.actions.creatorTools.playingWithViewers.discord.publishQueueMessage
   )
@@ -541,6 +561,8 @@ export function PlayWithViewersDashboardView({
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [selectionDialogState, setSelectionDialogState] =
     useState<SelectionDialogState>(null)
+  const [selectionResultState, setSelectionResultState] =
+    useState<SelectionResultState>(null)
   const [selectionLobbyCode, setSelectionLobbyCode] = useState("")
   const [createFormState, setCreateFormState] = useState<QueueFormState>(() =>
     getDefaultQueueFormState("")
@@ -554,7 +576,15 @@ export function PlayWithViewersDashboardView({
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [isClearingQueue, setIsClearingQueue] = useState(false)
   const [isSelectingBatch, setIsSelectingBatch] = useState(false)
+  const [isSyncingDiscordContext, setIsSyncingDiscordContext] = useState(false)
+  const [isLoadingAvailableGuilds, setIsLoadingAvailableGuilds] = useState(false)
   const [toolbarFieldPending, setToolbarFieldPending] = useState<string | null>(
+    null
+  )
+  const [availableGuilds, setAvailableGuilds] = useState<AvailableDiscordGuild[]>(
+    []
+  )
+  const [availableGuildsError, setAvailableGuildsError] = useState<string | null>(
     null
   )
   const [removingEntryId, setRemovingEntryId] =
@@ -581,12 +611,97 @@ export function PlayWithViewersDashboardView({
   }, [currentUser, queue])
 
   useEffect(() => {
+    if (!settingsOpen || queue !== null) {
+      return
+    }
+
+    let cancelled = false
+
+    async function loadAvailableGuilds() {
+      setIsLoadingAvailableGuilds(true)
+      setAvailableGuildsError(null)
+
+      try {
+        const guilds = (await listAvailableDiscordGuilds(
+          {}
+        )) as AvailableDiscordGuild[]
+
+        if (cancelled) {
+          return
+        }
+
+        setAvailableGuilds(guilds)
+        setCreateFormState((current) => ({
+          ...current,
+          guildId: guilds.some((guild) => guild.id === current.guildId)
+            ? current.guildId
+            : (guilds[0]?.id ?? ""),
+        }))
+      } catch (error) {
+        if (cancelled) {
+          return
+        }
+
+        setAvailableGuilds([])
+        setAvailableGuildsError(
+          toErrorMessage(error, "Unable to load eligible Discord servers.")
+        )
+        setCreateFormState((current) => ({
+          ...current,
+          guildId: "",
+        }))
+      } finally {
+        if (!cancelled) {
+          setIsLoadingAvailableGuilds(false)
+        }
+      }
+    }
+
+    void loadAvailableGuilds()
+
+    return () => {
+      cancelled = true
+    }
+  }, [listAvailableDiscordGuilds, queue, settingsOpen])
+
+  useEffect(() => {
     if (!queue || settingsOpen) {
       return
     }
 
     setSettingsFormState(toQueueFormState(queue))
   }, [queue, settingsOpen])
+
+  useEffect(() => {
+    if (!queue || (queue.guildName && queue.channelName)) {
+      return
+    }
+
+    const queueId = queue._id
+    let cancelled = false
+
+    async function resolveDiscordContext() {
+      setIsSyncingDiscordContext(true)
+
+      try {
+        await syncQueueDiscordContext({
+          queueId,
+        })
+      } catch {
+        // Keep the dashboard usable even if Discord context backfill fails.
+      } finally {
+        if (!cancelled) {
+          setIsSyncingDiscordContext(false)
+        }
+      }
+    }
+
+    void resolveDiscordContext()
+
+    return () => {
+      cancelled = true
+    }
+  }, [queue, syncQueueDiscordContext])
 
   const entries = queueEntries ?? []
   const eligibleEntriesCount = useMemo(() => {
@@ -602,9 +717,7 @@ export function PlayWithViewersDashboardView({
   const isLoadingQueue =
     currentUser === undefined ||
     (currentUser !== null && queue === undefined) ||
-    (queue !== null &&
-      queue !== undefined &&
-      (queueEntries === undefined || latestRound === undefined))
+    (queue !== null && queue !== undefined && queueEntries === undefined)
 
   async function syncQueueMessageIfPublished(queueId: Id<"viewerQueues">) {
     if (!queue?.messageId) {
@@ -628,12 +741,12 @@ export function PlayWithViewersDashboardView({
   }
 
   async function handleCopyMentions() {
-    if (!latestRound || latestRound === undefined) {
+    if (!selectionResultState) {
       return
     }
 
     await handleCopyToClipboard(
-      latestRound.selectedUsers
+      selectionResultState.selectedUsers
         .map((user) => `<@${user.discordUserId}>`)
         .join("\n"),
       "Mentions copied."
@@ -641,19 +754,19 @@ export function PlayWithViewersDashboardView({
   }
 
   async function handleCopyUsernames() {
-    if (!latestRound || latestRound === undefined) {
+    if (!selectionResultState) {
       return
     }
 
     await handleCopyToClipboard(
-      latestRound.selectedUsers.map((user) => user.username).join("\n"),
+      selectionResultState.selectedUsers.map((user) => user.username).join("\n"),
       "Usernames copied."
     )
   }
 
   async function handleCreateQueue() {
-    if (!currentUser?._id) {
-      toast.error("Unable to resolve your creator account.")
+    if (!createFormState.guildId.trim()) {
+      toast.error("Select a Discord server before creating the queue.")
       return
     }
 
@@ -665,11 +778,9 @@ export function PlayWithViewersDashboardView({
     setIsCreatingQueue(true)
 
     try {
-      await createQueue({
-        channelId: createFormState.channelId.trim(),
+      const result = await createQueueInOwnedGuild({
         creatorDisplayName: createFormState.creatorDisplayName.trim(),
         creatorMessage: createFormState.creatorMessage.trim() || undefined,
-        creatorUserId: currentUser._id,
         gameLabel: createFormState.gameLabel.trim(),
         guildId: createFormState.guildId.trim(),
         inviteMode: createFormState.inviteMode,
@@ -681,8 +792,18 @@ export function PlayWithViewersDashboardView({
         title: createFormState.title.trim(),
       })
 
-      toast.success("Queue created.")
       setSettingsOpen(false)
+
+      if (result.messagePublished) {
+        toast.success(
+          `Queue created in #${result.channelName} and published to Discord.`
+        )
+      } else {
+        toast.error(
+          result.publishError ??
+            "Queue created, but the initial Discord publish failed."
+        )
+      }
     } catch (error) {
       toast.error(toErrorMessage(error, "Unable to create the queue."))
     } finally {
@@ -825,6 +946,19 @@ export function PlayWithViewersDashboardView({
     }
   }
 
+  async function handleRetryQueueMessageSync() {
+    if (!queue) {
+      return
+    }
+
+    if (queue.messageId) {
+      await handleRefreshQueueMessage()
+      return
+    }
+
+    await handlePublishQueueMessage()
+  }
+
   async function handleRemoveEntry(entryId: Id<"viewerQueueEntries">) {
     if (!queue) {
       return
@@ -875,23 +1009,63 @@ export function PlayWithViewersDashboardView({
     setIsSelectingBatch(true)
 
     try {
-      if (selectionDialogState?.kind === "entry") {
-        await inviteQueueEntryNow({
-          entryId: selectionDialogState.entryId,
-          lobbyCode,
-        })
-        toast.success(
-          `${selectionDialogState.displayName} moved into the latest round.`
-        )
-      } else {
-        const result = await selectNextBatch({
-          lobbyCode,
-          queueId: queue._id,
-        })
+      const selectionKind =
+        selectionDialogState?.kind === "entry" ? "entry" : "batch"
+      const result =
+        selectionDialogState?.kind === "entry"
+          ? await inviteQueueEntryNowAndNotify({
+              entryId: selectionDialogState.entryId,
+              lobbyCode,
+            })
+          : await selectNextBatchAndNotify({
+              lobbyCode,
+              queueId: queue._id,
+            })
 
-        toast.success(
-          `Selected ${result.selectedCount} viewer${result.selectedCount === 1 ? "" : "s"}.`
-        )
+      const failedDmCount = result.selectedUsers.filter(
+        (user: QueueRoundUser) => user.dmStatus === "failed"
+      ).length
+
+      setSelectionResultState({
+        createdAt: Date.now(),
+        inviteMode: queue.inviteMode,
+        lobbyCode,
+        selectedUsers: result.selectedUsers as QueueRoundUser[],
+        selectionKind,
+      })
+
+      if (selectionDialogState?.kind === "entry") {
+        if (queue.inviteMode === "discord_dm") {
+          if (failedDmCount > 0) {
+            toast.error(
+              `Invite attempted. ${failedDmCount} Discord DM${failedDmCount === 1 ? "" : "s"} failed.`
+            )
+          } else {
+            toast.success(
+              `${selectionDialogState.displayName} was invited by Discord DM.`
+            )
+          }
+        } else {
+          toast.success(
+            `${selectionDialogState.displayName} is ready for manual invite.`
+          )
+        }
+      } else {
+        if (queue.inviteMode === "discord_dm") {
+          if (failedDmCount > 0) {
+            toast.error(
+              `Batch processed. ${failedDmCount} Discord DM${failedDmCount === 1 ? "" : "s"} failed.`
+            )
+          } else {
+            toast.success(
+              `Invited ${result.selectedCount} viewer${result.selectedCount === 1 ? "" : "s"} by Discord DM.`
+            )
+          }
+        } else {
+          toast.success(
+            `Selected ${result.selectedCount} viewer${result.selectedCount === 1 ? "" : "s"} for manual invite.`
+          )
+        }
       }
 
       await syncQueueMessageIfPublished(queue._id)
@@ -931,6 +1105,33 @@ export function PlayWithViewersDashboardView({
   }
 
   const pageTitle = queue?.title ?? "Play With Viewers"
+  const hasDiscordSyncError = Boolean(queue?.lastMessageSyncError)
+  const hasPublishedMessage = Boolean(queue?.messageId)
+  const isRetryingDiscordSync = hasPublishedMessage ? isRefreshing : isPublishing
+  const discordContextLabel = formatDiscordContext(
+    queue ?? null,
+    isSyncingDiscordContext
+  )
+  const retryDiscordSyncLabel = hasPublishedMessage
+    ? isRefreshing
+      ? "Retrying..."
+      : "Retry refresh"
+    : isPublishing
+      ? "Retrying..."
+      : "Retry publish"
+  const selectionResultTitle = !selectionResultState
+    ? "Selection results"
+    : selectionResultState.inviteMode === "discord_dm"
+      ? selectionResultState.selectionKind === "entry"
+        ? "Discord invite result"
+        : "Batch invite results"
+      : selectionResultState.selectionKind === "entry"
+        ? "Viewer ready to invite"
+        : "Batch ready to invite"
+  const selectionResultDescription =
+    selectionResultState?.inviteMode === "discord_dm"
+      ? "Review the Discord DM results for the selected viewers."
+      : "Use this list to contact the selected viewers directly."
 
   return (
     <div className="flex flex-1 flex-col gap-4">
@@ -979,13 +1180,8 @@ export function PlayWithViewersDashboardView({
         <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
           <span className="inline-flex items-center gap-1.5">
             <IconBrandDiscord />
-            {formatDiscordContext(queue ?? null)}
+            {discordContextLabel}
           </span>
-          {queue?.messageId ? (
-            <span className="font-mono text-xs text-foreground">
-              Message {queue.messageId}
-            </span>
-          ) : null}
           {queue ? (
             <span className="inline-flex items-center gap-1.5">
               <IconBrandTwitch />
@@ -999,7 +1195,18 @@ export function PlayWithViewersDashboardView({
         <Alert variant="destructive">
           <IconAlertTriangle />
           <AlertTitle>Discord sync error</AlertTitle>
-          <AlertDescription>{queue.lastMessageSyncError}</AlertDescription>
+          <AlertDescription className="flex flex-wrap items-start justify-between gap-3">
+            <span className="min-w-0 flex-1">{queue.lastMessageSyncError}</span>
+            <Button
+              disabled={isRetryingDiscordSync}
+              onClick={handleRetryQueueMessageSync}
+              size="sm"
+              variant="outline"
+            >
+              <IconRefresh data-icon="inline-start" />
+              {retryDiscordSyncLabel}
+            </Button>
+          </AlertDescription>
         </Alert>
       ) : null}
 
@@ -1014,9 +1221,9 @@ export function PlayWithViewersDashboardView({
               </EmptyMedia>
               <EmptyTitle>No queue configured yet</EmptyTitle>
               <EmptyDescription>
-                Create the first Play With Viewers queue, choose the Discord
-                channel it should publish into, and the operational dashboard
-                will load on this page.
+                Create the first Play With Viewers queue, choose a Discord
+                server you own where the bot is already installed, and the app
+                will create or reuse #play-with-viewers automatically.
               </EmptyDescription>
             </EmptyHeader>
             <Button
@@ -1149,13 +1356,17 @@ export function PlayWithViewersDashboardView({
                   Settings
                 </Button>
                 <Button
-                  disabled={Boolean(queue.messageId) || isPublishing}
+                  disabled={hasPublishedMessage || isPublishing}
                   onClick={handlePublishQueueMessage}
                   size="sm"
                   variant="outline"
                 >
                   <IconBrandDiscord data-icon="inline-start" />
-                  {isPublishing ? "Publishing..." : "Publish"}
+                  {isPublishing
+                    ? "Publishing..."
+                    : hasDiscordSyncError
+                      ? "Retry publish"
+                      : "Publish"}
                 </Button>
                 <Button
                   disabled={!queue.messageId || isRefreshing}
@@ -1181,8 +1392,7 @@ export function PlayWithViewersDashboardView({
                     <AlertDialogHeader>
                       <AlertDialogTitle>Clear the active queue?</AlertDialogTitle>
                       <AlertDialogDescription>
-                        This removes every waiting viewer. The latest selected
-                        batch stays intact.
+                        This removes every waiting viewer from the active list.
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
@@ -1207,127 +1417,121 @@ export function PlayWithViewersDashboardView({
               </div>
             </div>
           </Panel>
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
-            <Panel className="min-w-0">
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/70 px-4 py-3">
-                <div className="flex flex-col gap-1">
-                  <h2 className="text-sm font-medium">Active waiting list</h2>
-                  <p className="text-sm text-muted-foreground">
-                    {entries.length} waiting
-                    {entries.length > 0
-                      ? ` · ${eligibleEntriesCount} within the current rank band`
-                      : ""}
-                  </p>
-                </div>
-                <Badge variant="outline">
-                  {queue.playersPerBatch} per batch
-                </Badge>
+          <Panel className="min-w-0">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/70 px-4 py-3">
+              <div className="flex flex-col gap-1">
+                <h2 className="text-sm font-medium">Active waiting list</h2>
+                <p className="text-sm text-muted-foreground">
+                  {entries.length} waiting
+                  {entries.length > 0
+                    ? ` · ${eligibleEntriesCount} within the current rank band`
+                    : ""}
+                </p>
               </div>
+              <Badge variant="outline">{queue.playersPerBatch} per batch</Badge>
+            </div>
 
-              {entries.length === 0 ? (
-                <Empty className="min-h-[420px] rounded-none border-0 p-6">
-                  <EmptyHeader>
-                    <EmptyMedia variant="icon">
-                      <IconUsers />
-                    </EmptyMedia>
-                    <EmptyTitle>No viewers are waiting</EmptyTitle>
-                    <EmptyDescription>
-                      Publish the Discord queue message, then viewers can join
-                      from Discord and appear here in arrival order.
-                    </EmptyDescription>
-                  </EmptyHeader>
-                </Empty>
-              ) : (
-                <ScrollArea className="max-h-[620px]">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-16">Position</TableHead>
-                        <TableHead className="min-w-[220px]">Viewer</TableHead>
-                        <TableHead className="w-28">Rank</TableHead>
-                        <TableHead className="w-44">Joined</TableHead>
-                        <TableHead className="w-28">Waiting</TableHead>
-                        <TableHead className="w-[180px] text-right">
-                          Actions
-                        </TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {entries.map((entry, index) => (
-                        <TableRow key={entry._id}>
-                          <TableCell className="font-medium text-muted-foreground">
-                            {index + 1}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex min-w-0 items-center gap-3">
-                              <Avatar className="size-8">
-                                <AvatarFallback>
-                                  {getInitials(entry.displayName)}
-                                </AvatarFallback>
-                              </Avatar>
-                              <div className="min-w-0">
-                                <div className="truncate font-medium text-foreground">
-                                  {entry.displayName}
-                                </div>
-                                <div className="truncate text-sm text-muted-foreground">
-                                  @{entry.username}
-                                </div>
+            {entries.length === 0 ? (
+              <Empty className="min-h-[360px] rounded-none border-0 p-6">
+                <EmptyHeader>
+                  <EmptyMedia variant="icon">
+                    <IconUsers />
+                  </EmptyMedia>
+                  <EmptyTitle>No viewers are waiting</EmptyTitle>
+                  <EmptyDescription>
+                    Publish the Discord queue message, then viewers can join
+                    from Discord and appear here in arrival order.
+                  </EmptyDescription>
+                </EmptyHeader>
+              </Empty>
+            ) : (
+              <ScrollArea className="max-h-[700px]">
+                <Table className="min-w-[980px]">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-20 px-4">Position</TableHead>
+                      <TableHead className="min-w-[320px] px-4">Viewer</TableHead>
+                      <TableHead className="w-36 px-4">Rank</TableHead>
+                      <TableHead className="w-48 px-4">Joined</TableHead>
+                      <TableHead className="w-32 px-4">Waiting</TableHead>
+                      <TableHead className="w-[220px] px-4 text-right">
+                        Actions
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {entries.map((entry, index) => (
+                      <TableRow key={entry._id}>
+                        <TableCell className="px-4 py-4 font-medium text-muted-foreground">
+                          {index + 1}
+                        </TableCell>
+                        <TableCell className="px-4 py-4">
+                          <div className="flex min-w-0 items-center gap-3">
+                            <Avatar className="size-10">
+                              <AvatarImage
+                                alt={entry.displayName}
+                                src={entry.avatarUrl}
+                              />
+                              <AvatarFallback>
+                                {getInitials(entry.displayName)}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="min-w-0">
+                              <div className="truncate font-medium text-foreground">
+                                {entry.displayName}
+                              </div>
+                              <div className="truncate text-sm text-muted-foreground">
+                                @{entry.username}
                               </div>
                             </div>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline">
-                              {getRankLabel(entry.rank)}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-muted-foreground">
-                            {formatDateTime(entry.joinedAt)}
-                          </TableCell>
-                          <TableCell className="text-muted-foreground">
-                            {formatWaitDuration(entry.joinedAt, now)}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center justify-end gap-2">
-                              <Button
-                                disabled={isSelectingBatch}
-                                onClick={() =>
-                                  openSelectionDialog({
-                                    displayName: entry.displayName,
-                                    entryId: entry._id,
-                                    kind: "entry",
-                                  })
-                                }
-                                size="xs"
-                                variant="outline"
-                              >
-                                Invite now
-                              </Button>
-                              <Button
-                                disabled={removingEntryId === entry._id}
-                                onClick={() => handleRemoveEntry(entry._id)}
-                                size="xs"
-                                variant="ghost"
-                              >
-                                {removingEntryId === entry._id
-                                  ? "Removing..."
-                                  : "Remove"}
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </ScrollArea>
-              )}
-            </Panel>
-
-            <LatestRoundPanel
-              latestRound={latestRound}
-              onCopyMentions={handleCopyMentions}
-              onCopyUsernames={handleCopyUsernames}
-            />
-          </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="px-4 py-4">
+                          <Badge variant="outline">
+                            {getRankLabel(entry.rank)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="px-4 py-4 text-muted-foreground">
+                          {formatDateTime(entry.joinedAt)}
+                        </TableCell>
+                        <TableCell className="px-4 py-4 text-muted-foreground">
+                          {formatWaitDuration(entry.joinedAt, now)}
+                        </TableCell>
+                        <TableCell className="px-4 py-4">
+                          <div className="flex items-center justify-end gap-2">
+                            <Button
+                              disabled={isSelectingBatch}
+                              onClick={() =>
+                                openSelectionDialog({
+                                  displayName: entry.displayName,
+                                  entryId: entry._id,
+                                  kind: "entry",
+                                })
+                              }
+                              size="xs"
+                              variant="outline"
+                            >
+                              Invite now
+                            </Button>
+                            <Button
+                              disabled={removingEntryId === entry._id}
+                              onClick={() => handleRemoveEntry(entry._id)}
+                              size="xs"
+                              variant="ghost"
+                            >
+                              {removingEntryId === entry._id
+                                ? "Removing..."
+                                : "Remove"}
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </ScrollArea>
+            )}
+          </Panel>
         </>
       ) : null}
 
@@ -1340,7 +1544,7 @@ export function PlayWithViewersDashboardView({
             <SheetDescription>
               {queue
                 ? "Edit the operational queue configuration without leaving the dashboard."
-                : "Configure the queue, choose the Discord destination, and create the creator control surface."}
+                : "Configure the queue, choose an eligible Discord server, and create the creator control surface."}
             </SheetDescription>
           </SheetHeader>
 
@@ -1350,8 +1554,13 @@ export function PlayWithViewersDashboardView({
                 {!queue ? (
                   <>
                     <Field>
-                      <FieldLabel htmlFor="pwv-guild-id">Discord server ID</FieldLabel>
-                      <Input
+                      <FieldLabel htmlFor="pwv-guild-id">Discord server</FieldLabel>
+                      <NativeSelect
+                        disabled={
+                          isLoadingAvailableGuilds ||
+                          Boolean(availableGuildsError) ||
+                          availableGuilds.length === 0
+                        }
                         id="pwv-guild-id"
                         onChange={(event) =>
                           setCreateFormState((current) => ({
@@ -1359,25 +1568,51 @@ export function PlayWithViewersDashboardView({
                             guildId: event.target.value,
                           }))
                         }
-                        placeholder="123456789012345678"
                         value={createFormState.guildId}
-                      />
+                      >
+                        {availableGuilds.map((guild) => (
+                          <NativeSelectOption key={guild.id} value={guild.id}>
+                            {guild.name}
+                          </NativeSelectOption>
+                        ))}
+                      </NativeSelect>
+                      <FieldDescription>
+                        {isLoadingAvailableGuilds
+                          ? "Checking the Discord servers you own where the bot is already installed."
+                          : availableGuildsError
+                            ? availableGuildsError
+                            : availableGuilds.length === 0
+                              ? "No eligible servers are available yet."
+                              : "The app will reuse #play-with-viewers if it already exists. Otherwise it creates the channel and publishes the queue immediately."}
+                      </FieldDescription>
                     </Field>
 
-                    <Field>
-                      <FieldLabel htmlFor="pwv-channel-id">Discord channel ID</FieldLabel>
-                      <Input
-                        id="pwv-channel-id"
-                        onChange={(event) =>
-                          setCreateFormState((current) => ({
-                            ...current,
-                            channelId: event.target.value,
-                          }))
-                        }
-                        placeholder="123456789012345678"
-                        value={createFormState.channelId}
-                      />
-                    </Field>
+                    {availableGuilds.length === 0 &&
+                    !isLoadingAvailableGuilds &&
+                    !availableGuildsError ? (
+                      <Alert>
+                        <IconBrandDiscord />
+                        <AlertTitle>No eligible Discord servers</AlertTitle>
+                        <AlertDescription className="flex flex-col gap-3">
+                          <p>
+                            Play With Viewers only lists servers you own where
+                            the bot is already present.
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            <Button asChild size="sm" variant="outline">
+                              <a
+                                href="https://discord.com/oauth2/authorize?client_id=1474892349133029539"
+                                rel="noreferrer"
+                                target="_blank"
+                              >
+                                <IconExternalLink data-icon="inline-start" />
+                                Add bot to a server
+                              </a>
+                            </Button>
+                          </div>
+                        </AlertDescription>
+                      </Alert>
+                    ) : null}
                   </>
                 ) : null}
 
@@ -1631,7 +1866,7 @@ export function PlayWithViewersDashboardView({
                   </NativeSelect>
                   <FieldDescription>
                     {queue
-                      ? `Discord target stays fixed on ${formatDiscordContext(queue)}.`
+                      ? `Discord target stays fixed on ${discordContextLabel}.`
                       : "Discord DM mode requires a lobby code when selecting viewers."}
                   </FieldDescription>
                 </Field>
@@ -1648,7 +1883,16 @@ export function PlayWithViewersDashboardView({
                 {isSavingSettings ? "Saving..." : "Save settings"}
               </Button>
             ) : (
-              <Button disabled={isCreatingQueue} onClick={handleCreateQueue} size="sm">
+              <Button
+                disabled={
+                  isCreatingQueue ||
+                  isLoadingAvailableGuilds ||
+                  availableGuilds.length === 0 ||
+                  !createFormState.guildId.trim()
+                }
+                onClick={handleCreateQueue}
+                size="sm"
+              >
                 {isCreatingQueue ? "Creating..." : "Create queue"}
               </Button>
             )}
@@ -1674,8 +1918,8 @@ export function PlayWithViewersDashboardView({
             </DialogTitle>
             <DialogDescription>
               {selectionDialogState?.kind === "entry"
-                ? "This moves a single waiting viewer into the latest round immediately."
-                : "This uses the existing queue selection flow and writes the chosen viewers into the latest round."}
+                ? "This immediately pulls one waiting viewer out of the queue."
+                : "This runs the next batch flow and opens a follow-up result dialog for the selected viewers."}
             </DialogDescription>
           </DialogHeader>
 
@@ -1697,7 +1941,7 @@ export function PlayWithViewersDashboardView({
               <Field>
                 <FieldLabel>Manual contact mode</FieldLabel>
                 <FieldDescription>
-                  The selected viewers will appear in the latest batch panel with
+                  The selected viewers will open in a follow-up dialog with
                   copy helpers for mentions and usernames.
                 </FieldDescription>
               </Field>
@@ -1714,6 +1958,34 @@ export function PlayWithViewersDashboardView({
                 : selectionDialogState?.kind === "entry"
                   ? "Invite now"
                   : "Select batch"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectionResultState(null)
+          }
+        }}
+        open={selectionResultState !== null}
+      >
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{selectionResultTitle}</DialogTitle>
+            <DialogDescription>{selectionResultDescription}</DialogDescription>
+          </DialogHeader>
+
+          <SelectionResultSummary
+            onCopyMentions={handleCopyMentions}
+            onCopyUsernames={handleCopyUsernames}
+            selectionResult={selectionResultState}
+          />
+
+          <DialogFooter>
+            <Button onClick={() => setSelectionResultState(null)} variant="outline">
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>

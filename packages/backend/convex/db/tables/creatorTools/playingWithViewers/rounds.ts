@@ -10,6 +10,7 @@ export const viewerQueueRounds = defineTable({
       discordUserId: v.string(),
       username: v.string(),
       displayName: v.string(),
+      avatarUrl: v.optional(v.string()),
       rank: v.union(
         v.literal("bronze"),
         v.literal("silver"),

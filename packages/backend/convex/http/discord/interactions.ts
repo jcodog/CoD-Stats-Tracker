@@ -73,6 +73,29 @@ const getDiscordUser = (interaction: APIInteraction): APIUser | null => {
   return null
 }
 
+const getDiscordAvatarUrl = (interaction: APIInteraction): string | undefined => {
+  const user = getDiscordUser(interaction)
+
+  if (!user) {
+    return undefined
+  }
+
+  if (
+    "member" in interaction &&
+    interaction.member?.avatar &&
+    "guild_id" in interaction &&
+    interaction.guild_id
+  ) {
+    return `https://cdn.discordapp.com/guilds/${interaction.guild_id}/users/${user.id}/avatars/${interaction.member.avatar}.png?size=128`
+  }
+
+  if (user.avatar) {
+    return `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png?size=128`
+  }
+
+  return undefined
+}
+
 const parseCustomId = (customId: string): ParsedCustomId => {
   const parts = customId.split(":")
 
@@ -394,6 +417,7 @@ async function handleRankSelectInteraction(
         discordUserId: user.id,
         username: user.username,
         displayName: user.global_name ?? user.username,
+        avatarUrl: getDiscordAvatarUrl(interaction),
         rank: selectedRank as any,
       }
     )

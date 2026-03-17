@@ -1,6 +1,8 @@
 import { currentUser } from "@clerk/nextjs/server"
+import { notFound } from "next/navigation"
 
 import { PlayWithViewersDashboardView } from "@/features/creator-tools/play-with-viewers/views/PlayWithViewersDashboardView"
+import { getCreatorToolsAccessState } from "@/lib/server/creator-tools-access"
 
 function hasLinkedTwitchAccount(
   externalAccounts: Array<{ provider?: string | null }> | null | undefined
@@ -14,7 +16,14 @@ function hasLinkedTwitchAccount(
 }
 
 export default async function PlayWithViewersPage() {
-  const clerkUser = await currentUser()
+  const [creatorToolsAccess, clerkUser] = await Promise.all([
+    getCreatorToolsAccessState(),
+    currentUser(),
+  ])
+
+  if (creatorToolsAccess.isSignedIn && !creatorToolsAccess.hasCreatorAccess) {
+    notFound()
+  }
 
   return (
     <PlayWithViewersDashboardView
