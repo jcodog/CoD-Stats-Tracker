@@ -685,6 +685,42 @@ export declare const api: {
         any
       >;
     };
+    creatorTools: {
+      playingWithViewers: {
+        queue: {
+          getLatestQueueRound: FunctionReference<
+            "query",
+            "public",
+            { queueId: Id<"viewerQueues"> },
+            any
+          >;
+          getQueueByCreatorUserId: FunctionReference<
+            "query",
+            "public",
+            { creatorUserId: Id<"users"> },
+            any
+          >;
+          getQueueByGuildAndChannel: FunctionReference<
+            "query",
+            "public",
+            { channelId: string; guildId: string },
+            any
+          >;
+          getQueueById: FunctionReference<
+            "query",
+            "public",
+            { queueId: Id<"viewerQueues"> },
+            any
+          >;
+          getQueueEntries: FunctionReference<
+            "query",
+            "public",
+            { queueId: Id<"viewerQueues"> },
+            any
+          >;
+        };
+      };
+    };
     oauth: {
       getClientByClientId: FunctionReference<
         "query",
