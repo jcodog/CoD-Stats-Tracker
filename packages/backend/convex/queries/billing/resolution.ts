@@ -48,7 +48,7 @@ function isEntitlementCurrentlyApplicable(
 }
 
 async function getResolvedPlanFeatureKeys(args: {
-  ctx: QueryCtx
+  ctx: Pick<QueryCtx, "db">
   features: BillingFeatureRecord[]
   planKey: string | null
 }) {
@@ -132,7 +132,7 @@ function deriveUpcomingChange(subscription: BillingSubscriptionRecord | null) {
 }
 
 export async function buildResolvedBillingState(
-  ctx: QueryCtx,
+  ctx: Pick<QueryCtx, "db">,
   user: UserRecord
 ) {
   const now = Date.now()

@@ -17,6 +17,10 @@ import { billingEntitlements } from "./db/tables/billing/entitlements"
 import { billingAccessGrants } from "./db/tables/billing/accessGrants"
 import { billingWebhookEvents } from "./db/tables/billing/webhookEvents"
 import { staffAuditLogs } from "./db/tables/staffAuditLogs"
+import { viewerQueues } from "./db/tables/creatorTools/playingWithViewers/queues"
+import { viewerQueueEntries } from "./db/tables/creatorTools/playingWithViewers/entries"
+import { viewerQueueRounds } from "./db/tables/creatorTools/playingWithViewers/rounds"
+import { viewerQueueMessageSyncs } from "./db/tables/creatorTools/playingWithViewers/messageSync"
 
 export default defineSchema({
   sessions,
@@ -40,4 +44,8 @@ export default defineSchema({
   billingAccessGrants,
   billingWebhookEvents,
   staffAuditLogs,
+  viewerQueues,
+  viewerQueueEntries,
+  viewerQueueRounds,
+  viewerQueueMessageSyncs,
 })

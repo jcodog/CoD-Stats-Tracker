@@ -2,6 +2,7 @@ import Link from "next/link"
 
 import { StaffNavLink } from "@/components/app-shell/StaffNavLink"
 import { isFlagEnabled } from "@/lib/flags"
+import { getCreatorToolsAccessState } from "@/lib/server/creator-tools-access"
 import { UserButton } from "@clerk/nextjs"
 import {
   Avatar,
@@ -15,7 +16,10 @@ type AppShellProps = {
 }
 
 export async function AppShell({ children }: AppShellProps) {
-  const checkoutEnabled = await isFlagEnabled("checkout")
+  const [checkoutEnabled, creatorToolsAccess] = await Promise.all([
+    isFlagEnabled("checkout"),
+    getCreatorToolsAccessState(),
+  ])
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -42,14 +46,18 @@ export async function AppShell({ children }: AppShellProps) {
               <Button asChild size="sm" variant="ghost">
                 <Link href="/dashboard">Dashboard</Link>
               </Button>
+              {creatorToolsAccess.hasCreatorAccess ? (
+                <Button asChild size="sm" variant="ghost">
+                  <Link href="/creator-tools/play-with-viewers">
+                    Play With Viewers
+                  </Link>
+                </Button>
+              ) : null}
               {checkoutEnabled ? (
                 <Button asChild size="sm" variant="ghost">
                   <Link href="/settings/billing">Billing</Link>
                 </Button>
               ) : null}
-              <Button asChild size="sm" variant="ghost">
-                <Link href="/account">Account</Link>
-              </Button>
             </nav>
           </div>
 
