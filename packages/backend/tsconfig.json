@@ -9,6 +9,7 @@
     "noUncheckedIndexedAccess": false,
     "noEmit": true,
     "paths": {
+      "@workspace/backend/lib/*": ["./convex/lib/*"],
       "@workspace/backend/convex/*": ["./convex/*"],
       "@workspace/backend/landing/*": ["./src/landing/*"],
       "@workspace/backend/server/*": ["./src/server/*"]

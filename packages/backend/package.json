@@ -31,6 +31,7 @@
     "typescript": "^5.9.3"
   },
   "exports": {
+    "./lib/*": "./convex/lib/*.ts",
     "./convex/*": "./convex/*",
     "./landing/*": "./src/landing/*.ts",
     "./server/*": "./src/server/*.ts"

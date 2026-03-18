@@ -2,7 +2,7 @@ import { v } from "convex/values"
 import {
   RANK_WEIGHTS,
   type RankValue,
-} from "../../../../src/lib/playingWithViewers"
+} from "../../../lib/playingWithViewers"
 import { internalMutation } from "../../../_generated/server"
 
 const rankValidator = v.union(

@@ -13,7 +13,7 @@ import {
   InteractionType,
   MessageFlags,
 } from "discord-api-types/v10"
-import { pingCommand } from "../../../src/lib/commands/ping"
+import { pingCommand } from "../../lib/commands/ping"
 import { internal } from "../../_generated/api"
 import { httpAction } from "../../_generated/server"
 

@@ -4,7 +4,7 @@ import { v } from "convex/values"
 import { action } from "../../_generated/server"
 import type { RESTPutAPIApplicationCommandsJSONBody } from "discord-api-types/v10"
 
-import { pingCommand } from "../../../src/lib/commands/ping"
+import { pingCommand } from "../../lib/commands/ping"
 
 const DISCORD_API_BASE = "https://discord.com/api/v10"
 

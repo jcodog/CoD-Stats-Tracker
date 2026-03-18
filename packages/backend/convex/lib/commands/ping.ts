@@ -22,7 +22,7 @@ export const pingCommand: ChatInputCommand = {
       InteractionContextType.PrivateChannel,
     ],
   },
-  handler: async (_interaction) => {
+  handler: async () => {
     return {
       type: InteractionResponseType.ChannelMessageWithSource,
       data: {

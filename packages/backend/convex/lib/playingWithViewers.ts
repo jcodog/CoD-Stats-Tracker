@@ -1,4 +1,4 @@
-import type { Doc } from "../../convex/_generated/dataModel"
+import type { Doc } from "../_generated/dataModel"
 
 export type RankValue = Doc<"viewerQueueEntries">["rank"]
 
