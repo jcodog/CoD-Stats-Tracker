@@ -525,10 +525,12 @@ function SelectionResultSummary({
 
 type PlayWithViewersDashboardViewProps = {
   hasTwitchLinked: boolean
+  preferredCreatorDisplayName: string
 }
 
 export function PlayWithViewersDashboardView({
   hasTwitchLinked,
+  preferredCreatorDisplayName,
 }: PlayWithViewersDashboardViewProps) {
   const currentUser = useQuery(api.queries.users.current)
   const queue = useQuery(
@@ -582,10 +584,10 @@ export function PlayWithViewersDashboardView({
     useState<SelectionResultState>(null)
   const [selectionLobbyCode, setSelectionLobbyCode] = useState("")
   const [createFormState, setCreateFormState] = useState<QueueFormState>(() =>
-    getDefaultQueueFormState("")
+    getDefaultQueueFormState(preferredCreatorDisplayName)
   )
   const [settingsFormState, setSettingsFormState] = useState<QueueFormState>(
-    () => getDefaultQueueFormState("")
+    () => getDefaultQueueFormState(preferredCreatorDisplayName)
   )
   const [isCreatingQueue, setIsCreatingQueue] = useState(false)
   const [isSavingSettings, setIsSavingSettings] = useState(false)
@@ -620,12 +622,12 @@ export function PlayWithViewersDashboardView({
   }, [])
 
   useEffect(() => {
-    if (queue === undefined || queue !== null || currentUser === undefined) {
+    if (queue === undefined || queue !== null) {
       return
     }
 
-    setCreateFormState(getDefaultQueueFormState(currentUser?.name ?? ""))
-  }, [currentUser, queue])
+    setCreateFormState(getDefaultQueueFormState(preferredCreatorDisplayName))
+  }, [preferredCreatorDisplayName, queue])
 
   useEffect(() => {
     if (!settingsOpen || queue !== null) {
