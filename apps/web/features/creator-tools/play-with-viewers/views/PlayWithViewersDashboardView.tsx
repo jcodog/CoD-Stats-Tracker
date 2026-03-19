@@ -713,6 +713,12 @@ export function PlayWithViewersDashboardView({
       return
     }
 
+    if (queue.channelPermsCorrect === true) {
+      setAuditedQueueId(queue._id)
+      setIsSyncingDiscordContext(false)
+      return
+    }
+
     const queueId = queue._id
     let cancelled = false
 

@@ -1011,23 +1011,6 @@ export const syncQueueDiscordContext = action({
       }
     )
 
-    if (queue.messageId) {
-      try {
-        await updateQueueMessageForQueue(ctx, args.queueId)
-      } catch (error) {
-        console.error(
-          "Play With Viewers syncQueueDiscordContext message refresh failed",
-          {
-            error: toErrorMessage(
-              error,
-              "Failed to refresh the published queue message."
-            ),
-            queueId: args.queueId,
-          }
-        )
-      }
-    }
-
     return discordContext
   },
 })
