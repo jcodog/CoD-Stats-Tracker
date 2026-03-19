@@ -61,6 +61,34 @@ const jsonError = (message: string, status: number = 400): Response => {
   )
 }
 
+const normalizeInteractionErrorMessage = (message: string): string => {
+  const normalized = message.replace(/^Uncaught Error:\s*/u, "").trim()
+
+  switch (normalized) {
+    case "Queue not found":
+      return "This queue is no longer available."
+    case "Queue is not active":
+      return "This queue is currently closed."
+    case "Viewer is already in the queue":
+      return "You are already in this queue."
+    case "Viewer is not in the queue":
+      return "You are not currently in this queue."
+    default:
+      return normalized
+  }
+}
+
+const getInteractionErrorMessage = (
+  error: unknown,
+  fallback: string
+): string => {
+  if (!(error instanceof Error) || !error.message.trim()) {
+    return fallback
+  }
+
+  return normalizeInteractionErrorMessage(error.message)
+}
+
 const getDiscordUser = (interaction: APIInteraction): APIUser | null => {
   if ("member" in interaction && interaction.member?.user) {
     return interaction.member.user
@@ -315,13 +343,10 @@ async function handleLeaveInteraction(
       }
     )
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Failed to leave the queue."
-
     return json({
       type: InteractionResponseType.ChannelMessageWithSource,
       data: {
-        content: message,
+        content: getInteractionErrorMessage(error, "Failed to leave the queue."),
         flags: MessageFlags.Ephemeral,
       },
     })
@@ -426,13 +451,10 @@ async function handleRankSelectInteraction(
       }
     )
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Failed to join the queue."
-
     return json({
       type: InteractionResponseType.ChannelMessageWithSource,
       data: {
-        content: message,
+        content: getInteractionErrorMessage(error, "Failed to join the queue."),
         flags: MessageFlags.Ephemeral,
       },
     })

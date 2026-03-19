@@ -360,12 +360,14 @@ function renderQueueMessage({
             style: ButtonStyle.Secondary,
             label: "Leave Queue",
             custom_id: buildCustomId("leave", queue._id),
+            disabled: !queue.isActive,
           },
           {
             type: ComponentType.Button,
             style: ButtonStyle.Secondary,
             label: "My Status",
             custom_id: buildCustomId("status", queue._id),
+            disabled: !queue.isActive,
           },
         ],
       },
@@ -1008,6 +1010,23 @@ export const syncQueueDiscordContext = action({
         queueId: args.queueId,
       }
     )
+
+    if (queue.messageId) {
+      try {
+        await updateQueueMessageForQueue(ctx, args.queueId)
+      } catch (error) {
+        console.error(
+          "Play With Viewers syncQueueDiscordContext message refresh failed",
+          {
+            error: toErrorMessage(
+              error,
+              "Failed to refresh the published queue message."
+            ),
+            queueId: args.queueId,
+          }
+        )
+      }
+    }
 
     return discordContext
   },
