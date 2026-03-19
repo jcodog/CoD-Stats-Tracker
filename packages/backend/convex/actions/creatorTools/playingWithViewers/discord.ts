@@ -86,16 +86,12 @@ type AvailableDiscordGuild = {
 }
 
 type DiscordGuildPermissionContext = {
-  botUserId: string
   guildPermissionBits: bigint
-  memberRoleIds: Set<string>
 }
 
 type QueueChannelBotPermissionStatus = {
   canUpdateChannelPermissions: boolean
-  missingManagePermissionLabels: string[]
   missingManageRoles: boolean
-  missingOverwritePermissionLabels: string[]
   missingPermissionLabels: string[]
   needsReinvite: boolean
 }
@@ -136,16 +132,30 @@ const PLAY_WITH_VIEWERS_EVERYONE_DENY_PERMISSION_FLAGS = [
   PermissionFlagsBits.UseExternalApps,
 ] as const
 
-const PLAY_WITH_VIEWERS_REQUIRED_MANAGE_PERMISSION_FLAGS = [
+const PLAY_WITH_VIEWERS_REQUIRED_SERVER_PERMISSION_FLAGS = [
+  PermissionFlagsBits.ViewChannel,
+  PermissionFlagsBits.UseApplicationCommands,
+  PermissionFlagsBits.ReadMessageHistory,
+  PermissionFlagsBits.CreateInstantInvite,
+  PermissionFlagsBits.SendMessages,
+  PermissionFlagsBits.EmbedLinks,
+  PermissionFlagsBits.AttachFiles,
+  PermissionFlagsBits.MentionEveryone,
+  PermissionFlagsBits.UseExternalEmojis,
+  PermissionFlagsBits.AddReactions,
+  PermissionFlagsBits.UseExternalStickers,
+  PermissionFlagsBits.SendPolls,
+  PermissionFlagsBits.PinMessages,
+  PermissionFlagsBits.ManageMessages,
+  PermissionFlagsBits.BypassSlowmode,
   PermissionFlagsBits.ManageChannels,
   PermissionFlagsBits.ManageRoles,
-] as const
-
-const PLAY_WITH_VIEWERS_OVERWRITE_PERMISSION_FLAGS = [
-  ...PLAY_WITH_VIEWERS_EVERYONE_PERMISSION_FLAGS,
-  ...PLAY_WITH_VIEWERS_EVERYONE_DENY_PERMISSION_FLAGS,
-  ...PLAY_WITH_VIEWERS_BOT_EXTRA_PERMISSION_FLAGS,
-  ...PLAY_WITH_VIEWERS_REQUIRED_MANAGE_PERMISSION_FLAGS,
+  PermissionFlagsBits.KickMembers,
+  PermissionFlagsBits.ManageGuild,
+  PermissionFlagsBits.ManageWebhooks,
+  PermissionFlagsBits.ModerateMembers,
+  PermissionFlagsBits.UseEmbeddedActivities,
+  PermissionFlagsBits.UseExternalApps,
 ] as const
 
 function getRequiredEnv(name: string): string {
@@ -209,6 +219,11 @@ const DISCORD_PERMISSION_LABELS = new Map<bigint, string>([
   [PermissionFlagsBits.BypassSlowmode, "Bypass Slow Mode"],
   [PermissionFlagsBits.ManageChannels, "Manage Channels"],
   [PermissionFlagsBits.ManageRoles, "Manage Roles"],
+  [PermissionFlagsBits.KickMembers, "Kick Members"],
+  [PermissionFlagsBits.ManageGuild, "Manage Server"],
+  [PermissionFlagsBits.ManageWebhooks, "Manage Webhooks"],
+  [PermissionFlagsBits.ModerateMembers, "Moderate Members"],
+  [PermissionFlagsBits.UseEmbeddedActivities, "Use Embedded Activities"],
 ])
 
 function hasPermission(permissionBits: bigint, permission: bigint) {
@@ -225,34 +240,40 @@ function getPermissionLabel(permission: bigint) {
   )
 }
 
-function getUniquePermissions(flags: readonly bigint[]) {
-  return [...new Set(flags)]
-}
-
-function getUniquePermissionLabels(labels: readonly string[]) {
-  return [...new Set(labels)]
-}
-
-async function readDiscordApiError(response: Response, fallback: string) {
+async function readDiscordApiErrorDetails(response: Response, fallback: string) {
   const responseText = await response.text()
 
   if (!responseText.trim()) {
-    return fallback
+    return {
+      code: undefined,
+      message: fallback,
+    }
   }
 
   try {
     const payload = JSON.parse(responseText) as {
+      code?: number
       message?: string
     }
 
-    if (payload.message?.trim()) {
-      return payload.message.trim()
+    return {
+      code: payload.code,
+      message: payload.message?.trim() || responseText,
     }
   } catch {
     // Fall back to the raw text when Discord doesn't send JSON.
   }
 
-  return responseText
+  return {
+    code: undefined,
+    message: responseText,
+  }
+}
+
+async function readDiscordApiError(response: Response, fallback: string) {
+  const details = await readDiscordApiErrorDetails(response, fallback)
+
+  return details.message
 }
 
 async function getBotGuildPermissionContext(
@@ -288,11 +309,9 @@ async function getBotGuildPermissionContext(
 
   const roles = (await rolesResponse.json()) as DiscordGuildRole[]
   const member = (await memberResponse.json()) as DiscordGuildMember
-  const memberRoleIds = new Set(member.roles)
   const relevantRoleIds = new Set([guildId, ...member.roles])
 
   return {
-    botUserId,
     guildPermissionBits: roles.reduce((permissionBits, role) => {
       if (!relevantRoleIds.has(role.id)) {
         return permissionBits
@@ -300,163 +319,43 @@ async function getBotGuildPermissionContext(
 
       return permissionBits | BigInt(role.permissions)
     }, 0n),
-    memberRoleIds,
   }
 }
 
-function applyPermissionOverwrite(permissionBits: bigint, overwrite: {
-  allow: bigint
-  deny: bigint
-}) {
-  return (permissionBits & ~overwrite.deny) | overwrite.allow
-}
-
-function resolveChannelPermissionBits(args: {
-  basePermissionBits: bigint
-  botUserId: string
-  guildId: string
-  memberRoleIds: Set<string>
-  permissionOverwrites: DiscordChannelPermissionOverwrite[] | null | undefined
-}) {
-  if (hasPermission(args.basePermissionBits, PermissionFlagsBits.Administrator)) {
-    return args.basePermissionBits
-  }
-
-  const permissionOverwrites = args.permissionOverwrites ?? []
-  let permissionBits = args.basePermissionBits
-  const everyoneOverwrite = permissionOverwrites.find(
-    (overwrite) =>
-      overwrite.id === args.guildId && Number(overwrite.type) === OverwriteType.Role
-  )
-
-  if (everyoneOverwrite) {
-    permissionBits = applyPermissionOverwrite(permissionBits, {
-      allow: parsePermissionBits(everyoneOverwrite.allow),
-      deny: parsePermissionBits(everyoneOverwrite.deny),
-    })
-  }
-
-  const roleOverwriteBits = permissionOverwrites
-    .filter(
-      (overwrite) =>
-        Number(overwrite.type) === OverwriteType.Role &&
-        args.memberRoleIds.has(overwrite.id)
-    )
-    .reduce(
-      (combined, overwrite) => ({
-        allow: combined.allow | parsePermissionBits(overwrite.allow),
-        deny: combined.deny | parsePermissionBits(overwrite.deny),
-      }),
-      { allow: 0n, deny: 0n }
-    )
-
-  permissionBits = applyPermissionOverwrite(permissionBits, roleOverwriteBits)
-
-  const memberOverwrite = permissionOverwrites.find(
-    (overwrite) =>
-      overwrite.id === args.botUserId && Number(overwrite.type) === OverwriteType.Member
-  )
-
-  if (memberOverwrite) {
-    permissionBits = applyPermissionOverwrite(permissionBits, {
-      allow: parsePermissionBits(memberOverwrite.allow),
-      deny: parsePermissionBits(memberOverwrite.deny),
-    })
-  }
-
-  return permissionBits
-}
-
-async function getBotChannelPermissionContext(args: {
-  channelId: string
-  guildId: string
-  guildPermissionContext: DiscordGuildPermissionContext
-}) {
-  const channelResponse = await discordBotRequest(`/channels/${args.channelId}`, {
+async function getDiscordChannelDetails(channelId: string) {
+  const channelResponse = await discordBotRequest(`/channels/${channelId}`, {
     method: "GET",
   })
 
   if (!channelResponse.ok) {
-    const errorText = await readDiscordApiError(
+    const errorDetails = await readDiscordApiErrorDetails(
       channelResponse,
       "Failed to load Discord channel details."
     )
 
-    throw new Error(`Failed to load Discord channel details: ${errorText}`)
+    if (channelResponse.status === 404 && errorDetails.code === 10003) {
+      return null
+    }
+
+    throw new Error(`Failed to load Discord channel details: ${errorDetails.message}`)
   }
 
-  const channel = (await channelResponse.json()) as DiscordGuildChannelDetails
-
-  return {
-    channel,
-    permissionBits: resolveChannelPermissionBits({
-      basePermissionBits: args.guildPermissionContext.guildPermissionBits,
-      botUserId: args.guildPermissionContext.botUserId,
-      guildId: args.guildId,
-      memberRoleIds: args.guildPermissionContext.memberRoleIds,
-      permissionOverwrites: channel.permission_overwrites,
-    }),
-  }
+  return (await channelResponse.json()) as DiscordGuildChannelDetails
 }
 
 async function getBotQueueChannelPermissionStatus(
   args: {
-    channelId: string
     guildId: string
   }
 ): Promise<QueueChannelBotPermissionStatus> {
   const guildPermissionContext = await getBotGuildPermissionContext(args.guildId)
-  const { channel, permissionBits: channelPermissionBits } =
-    await getBotChannelPermissionContext({
-      channelId: args.channelId,
-      guildId: args.guildId,
-      guildPermissionContext,
-    })
-
-  if (
-    (channelPermissionBits & PermissionFlagsBits.Administrator) ===
-    PermissionFlagsBits.Administrator
-  ) {
-    return {
-      canUpdateChannelPermissions: true,
-      missingManagePermissionLabels: [],
-      missingManageRoles: false,
-      missingOverwritePermissionLabels: [],
-      missingPermissionLabels: [],
-      needsReinvite: false,
-    }
-  }
-
-  const overwritePermissionBits = channel.parent_id
-    ? (
-        await getBotChannelPermissionContext({
-          channelId: channel.parent_id,
-          guildId: args.guildId,
-          guildPermissionContext,
-        })
-      ).permissionBits
-    : guildPermissionContext.guildPermissionBits
-
-  const missingManagePermissionLabels = PLAY_WITH_VIEWERS_REQUIRED_MANAGE_PERMISSION_FLAGS
-    .filter((permission) => !hasPermission(channelPermissionBits, permission))
+  const missingPermissionLabels = PLAY_WITH_VIEWERS_REQUIRED_SERVER_PERMISSION_FLAGS
+    .filter((permission) => !hasPermission(guildPermissionContext.guildPermissionBits, permission))
     .map(getPermissionLabel)
-
-  const missingOverwritePermissionLabels = getUniquePermissions(
-    PLAY_WITH_VIEWERS_OVERWRITE_PERMISSION_FLAGS
-  )
-    .filter((permission) => !hasPermission(overwritePermissionBits, permission))
-    .map(getPermissionLabel)
-
-  const missingPermissionLabels = getUniquePermissionLabels([
-    ...missingManagePermissionLabels,
-    ...missingOverwritePermissionLabels,
-  ])
 
   return {
     canUpdateChannelPermissions: missingPermissionLabels.length === 0,
-    missingManagePermissionLabels,
-    missingManageRoles: missingManagePermissionLabels.includes("Manage Roles"),
-    missingOverwritePermissionLabels,
+    missingManageRoles: missingPermissionLabels.includes("Manage Roles"),
     missingPermissionLabels,
     needsReinvite: missingPermissionLabels.length > 0,
   }
@@ -469,28 +368,18 @@ function buildBotQueueChannelPermissionError(
     return null
   }
 
-  const details = [
-    status.missingManagePermissionLabels.length > 0
-      ? `channel-level management permissions: ${status.missingManagePermissionLabels.join(", ")}`
-      : null,
-    status.missingOverwritePermissionLabels.length > 0
-      ? `guild or parent-category permissions needed for the Play With Viewers overwrite set: ${status.missingOverwritePermissionLabels.join(", ")}`
-      : null,
-  ].filter(Boolean)
-
   if (status.missingManageRoles) {
-    return `The CoD Stats bot does not currently have the effective Discord "Manage Roles" permission needed to update this Play With Viewers channel. Missing right now: ${status.missingPermissionLabels.join(
+    return `The CoD Stats bot does not currently have the Discord "Manage Roles" permission required in this server. Missing right now: ${status.missingPermissionLabels.join(
       ", "
-    )}. Check the channel or parent category permissions, then try again.`
+    )}. Reinvite the bot with the updated server permissions, then try again.`
   }
 
-  return `Discord won't let the bot update this channel's permission overwrites yet. Missing ${details.join(
-    "; missing "
-  )}. Check the channel or parent category permissions, then try again.`
+  return `The CoD Stats bot is missing required Discord server permissions for Play With Viewers. Missing right now: ${status.missingPermissionLabels.join(
+    ", "
+  )}. Reinvite the bot with the updated server permissions, then try again.`
 }
 
 async function ensureBotCanConfigureQueueChannelPermissions(args: {
-  channelId: string
   guildId: string
 }) {
   const status = await getBotQueueChannelPermissionStatus(args)
@@ -578,17 +467,13 @@ async function getQueueChannelPermissionState(args: {
   channelId: string
   guildId: string
 }) {
-  const channelResponse = await discordBotRequest(`/channels/${args.channelId}`, {
-    method: "GET",
-  })
+  const channel = await getDiscordChannelDetails(args.channelId)
 
-  if (!channelResponse.ok) {
-    const errorText = await channelResponse.text()
-
-    throw new Error(`Failed to load Discord channel details: ${errorText}`)
+  if (!channel) {
+    throw new Error(
+      "The Play With Viewers channel no longer exists. Recreate it from the dashboard and try again."
+    )
   }
-
-  const channel = (await channelResponse.json()) as DiscordGuildChannelDetails
 
   return {
     channelName: channel.name,
@@ -603,7 +488,9 @@ async function applyQueueChannelPermissions(args: {
   channelId: string
   guildId: string
 }) {
-  await ensureBotCanConfigureQueueChannelPermissions(args)
+  await ensureBotCanConfigureQueueChannelPermissions({
+    guildId: args.guildId,
+  })
 
   const overwrites = buildQueueChannelPermissionOverwrites(args.guildId)
 
@@ -621,13 +508,19 @@ async function applyQueueChannelPermissions(args: {
     )
 
     if (!response.ok) {
-      const errorText = await readDiscordApiError(
+      const errorDetails = await readDiscordApiErrorDetails(
         response,
         "Discord rejected the channel permissions update."
       )
 
+      if (response.status === 403 && errorDetails.message === "Missing Permissions") {
+        throw new Error(
+          "Discord is still blocking the Play With Viewers channel overwrite update. The bot has the required server permissions, so check whether this channel or its parent category is locked against overwrite edits."
+        )
+      }
+
       throw new Error(
-        `Failed to update Play With Viewers channel permissions: ${errorText}`
+        `Failed to update Play With Viewers channel permissions: ${errorDetails.message}`
       )
     }
   }
@@ -907,6 +800,45 @@ async function getOrCreateQueueChannel(guildId: string) {
   }
 }
 
+async function ensureQueueDiscordChannel(
+  ctx: ActionCtx,
+  queue: Doc<"viewerQueues">
+) {
+  const existingChannel = await getDiscordChannelDetails(queue.channelId)
+
+  if (existingChannel) {
+    return {
+      queue,
+      recreatedChannel: false,
+    }
+  }
+
+  const channel = await getOrCreateQueueChannel(queue.guildId)
+
+  await ctx.runMutation(
+    internal.mutations.creatorTools.playingWithViewers.queue.setQueueDiscordContext,
+    {
+      channelId: channel.channelId,
+      channelName: channel.channelName,
+      channelPermsCorrect: channel.channelPermsCorrect,
+      queueId: queue._id,
+      resetMessageState: true,
+    }
+  )
+
+  const nextQueue = await ctx.runQuery(
+    internal.queries.creatorTools.playingWithViewers.queue.getQueueById,
+    {
+      queueId: queue._id,
+    }
+  )
+
+  return {
+    queue: nextQueue,
+    recreatedChannel: true,
+  }
+}
+
 async function getDiscordQueueContext(args: {
   botPermissionStatus?: QueueChannelBotPermissionStatus
   channelId: string
@@ -919,7 +851,9 @@ async function getDiscordQueueContext(args: {
     getQueueChannelPermissionState(args),
     args.botPermissionStatus
       ? Promise.resolve(args.botPermissionStatus)
-      : getBotQueueChannelPermissionStatus(args),
+      : getBotQueueChannelPermissionStatus({
+          guildId: args.guildId,
+        }),
   ])
 
   if (!guildResponse.ok) {
@@ -940,12 +874,15 @@ async function getDiscordQueueContext(args: {
 
 async function publishQueueMessageForQueue(
   ctx: ActionCtx,
-  queueId: Id<"viewerQueues">
+  queueId: Id<"viewerQueues">,
+  retriedAfterMissingChannel = false
 ) {
-  const queue = await ctx.runQuery(
+  let queue = await ctx.runQuery(
     internal.queries.creatorTools.playingWithViewers.queue.getQueueById,
     { queueId }
   )
+
+  queue = (await ensureQueueDiscordChannel(ctx, queue)).queue
 
   if (queue.messageId) {
     throw new Error(
@@ -970,9 +907,22 @@ async function publishQueueMessageForQueue(
     })
 
     if (!response.ok) {
-      const errorText = await response.text()
+      const errorDetails = await readDiscordApiErrorDetails(
+        response,
+        "Failed to publish queue message."
+      )
 
-      throw new Error(`Failed to publish queue message: ${errorText}`)
+      if (
+        !retriedAfterMissingChannel &&
+        response.status === 404 &&
+        errorDetails.code === 10003
+      ) {
+        await ensureQueueDiscordChannel(ctx, queue)
+
+        return await publishQueueMessageForQueue(ctx, queueId, true)
+      }
+
+      throw new Error(`Failed to publish queue message: ${errorDetails.message}`)
     }
 
     const createdMessage = (await response.json()) as { id: string }
@@ -1045,13 +995,15 @@ async function updateQueueMessageForQueue(
   ctx: ActionCtx,
   queueId: Id<"viewerQueues">
 ) {
-  const queue = await ctx.runQuery(
+  let queue = await ctx.runQuery(
     internal.queries.creatorTools.playingWithViewers.queue.getQueueById,
     { queueId }
   )
 
+  queue = (await ensureQueueDiscordChannel(ctx, queue)).queue
+
   if (!queue.messageId) {
-    throw new Error("Queue message has not been published yet")
+    return await publishQueueMessageForQueue(ctx, queueId)
   }
 
   const entries = await ctx.runQuery(
@@ -1074,9 +1026,29 @@ async function updateQueueMessageForQueue(
     )
 
     if (!response.ok) {
-      const errorText = await response.text()
+      const errorDetails = await readDiscordApiErrorDetails(
+        response,
+        "Failed to update queue message."
+      )
 
-      throw new Error(`Failed to update queue message: ${errorText}`)
+      if (response.status === 404 && errorDetails.code === 10003) {
+        await ensureQueueDiscordChannel(ctx, queue)
+
+        return await publishQueueMessageForQueue(ctx, queueId)
+      }
+
+      if (response.status === 404 && errorDetails.code === 10008) {
+        await ctx.runMutation(
+          internal.mutations.creatorTools.playingWithViewers.queue.clearQueueMessageMeta,
+          {
+            queueId,
+          }
+        )
+
+        return await publishQueueMessageForQueue(ctx, queueId)
+      }
+
+      throw new Error(`Failed to update queue message: ${errorDetails.message}`)
     }
 
     await ctx.runMutation(
@@ -1360,7 +1332,9 @@ export const syncQueueDiscordContext = action({
     queueId: v.id("viewerQueues"),
   },
   handler: async (ctx, args) => {
-    const { queue } = await requireOwnedQueueActionAccess(ctx, args.queueId)
+    let { queue } = await requireOwnedQueueActionAccess(ctx, args.queueId)
+
+    queue = (await ensureQueueDiscordChannel(ctx, queue)).queue
 
     const discordContext = await getDiscordQueueContext({
       channelId: queue.channelId,
@@ -1387,16 +1361,16 @@ export const fixQueueChannelPermissions = action({
   },
   handler: async (ctx, args) => {
     const { queue } = await requireOwnedQueueActionAccess(ctx, args.queueId)
+    const ensuredQueue = (await ensureQueueDiscordChannel(ctx, queue)).queue
     const botPermissionStatus = await getBotQueueChannelPermissionStatus({
-      channelId: queue.channelId,
-      guildId: queue.guildId,
+      guildId: ensuredQueue.guildId,
     })
 
     if (!botPermissionStatus.canUpdateChannelPermissions) {
       const discordContext = await getDiscordQueueContext({
         botPermissionStatus,
-        channelId: queue.channelId,
-        guildId: queue.guildId,
+        channelId: ensuredQueue.channelId,
+        guildId: ensuredQueue.guildId,
       })
 
       await ctx.runMutation(
@@ -1416,14 +1390,14 @@ export const fixQueueChannelPermissions = action({
     }
 
     await applyQueueChannelPermissions({
-      channelId: queue.channelId,
-      guildId: queue.guildId,
+      channelId: ensuredQueue.channelId,
+      guildId: ensuredQueue.guildId,
     })
 
     const discordContext = await getDiscordQueueContext({
       botPermissionStatus,
-      channelId: queue.channelId,
-      guildId: queue.guildId,
+      channelId: ensuredQueue.channelId,
+      guildId: ensuredQueue.guildId,
     })
 
     await ctx.runMutation(

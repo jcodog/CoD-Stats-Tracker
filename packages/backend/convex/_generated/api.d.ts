@@ -1195,6 +1195,12 @@ export declare const internal: {
             { queueId: Id<"viewerQueues"> },
             any
           >;
+          clearQueueMessageMeta: FunctionReference<
+            "mutation",
+            "internal",
+            { queueId: Id<"viewerQueues"> },
+            any
+          >;
           clearQueueMessageSyncError: FunctionReference<
             "mutation",
             "internal",
@@ -1295,10 +1301,12 @@ export declare const internal: {
             "mutation",
             "internal",
             {
+              channelId?: string;
               channelName?: string;
               channelPermsCorrect?: boolean;
               guildName?: string;
               queueId: Id<"viewerQueues">;
+              resetMessageState?: boolean;
             },
             any
           >;

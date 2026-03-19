@@ -536,6 +536,27 @@ export const setQueueMessageMeta = internalMutation({
   },
 })
 
+export const clearQueueMessageMeta = internalMutation({
+  args: {
+    queueId: v.id("viewerQueues"),
+  },
+  handler: async (ctx, args) => {
+    const queue = await ctx.db.get(args.queueId)
+
+    if (!queue) {
+      throw new Error("Queue not found")
+    }
+
+    await ctx.db.patch(args.queueId, {
+      lastMessageSyncError: undefined,
+      messageId: undefined,
+      updatedAt: Date.now(),
+    })
+
+    return { queueId: args.queueId }
+  },
+})
+
 export const setQueueMessageSyncError = internalMutation({
   args: {
     queueId: v.id("viewerQueues"),
@@ -581,8 +602,10 @@ export const setQueueDiscordContext = internalMutation({
   args: {
     queueId: v.id("viewerQueues"),
     guildName: v.optional(v.string()),
+    channelId: v.optional(v.string()),
     channelName: v.optional(v.string()),
     channelPermsCorrect: v.optional(v.boolean()),
+    resetMessageState: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const queue = await ctx.db.get(args.queueId)
@@ -591,10 +614,19 @@ export const setQueueDiscordContext = internalMutation({
       throw new Error("Queue not found")
     }
 
+    const channelId = args.channelId?.trim()
+
     await ctx.db.patch(args.queueId, {
+      channelId: channelId || queue.channelId,
       guildName: args.guildName?.trim() || undefined,
       channelName: args.channelName?.trim() || undefined,
       channelPermsCorrect: args.channelPermsCorrect,
+      ...(args.resetMessageState
+        ? {
+            lastMessageSyncError: undefined,
+            messageId: undefined,
+          }
+        : {}),
       updatedAt: Date.now(),
     })
 
