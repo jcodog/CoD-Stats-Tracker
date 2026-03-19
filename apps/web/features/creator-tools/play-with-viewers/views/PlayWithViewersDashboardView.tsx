@@ -801,8 +801,67 @@ export function PlayWithViewersDashboardView({
     (currentUser !== null && queue === undefined) ||
     (queue !== null && queue !== undefined && queueEntries === undefined)
 
+  function applyAuditedDiscordContext(
+    queueId: Id<"viewerQueues">,
+    result: Awaited<ReturnType<typeof syncQueueDiscordContext>>
+  ) {
+    setAuditedQueueId(queueId)
+    setAuditedChannelPermsCorrect(result.channelPermsCorrect)
+    setQueueBotPermissionStatus(result.botPermissionStatus)
+
+    if (result.botPermissionStatus?.needsReinvite || result.channelPermsCorrect !== true) {
+      setPermissionsDialogOpen(true)
+      setPermissionsDialogQueueId(queueId)
+      return
+    }
+
+    setPermissionsDialogOpen(false)
+    setPermissionsDialogQueueId(null)
+  }
+
+  async function ensureQueueReadyForDiscordSync(queueId: Id<"viewerQueues">) {
+    setIsSyncingDiscordContext(true)
+
+    try {
+      const result = await syncQueueDiscordContext({
+        queueId,
+      })
+
+      applyAuditedDiscordContext(queueId, result)
+
+      if (result.botPermissionStatus?.needsReinvite) {
+        toast.error(
+          "Reinvite the Discord bot with the required server permissions before publishing or refreshing this queue."
+        )
+        return false
+      }
+
+      if (result.channelPermsCorrect !== true) {
+        toast.error(
+          "Fix the Play With Viewers channel permissions before publishing or refreshing the queue message."
+        )
+        return false
+      }
+
+      return true
+    } catch (error) {
+      toast.error(
+        toErrorMessage(error, "Unable to verify the Discord queue right now.")
+      )
+      return false
+    } finally {
+      setIsSyncingDiscordContext(false)
+    }
+  }
+
   async function syncQueueMessageIfPublished(queueId: Id<"viewerQueues">) {
     if (!queue?.messageId) {
+      return
+    }
+
+    const canRefreshQueueMessage = await ensureQueueReadyForDiscordSync(queueId)
+
+    if (!canRefreshQueueMessage) {
       return
     }
 
@@ -1004,6 +1063,12 @@ export function PlayWithViewersDashboardView({
     setIsPublishing(true)
 
     try {
+      const canPublishQueueMessage = await ensureQueueReadyForDiscordSync(queue._id)
+
+      if (!canPublishQueueMessage) {
+        return
+      }
+
       await publishQueueMessage({ queueId: queue._id })
       toast.success("Queue message published to Discord.")
     } catch (error) {
@@ -1021,6 +1086,12 @@ export function PlayWithViewersDashboardView({
     setIsRefreshing(true)
 
     try {
+      const canRefreshQueueMessage = await ensureQueueReadyForDiscordSync(queue._id)
+
+      if (!canRefreshQueueMessage) {
+        return
+      }
+
       await refreshQueueMessage({ queueId: queue._id })
       toast.success("Queue message refreshed.")
     } catch (error) {

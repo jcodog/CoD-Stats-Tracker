@@ -343,6 +343,20 @@ async function getDiscordChannelDetails(channelId: string) {
   return (await channelResponse.json()) as DiscordGuildChannelDetails
 }
 
+async function getDiscordGuildSummary(guildId: string) {
+  const guildResponse = await discordBotRequest(`/guilds/${guildId}`, {
+    method: "GET",
+  })
+
+  if (!guildResponse.ok) {
+    const errorText = await guildResponse.text()
+
+    throw new Error(`Failed to load Discord server details: ${errorText}`)
+  }
+
+  return (await guildResponse.json()) as DiscordGuildSummary
+}
+
 async function getBotQueueChannelPermissionStatus(
   args: {
     guildId: string
@@ -839,15 +853,27 @@ async function ensureQueueDiscordChannel(
   }
 }
 
+async function getReinviteRequiredQueueContext(args: {
+  botPermissionStatus: QueueChannelBotPermissionStatus
+  queue: Pick<Doc<"viewerQueues">, "channelName" | "guildId">
+}) {
+  const guild = await getDiscordGuildSummary(args.queue.guildId)
+
+  return {
+    botPermissionStatus: args.botPermissionStatus,
+    channelName: args.queue.channelName?.trim() || PLAY_WITH_VIEWERS_CHANNEL_NAME,
+    channelPermsCorrect: false,
+    guildName: guild.name,
+  }
+}
+
 async function getDiscordQueueContext(args: {
   botPermissionStatus?: QueueChannelBotPermissionStatus
   channelId: string
   guildId: string
 }) {
-  const [guildResponse, channelState, botPermissionStatus] = await Promise.all([
-    discordBotRequest(`/guilds/${args.guildId}`, {
-      method: "GET",
-    }),
+  const [guild, channelState, botPermissionStatus] = await Promise.all([
+    getDiscordGuildSummary(args.guildId),
     getQueueChannelPermissionState(args),
     args.botPermissionStatus
       ? Promise.resolve(args.botPermissionStatus)
@@ -855,14 +881,6 @@ async function getDiscordQueueContext(args: {
           guildId: args.guildId,
         }),
   ])
-
-  if (!guildResponse.ok) {
-    const errorText = await guildResponse.text()
-
-    throw new Error(`Failed to load Discord server details: ${errorText}`)
-  }
-
-  const guild = (await guildResponse.json()) as DiscordGuildSummary
 
   return {
     botPermissionStatus,
@@ -882,25 +900,29 @@ async function publishQueueMessageForQueue(
     { queueId }
   )
 
-  queue = (await ensureQueueDiscordChannel(ctx, queue)).queue
-
-  if (queue.messageId) {
-    throw new Error(
-      "Queue message is already published. Use refresh to update the existing message."
-    )
-  }
-
-  const entries = await ctx.runQuery(
-    internal.queries.creatorTools.playingWithViewers.queue.getQueueEntries,
-    { queueId }
-  )
-
-  const payload: RESTPostAPIChannelMessageJSONBody = renderQueueMessage({
-    queue,
-    queueSize: entries.length,
-  }) as RESTPostAPIChannelMessageJSONBody
-
   try {
+    await ensureBotCanConfigureQueueChannelPermissions({
+      guildId: queue.guildId,
+    })
+
+    queue = (await ensureQueueDiscordChannel(ctx, queue)).queue
+
+    if (queue.messageId) {
+      throw new Error(
+        "Queue message is already published. Use refresh to update the existing message."
+      )
+    }
+
+    const entries = await ctx.runQuery(
+      internal.queries.creatorTools.playingWithViewers.queue.getQueueEntries,
+      { queueId }
+    )
+
+    const payload: RESTPostAPIChannelMessageJSONBody = renderQueueMessage({
+      queue,
+      queueSize: entries.length,
+    }) as RESTPostAPIChannelMessageJSONBody
+
     const response = await discordBotRequest(`/channels/${queue.channelId}/messages`, {
       method: "POST",
       body: JSON.stringify(payload),
@@ -1000,23 +1022,27 @@ async function updateQueueMessageForQueue(
     { queueId }
   )
 
-  queue = (await ensureQueueDiscordChannel(ctx, queue)).queue
-
-  if (!queue.messageId) {
-    return await publishQueueMessageForQueue(ctx, queueId)
-  }
-
-  const entries = await ctx.runQuery(
-    internal.queries.creatorTools.playingWithViewers.queue.getQueueEntries,
-    { queueId }
-  )
-
-  const payload: RESTPatchAPIChannelMessageJSONBody = renderQueueMessage({
-    queue,
-    queueSize: entries.length,
-  }) as RESTPatchAPIChannelMessageJSONBody
-
   try {
+    await ensureBotCanConfigureQueueChannelPermissions({
+      guildId: queue.guildId,
+    })
+
+    queue = (await ensureQueueDiscordChannel(ctx, queue)).queue
+
+    if (!queue.messageId) {
+      return await publishQueueMessageForQueue(ctx, queueId)
+    }
+
+    const entries = await ctx.runQuery(
+      internal.queries.creatorTools.playingWithViewers.queue.getQueueEntries,
+      { queueId }
+    )
+
+    const payload: RESTPatchAPIChannelMessageJSONBody = renderQueueMessage({
+      queue,
+      queueSize: entries.length,
+    }) as RESTPatchAPIChannelMessageJSONBody
+
     const response = await discordBotRequest(
       `/channels/${queue.channelId}/messages/${queue.messageId}`,
       {
@@ -1333,10 +1359,33 @@ export const syncQueueDiscordContext = action({
   },
   handler: async (ctx, args) => {
     let { queue } = await requireOwnedQueueActionAccess(ctx, args.queueId)
+    const botPermissionStatus = await getBotQueueChannelPermissionStatus({
+      guildId: queue.guildId,
+    })
+
+    if (!botPermissionStatus.canUpdateChannelPermissions) {
+      const discordContext = await getReinviteRequiredQueueContext({
+        botPermissionStatus,
+        queue,
+      })
+
+      await ctx.runMutation(
+        internal.mutations.creatorTools.playingWithViewers.queue.setQueueDiscordContext,
+        {
+          channelName: discordContext.channelName,
+          channelPermsCorrect: discordContext.channelPermsCorrect,
+          guildName: discordContext.guildName,
+          queueId: args.queueId,
+        }
+      )
+
+      return discordContext
+    }
 
     queue = (await ensureQueueDiscordChannel(ctx, queue)).queue
 
     const discordContext = await getDiscordQueueContext({
+      botPermissionStatus,
       channelId: queue.channelId,
       guildId: queue.guildId,
     })
@@ -1361,16 +1410,14 @@ export const fixQueueChannelPermissions = action({
   },
   handler: async (ctx, args) => {
     const { queue } = await requireOwnedQueueActionAccess(ctx, args.queueId)
-    const ensuredQueue = (await ensureQueueDiscordChannel(ctx, queue)).queue
     const botPermissionStatus = await getBotQueueChannelPermissionStatus({
-      guildId: ensuredQueue.guildId,
+      guildId: queue.guildId,
     })
 
     if (!botPermissionStatus.canUpdateChannelPermissions) {
-      const discordContext = await getDiscordQueueContext({
+      const discordContext = await getReinviteRequiredQueueContext({
         botPermissionStatus,
-        channelId: ensuredQueue.channelId,
-        guildId: ensuredQueue.guildId,
+        queue,
       })
 
       await ctx.runMutation(
@@ -1388,6 +1435,8 @@ export const fixQueueChannelPermissions = action({
         permissionsUpdated: false,
       }
     }
+
+    const ensuredQueue = (await ensureQueueDiscordChannel(ctx, queue)).queue
 
     await applyQueueChannelPermissions({
       channelId: ensuredQueue.channelId,
