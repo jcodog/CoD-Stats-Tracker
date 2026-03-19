@@ -16,7 +16,6 @@ import {
   ComponentType,
   OverwriteType,
   PermissionFlagsBits,
-  type RESTPatchAPIChannelJSONBody,
   type RESTPatchAPIChannelMessageJSONBody,
   type RESTPostAPIChannelMessageJSONBody,
 } from "discord-api-types/v10"
@@ -84,6 +83,12 @@ type AvailableDiscordGuild = {
   iconUrl: string | null
   id: string
   name: string
+}
+
+type DiscordGuildPermissionContext = {
+  botUserId: string
+  guildPermissionBits: bigint
+  memberRoleIds: Set<string>
 }
 
 type QueueChannelBotPermissionStatus = {
@@ -250,7 +255,9 @@ async function readDiscordApiError(response: Response, fallback: string) {
   return responseText
 }
 
-async function getBotGuildPermissionBits(guildId: string) {
+async function getBotGuildPermissionContext(
+  guildId: string
+): Promise<DiscordGuildPermissionContext> {
   const botUserId = getRequiredEnv("DISCORD_APPLICATION_ID")
   const [rolesResponse, memberResponse] = await Promise.all([
     discordBotRequest(`/guilds/${guildId}/roles`, {
@@ -281,24 +288,133 @@ async function getBotGuildPermissionBits(guildId: string) {
 
   const roles = (await rolesResponse.json()) as DiscordGuildRole[]
   const member = (await memberResponse.json()) as DiscordGuildMember
+  const memberRoleIds = new Set(member.roles)
   const relevantRoleIds = new Set([guildId, ...member.roles])
 
-  return roles.reduce((permissionBits, role) => {
-    if (!relevantRoleIds.has(role.id)) {
-      return permissionBits
-    }
+  return {
+    botUserId,
+    guildPermissionBits: roles.reduce((permissionBits, role) => {
+      if (!relevantRoleIds.has(role.id)) {
+        return permissionBits
+      }
 
-    return permissionBits | BigInt(role.permissions)
-  }, 0n)
+      return permissionBits | BigInt(role.permissions)
+    }, 0n),
+    memberRoleIds,
+  }
+}
+
+function applyPermissionOverwrite(permissionBits: bigint, overwrite: {
+  allow: bigint
+  deny: bigint
+}) {
+  return (permissionBits & ~overwrite.deny) | overwrite.allow
+}
+
+function resolveChannelPermissionBits(args: {
+  basePermissionBits: bigint
+  botUserId: string
+  guildId: string
+  memberRoleIds: Set<string>
+  permissionOverwrites: DiscordChannelPermissionOverwrite[] | null | undefined
+}) {
+  if (hasPermission(args.basePermissionBits, PermissionFlagsBits.Administrator)) {
+    return args.basePermissionBits
+  }
+
+  const permissionOverwrites = args.permissionOverwrites ?? []
+  let permissionBits = args.basePermissionBits
+  const everyoneOverwrite = permissionOverwrites.find(
+    (overwrite) =>
+      overwrite.id === args.guildId && Number(overwrite.type) === OverwriteType.Role
+  )
+
+  if (everyoneOverwrite) {
+    permissionBits = applyPermissionOverwrite(permissionBits, {
+      allow: parsePermissionBits(everyoneOverwrite.allow),
+      deny: parsePermissionBits(everyoneOverwrite.deny),
+    })
+  }
+
+  const roleOverwriteBits = permissionOverwrites
+    .filter(
+      (overwrite) =>
+        Number(overwrite.type) === OverwriteType.Role &&
+        args.memberRoleIds.has(overwrite.id)
+    )
+    .reduce(
+      (combined, overwrite) => ({
+        allow: combined.allow | parsePermissionBits(overwrite.allow),
+        deny: combined.deny | parsePermissionBits(overwrite.deny),
+      }),
+      { allow: 0n, deny: 0n }
+    )
+
+  permissionBits = applyPermissionOverwrite(permissionBits, roleOverwriteBits)
+
+  const memberOverwrite = permissionOverwrites.find(
+    (overwrite) =>
+      overwrite.id === args.botUserId && Number(overwrite.type) === OverwriteType.Member
+  )
+
+  if (memberOverwrite) {
+    permissionBits = applyPermissionOverwrite(permissionBits, {
+      allow: parsePermissionBits(memberOverwrite.allow),
+      deny: parsePermissionBits(memberOverwrite.deny),
+    })
+  }
+
+  return permissionBits
+}
+
+async function getBotChannelPermissionContext(args: {
+  channelId: string
+  guildId: string
+  guildPermissionContext: DiscordGuildPermissionContext
+}) {
+  const channelResponse = await discordBotRequest(`/channels/${args.channelId}`, {
+    method: "GET",
+  })
+
+  if (!channelResponse.ok) {
+    const errorText = await readDiscordApiError(
+      channelResponse,
+      "Failed to load Discord channel details."
+    )
+
+    throw new Error(`Failed to load Discord channel details: ${errorText}`)
+  }
+
+  const channel = (await channelResponse.json()) as DiscordGuildChannelDetails
+
+  return {
+    channel,
+    permissionBits: resolveChannelPermissionBits({
+      basePermissionBits: args.guildPermissionContext.guildPermissionBits,
+      botUserId: args.guildPermissionContext.botUserId,
+      guildId: args.guildId,
+      memberRoleIds: args.guildPermissionContext.memberRoleIds,
+      permissionOverwrites: channel.permission_overwrites,
+    }),
+  }
 }
 
 async function getBotQueueChannelPermissionStatus(
-  guildId: string
+  args: {
+    channelId: string
+    guildId: string
+  }
 ): Promise<QueueChannelBotPermissionStatus> {
-  const permissionBits = await getBotGuildPermissionBits(guildId)
+  const guildPermissionContext = await getBotGuildPermissionContext(args.guildId)
+  const { channel, permissionBits: channelPermissionBits } =
+    await getBotChannelPermissionContext({
+      channelId: args.channelId,
+      guildId: args.guildId,
+      guildPermissionContext,
+    })
 
   if (
-    (permissionBits & PermissionFlagsBits.Administrator) ===
+    (channelPermissionBits & PermissionFlagsBits.Administrator) ===
     PermissionFlagsBits.Administrator
   ) {
     return {
@@ -311,14 +427,24 @@ async function getBotQueueChannelPermissionStatus(
     }
   }
 
+  const overwritePermissionBits = channel.parent_id
+    ? (
+        await getBotChannelPermissionContext({
+          channelId: channel.parent_id,
+          guildId: args.guildId,
+          guildPermissionContext,
+        })
+      ).permissionBits
+    : guildPermissionContext.guildPermissionBits
+
   const missingManagePermissionLabels = PLAY_WITH_VIEWERS_REQUIRED_MANAGE_PERMISSION_FLAGS
-    .filter((permission) => !hasPermission(permissionBits, permission))
+    .filter((permission) => !hasPermission(channelPermissionBits, permission))
     .map(getPermissionLabel)
 
   const missingOverwritePermissionLabels = getUniquePermissions(
     PLAY_WITH_VIEWERS_OVERWRITE_PERMISSION_FLAGS
   )
-    .filter((permission) => !hasPermission(permissionBits, permission))
+    .filter((permission) => !hasPermission(overwritePermissionBits, permission))
     .map(getPermissionLabel)
 
   const missingPermissionLabels = getUniquePermissionLabels([
@@ -345,26 +471,29 @@ function buildBotQueueChannelPermissionError(
 
   const details = [
     status.missingManagePermissionLabels.length > 0
-      ? `management permissions: ${status.missingManagePermissionLabels.join(", ")}`
+      ? `channel-level management permissions: ${status.missingManagePermissionLabels.join(", ")}`
       : null,
     status.missingOverwritePermissionLabels.length > 0
-      ? `server permissions needed for the Play With Viewers overwrite set: ${status.missingOverwritePermissionLabels.join(", ")}`
+      ? `guild or parent-category permissions needed for the Play With Viewers overwrite set: ${status.missingOverwritePermissionLabels.join(", ")}`
       : null,
   ].filter(Boolean)
 
   if (status.missingManageRoles) {
-    return `The CoD Stats bot is missing the Discord "Manage Roles" permission in this server, so it cannot update Play With Viewers channel permission overwrites. Missing right now: ${status.missingPermissionLabels.join(
+    return `The CoD Stats bot does not currently have the effective Discord "Manage Roles" permission needed to update this Play With Viewers channel. Missing right now: ${status.missingPermissionLabels.join(
       ", "
-    )}. Reinvite the bot with updated permissions and try again.`
+    )}. Check the channel or parent category permissions, then try again.`
   }
 
   return `Discord won't let the bot update this channel's permission overwrites yet. Missing ${details.join(
     "; missing "
-  )}. Reinvite the bot with updated permissions and try again.`
+  )}. Check the channel or parent category permissions, then try again.`
 }
 
-async function ensureBotCanConfigureQueueChannelPermissions(guildId: string) {
-  const status = await getBotQueueChannelPermissionStatus(guildId)
+async function ensureBotCanConfigureQueueChannelPermissions(args: {
+  channelId: string
+  guildId: string
+}) {
+  const status = await getBotQueueChannelPermissionStatus(args)
   const errorMessage = buildBotQueueChannelPermissionError(status)
 
   if (!errorMessage) {
@@ -474,22 +603,33 @@ async function applyQueueChannelPermissions(args: {
   channelId: string
   guildId: string
 }) {
-  await ensureBotCanConfigureQueueChannelPermissions(args.guildId)
+  await ensureBotCanConfigureQueueChannelPermissions(args)
 
-  const response = await discordBotRequest(`/channels/${args.channelId}`, {
-    method: "PATCH",
-    body: JSON.stringify({
-      permission_overwrites: buildQueueChannelPermissionOverwrites(args.guildId),
-    } satisfies RESTPatchAPIChannelJSONBody),
-  })
+  const overwrites = buildQueueChannelPermissionOverwrites(args.guildId)
 
-  if (!response.ok) {
-    const errorText = await readDiscordApiError(
-      response,
-      "Discord rejected the channel permissions update."
+  for (const overwrite of overwrites) {
+    const response = await discordBotRequest(
+      `/channels/${args.channelId}/permissions/${overwrite.id}`,
+      {
+        method: "PUT",
+        body: JSON.stringify({
+          allow: overwrite.allow,
+          deny: overwrite.deny,
+          type: overwrite.type,
+        }),
+      }
     )
 
-    throw new Error(`Failed to update Play With Viewers channel permissions: ${errorText}`)
+    if (!response.ok) {
+      const errorText = await readDiscordApiError(
+        response,
+        "Discord rejected the channel permissions update."
+      )
+
+      throw new Error(
+        `Failed to update Play With Viewers channel permissions: ${errorText}`
+      )
+    }
   }
 
   const permissionState = await getQueueChannelPermissionState(args)
@@ -779,7 +919,7 @@ async function getDiscordQueueContext(args: {
     getQueueChannelPermissionState(args),
     args.botPermissionStatus
       ? Promise.resolve(args.botPermissionStatus)
-      : getBotQueueChannelPermissionStatus(args.guildId),
+      : getBotQueueChannelPermissionStatus(args),
   ])
 
   if (!guildResponse.ok) {
@@ -1247,7 +1387,10 @@ export const fixQueueChannelPermissions = action({
   },
   handler: async (ctx, args) => {
     const { queue } = await requireOwnedQueueActionAccess(ctx, args.queueId)
-    const botPermissionStatus = await getBotQueueChannelPermissionStatus(queue.guildId)
+    const botPermissionStatus = await getBotQueueChannelPermissionStatus({
+      channelId: queue.channelId,
+      guildId: queue.guildId,
+    })
 
     if (!botPermissionStatus.canUpdateChannelPermissions) {
       const discordContext = await getDiscordQueueContext({

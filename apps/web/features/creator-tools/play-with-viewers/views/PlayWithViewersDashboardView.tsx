@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { startTransition, useEffect, useMemo, useState } from "react"
-import { useAction, useQuery } from "convex/react"
+import { useQuery } from "convex/react"
 import {
   IconAlertTriangle,
   IconArrowRight,
@@ -21,6 +21,24 @@ import {
 import { api } from "@workspace/backend/convex/_generated/api"
 import type { Doc, Id } from "@workspace/backend/convex/_generated/dataModel"
 import type { RankValue } from "@workspace/backend/lib/playingWithViewers"
+import {
+  type AvailableDiscordGuild,
+  type QueueChannelBotPermissionStatus,
+} from "@/features/creator-tools/play-with-viewers/lib/play-with-viewers-api"
+import {
+  useClearQueueAction,
+  useCreateQueueInOwnedGuildAction,
+  useFixQueueChannelPermissionsAction,
+  useInviteQueueEntryNowAndNotifyAction,
+  useListAvailableDiscordGuildsAction,
+  usePublishQueueMessageAction,
+  useRemoveQueueEntryAction,
+  useSelectNextBatchAndNotifyAction,
+  useSetQueueActiveAction,
+  useSyncQueueDiscordContextAction,
+  useUpdateQueueMessageAction,
+  useUpdateQueueSettingsAction,
+} from "@/features/creator-tools/play-with-viewers/lib/play-with-viewers-client"
 import {
   Alert,
   AlertDescription,
@@ -98,31 +116,6 @@ type ViewerQueueEntry = Doc<"viewerQueueEntries">
 type ViewerQueueRound = Doc<"viewerQueueRounds">
 type InviteMode = ViewerQueue["inviteMode"]
 type QueueRoundUser = ViewerQueueRound["selectedUsers"][number]
-type AvailableDiscordGuild = {
-  iconUrl: string | null
-  id: string
-  name: string
-}
-
-type QueueChannelBotPermissionStatus = {
-  canUpdateChannelPermissions: boolean
-  missingManagePermissionLabels: string[]
-  missingManageRoles: boolean
-  missingOverwritePermissionLabels: string[]
-  missingPermissionLabels: string[]
-  needsReinvite: boolean
-}
-
-type QueueDiscordContext = {
-  botPermissionStatus: QueueChannelBotPermissionStatus
-  channelName: string
-  channelPermsCorrect: boolean
-  guildName: string
-}
-
-type QueueChannelPermissionsFixResult = QueueDiscordContext & {
-  permissionsUpdated: boolean
-}
 
 type QueueFormState = {
   channelId: string
@@ -234,6 +227,8 @@ function toQueueFormState(queue: ViewerQueue): QueueFormState {
 function toErrorMessage(error: unknown, fallback: string) {
   if (error instanceof Error && error.message.trim()) {
     return error.message
+      .replace(/^\[CONVEX [^\]]+\]\s*/u, "")
+      .replace(/^Uncaught Error:\s*/u, "")
   }
 
   return fallback
@@ -564,42 +559,18 @@ export function PlayWithViewersDashboardView({
     queue?._id ? { queueId: queue._id } : "skip"
   ) as ViewerQueueEntry[] | undefined
 
-  const createQueueInOwnedGuild = useAction(
-    api.actions.creatorTools.playingWithViewers.discord.createQueueInOwnedGuild
-  )
-  const listAvailableDiscordGuilds = useAction(
-    api.actions.creatorTools.playingWithViewers.discord.listAvailableDiscordGuilds
-  )
-  const syncQueueDiscordContext = useAction(
-    api.actions.creatorTools.playingWithViewers.discord.syncQueueDiscordContext
-  )
-  const fixQueueChannelPermissions = useAction(
-    api.actions.creatorTools.playingWithViewers.discord.fixQueueChannelPermissions
-  )
-  const selectNextBatchAndNotify = useAction(
-    api.actions.creatorTools.playingWithViewers.discord.selectNextBatchAndNotify
-  )
-  const inviteQueueEntryNowAndNotify = useAction(
-    api.actions.creatorTools.playingWithViewers.discord.inviteQueueEntryNowAndNotify
-  )
-  const updateQueueSettings = useAction(
-    api.actions.creatorTools.playingWithViewers.queue.updateQueueSettings
-  )
-  const setQueueActive = useAction(
-    api.actions.creatorTools.playingWithViewers.queue.setQueueActive
-  )
-  const clearQueue = useAction(
-    api.actions.creatorTools.playingWithViewers.queue.clearQueue
-  )
-  const removeQueueEntry = useAction(
-    api.actions.creatorTools.playingWithViewers.queue.removeQueueEntry
-  )
-  const publishQueueMessage = useAction(
-    api.actions.creatorTools.playingWithViewers.discord.publishQueueMessage
-  )
-  const refreshQueueMessage = useAction(
-    api.actions.creatorTools.playingWithViewers.discord.updateQueueMessage
-  )
+  const clearQueue = useClearQueueAction()
+  const createQueueInOwnedGuild = useCreateQueueInOwnedGuildAction()
+  const fixQueueChannelPermissions = useFixQueueChannelPermissionsAction()
+  const inviteQueueEntryNowAndNotify = useInviteQueueEntryNowAndNotifyAction()
+  const listAvailableDiscordGuilds = useListAvailableDiscordGuildsAction()
+  const publishQueueMessage = usePublishQueueMessageAction()
+  const removeQueueEntry = useRemoveQueueEntryAction()
+  const refreshQueueMessage = useUpdateQueueMessageAction()
+  const selectNextBatchAndNotify = useSelectNextBatchAndNotifyAction()
+  const setQueueActive = useSetQueueActiveAction()
+  const syncQueueDiscordContext = useSyncQueueDiscordContextAction()
+  const updateQueueSettings = useUpdateQueueSettingsAction()
 
   const [now, setNow] = useState(() => Date.now())
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -688,9 +659,7 @@ export function PlayWithViewersDashboardView({
       setAvailableGuildsError(null)
 
       try {
-        const guilds = (await listAvailableDiscordGuilds(
-          {}
-        )) as AvailableDiscordGuild[]
+        const guilds: AvailableDiscordGuild[] = await listAvailableDiscordGuilds({})
 
         if (cancelled) {
           return
@@ -766,9 +735,9 @@ export function PlayWithViewersDashboardView({
       setIsSyncingDiscordContext(true)
 
       try {
-        const result = (await syncQueueDiscordContext({
+        const result = await syncQueueDiscordContext({
           queueId,
-        })) as QueueDiscordContext
+        })
 
         if (cancelled) {
           return
@@ -1069,9 +1038,9 @@ export function PlayWithViewersDashboardView({
     setIsFixingChannelPermissions(true)
 
     try {
-      const result = (await fixQueueChannelPermissions({
+      const result = await fixQueueChannelPermissions({
         queueId: queue._id,
-      })) as QueueChannelPermissionsFixResult
+      })
 
       setAuditedQueueId(queue._id)
       setAuditedChannelPermsCorrect(result.channelPermsCorrect)
