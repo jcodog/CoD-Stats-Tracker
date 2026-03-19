@@ -120,17 +120,12 @@ const PLAY_WITH_VIEWERS_BOT_EXTRA_PERMISSION_FLAGS = [
 const PLAY_WITH_VIEWERS_EVERYONE_DENY_PERMISSION_FLAGS = [
   PermissionFlagsBits.CreateInstantInvite,
   PermissionFlagsBits.SendMessages,
-  PermissionFlagsBits.SendTTSMessages,
   PermissionFlagsBits.EmbedLinks,
   PermissionFlagsBits.AttachFiles,
   PermissionFlagsBits.MentionEveryone,
   PermissionFlagsBits.UseExternalEmojis,
   PermissionFlagsBits.AddReactions,
-  PermissionFlagsBits.CreatePublicThreads,
-  PermissionFlagsBits.CreatePrivateThreads,
   PermissionFlagsBits.UseExternalStickers,
-  PermissionFlagsBits.SendMessagesInThreads,
-  PermissionFlagsBits.SendVoiceMessages,
   PermissionFlagsBits.SendPolls,
   PermissionFlagsBits.PinMessages,
   PermissionFlagsBits.UseExternalApps,
@@ -181,8 +176,8 @@ const PLAY_WITH_VIEWERS_EVERYONE_DENY_PERMISSIONS = combinePermissionFlags(
 
 const PLAY_WITH_VIEWERS_BOT_DENY_PERMISSIONS = 0n
 
-function normalizePermissionBits(value: string | null | undefined) {
-  return BigInt(value ?? "0").toString()
+function parsePermissionBits(value: string | null | undefined) {
+  return BigInt(value ?? "0")
 }
 
 const DISCORD_PERMISSION_LABELS = new Map<bigint, string>([
@@ -402,41 +397,52 @@ function hasExpectedQueueChannelPermissions(args: {
   guildId: string
   permissionOverwrites: DiscordChannelPermissionOverwrite[] | null | undefined
 }) {
-  const actualOverwrites = [...(args.permissionOverwrites ?? [])]
-    .map((overwrite) => ({
-      allow: normalizePermissionBits(overwrite.allow),
-      deny: normalizePermissionBits(overwrite.deny),
-      id: overwrite.id,
-      type: Number(overwrite.type),
-    }))
-    .sort((left, right) =>
-      left.id === right.id ? left.type - right.type : left.id.localeCompare(right.id)
-    )
-  const expectedOverwrites = buildQueueChannelPermissionOverwrites(args.guildId)
-    .map((overwrite) => ({
-      allow: normalizePermissionBits(overwrite.allow),
-      deny: normalizePermissionBits(overwrite.deny),
-      id: overwrite.id,
-      type: Number(overwrite.type),
-    }))
-    .sort((left, right) =>
-      left.id === right.id ? left.type - right.type : left.id.localeCompare(right.id)
-    )
+  const actualOverwriteMap = new Map(
+    [...(args.permissionOverwrites ?? [])].map((overwrite) => [
+      `${overwrite.id}:${Number(overwrite.type)}`,
+      {
+        allow: parsePermissionBits(overwrite.allow),
+        deny: parsePermissionBits(overwrite.deny),
+      },
+    ])
+  )
+  const [expectedEveryoneOverwrite, expectedBotOverwrite] =
+    buildQueueChannelPermissionOverwrites(args.guildId)
+  const actualEveryoneOverwrite = actualOverwriteMap.get(
+    `${expectedEveryoneOverwrite.id}:${Number(expectedEveryoneOverwrite.type)}`
+  )
+  const actualBotOverwrite = actualOverwriteMap.get(
+    `${expectedBotOverwrite.id}:${Number(expectedBotOverwrite.type)}`
+  )
 
-  if (actualOverwrites.length !== expectedOverwrites.length) {
+  if (!actualEveryoneOverwrite || !actualBotOverwrite) {
     return false
   }
 
-  return actualOverwrites.every((overwrite, index) => {
-    const expected = expectedOverwrites[index]
+  const expectedEveryoneAllow = parsePermissionBits(expectedEveryoneOverwrite.allow)
+  const expectedEveryoneDeny = parsePermissionBits(expectedEveryoneOverwrite.deny)
+  const expectedBotAllow = parsePermissionBits(expectedBotOverwrite.allow)
+  const expectedBotDeny = parsePermissionBits(expectedBotOverwrite.deny)
 
-    return (
-      overwrite.allow === expected.allow &&
-      overwrite.deny === expected.deny &&
-      overwrite.id === expected.id &&
-      overwrite.type === expected.type
-    )
-  })
+  const everyoneAllowMatches =
+    actualEveryoneOverwrite.allow === expectedEveryoneAllow
+  const everyoneDenyCoversRequiredBits =
+    (actualEveryoneOverwrite.deny & expectedEveryoneDeny) === expectedEveryoneDeny
+  const everyoneDenyDoesNotBlockRequiredAllowBits =
+    (actualEveryoneOverwrite.deny & expectedEveryoneAllow) === 0n
+  const botAllowCoversRequiredBits =
+    (actualBotOverwrite.allow & expectedBotAllow) === expectedBotAllow
+  const botDenyDoesNotBlockRequiredBits =
+    (actualBotOverwrite.deny & expectedBotAllow) === 0n &&
+    (actualBotOverwrite.deny & expectedBotDeny) === expectedBotDeny
+
+  return (
+    everyoneAllowMatches &&
+    everyoneDenyCoversRequiredBits &&
+    everyoneDenyDoesNotBlockRequiredAllowBits &&
+    botAllowCoversRequiredBits &&
+    botDenyDoesNotBlockRequiredBits
+  )
 }
 
 async function getQueueChannelPermissionState(args: {

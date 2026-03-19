@@ -192,7 +192,7 @@ const defaultRulesText = [
   "- Be ready when your turn comes up so the queue can keep moving.",
 ].join("\n")
 const DISCORD_BOT_REINVITE_URL =
-  "https://discord.com/oauth2/authorize?client_id=1474892349133029539&scope=bot%20applications.commands&permissions=8444389156580432"
+  "https://discord.com/oauth2/authorize?client_id=1474892349133029539"
 
 function getDefaultQueueFormState(name: string): QueueFormState {
   const trimmedName = name.trim()
