@@ -551,6 +551,9 @@ export function PlayWithViewersDashboardView({
   const syncQueueDiscordContext = useAction(
     api.actions.creatorTools.playingWithViewers.discord.syncQueueDiscordContext
   )
+  const fixQueueChannelPermissions = useAction(
+    api.actions.creatorTools.playingWithViewers.discord.fixQueueChannelPermissions
+  )
   const selectNextBatchAndNotify = useAction(
     api.actions.creatorTools.playingWithViewers.discord.selectNextBatchAndNotify
   )
@@ -596,6 +599,8 @@ export function PlayWithViewersDashboardView({
   const [isClearingQueue, setIsClearingQueue] = useState(false)
   const [isSelectingBatch, setIsSelectingBatch] = useState(false)
   const [isSyncingDiscordContext, setIsSyncingDiscordContext] = useState(false)
+  const [isFixingChannelPermissions, setIsFixingChannelPermissions] =
+    useState(false)
   const [isLoadingAvailableGuilds, setIsLoadingAvailableGuilds] = useState(false)
   const [toolbarFieldPending, setToolbarFieldPending] = useState<string | null>(
     null
@@ -608,6 +613,12 @@ export function PlayWithViewersDashboardView({
   )
   const [removingEntryId, setRemovingEntryId] =
     useState<Id<"viewerQueueEntries"> | null>(null)
+  const [auditedQueueId, setAuditedQueueId] = useState<Id<"viewerQueues"> | null>(
+    null
+  )
+  const [permissionsDialogOpen, setPermissionsDialogOpen] = useState(false)
+  const [permissionsDialogQueueId, setPermissionsDialogQueueId] =
+    useState<Id<"viewerQueues"> | null>(null)
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -692,7 +703,13 @@ export function PlayWithViewersDashboardView({
   }, [queue, settingsOpen])
 
   useEffect(() => {
-    if (!queue || (queue.guildName && queue.channelName)) {
+    setAuditedQueueId(null)
+    setPermissionsDialogOpen(false)
+    setPermissionsDialogQueueId(null)
+  }, [queue?._id])
+
+  useEffect(() => {
+    if (!queue || auditedQueueId === queue._id) {
       return
     }
 
@@ -707,9 +724,10 @@ export function PlayWithViewersDashboardView({
           queueId,
         })
       } catch {
-        // Keep the dashboard usable even if Discord context backfill fails.
+        // Keep the dashboard usable even if the Discord audit fails.
       } finally {
         if (!cancelled) {
+          setAuditedQueueId(queueId)
           setIsSyncingDiscordContext(false)
         }
       }
@@ -720,7 +738,24 @@ export function PlayWithViewersDashboardView({
     return () => {
       cancelled = true
     }
-  }, [queue, syncQueueDiscordContext])
+  }, [auditedQueueId, queue, syncQueueDiscordContext])
+
+  useEffect(() => {
+    if (!queue || auditedQueueId !== queue._id || isSyncingDiscordContext) {
+      return
+    }
+
+    if (queue.channelPermsCorrect === true) {
+      setPermissionsDialogOpen(false)
+      setPermissionsDialogQueueId(null)
+      return
+    }
+
+    if (permissionsDialogQueueId !== queue._id) {
+      setPermissionsDialogOpen(true)
+      setPermissionsDialogQueueId(queue._id)
+    }
+  }, [auditedQueueId, isSyncingDiscordContext, permissionsDialogQueueId, queue])
 
   const entries = queueEntries ?? []
   const eligibleEntriesCount = useMemo(() => {
@@ -967,6 +1002,28 @@ export function PlayWithViewersDashboardView({
     }
   }
 
+  async function handleFixChannelPermissions() {
+    if (!queue) {
+      return
+    }
+
+    setIsFixingChannelPermissions(true)
+
+    try {
+      await fixQueueChannelPermissions({
+        queueId: queue._id,
+      })
+      setPermissionsDialogOpen(false)
+      toast.success("Discord channel permissions updated.")
+    } catch (error) {
+      toast.error(
+        toErrorMessage(error, "Unable to repair Discord channel permissions.")
+      )
+    } finally {
+      setIsFixingChannelPermissions(false)
+    }
+  }
+
   async function handleRetryQueueMessageSync() {
     if (!queue) {
       return
@@ -1129,9 +1186,17 @@ export function PlayWithViewersDashboardView({
   const hasDiscordSyncError = Boolean(queue?.lastMessageSyncError)
   const hasPublishedMessage = Boolean(queue?.messageId)
   const isRetryingDiscordSync = hasPublishedMessage ? isRefreshing : isPublishing
+  const hasAuditedQueuePermissions = Boolean(
+    queue && auditedQueueId === queue._id
+  )
   const discordContextLabel = formatDiscordContext(
     queue ?? null,
     isSyncingDiscordContext
+  )
+  const needsChannelPermissionRepair = Boolean(
+    queue &&
+      hasAuditedQueuePermissions &&
+      queue.channelPermsCorrect !== true
   )
   const retryDiscordSyncLabel = hasPublishedMessage
     ? isRefreshing
@@ -1226,6 +1291,27 @@ export function PlayWithViewersDashboardView({
             >
               <IconRefresh data-icon="inline-start" />
               {retryDiscordSyncLabel}
+            </Button>
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
+      {needsChannelPermissionRepair ? (
+        <Alert variant="destructive">
+          <IconAlertTriangle />
+          <AlertTitle>Discord channel permissions need repair</AlertTitle>
+          <AlertDescription className="flex flex-wrap items-start justify-between gap-3">
+            <span className="min-w-0 flex-1">
+              The Play With Viewers channel needs its private overwrite set
+              reapplied before viewers should use it.
+            </span>
+            <Button
+              onClick={() => setPermissionsDialogOpen(true)}
+              size="sm"
+              variant="outline"
+            >
+              <IconSettings data-icon="inline-start" />
+              Fix permissions
             </Button>
           </AlertDescription>
         </Alert>
@@ -1920,6 +2006,51 @@ export function PlayWithViewersDashboardView({
           </SheetFooter>
         </SheetContent>
       </Sheet>
+
+      <Dialog
+        onOpenChange={setPermissionsDialogOpen}
+        open={permissionsDialogOpen}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Fix Discord channel permissions</DialogTitle>
+            <DialogDescription>
+              Play With Viewers needs a locked-down channel so only viewers can
+              see the queue and interact with the bot controls.
+            </DialogDescription>
+          </DialogHeader>
+
+          <FieldGroup>
+            <Field>
+              <FieldLabel>Everyone</FieldLabel>
+              <FieldDescription>
+                Keep only view channel, read message history, and use
+                application commands enabled.
+              </FieldDescription>
+            </Field>
+            <Field>
+              <FieldLabel>Bot</FieldLabel>
+              <FieldDescription>
+                Allow message sending, message management, embeds, files,
+                reactions, external emoji and stickers, pinning, slow mode
+                bypass, polls, external apps, and activities.
+              </FieldDescription>
+            </Field>
+          </FieldGroup>
+
+          <DialogFooter>
+            <Button onClick={() => setPermissionsDialogOpen(false)} variant="outline">
+              Not now
+            </Button>
+            <Button
+              disabled={!queue || isFixingChannelPermissions}
+              onClick={handleFixChannelPermissions}
+            >
+              {isFixingChannelPermissions ? "Fixing..." : "Fix permissions"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         onOpenChange={(open) => {

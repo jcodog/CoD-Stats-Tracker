@@ -14,6 +14,9 @@ import {
   ButtonStyle,
   ChannelType,
   ComponentType,
+  OverwriteType,
+  PermissionFlagsBits,
+  type RESTPatchAPIChannelJSONBody,
   type RESTPatchAPIChannelMessageJSONBody,
   type RESTPostAPIChannelMessageJSONBody,
 } from "discord-api-types/v10"
@@ -50,6 +53,17 @@ type DiscordGuildChannel = {
   type: ChannelType
 }
 
+type DiscordChannelPermissionOverwrite = {
+  allow?: string | null
+  deny?: string | null
+  id: string
+  type: number | OverwriteType
+}
+
+type DiscordGuildChannelDetails = DiscordGuildChannel & {
+  permission_overwrites?: DiscordChannelPermissionOverwrite[]
+}
+
 type DiscordGuildSummary = {
   id: string
   name: string
@@ -63,14 +77,209 @@ type AvailableDiscordGuild = {
 
 type QueueRoundSelectedUser = Doc<"viewerQueueRounds">["selectedUsers"][number]
 
-function getBotToken(): string {
-  const token = process.env.DISCORD_BOT_TOKEN
+const PLAY_WITH_VIEWERS_EVERYONE_PERMISSION_FLAGS = [
+  PermissionFlagsBits.ViewChannel,
+  PermissionFlagsBits.ReadMessageHistory,
+  PermissionFlagsBits.UseApplicationCommands,
+] as const
 
-  if (!token) {
-    throw new Error("DISCORD_BOT_TOKEN is not configured")
+const PLAY_WITH_VIEWERS_BOT_EXTRA_PERMISSION_FLAGS = [
+  PermissionFlagsBits.SendMessages,
+  PermissionFlagsBits.ManageMessages,
+  PermissionFlagsBits.EmbedLinks,
+  PermissionFlagsBits.AttachFiles,
+  PermissionFlagsBits.AddReactions,
+  PermissionFlagsBits.UseExternalEmojis,
+  PermissionFlagsBits.UseExternalStickers,
+  PermissionFlagsBits.PinMessages,
+  PermissionFlagsBits.BypassSlowmode,
+  PermissionFlagsBits.SendPolls,
+  PermissionFlagsBits.UseExternalApps,
+  PermissionFlagsBits.UseEmbeddedActivities,
+] as const
+
+const PLAY_WITH_VIEWERS_TEXT_PERMISSION_FLAGS = [
+  PermissionFlagsBits.ViewChannel,
+  PermissionFlagsBits.CreateInstantInvite,
+  PermissionFlagsBits.SendMessages,
+  PermissionFlagsBits.SendTTSMessages,
+  PermissionFlagsBits.ManageMessages,
+  PermissionFlagsBits.EmbedLinks,
+  PermissionFlagsBits.AttachFiles,
+  PermissionFlagsBits.ReadMessageHistory,
+  PermissionFlagsBits.MentionEveryone,
+  PermissionFlagsBits.UseExternalEmojis,
+  PermissionFlagsBits.ManageChannels,
+  PermissionFlagsBits.ManageRoles,
+  PermissionFlagsBits.ManageWebhooks,
+  PermissionFlagsBits.UseApplicationCommands,
+  PermissionFlagsBits.AddReactions,
+  PermissionFlagsBits.ManageThreads,
+  PermissionFlagsBits.CreatePublicThreads,
+  PermissionFlagsBits.CreatePrivateThreads,
+  PermissionFlagsBits.UseExternalStickers,
+  PermissionFlagsBits.SendMessagesInThreads,
+  PermissionFlagsBits.SendVoiceMessages,
+  PermissionFlagsBits.SendPolls,
+  PermissionFlagsBits.PinMessages,
+  PermissionFlagsBits.BypassSlowmode,
+  PermissionFlagsBits.UseExternalApps,
+  PermissionFlagsBits.UseEmbeddedActivities,
+] as const
+
+function getRequiredEnv(name: string): string {
+  const value = process.env[name]?.trim()
+
+  if (!value) {
+    throw new Error(`${name} is not configured`)
   }
 
-  return token
+  return value
+}
+
+function getBotToken(): string {
+  return getRequiredEnv("DISCORD_BOT_TOKEN")
+}
+
+function combinePermissionFlags(flags: readonly bigint[]) {
+  return flags.reduce((combined, flag) => combined | flag, 0n)
+}
+
+const PLAY_WITH_VIEWERS_EVERYONE_ALLOW_PERMISSIONS = combinePermissionFlags(
+  PLAY_WITH_VIEWERS_EVERYONE_PERMISSION_FLAGS
+)
+
+const PLAY_WITH_VIEWERS_BOT_ALLOW_PERMISSIONS = combinePermissionFlags([
+  ...PLAY_WITH_VIEWERS_EVERYONE_PERMISSION_FLAGS,
+  ...PLAY_WITH_VIEWERS_BOT_EXTRA_PERMISSION_FLAGS,
+])
+
+const PLAY_WITH_VIEWERS_PERMISSION_SPACE = combinePermissionFlags(
+  PLAY_WITH_VIEWERS_TEXT_PERMISSION_FLAGS
+)
+
+const PLAY_WITH_VIEWERS_EVERYONE_DENY_PERMISSIONS =
+  PLAY_WITH_VIEWERS_PERMISSION_SPACE &
+  ~PLAY_WITH_VIEWERS_EVERYONE_ALLOW_PERMISSIONS
+
+const PLAY_WITH_VIEWERS_BOT_DENY_PERMISSIONS =
+  PLAY_WITH_VIEWERS_PERMISSION_SPACE & ~PLAY_WITH_VIEWERS_BOT_ALLOW_PERMISSIONS
+
+function normalizePermissionBits(value: string | null | undefined) {
+  return BigInt(value ?? "0").toString()
+}
+
+function buildQueueChannelPermissionOverwrites(guildId: string) {
+  const botUserId = getRequiredEnv("DISCORD_APPLICATION_ID")
+
+  return [
+    {
+      allow: PLAY_WITH_VIEWERS_EVERYONE_ALLOW_PERMISSIONS.toString(),
+      deny: PLAY_WITH_VIEWERS_EVERYONE_DENY_PERMISSIONS.toString(),
+      id: guildId,
+      type: OverwriteType.Role,
+    },
+    {
+      allow: PLAY_WITH_VIEWERS_BOT_ALLOW_PERMISSIONS.toString(),
+      deny: PLAY_WITH_VIEWERS_BOT_DENY_PERMISSIONS.toString(),
+      id: botUserId,
+      type: OverwriteType.Member,
+    },
+  ] satisfies DiscordChannelPermissionOverwrite[]
+}
+
+function hasExpectedQueueChannelPermissions(args: {
+  guildId: string
+  permissionOverwrites: DiscordChannelPermissionOverwrite[] | null | undefined
+}) {
+  const actualOverwrites = [...(args.permissionOverwrites ?? [])]
+    .map((overwrite) => ({
+      allow: normalizePermissionBits(overwrite.allow),
+      deny: normalizePermissionBits(overwrite.deny),
+      id: overwrite.id,
+      type: Number(overwrite.type),
+    }))
+    .sort((left, right) =>
+      left.id === right.id ? left.type - right.type : left.id.localeCompare(right.id)
+    )
+  const expectedOverwrites = buildQueueChannelPermissionOverwrites(args.guildId)
+    .map((overwrite) => ({
+      allow: normalizePermissionBits(overwrite.allow),
+      deny: normalizePermissionBits(overwrite.deny),
+      id: overwrite.id,
+      type: Number(overwrite.type),
+    }))
+    .sort((left, right) =>
+      left.id === right.id ? left.type - right.type : left.id.localeCompare(right.id)
+    )
+
+  if (actualOverwrites.length !== expectedOverwrites.length) {
+    return false
+  }
+
+  return actualOverwrites.every((overwrite, index) => {
+    const expected = expectedOverwrites[index]
+
+    return (
+      overwrite.allow === expected.allow &&
+      overwrite.deny === expected.deny &&
+      overwrite.id === expected.id &&
+      overwrite.type === expected.type
+    )
+  })
+}
+
+async function getQueueChannelPermissionState(args: {
+  channelId: string
+  guildId: string
+}) {
+  const channelResponse = await discordBotRequest(`/channels/${args.channelId}`, {
+    method: "GET",
+  })
+
+  if (!channelResponse.ok) {
+    const errorText = await channelResponse.text()
+
+    throw new Error(`Failed to load Discord channel details: ${errorText}`)
+  }
+
+  const channel = (await channelResponse.json()) as DiscordGuildChannelDetails
+
+  return {
+    channelName: channel.name,
+    channelPermsCorrect: hasExpectedQueueChannelPermissions({
+      guildId: args.guildId,
+      permissionOverwrites: channel.permission_overwrites,
+    }),
+  }
+}
+
+async function applyQueueChannelPermissions(args: {
+  channelId: string
+  guildId: string
+}) {
+  const response = await discordBotRequest(`/channels/${args.channelId}`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      permission_overwrites: buildQueueChannelPermissionOverwrites(args.guildId),
+    } satisfies RESTPatchAPIChannelJSONBody),
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+
+    throw new Error(`Failed to update Play With Viewers channel permissions: ${errorText}`)
+  }
+
+  const permissionState = await getQueueChannelPermissionState(args)
+
+  if (!permissionState.channelPermsCorrect) {
+    throw new Error(
+      "The Play With Viewers channel permissions could not be verified after updating them."
+    )
+  }
+
+  return permissionState
 }
 
 function toErrorMessage(error: unknown, fallback: string) {
@@ -300,34 +509,38 @@ async function getOrCreateQueueChannel(guildId: string) {
       channel.name.toLowerCase() === PLAY_WITH_VIEWERS_CHANNEL_NAME
   )
 
-  if (existingChannel) {
-    return {
-      channelId: existingChannel.id,
-      channelName: existingChannel.name,
-      reusedChannel: true,
+  const reusedChannel = Boolean(existingChannel)
+  let channelId = existingChannel?.id ?? null
+
+  if (!channelId) {
+    const createChannelResponse = await discordBotRequest(`/guilds/${guildId}/channels`, {
+      method: "POST",
+      body: JSON.stringify({
+        name: PLAY_WITH_VIEWERS_CHANNEL_NAME,
+        type: ChannelType.GuildText,
+      }),
+    })
+
+    if (!createChannelResponse.ok) {
+      const errorText = await createChannelResponse.text()
+
+      throw new Error(`Failed to create the Play With Viewers channel: ${errorText}`)
     }
+
+    const createdChannel = (await createChannelResponse.json()) as DiscordGuildChannel
+    channelId = createdChannel.id
   }
 
-  const createChannelResponse = await discordBotRequest(`/guilds/${guildId}/channels`, {
-    method: "POST",
-    body: JSON.stringify({
-      name: PLAY_WITH_VIEWERS_CHANNEL_NAME,
-      type: ChannelType.GuildText,
-    }),
+  const permissionState = await applyQueueChannelPermissions({
+    channelId,
+    guildId,
   })
 
-  if (!createChannelResponse.ok) {
-    const errorText = await createChannelResponse.text()
-
-    throw new Error(`Failed to create the Play With Viewers channel: ${errorText}`)
-  }
-
-  const createdChannel = (await createChannelResponse.json()) as DiscordGuildChannel
-
   return {
-    channelId: createdChannel.id,
-    channelName: createdChannel.name,
-    reusedChannel: false,
+    channelId,
+    channelName: permissionState.channelName,
+    channelPermsCorrect: permissionState.channelPermsCorrect,
+    reusedChannel,
   }
 }
 
@@ -335,13 +548,11 @@ async function getDiscordQueueContext(args: {
   channelId: string
   guildId: string
 }) {
-  const [guildResponse, channelResponse] = await Promise.all([
+  const [guildResponse, channelState] = await Promise.all([
     discordBotRequest(`/guilds/${args.guildId}`, {
       method: "GET",
     }),
-    discordBotRequest(`/channels/${args.channelId}`, {
-      method: "GET",
-    }),
+    getQueueChannelPermissionState(args),
   ])
 
   if (!guildResponse.ok) {
@@ -350,17 +561,11 @@ async function getDiscordQueueContext(args: {
     throw new Error(`Failed to load Discord server details: ${errorText}`)
   }
 
-  if (!channelResponse.ok) {
-    const errorText = await channelResponse.text()
-
-    throw new Error(`Failed to load Discord channel details: ${errorText}`)
-  }
-
   const guild = (await guildResponse.json()) as DiscordGuildSummary
-  const channel = (await channelResponse.json()) as DiscordGuildChannel
 
   return {
-    channelName: channel.name,
+    channelName: channelState.channelName,
+    channelPermsCorrect: channelState.channelPermsCorrect,
     guildName: guild.name,
   }
 }
@@ -458,7 +663,9 @@ async function publishQueueMessageForQueue(
       }
     )
 
-    throw new Error(errorMessage)
+    throw new Error(errorMessage, {
+      cause: error,
+    })
   }
 }
 
@@ -532,7 +739,9 @@ async function updateQueueMessageForQueue(
       }
     )
 
-    throw new Error(errorMessage)
+    throw new Error(errorMessage, {
+      cause: error,
+    })
   }
 }
 
@@ -737,6 +946,7 @@ export const createQueueInOwnedGuild = action({
       {
         channelId: channel.channelId,
         channelName: channel.channelName,
+        channelPermsCorrect: channel.channelPermsCorrect,
         creatorDisplayName: args.creatorDisplayName.trim(),
         creatorMessage: args.creatorMessage?.trim() || undefined,
         creatorUserId: user._id,
@@ -793,6 +1003,38 @@ export const syncQueueDiscordContext = action({
       internal.mutations.creatorTools.playingWithViewers.queue.setQueueDiscordContext,
       {
         channelName: discordContext.channelName,
+        channelPermsCorrect: discordContext.channelPermsCorrect,
+        guildName: discordContext.guildName,
+        queueId: args.queueId,
+      }
+    )
+
+    return discordContext
+  },
+})
+
+export const fixQueueChannelPermissions = action({
+  args: {
+    queueId: v.id("viewerQueues"),
+  },
+  handler: async (ctx, args) => {
+    const { queue } = await requireOwnedQueueActionAccess(ctx, args.queueId)
+
+    await applyQueueChannelPermissions({
+      channelId: queue.channelId,
+      guildId: queue.guildId,
+    })
+
+    const discordContext = await getDiscordQueueContext({
+      channelId: queue.channelId,
+      guildId: queue.guildId,
+    })
+
+    await ctx.runMutation(
+      internal.mutations.creatorTools.playingWithViewers.queue.setQueueDiscordContext,
+      {
+        channelName: discordContext.channelName,
+        channelPermsCorrect: discordContext.channelPermsCorrect,
         guildName: discordContext.guildName,
         queueId: args.queueId,
       }

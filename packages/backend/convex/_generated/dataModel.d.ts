@@ -1150,6 +1150,7 @@ export type DataModel = {
     document: {
       channelId: string;
       channelName?: string;
+      channelPermsCorrect?: boolean;
       createdAt: number;
       creatorDisplayName: string;
       creatorMessage?: string;
@@ -1193,6 +1194,7 @@ export type DataModel = {
       | "_id"
       | "channelId"
       | "channelName"
+      | "channelPermsCorrect"
       | "createdAt"
       | "creatorDisplayName"
       | "creatorMessage"

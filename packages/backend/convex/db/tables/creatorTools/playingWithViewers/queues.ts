@@ -7,6 +7,7 @@ export const viewerQueues = defineTable({
   guildName: v.optional(v.string()),
   channelId: v.string(),
   channelName: v.optional(v.string()),
+  channelPermsCorrect: v.optional(v.boolean()),
   messageId: v.optional(v.string()),
   title: v.string(),
   creatorDisplayName: v.string(),

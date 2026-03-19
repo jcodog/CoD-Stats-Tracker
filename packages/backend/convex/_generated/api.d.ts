@@ -141,6 +141,12 @@ export declare const api: {
             },
             any
           >;
+          fixQueueChannelPermissions: FunctionReference<
+            "action",
+            "public",
+            { queueId: Id<"viewerQueues"> },
+            any
+          >;
           inviteQueueEntryNowAndNotify: FunctionReference<
             "action",
             "public",
@@ -1201,6 +1207,7 @@ export declare const internal: {
             {
               channelId: string;
               channelName?: string;
+              channelPermsCorrect?: boolean;
               creatorDisplayName: string;
               creatorMessage?: string;
               creatorUserId: Id<"users">;
@@ -1289,6 +1296,7 @@ export declare const internal: {
             "internal",
             {
               channelName?: string;
+              channelPermsCorrect?: boolean;
               guildName?: string;
               queueId: Id<"viewerQueues">;
             },

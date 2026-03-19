@@ -93,6 +93,7 @@ export const createQueue = internalMutation({
     guildName: v.optional(v.string()),
     channelId: v.string(),
     channelName: v.optional(v.string()),
+    channelPermsCorrect: v.optional(v.boolean()),
     title: v.string(),
     creatorDisplayName: v.string(),
     gameLabel: v.string(),
@@ -115,6 +116,7 @@ export const createQueue = internalMutation({
     const channelId = requireNonEmptyString(args.channelId, "channelId")
     const guildName = args.guildName?.trim() || undefined
     const channelName = args.channelName?.trim() || undefined
+    const channelPermsCorrect = args.channelPermsCorrect
     const title = requireNonEmptyString(args.title, "title")
     const creatorDisplayName = requireNonEmptyString(
       args.creatorDisplayName,
@@ -141,6 +143,7 @@ export const createQueue = internalMutation({
       guildName,
       channelId,
       channelName,
+      channelPermsCorrect,
       title,
       creatorDisplayName,
       gameLabel,
@@ -579,6 +582,7 @@ export const setQueueDiscordContext = internalMutation({
     queueId: v.id("viewerQueues"),
     guildName: v.optional(v.string()),
     channelName: v.optional(v.string()),
+    channelPermsCorrect: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const queue = await ctx.db.get(args.queueId)
@@ -590,6 +594,7 @@ export const setQueueDiscordContext = internalMutation({
     await ctx.db.patch(args.queueId, {
       guildName: args.guildName?.trim() || undefined,
       channelName: args.channelName?.trim() || undefined,
+      channelPermsCorrect: args.channelPermsCorrect,
       updatedAt: Date.now(),
     })
 
