@@ -104,6 +104,26 @@ type AvailableDiscordGuild = {
   name: string
 }
 
+type QueueChannelBotPermissionStatus = {
+  canUpdateChannelPermissions: boolean
+  missingManagePermissionLabels: string[]
+  missingManageRoles: boolean
+  missingOverwritePermissionLabels: string[]
+  missingPermissionLabels: string[]
+  needsReinvite: boolean
+}
+
+type QueueDiscordContext = {
+  botPermissionStatus: QueueChannelBotPermissionStatus
+  channelName: string
+  channelPermsCorrect: boolean
+  guildName: string
+}
+
+type QueueChannelPermissionsFixResult = QueueDiscordContext & {
+  permissionsUpdated: boolean
+}
+
 type QueueFormState = {
   channelId: string
   creatorDisplayName: string
@@ -171,6 +191,8 @@ const defaultRulesText = [
   "- No harassment, hate speech, or griefing.",
   "- Be ready when your turn comes up so the queue can keep moving.",
 ].join("\n")
+const DISCORD_BOT_REINVITE_URL =
+  "https://discord.com/oauth2/authorize?client_id=1474892349133029539&scope=bot%20applications.commands&permissions=8444389156580432"
 
 function getDefaultQueueFormState(name: string): QueueFormState {
   const trimmedName = name.trim()
@@ -616,9 +638,23 @@ export function PlayWithViewersDashboardView({
   const [auditedQueueId, setAuditedQueueId] = useState<Id<"viewerQueues"> | null>(
     null
   )
+  const [auditedChannelPermsCorrect, setAuditedChannelPermsCorrect] = useState<
+    boolean | null
+  >(null)
   const [permissionsDialogOpen, setPermissionsDialogOpen] = useState(false)
   const [permissionsDialogQueueId, setPermissionsDialogQueueId] =
     useState<Id<"viewerQueues"> | null>(null)
+  const [queueBotPermissionStatus, setQueueBotPermissionStatus] =
+    useState<QueueChannelBotPermissionStatus | null>(null)
+  const hasAuditedQueuePermissions = Boolean(
+    queue && auditedQueueId === queue._id
+  )
+  const resolvedChannelPermsCorrect =
+    queue?.channelPermsCorrect === true
+      ? true
+      : hasAuditedQueuePermissions && auditedChannelPermsCorrect !== null
+      ? auditedChannelPermsCorrect
+      : (queue?.channelPermsCorrect ?? null)
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -704,8 +740,10 @@ export function PlayWithViewersDashboardView({
 
   useEffect(() => {
     setAuditedQueueId(null)
+    setAuditedChannelPermsCorrect(null)
     setPermissionsDialogOpen(false)
     setPermissionsDialogQueueId(null)
+    setQueueBotPermissionStatus(null)
   }, [queue?._id])
 
   useEffect(() => {
@@ -714,7 +752,9 @@ export function PlayWithViewersDashboardView({
     }
 
     if (queue.channelPermsCorrect === true) {
+      setAuditedChannelPermsCorrect(true)
       setAuditedQueueId(queue._id)
+      setQueueBotPermissionStatus(null)
       setIsSyncingDiscordContext(false)
       return
     }
@@ -726,9 +766,16 @@ export function PlayWithViewersDashboardView({
       setIsSyncingDiscordContext(true)
 
       try {
-        await syncQueueDiscordContext({
+        const result = (await syncQueueDiscordContext({
           queueId,
-        })
+        })) as QueueDiscordContext
+
+        if (cancelled) {
+          return
+        }
+
+        setAuditedChannelPermsCorrect(result.channelPermsCorrect)
+        setQueueBotPermissionStatus(result.botPermissionStatus)
       } catch {
         // Keep the dashboard usable even if the Discord audit fails.
       } finally {
@@ -751,7 +798,7 @@ export function PlayWithViewersDashboardView({
       return
     }
 
-    if (queue.channelPermsCorrect === true) {
+    if (resolvedChannelPermsCorrect === true) {
       setPermissionsDialogOpen(false)
       setPermissionsDialogQueueId(null)
       return
@@ -761,7 +808,13 @@ export function PlayWithViewersDashboardView({
       setPermissionsDialogOpen(true)
       setPermissionsDialogQueueId(queue._id)
     }
-  }, [auditedQueueId, isSyncingDiscordContext, permissionsDialogQueueId, queue])
+  }, [
+    auditedQueueId,
+    isSyncingDiscordContext,
+    permissionsDialogQueueId,
+    queue,
+    resolvedChannelPermsCorrect,
+  ])
 
   const entries = queueEntries ?? []
   const eligibleEntriesCount = useMemo(() => {
@@ -1016,10 +1069,22 @@ export function PlayWithViewersDashboardView({
     setIsFixingChannelPermissions(true)
 
     try {
-      await fixQueueChannelPermissions({
+      const result = (await fixQueueChannelPermissions({
         queueId: queue._id,
-      })
+      })) as QueueChannelPermissionsFixResult
+
+      setAuditedQueueId(queue._id)
+      setAuditedChannelPermsCorrect(result.channelPermsCorrect)
+      setQueueBotPermissionStatus(result.botPermissionStatus)
+
+      if (!result.permissionsUpdated) {
+        setPermissionsDialogOpen(true)
+        setPermissionsDialogQueueId(queue._id)
+        return
+      }
+
       setPermissionsDialogOpen(false)
+      setPermissionsDialogQueueId(null)
       toast.success("Discord channel permissions updated.")
     } catch (error) {
       toast.error(
@@ -1192,9 +1257,6 @@ export function PlayWithViewersDashboardView({
   const hasDiscordSyncError = Boolean(queue?.lastMessageSyncError)
   const hasPublishedMessage = Boolean(queue?.messageId)
   const isRetryingDiscordSync = hasPublishedMessage ? isRefreshing : isPublishing
-  const hasAuditedQueuePermissions = Boolean(
-    queue && auditedQueueId === queue._id
-  )
   const discordContextLabel = formatDiscordContext(
     queue ?? null,
     isSyncingDiscordContext
@@ -1202,8 +1264,12 @@ export function PlayWithViewersDashboardView({
   const needsChannelPermissionRepair = Boolean(
     queue &&
       hasAuditedQueuePermissions &&
-      queue.channelPermsCorrect !== true
+      resolvedChannelPermsCorrect !== true
   )
+  const permissionsDialogNeedsReinvite = Boolean(
+    needsChannelPermissionRepair && queueBotPermissionStatus?.needsReinvite
+  )
+  const missingBotPermissionLabels = queueBotPermissionStatus?.missingPermissionLabels ?? []
   const retryDiscordSyncLabel = hasPublishedMessage
     ? isRefreshing
       ? "Retrying..."
@@ -1305,11 +1371,16 @@ export function PlayWithViewersDashboardView({
       {needsChannelPermissionRepair ? (
         <Alert variant="destructive">
           <IconAlertTriangle />
-          <AlertTitle>Discord channel permissions need repair</AlertTitle>
+          <AlertTitle>
+            {permissionsDialogNeedsReinvite
+              ? "Discord bot permissions need updating"
+              : "Discord channel permissions need repair"}
+          </AlertTitle>
           <AlertDescription className="flex flex-wrap items-start justify-between gap-3">
             <span className="min-w-0 flex-1">
-              The Play With Viewers channel needs its private overwrite set
-              reapplied before viewers should use it.
+              {permissionsDialogNeedsReinvite
+                ? "The bot cannot update the Play With Viewers channel overwrites in this server yet. Reinvite it with the updated Discord permissions, then run the repair again."
+                : "The Play With Viewers channel needs its private overwrite set reapplied before viewers should use it."}
             </span>
             <Button
               onClick={() => setPermissionsDialogOpen(true)}
@@ -1317,7 +1388,7 @@ export function PlayWithViewersDashboardView({
               variant="outline"
             >
               <IconSettings data-icon="inline-start" />
-              Fix permissions
+              {permissionsDialogNeedsReinvite ? "Reinvite bot" : "Fix permissions"}
             </Button>
           </AlertDescription>
         </Alert>
@@ -1714,7 +1785,7 @@ export function PlayWithViewersDashboardView({
                           <div className="flex flex-wrap gap-2">
                             <Button asChild size="sm" variant="outline">
                               <a
-                                href="https://discord.com/oauth2/authorize?client_id=1474892349133029539"
+                                href={DISCORD_BOT_REINVITE_URL}
                                 rel="noreferrer"
                                 target="_blank"
                               >
@@ -2019,41 +2090,85 @@ export function PlayWithViewersDashboardView({
       >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Fix Discord channel permissions</DialogTitle>
+            <DialogTitle>
+              {permissionsDialogNeedsReinvite
+                ? "Update Discord bot permissions"
+                : "Fix Discord channel permissions"}
+            </DialogTitle>
             <DialogDescription>
-              Play With Viewers needs a locked-down channel so only viewers can
-              see the queue and interact with the bot controls.
+              {permissionsDialogNeedsReinvite
+                ? queueBotPermissionStatus?.missingManageRoles
+                  ? 'Discord is blocking channel overwrite updates because the bot is missing the "Manage Roles" permission in this server.'
+                  : "Discord is blocking channel overwrite updates because the bot is missing required server permissions for the Play With Viewers channel."
+                : "Play With Viewers needs a locked-down channel so only viewers can see the queue and interact with the bot controls."}
             </DialogDescription>
           </DialogHeader>
 
-          <FieldGroup>
-            <Field>
-              <FieldLabel>Everyone</FieldLabel>
-              <FieldDescription>
-                Keep only view channel, read message history, and use
-                application commands enabled.
-              </FieldDescription>
-            </Field>
-            <Field>
-              <FieldLabel>Bot</FieldLabel>
-              <FieldDescription>
-                Allow message sending, message management, embeds, files,
-                reactions, external emoji and stickers, pinning, slow mode
-                bypass, polls, external apps, and activities.
-              </FieldDescription>
-            </Field>
-          </FieldGroup>
+          {permissionsDialogNeedsReinvite ? (
+            <FieldGroup>
+              <Field>
+                <FieldLabel>Missing in this server</FieldLabel>
+                <FieldDescription>
+                  {missingBotPermissionLabels.length > 0
+                    ? missingBotPermissionLabels.join(", ")
+                    : "The current bot invite is missing one or more required permissions."}
+                </FieldDescription>
+              </Field>
+              <Field>
+                <FieldLabel>What to do</FieldLabel>
+                <FieldDescription>
+                  Reinvite the bot so Discord grants the updated permission set,
+                  then come back here and check again.
+                </FieldDescription>
+              </Field>
+            </FieldGroup>
+          ) : (
+            <FieldGroup>
+              <Field>
+                <FieldLabel>Everyone</FieldLabel>
+                <FieldDescription>
+                  Keep only view channel, read message history, and use
+                  application commands enabled.
+                </FieldDescription>
+              </Field>
+              <Field>
+                <FieldLabel>Bot</FieldLabel>
+                <FieldDescription>
+                  Allow message sending, message management, embeds, files,
+                  reactions, external emoji and stickers, pinning, slow mode
+                  bypass, polls, and external apps.
+                </FieldDescription>
+              </Field>
+            </FieldGroup>
+          )}
 
           <DialogFooter>
             <Button onClick={() => setPermissionsDialogOpen(false)} variant="outline">
               Not now
             </Button>
-            <Button
-              disabled={!queue || isFixingChannelPermissions}
-              onClick={handleFixChannelPermissions}
-            >
-              {isFixingChannelPermissions ? "Fixing..." : "Fix permissions"}
-            </Button>
+            {permissionsDialogNeedsReinvite ? (
+              <>
+                <Button asChild variant="outline">
+                  <a href={DISCORD_BOT_REINVITE_URL} rel="noreferrer" target="_blank">
+                    <IconExternalLink data-icon="inline-start" />
+                    Reinvite bot
+                  </a>
+                </Button>
+                <Button
+                  disabled={!queue || isFixingChannelPermissions}
+                  onClick={handleFixChannelPermissions}
+                >
+                  {isFixingChannelPermissions ? "Checking..." : "Check again"}
+                </Button>
+              </>
+            ) : (
+              <Button
+                disabled={!queue || isFixingChannelPermissions}
+                onClick={handleFixChannelPermissions}
+              >
+                {isFixingChannelPermissions ? "Fixing..." : "Fix permissions"}
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
