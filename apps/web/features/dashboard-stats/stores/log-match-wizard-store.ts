@@ -6,7 +6,7 @@ export type LogMatchStep =
   | "map"
   | "mode"
   | "notes"
-  | "optionalStats"
+  | "stats"
   | "outcome"
   | "review"
   | "session"
@@ -53,21 +53,8 @@ type LogMatchWizardState = {
   srChange: string
   step: LogMatchStep
   teamScore: string
-  nextStep: () => void
-  prevStep: () => void
   reset: (selectedSessionId?: string | null) => void
 }
-
-const stepOrder: LogMatchStep[] = [
-  "session",
-  "outcome",
-  "srChange",
-  "mode",
-  "map",
-  "optionalStats",
-  "notes",
-  "review",
-]
 
 function getInitialState(selectedSessionId: string | null = null) {
   return {
@@ -93,15 +80,6 @@ function getInitialState(selectedSessionId: string | null = null) {
 
 export const useLogMatchWizardStore = create<LogMatchWizardState>((set) => ({
   ...getInitialState(),
-  nextStep: () =>
-    set((state) => ({
-      step:
-        stepOrder[Math.min(stepOrder.indexOf(state.step) + 1, stepOrder.length - 1)],
-    })),
-  prevStep: () =>
-    set((state) => ({
-      step: stepOrder[Math.max(stepOrder.indexOf(state.step) - 1, 0)],
-    })),
   reset: (selectedSessionId = null) => set(getInitialState(selectedSessionId)),
   setField: (key, value) => set({ [key]: value } as Partial<LogMatchWizardState>),
 }))
