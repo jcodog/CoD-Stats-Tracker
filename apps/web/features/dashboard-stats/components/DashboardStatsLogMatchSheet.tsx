@@ -700,8 +700,8 @@ export function DashboardStatsLogMatchSheet(
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
-      <DialogContent className="max-h-[calc(100vh-2.5rem)] overflow-hidden p-0 sm:max-w-3xl">
-        <DialogHeader className="border-b border-border/60 px-6 py-5">
+      <DialogContent className="max-h-[min(90vh,56rem)] min-h-[min(78vh,46rem)] gap-0 overflow-hidden p-0 sm:max-w-[min(92vw,72rem)]">
+        <DialogHeader className="border-b border-border/60 px-7 py-6 pr-14">
           <div className="flex items-start justify-between gap-4">
             <div className="grid gap-1">
               <DialogTitle>Log Ranked Match</DialogTitle>
@@ -725,7 +725,7 @@ export function DashboardStatsLogMatchSheet(
         </div>
 
         <div className="min-h-0 overflow-y-auto">
-          <div className="grid gap-6 px-6 py-6">
+          <div className="grid gap-7 px-7 py-7">
             <div className="grid gap-1">
               <h3 className="text-lg font-semibold tracking-tight">
                 {currentStep.title}
@@ -1100,7 +1100,7 @@ export function DashboardStatsLogMatchSheet(
           </div>
         </div>
 
-        <div className="border-t border-border/60 bg-background px-6 py-4">
+        <div className="border-t border-border/60 bg-background px-7 py-5">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-muted-foreground">{selectedSessionLabel}</p>
 
