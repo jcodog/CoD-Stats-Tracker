@@ -153,5 +153,47 @@ export const billingActionSchema = z.discriminatedUnion("action", [
   }),
 ])
 
+export const rankedActionSchema = z.discriminatedUnion("action", [
+  z.object({
+    action: z.literal("setCurrentRankedConfig"),
+    input: z.object({
+      activeSeason: z.number().int().min(1).max(999),
+      activeTitleKey: catalogKeySchema,
+    }),
+  }),
+  z.object({
+    action: z.literal("upsertRankedTitle"),
+    input: z.object({
+      isActive: z.boolean(),
+      key: catalogKeySchema,
+      label: textSchema.max(80),
+      sortOrder: z.number().int(),
+    }),
+  }),
+  z.object({
+    action: z.literal("upsertRankedMap"),
+    input: z.object({
+      isActive: z.boolean(),
+      mapId: z.string().min(1).optional(),
+      name: textSchema.max(80),
+      sortOrder: z.number().int(),
+      supportedModeIds: z.array(z.string().min(1)).min(1),
+      titleKey: catalogKeySchema,
+    }),
+  }),
+  z.object({
+    action: z.literal("upsertRankedMode"),
+    input: z.object({
+      isActive: z.boolean(),
+      key: catalogKeySchema,
+      label: textSchema.max(80),
+      modeId: z.string().min(1).optional(),
+      sortOrder: z.number().int(),
+      titleKey: catalogKeySchema,
+    }),
+  }),
+])
+
 export type BillingActionRequest = z.infer<typeof billingActionSchema>
 export type ManagementActionRequest = z.infer<typeof managementActionSchema>
+export type RankedActionRequest = z.infer<typeof rankedActionSchema>

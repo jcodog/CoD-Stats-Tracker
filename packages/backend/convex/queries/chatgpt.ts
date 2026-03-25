@@ -71,16 +71,16 @@ async function getUserBySub(ctx: QueryCtx, sub: string) {
 function aggregateGames(
   games: Array<{
     outcome: "win" | "loss";
-    kills: number;
-    deaths: number;
+    kills?: number | null;
+    deaths?: number | null;
     srChange: number;
   }>,
 ) {
   const totalMatches = games.length;
   const wins = games.filter((game) => game.outcome === "win").length;
   const losses = totalMatches - wins;
-  const kills = games.reduce((total, game) => total + game.kills, 0);
-  const deaths = games.reduce((total, game) => total + game.deaths, 0);
+  const kills = games.reduce((total, game) => total + (game.kills ?? 0), 0);
+  const deaths = games.reduce((total, game) => total + (game.deaths ?? 0), 0);
   const totalSrChange = games.reduce((total, game) => total + game.srChange, 0);
 
   return {
@@ -95,12 +95,15 @@ function aggregateGames(
   };
 }
 
-function calculateKd(kills: number, deaths: number) {
-  if (deaths <= 0) {
+function calculateKd(kills: number | null | undefined, deaths: number | null | undefined) {
+  const normalizedKills = kills ?? 0;
+  const normalizedDeaths = deaths ?? 0;
+
+  if (normalizedDeaths <= 0) {
     return null;
   }
 
-  return roundRatio(kills / deaths);
+  return roundRatio(normalizedKills / normalizedDeaths);
 }
 
 function buildSessionSummary(
@@ -143,21 +146,21 @@ function buildSessionSummary(
 
 function buildMatchSummary(game: {
   _id: Id<"games">;
-  mode: "hardpoint" | "snd" | "overload";
+  mode?: string;
   createdAt: number;
   outcome: "win" | "loss";
   srChange: number;
-  kills: number;
-  deaths: number;
+  kills?: number | null;
+  deaths?: number | null;
 }) {
   return {
     matchId: String(game._id),
-    mode: game.mode,
+    mode: game.mode ?? null,
     playedAt: game.createdAt,
     outcome: game.outcome,
     srDelta: game.srChange,
-    kills: game.kills,
-    deaths: game.deaths,
+    kills: game.kills ?? null,
+    deaths: game.deaths ?? null,
     kd: calculateKd(game.kills, game.deaths),
   };
 }
@@ -166,10 +169,10 @@ function buildMatchDetail(game: {
   _id: Id<"games">;
   sessionId: string;
   userId: string;
-  mode: "hardpoint" | "snd" | "overload";
+  mode?: string;
   outcome: "win" | "loss";
-  kills: number;
-  deaths: number;
+  kills?: number | null;
+  deaths?: number | null;
   srChange: number;
   lossProtected: boolean;
   teamScore?: number | null;
@@ -184,12 +187,12 @@ function buildMatchDetail(game: {
     matchId: String(game._id),
     sessionId: game.sessionId,
     userId: game.userId,
-    mode: game.mode,
+    mode: game.mode ?? null,
     playedAt: game.createdAt,
     outcome: game.outcome,
     srDelta: game.srChange,
-    kills: game.kills,
-    deaths: game.deaths,
+    kills: game.kills ?? null,
+    deaths: game.deaths ?? null,
     kd: calculateKd(game.kills, game.deaths),
     lossProtected: game.lossProtected,
     teamScore: game.teamScore ?? null,
@@ -346,11 +349,11 @@ export const getDailyStatsByDiscordId = query({
       games: games.map((game) => ({
         sessionId: game.sessionId,
         createdAt: game.createdAt,
-        mode: game.mode,
+        mode: game.mode ?? null,
         outcome: game.outcome,
         srChange: game.srChange,
-        kills: game.kills,
-        deaths: game.deaths,
+        kills: game.kills ?? null,
+        deaths: game.deaths ?? null,
         lossProtected: game.lossProtected,
         teamScore: game.teamScore ?? null,
         enemyScore: game.enemyScore ?? null,
@@ -389,11 +392,11 @@ export const getRecentStatsByDiscordId = query({
       games: games.map((game) => ({
         sessionId: game.sessionId,
         createdAt: game.createdAt,
-        mode: game.mode,
+        mode: game.mode ?? null,
         outcome: game.outcome,
         srChange: game.srChange,
-        kills: game.kills,
-        deaths: game.deaths,
+        kills: game.kills ?? null,
+        deaths: game.deaths ?? null,
         lossProtected: game.lossProtected,
         teamScore: game.teamScore ?? null,
         enemyScore: game.enemyScore ?? null,

@@ -404,6 +404,47 @@ export declare const api: {
       overview: {
         getDashboard: FunctionReference<"action", "public", {}, any>;
       };
+      ranked: {
+        getDashboard: FunctionReference<"action", "public", {}, any>;
+        setCurrentRankedConfig: FunctionReference<
+          "action",
+          "public",
+          { activeSeason: number; activeTitleKey: string },
+          any
+        >;
+        upsertRankedMap: FunctionReference<
+          "action",
+          "public",
+          {
+            isActive: boolean;
+            mapId?: Id<"rankedMaps">;
+            name: string;
+            sortOrder: number;
+            supportedModeIds: Array<Id<"rankedModes">>;
+            titleKey: string;
+          },
+          any
+        >;
+        upsertRankedMode: FunctionReference<
+          "action",
+          "public",
+          {
+            isActive: boolean;
+            key: string;
+            label: string;
+            modeId?: Id<"rankedModes">;
+            sortOrder: number;
+            titleKey: string;
+          },
+          any
+        >;
+        upsertRankedTitle: FunctionReference<
+          "action",
+          "public",
+          { isActive: boolean; key: string; label: string; sortOrder: number },
+          any
+        >;
+      };
     };
   };
   migrations: {
@@ -546,6 +587,40 @@ export declare const api: {
       >;
     };
     stats: {
+      dashboard: {
+        createSession: FunctionReference<
+          "mutation",
+          "public",
+          {
+            existingUsernameId?: Id<"activisionUsernames">;
+            newUsername?: string;
+            startSr: number;
+          },
+          any
+        >;
+        logMatch: FunctionReference<
+          "mutation",
+          "public",
+          {
+            deaths?: null | number;
+            defuses?: null | number;
+            enemyScore?: null | number;
+            hillTimeSeconds?: null | number;
+            kills?: null | number;
+            lossProtected?: boolean;
+            mapId: Id<"rankedMaps">;
+            modeId: Id<"rankedModes">;
+            notes?: string;
+            outcome: "win" | "loss";
+            overloads?: null | number;
+            plants?: null | number;
+            sessionId: Id<"sessions">;
+            srChange: number;
+            teamScore?: null | number;
+          },
+          any
+        >;
+      };
       games: {
         logMatch: FunctionReference<
           "mutation",
@@ -732,6 +807,61 @@ export declare const api: {
           "query",
           "public",
           { includeLossProtected: boolean; sessionId: string },
+          any
+        >;
+      };
+      dashboard: {
+        getAvailableActivisionUsernames: FunctionReference<
+          "query",
+          "public",
+          {},
+          any
+        >;
+        getAvailableMapsForCurrentTitle: FunctionReference<
+          "query",
+          "public",
+          {},
+          any
+        >;
+        getAvailableModesForCurrentTitle: FunctionReference<
+          "query",
+          "public",
+          {},
+          any
+        >;
+        getCurrentDashboardState: FunctionReference<"query", "public", {}, any>;
+        getRecentSessionMatches: FunctionReference<
+          "query",
+          "public",
+          {
+            includeLossProtected: boolean;
+            limit?: number;
+            sessionId: Id<"sessions">;
+          },
+          any
+        >;
+        getSessionDailyPerformance: FunctionReference<
+          "query",
+          "public",
+          { includeLossProtected: boolean; sessionId: Id<"sessions"> },
+          any
+        >;
+        getSessionOverview: FunctionReference<
+          "query",
+          "public",
+          { includeLossProtected: boolean; sessionId: Id<"sessions"> },
+          any
+        >;
+        getSessionSrTimeline: FunctionReference<
+          "query",
+          "public",
+          { includeLossProtected: boolean; sessionId: Id<"sessions"> },
+          any
+        >;
+        getSessionWinLossBreakdown: FunctionReference<
+          "query",
+          "public",
+          { includeLossProtected: boolean; sessionId: Id<"sessions"> },
           any
         >;
       };
@@ -1424,6 +1554,16 @@ export declare const internal: {
           },
           any
         >;
+        setCurrentRankedConfig: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            activeSeason: number;
+            activeTitleKey: string;
+            updatedByUserId: Id<"users">;
+          },
+          any
+        >;
         setFeatureActiveState: FunctionReference<
           "mutation",
           "internal",
@@ -1513,6 +1653,38 @@ export declare const internal: {
             sortOrder: number;
             yearlyPriceAmount: number;
           },
+          any
+        >;
+        upsertRankedMap: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            isActive: boolean;
+            mapId?: Id<"rankedMaps">;
+            name: string;
+            sortOrder: number;
+            supportedModeIds: Array<Id<"rankedModes">>;
+            titleKey: string;
+          },
+          any
+        >;
+        upsertRankedMode: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            isActive: boolean;
+            key: string;
+            label: string;
+            modeId?: Id<"rankedModes">;
+            sortOrder: number;
+            titleKey: string;
+          },
+          any
+        >;
+        upsertRankedTitle: FunctionReference<
+          "mutation",
+          "internal",
+          { isActive: boolean; key: string; label: string; sortOrder: number },
           any
         >;
       };
@@ -1684,6 +1856,7 @@ export declare const internal: {
         >;
         getManagementRecords: FunctionReference<"query", "internal", {}, any>;
         getOverviewRecords: FunctionReference<"query", "internal", {}, any>;
+        getRankedRecords: FunctionReference<"query", "internal", {}, any>;
         getUserByClerkUserId: FunctionReference<
           "query",
           "internal",

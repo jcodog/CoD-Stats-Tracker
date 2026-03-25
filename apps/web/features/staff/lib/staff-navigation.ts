@@ -1,5 +1,6 @@
 import {
   IconCreditCard,
+  IconDeviceGamepad2,
   IconLayoutDashboard,
   IconReceipt2,
   IconUsers,
@@ -26,7 +27,7 @@ export const STAFF_CONSOLE_TITLE = "Staff Console"
 
 type StaffNavGroup = "administration" | "billing" | "workspace"
 type StaffNavIcon = typeof IconLayoutDashboard
-type StaffPrimaryRouteKey = "management" | "overview"
+type StaffPrimaryRouteKey = "management" | "overview" | "ranked"
 
 export type StaffRouteContext = {
   breadcrumbs: StaffBreadcrumbItem[]
@@ -86,6 +87,16 @@ const STAFF_NAV_LINKS = {
     label: "Overview",
     minimumRole: "staff",
   },
+  ranked: {
+    description: "Current ranked title and season rollout controls.",
+    group: "workspace",
+    href: "/staff/ranked",
+    icon: IconDeviceGamepad2,
+    key: "ranked",
+    kind: "link",
+    label: "Ranked Stats",
+    minimumRole: "staff",
+  },
 } as const satisfies Record<StaffPrimaryRouteKey, StaffNavLinkItem>
 
 const STAFF_NAV_GROUPS: readonly StaffNavGroup[] = [
@@ -133,6 +144,14 @@ export function resolveStaffRoute(pathname: string): StaffRouteContext {
     }
   }
 
+  if (pathname.startsWith("/staff/ranked")) {
+    return {
+      breadcrumbs: [{ label: "Ranked Stats" }],
+      key: STAFF_NAV_LINKS.ranked.key,
+      label: STAFF_NAV_LINKS.ranked.label,
+    }
+  }
+
   if (
     pathname.startsWith("/staff/catalog") ||
     pathname.startsWith("/staff/subscriptions")
@@ -171,7 +190,7 @@ export function getStaffNavigationSections(role: UserRole) {
   return STAFF_NAV_GROUPS.map<StaffNavSection | null>((group) => {
     const items = [
       ...(group === "workspace"
-        ? [STAFF_NAV_LINKS.overview]
+        ? [STAFF_NAV_LINKS.overview, STAFF_NAV_LINKS.ranked]
         : group === "billing"
           ? [
               STAFF_BILLING_NAV_ITEMS.catalog,

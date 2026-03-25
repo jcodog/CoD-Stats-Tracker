@@ -1,25 +1,35 @@
 import Link from "next/link"
+import { currentUser } from "@clerk/nextjs/server"
 
-import { StaffNavLink } from "@/components/app-shell/StaffNavLink"
-import { isFlagEnabled } from "@/lib/flags"
+import {
+  getParsedUserRoleState,
+  roleMeetsRequirement,
+} from "@workspace/backend/convex/lib/staffRoles"
 import { getCreatorToolsAccessState } from "@/lib/server/creator-tools-access"
-import { UserButton } from "@clerk/nextjs"
 import {
   Avatar,
   AvatarFallback,
   AvatarImage,
 } from "@workspace/ui/components/avatar"
 import { Button } from "@workspace/ui/components/button"
+import { ThemeToggle } from "@/components/theme-toggle"
+import { isFlagEnabled } from "@/lib/flags"
+import { AppUserButton } from "@/components/app-shell/AppUserButton"
 
 type AppShellProps = {
   children: React.ReactNode
 }
 
 export async function AppShell({ children }: AppShellProps) {
-  const [checkoutEnabled, creatorToolsAccess] = await Promise.all([
+  const [checkoutEnabled, creatorToolsAccess, clerkUser] = await Promise.all([
     isFlagEnabled("checkout"),
     getCreatorToolsAccessState(),
+    currentUser(),
   ])
+  const showStaffConsoleLink = roleMeetsRequirement(
+    getParsedUserRoleState(clerkUser?.publicMetadata?.role).role ?? "user",
+    "staff"
+  )
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -62,19 +72,8 @@ export async function AppShell({ children }: AppShellProps) {
           </div>
 
           <div className="flex items-center gap-2">
-            <StaffNavLink />
-            <UserButton
-              showName
-              userProfileMode="navigation"
-              userProfileUrl="/account"
-              appearance={{
-                elements: {
-                  userButtonTrigger:
-                    "outline-none! ring-0! shadow-none! focus:ring-0! focus-visible:ring-0! focus-visible:outline-none! active:ring-0! active:outline-none! data-[state=open]:ring-0! data-[state=open]:shadow-none!",
-                  userButtonBox: "gap-2! pl-2!",
-                },
-              }}
-            />
+            <AppUserButton showStaffConsoleLink={showStaffConsoleLink} />
+            <ThemeToggle />
           </div>
         </div>
       </header>

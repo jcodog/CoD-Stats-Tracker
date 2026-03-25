@@ -21,11 +21,21 @@ import { viewerQueues } from "./db/tables/creatorTools/playingWithViewers/queues
 import { viewerQueueEntries } from "./db/tables/creatorTools/playingWithViewers/entries"
 import { viewerQueueRounds } from "./db/tables/creatorTools/playingWithViewers/rounds"
 import { viewerQueueMessageSyncs } from "./db/tables/creatorTools/playingWithViewers/messageSync"
+import { activisionUsernames } from "./db/tables/activisionUsernames"
+import { rankedConfigs } from "./db/tables/rankedConfigs"
+import { rankedMaps } from "./db/tables/rankedMaps"
+import { rankedModes } from "./db/tables/rankedModes"
+import { rankedTitles } from "./db/tables/rankedTitles"
 
 export default defineSchema({
   sessions,
   games,
   users,
+  activisionUsernames,
+  rankedTitles,
+  rankedModes,
+  rankedMaps,
+  rankedConfigs,
   chatgptAppConnections,
   oauthAuthCodes,
   oauthClients,

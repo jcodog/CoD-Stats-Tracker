@@ -27,6 +27,41 @@ import type { GenericId } from "convex/values";
  */
 
 export type DataModel = {
+  activisionUsernames: {
+    document: {
+      createdAt: number;
+      displayUsername: string;
+      isPrimary?: boolean;
+      lastUsedAt: number;
+      normalizedUsername: string;
+      ownerUserId: Id<"users">;
+      updatedAt: number;
+      _id: Id<"activisionUsernames">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "createdAt"
+      | "displayUsername"
+      | "isPrimary"
+      | "lastUsedAt"
+      | "normalizedUsername"
+      | "ownerUserId"
+      | "updatedAt";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_owner: ["ownerUserId", "_creationTime"];
+      by_owner_normalized: [
+        "ownerUserId",
+        "normalizedUsername",
+        "_creationTime",
+      ];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
   billingAccessGrants: {
     document: {
       active: boolean;
@@ -674,15 +709,20 @@ export type DataModel = {
   games: {
     document: {
       createdAt: number;
-      deaths: number;
+      deaths?: null | number;
       defuses?: null | number;
       enemyScore?: null | number;
       hillTimeSeconds?: null | number;
-      kills: number;
+      kills?: null | number;
       lossProtected: boolean;
-      mode: "hardpoint" | "snd" | "overload";
+      mapId?: Id<"rankedMaps">;
+      mapNameSnapshot?: string;
+      mode?: string;
+      modeId?: Id<"rankedModes">;
+      notes?: string;
       outcome: "win" | "loss";
       overloads?: null | number;
+      ownerUserId?: Id<"users">;
       plants?: null | number;
       sessionId: string;
       srChange: number;
@@ -701,9 +741,14 @@ export type DataModel = {
       | "hillTimeSeconds"
       | "kills"
       | "lossProtected"
+      | "mapId"
+      | "mapNameSnapshot"
       | "mode"
+      | "modeId"
+      | "notes"
       | "outcome"
       | "overloads"
+      | "ownerUserId"
       | "plants"
       | "sessionId"
       | "srChange"
@@ -903,19 +948,162 @@ export type DataModel = {
     searchIndexes: {};
     vectorIndexes: {};
   };
+  rankedConfigs: {
+    document: {
+      activeSeason: number;
+      activeTitleKey: string;
+      key: "current";
+      updatedAt: number;
+      updatedByUserId: Id<"users">;
+      _id: Id<"rankedConfigs">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "activeSeason"
+      | "activeTitleKey"
+      | "key"
+      | "updatedAt"
+      | "updatedByUserId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_key: ["key", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  rankedMaps: {
+    document: {
+      createdAt: number;
+      isActive: boolean;
+      name: string;
+      normalizedName: string;
+      sortOrder: number;
+      supportedModeIds?: Array<Id<"rankedModes">>;
+      titleKey: string;
+      updatedAt: number;
+      _id: Id<"rankedMaps">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "createdAt"
+      | "isActive"
+      | "name"
+      | "normalizedName"
+      | "sortOrder"
+      | "supportedModeIds"
+      | "titleKey"
+      | "updatedAt";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_title: ["titleKey", "_creationTime"];
+      by_title_active_sort: [
+        "titleKey",
+        "isActive",
+        "sortOrder",
+        "_creationTime",
+      ];
+      by_title_normalized: ["titleKey", "normalizedName", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  rankedModes: {
+    document: {
+      createdAt: number;
+      isActive: boolean;
+      key: string;
+      label: string;
+      sortOrder: number;
+      titleKey: string;
+      updatedAt: number;
+      _id: Id<"rankedModes">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "createdAt"
+      | "isActive"
+      | "key"
+      | "label"
+      | "sortOrder"
+      | "titleKey"
+      | "updatedAt";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_title: ["titleKey", "_creationTime"];
+      by_title_active_sort: [
+        "titleKey",
+        "isActive",
+        "sortOrder",
+        "_creationTime",
+      ];
+      by_title_key: ["titleKey", "key", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  rankedTitles: {
+    document: {
+      createdAt: number;
+      isActive: boolean;
+      key: string;
+      label: string;
+      sortOrder: number;
+      updatedAt: number;
+      _id: Id<"rankedTitles">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "createdAt"
+      | "isActive"
+      | "key"
+      | "label"
+      | "sortOrder"
+      | "updatedAt";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_active_sort: ["isActive", "sortOrder", "_creationTime"];
+      by_key: ["key", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
   sessions: {
     document: {
+      activisionUsernameId?: Id<"activisionUsernames">;
+      activisionUsernameSnapshot?: string;
+      archivedReason?:
+        | "title_rollover"
+        | "season_rollover"
+        | "title_and_season_rollover";
       bestStreak: number;
       codTitle: string;
       currentSr: number;
       deaths: number;
       endedAt: null | number;
       kills: number;
+      lastMatchLoggedAt?: number;
       losses: number;
+      matchCount?: number;
+      ownerUserId?: Id<"users">;
       season: number;
       startSr: number;
       startedAt: number;
       streak: number;
+      titleKey?: string;
+      titleLabelSnapshot?: string;
+      titleSeasonKey?: string;
       userId: string;
       uuid: string;
       wins: number;
@@ -925,23 +1113,41 @@ export type DataModel = {
     fieldPaths:
       | "_creationTime"
       | "_id"
+      | "activisionUsernameId"
+      | "activisionUsernameSnapshot"
+      | "archivedReason"
       | "bestStreak"
       | "codTitle"
       | "currentSr"
       | "deaths"
       | "endedAt"
       | "kills"
+      | "lastMatchLoggedAt"
       | "losses"
+      | "matchCount"
+      | "ownerUserId"
       | "season"
       | "startedAt"
       | "startSr"
       | "streak"
+      | "titleKey"
+      | "titleLabelSnapshot"
+      | "titleSeasonKey"
       | "userId"
       | "uuid"
       | "wins";
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
+      by_endedAt: ["endedAt", "_creationTime"];
+      by_owner_startedAt: ["ownerUserId", "startedAt", "_creationTime"];
+      by_owner_titleSeason: ["ownerUserId", "titleSeasonKey", "_creationTime"];
+      by_owner_titleSeason_username: [
+        "ownerUserId",
+        "titleSeasonKey",
+        "activisionUsernameSnapshot",
+        "_creationTime",
+      ];
       by_user: ["userId", "_creationTime"];
       by_user_cod_season: ["userId", "codTitle", "season", "_creationTime"];
       by_uuid: ["uuid", "_creationTime"];

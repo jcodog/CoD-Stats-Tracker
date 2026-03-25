@@ -21,6 +21,7 @@ import {
 import { api } from "@workspace/backend/convex/_generated/api"
 import type { Doc, Id } from "@workspace/backend/convex/_generated/dataModel"
 import type { RankValue } from "@workspace/backend/lib/playingWithViewers"
+import { AppSelect } from "@/components/AppSelect"
 import {
   type AvailableDiscordGuild,
   type QueueChannelBotPermissionStatus,
@@ -84,10 +85,6 @@ import {
   FieldLabel,
 } from "@workspace/ui/components/field"
 import { Input } from "@workspace/ui/components/input"
-import {
-  NativeSelect,
-  NativeSelectOption,
-} from "@workspace/ui/components/native-select"
 import { ScrollArea } from "@workspace/ui/components/scroll-area"
 import {
   Sheet,
@@ -343,7 +340,7 @@ function Panel({
   return (
     <section
       className={cn(
-        "overflow-hidden rounded-lg border border-border/70 bg-card/80",
+        "overflow-hidden rounded-xl border border-border/60 bg-background",
         className
       )}
     >
@@ -357,10 +354,21 @@ function ToolbarGroup({
   label,
 }: Readonly<{ children: React.ReactNode; label: string }>) {
   return (
-    <div className="flex items-center gap-2 border-r border-border/70 pr-4 last:border-r-0 last:pr-0">
-      <span className="text-xs font-medium text-muted-foreground">{label}</span>
-      {children}
+    <div className="flex shrink-0 items-center gap-3">
+      <span className="whitespace-nowrap text-sm font-medium text-muted-foreground">
+        {label}
+      </span>
+      <div className="flex flex-wrap items-center gap-2">{children}</div>
     </div>
+  )
+}
+
+function ToolbarDivider() {
+  return (
+    <span
+      aria-hidden="true"
+      className="hidden h-5 w-px bg-border/60 lg:block"
+    />
   )
 }
 
@@ -1463,181 +1471,186 @@ export function PlayWithViewersDashboardView({
       ) : queue ? (
         <>
           <Panel>
-            <div className="flex flex-wrap items-center gap-3 overflow-x-auto px-4 py-3">
-              <ToolbarGroup label="State">
-                <span
-                  className={cn(
-                    "text-sm font-medium",
-                    queue.isActive ? "text-foreground" : "text-muted-foreground"
-                  )}
-                >
-                  {queue.isActive ? "Open" : "Closed"}
-                </span>
-                <Switch
-                  checked={queue.isActive}
-                  disabled={toolbarFieldPending === "active"}
-                  onCheckedChange={handleToggleQueueActive}
-                  size="sm"
-                />
-              </ToolbarGroup>
+            <div className="flex flex-col gap-4 px-5 py-5">
+              <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+                <ToolbarGroup label="State">
+                  <span
+                    className={cn(
+                      "text-sm font-medium",
+                      queue.isActive ? "text-foreground" : "text-muted-foreground"
+                    )}
+                  >
+                    {queue.isActive ? "Open" : "Closed"}
+                  </span>
+                  <Switch
+                    checked={queue.isActive}
+                    disabled={toolbarFieldPending === "active"}
+                    onCheckedChange={handleToggleQueueActive}
+                    size="sm"
+                  />
+                </ToolbarGroup>
 
-              <ToolbarGroup label="Ranks">
-                <NativeSelect
-                  disabled={toolbarFieldPending !== null}
-                  onChange={(event) =>
-                    handleToolbarSettingsChange("minRank", {
-                      minRank: event.target.value as RankValue,
-                    })
-                  }
-                  size="sm"
-                  value={queue.minRank}
-                >
-                  {rankOptions.map((option) => (
-                    <NativeSelectOption key={`min-${option.value}`} value={option.value}>
-                      Min {option.label}
-                    </NativeSelectOption>
-                  ))}
-                </NativeSelect>
-                <NativeSelect
-                  disabled={toolbarFieldPending !== null}
-                  onChange={(event) =>
-                    handleToolbarSettingsChange("maxRank", {
-                      maxRank: event.target.value as RankValue,
-                    })
-                  }
-                  size="sm"
-                  value={queue.maxRank}
-                >
-                  {rankOptions.map((option) => (
-                    <NativeSelectOption key={`max-${option.value}`} value={option.value}>
-                      Max {option.label}
-                    </NativeSelectOption>
-                  ))}
-                </NativeSelect>
-              </ToolbarGroup>
+                <ToolbarDivider />
 
-              <ToolbarGroup label="Batch">
-                <NativeSelect
-                  disabled={toolbarFieldPending !== null}
-                  onChange={(event) =>
-                    handleToolbarSettingsChange("playersPerBatch", {
-                      playersPerBatch: Number(event.target.value),
-                    })
-                  }
-                  size="sm"
-                  value={String(queue.playersPerBatch)}
-                >
-                  {playersPerBatchOptions.map((value) => (
-                    <NativeSelectOption key={value} value={String(value)}>
-                      {value} per batch
-                    </NativeSelectOption>
-                  ))}
-                </NativeSelect>
-                <NativeSelect
-                  disabled={toolbarFieldPending !== null}
-                  onChange={(event) =>
-                    handleToolbarSettingsChange("matchesPerViewer", {
-                      matchesPerViewer: Number(event.target.value),
-                    })
-                  }
-                  size="sm"
-                  value={String(queue.matchesPerViewer)}
-                >
-                  {matchesPerViewerOptions.map((value) => (
-                    <NativeSelectOption key={value} value={String(value)}>
-                      {value} match{value === 1 ? "" : "es"}
-                    </NativeSelectOption>
-                  ))}
-                </NativeSelect>
-              </ToolbarGroup>
+                <ToolbarGroup label="Ranks">
+                  <AppSelect
+                    className="w-[144px] max-w-full"
+                    disabled={toolbarFieldPending !== null}
+                    onValueChange={(value) =>
+                      handleToolbarSettingsChange("minRank", {
+                        minRank: value as RankValue,
+                      })
+                    }
+                    options={rankOptions.map((option) => ({
+                      label: `Min ${option.label}`,
+                      value: option.value,
+                    }))}
+                    size="sm"
+                    value={queue.minRank}
+                  />
+                  <AppSelect
+                    className="w-[144px] max-w-full"
+                    disabled={toolbarFieldPending !== null}
+                    onValueChange={(value) =>
+                      handleToolbarSettingsChange("maxRank", {
+                        maxRank: value as RankValue,
+                      })
+                    }
+                    options={rankOptions.map((option) => ({
+                      label: `Max ${option.label}`,
+                      value: option.value,
+                    }))}
+                    size="sm"
+                    value={queue.maxRank}
+                  />
+                </ToolbarGroup>
 
-              <ToolbarGroup label="Invite mode">
-                <NativeSelect
-                  disabled={toolbarFieldPending !== null}
-                  onChange={(event) =>
-                    handleToolbarSettingsChange("inviteMode", {
-                      inviteMode: event.target.value as InviteMode,
-                    })
-                  }
-                  size="sm"
-                  value={queue.inviteMode}
-                >
-                  {inviteModeOptions.map((option) => (
-                    <NativeSelectOption key={option.value} value={option.value}>
-                      {option.label}
-                    </NativeSelectOption>
-                  ))}
-                </NativeSelect>
-              </ToolbarGroup>
+                <ToolbarDivider />
 
-              <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  onClick={() => setSettingsOpen(true)}
-                  size="sm"
-                  variant="outline"
-                >
-                  <IconSettings data-icon="inline-start" />
-                  Settings
-                </Button>
-                <Button
-                  disabled={hasPublishedMessage || isPublishing}
-                  onClick={handlePublishQueueMessage}
-                  size="sm"
-                  variant="outline"
-                >
-                  <IconBrandDiscord data-icon="inline-start" />
-                  {isPublishing
-                    ? "Publishing..."
-                    : hasDiscordSyncError
-                      ? "Retry publish"
-                      : "Publish"}
-                </Button>
-                <Button
-                  disabled={!queue.messageId || isRefreshing}
-                  onClick={handleRefreshQueueMessage}
-                  size="sm"
-                  variant="outline"
-                >
-                  <IconRefresh data-icon="inline-start" />
-                  {isRefreshing ? "Refreshing..." : "Refresh"}
-                </Button>
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button
-                      disabled={entries.length === 0 || isClearingQueue}
-                      size="sm"
-                      variant="ghost"
-                    >
-                      <IconTrash data-icon="inline-start" />
-                      {isClearingQueue ? "Clearing..." : "Clear queue"}
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent size="sm">
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Clear the active queue?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        This removes every waiting viewer from the active list.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction
-                        onClick={handleClearQueue}
-                        variant="destructive"
+                <ToolbarGroup label="Batch">
+                  <AppSelect
+                    className="w-[148px] max-w-full"
+                    disabled={toolbarFieldPending !== null}
+                    onValueChange={(value) =>
+                      handleToolbarSettingsChange("playersPerBatch", {
+                        playersPerBatch: Number(value),
+                      })
+                    }
+                    options={playersPerBatchOptions.map((value) => ({
+                      label: `${value} per batch`,
+                      value: String(value),
+                    }))}
+                    size="sm"
+                    value={String(queue.playersPerBatch)}
+                  />
+                  <AppSelect
+                    className="w-[124px] max-w-full"
+                    disabled={toolbarFieldPending !== null}
+                    onValueChange={(value) =>
+                      handleToolbarSettingsChange("matchesPerViewer", {
+                        matchesPerViewer: Number(value),
+                      })
+                    }
+                    options={matchesPerViewerOptions.map((value) => ({
+                      label: `${value} match${value === 1 ? "" : "es"}`,
+                      value: String(value),
+                    }))}
+                    size="sm"
+                    value={String(queue.matchesPerViewer)}
+                  />
+                </ToolbarGroup>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-border/50 pt-4">
+                <ToolbarGroup label="Invite mode">
+                  <AppSelect
+                    className="w-[168px] max-w-full"
+                    disabled={toolbarFieldPending !== null}
+                    onValueChange={(value) =>
+                      handleToolbarSettingsChange("inviteMode", {
+                        inviteMode: value as InviteMode,
+                      })
+                    }
+                    options={inviteModeOptions.map((option) => ({
+                      label: option.label,
+                      value: option.value,
+                    }))}
+                    size="sm"
+                    value={queue.inviteMode}
+                  />
+                </ToolbarGroup>
+
+                <ToolbarDivider />
+
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <Button
+                    onClick={() => setSettingsOpen(true)}
+                    size="sm"
+                    variant="outline"
+                  >
+                    <IconSettings data-icon="inline-start" />
+                    Settings
+                  </Button>
+                  <Button
+                    disabled={hasPublishedMessage || isPublishing}
+                    onClick={handlePublishQueueMessage}
+                    size="sm"
+                    variant="outline"
+                  >
+                    <IconBrandDiscord data-icon="inline-start" />
+                    {isPublishing
+                      ? "Publishing..."
+                      : hasDiscordSyncError
+                        ? "Retry publish"
+                        : "Publish"}
+                  </Button>
+                  <Button
+                    disabled={!queue.messageId || isRefreshing}
+                    onClick={handleRefreshQueueMessage}
+                    size="sm"
+                    variant="outline"
+                  >
+                    <IconRefresh data-icon="inline-start" />
+                    {isRefreshing ? "Refreshing..." : "Refresh"}
+                  </Button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        disabled={entries.length === 0 || isClearingQueue}
+                        size="sm"
+                        variant="ghost"
                       >
-                        Clear queue
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-                <Button
-                  disabled={entries.length === 0}
-                  onClick={() => openSelectionDialog({ kind: "batch" })}
-                  size="sm"
-                >
-                  <IconArrowRight data-icon="inline-start" />
-                  Next batch
-                </Button>
+                        <IconTrash data-icon="inline-start" />
+                        {isClearingQueue ? "Clearing..." : "Clear queue"}
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent size="sm">
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Clear the active queue?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This removes every waiting viewer from the active list.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={handleClearQueue}
+                          variant="destructive"
+                        >
+                          Clear queue
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                  <Button
+                    disabled={entries.length === 0}
+                    onClick={() => openSelectionDialog({ kind: "batch" })}
+                    size="sm"
+                  >
+                    <IconArrowRight data-icon="inline-start" />
+                    Next batch
+                  </Button>
+                </div>
               </div>
             </div>
           </Panel>
@@ -1760,8 +1773,8 @@ export function PlayWithViewersDashboardView({
       ) : null}
 
       <Sheet onOpenChange={setSettingsOpen} open={settingsOpen}>
-        <SheetContent className="w-full sm:max-w-xl">
-          <SheetHeader>
+        <SheetContent className="w-full p-0 sm:max-w-2xl lg:max-w-[54rem]">
+          <SheetHeader className="shrink-0 border-b border-border/60 px-6 py-5 text-left">
             <SheetTitle>
               {queue ? "Queue settings" : "Create Play With Viewers queue"}
             </SheetTitle>
@@ -1772,34 +1785,34 @@ export function PlayWithViewersDashboardView({
             </SheetDescription>
           </SheetHeader>
 
-          <ScrollArea className="flex-1">
-            <div className="p-4 pt-0">
+          <ScrollArea className="min-h-0 flex-1">
+            <div className="px-6 py-6">
               <FieldGroup>
+                <div className="grid gap-6">
                 {!queue ? (
                   <>
                     <Field>
                       <FieldLabel htmlFor="pwv-guild-id">Discord server</FieldLabel>
-                      <NativeSelect
+                      <AppSelect
                         disabled={
                           isLoadingAvailableGuilds ||
                           Boolean(availableGuildsError) ||
                           availableGuilds.length === 0
                         }
                         id="pwv-guild-id"
-                        onChange={(event) =>
+                        onValueChange={(value) =>
                           setCreateFormState((current) => ({
                             ...current,
-                            guildId: event.target.value,
+                            guildId: value,
                           }))
                         }
+                        options={availableGuilds.map((guild) => ({
+                          label: guild.name,
+                          value: guild.id,
+                        }))}
+                        placeholder="Select a Discord server"
                         value={createFormState.guildId}
-                      >
-                        {availableGuilds.map((guild) => (
-                          <NativeSelectOption key={guild.id} value={guild.id}>
-                            {guild.name}
-                          </NativeSelectOption>
-                        ))}
-                      </NativeSelect>
+                      />
                       <FieldDescription>
                         {isLoadingAvailableGuilds
                           ? "Checking the Discord servers you own where the bot is already installed."
@@ -1907,6 +1920,7 @@ export function PlayWithViewersDashboardView({
                     Creator message
                   </FieldLabel>
                   <Textarea
+                    className="min-h-[120px] resize-y"
                     id="pwv-creator-message"
                     onChange={(event) =>
                       queue
@@ -1930,6 +1944,7 @@ export function PlayWithViewersDashboardView({
                 <Field>
                   <FieldLabel htmlFor="pwv-rules">Rules text</FieldLabel>
                   <Textarea
+                    className="min-h-[140px] resize-y"
                     id="pwv-rules"
                     onChange={(event) =>
                       queue
@@ -1946,159 +1961,143 @@ export function PlayWithViewersDashboardView({
                   />
                 </Field>
 
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <Field>
-                    <FieldLabel htmlFor="pwv-players-per-batch">
-                      Players per batch
-                    </FieldLabel>
-                    <NativeSelect
-                      id="pwv-players-per-batch"
-                      onChange={(event) =>
-                        queue
-                          ? setSettingsFormState((current) => ({
-                              ...current,
-                              playersPerBatch: event.target.value,
-                            }))
-                          : setCreateFormState((current) => ({
-                              ...current,
-                              playersPerBatch: event.target.value,
-                            }))
-                      }
-                      value={
-                        queue
-                          ? settingsFormState.playersPerBatch
-                          : createFormState.playersPerBatch
-                      }
-                    >
-                      {playersPerBatchOptions.map((value) => (
-                        <NativeSelectOption key={`sheet-batch-${value}`} value={String(value)}>
-                          {value}
-                        </NativeSelectOption>
-                      ))}
-                    </NativeSelect>
-                  </Field>
-
-                  <Field>
-                    <FieldLabel htmlFor="pwv-matches-per-viewer">
-                      Matches per viewer
-                    </FieldLabel>
-                    <NativeSelect
-                      id="pwv-matches-per-viewer"
-                      onChange={(event) =>
-                        queue
-                          ? setSettingsFormState((current) => ({
-                              ...current,
-                              matchesPerViewer: event.target.value,
-                            }))
-                          : setCreateFormState((current) => ({
-                              ...current,
-                              matchesPerViewer: event.target.value,
-                            }))
-                      }
-                      value={
-                        queue
-                          ? settingsFormState.matchesPerViewer
-                          : createFormState.matchesPerViewer
-                      }
-                    >
-                      {matchesPerViewerOptions.map((value) => (
-                        <NativeSelectOption
-                          key={`sheet-matches-${value}`}
-                          value={String(value)}
-                        >
-                          {value}
-                        </NativeSelectOption>
-                      ))}
-                    </NativeSelect>
-                  </Field>
-                </div>
-
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <Field>
-                    <FieldLabel htmlFor="pwv-min-rank">Minimum rank</FieldLabel>
-                    <NativeSelect
-                      id="pwv-min-rank"
-                      onChange={(event) =>
-                        queue
-                          ? setSettingsFormState((current) => ({
-                              ...current,
-                              minRank: event.target.value as RankValue,
-                            }))
-                          : setCreateFormState((current) => ({
-                              ...current,
-                              minRank: event.target.value as RankValue,
-                            }))
-                      }
-                      value={queue ? settingsFormState.minRank : createFormState.minRank}
-                    >
-                      {rankOptions.map((option) => (
-                        <NativeSelectOption key={`sheet-min-${option.value}`} value={option.value}>
-                          {option.label}
-                        </NativeSelectOption>
-                      ))}
-                    </NativeSelect>
-                  </Field>
-
-                  <Field>
-                    <FieldLabel htmlFor="pwv-max-rank">Maximum rank</FieldLabel>
-                    <NativeSelect
-                      id="pwv-max-rank"
-                      onChange={(event) =>
-                        queue
-                          ? setSettingsFormState((current) => ({
-                              ...current,
-                              maxRank: event.target.value as RankValue,
-                            }))
-                          : setCreateFormState((current) => ({
-                              ...current,
-                              maxRank: event.target.value as RankValue,
-                            }))
-                      }
-                      value={queue ? settingsFormState.maxRank : createFormState.maxRank}
-                    >
-                      {rankOptions.map((option) => (
-                        <NativeSelectOption key={`sheet-max-${option.value}`} value={option.value}>
-                          {option.label}
-                        </NativeSelectOption>
-                      ))}
-                    </NativeSelect>
-                  </Field>
-                </div>
-
                 <Field>
-                  <FieldLabel htmlFor="pwv-invite-mode">Invite mode</FieldLabel>
-                  <NativeSelect
-                    id="pwv-invite-mode"
-                    onChange={(event) =>
+                  <FieldLabel htmlFor="pwv-players-per-batch">
+                    Players per batch
+                  </FieldLabel>
+                  <AppSelect
+                    id="pwv-players-per-batch"
+                    onValueChange={(value) =>
                       queue
                         ? setSettingsFormState((current) => ({
                             ...current,
-                            inviteMode: event.target.value as InviteMode,
+                            playersPerBatch: value,
                           }))
                         : setCreateFormState((current) => ({
                             ...current,
-                            inviteMode: event.target.value as InviteMode,
+                            playersPerBatch: value,
                           }))
                     }
+                    options={playersPerBatchOptions.map((value) => ({
+                      label: String(value),
+                      value: String(value),
+                    }))}
+                    value={
+                      queue
+                        ? settingsFormState.playersPerBatch
+                        : createFormState.playersPerBatch
+                    }
+                  />
+                </Field>
+
+                <Field>
+                  <FieldLabel htmlFor="pwv-matches-per-viewer">
+                    Matches per viewer
+                  </FieldLabel>
+                  <AppSelect
+                    id="pwv-matches-per-viewer"
+                    onValueChange={(value) =>
+                      queue
+                        ? setSettingsFormState((current) => ({
+                            ...current,
+                            matchesPerViewer: value,
+                          }))
+                        : setCreateFormState((current) => ({
+                            ...current,
+                            matchesPerViewer: value,
+                          }))
+                    }
+                    options={matchesPerViewerOptions.map((value) => ({
+                      label: String(value),
+                      value: String(value),
+                    }))}
+                    value={
+                      queue
+                        ? settingsFormState.matchesPerViewer
+                        : createFormState.matchesPerViewer
+                    }
+                  />
+                </Field>
+
+                <Field>
+                  <FieldLabel htmlFor="pwv-min-rank">Minimum rank</FieldLabel>
+                  <AppSelect
+                    id="pwv-min-rank"
+                    onValueChange={(value) =>
+                      queue
+                        ? setSettingsFormState((current) => ({
+                            ...current,
+                            minRank: value as RankValue,
+                          }))
+                        : setCreateFormState((current) => ({
+                            ...current,
+                            minRank: value as RankValue,
+                          }))
+                    }
+                    options={rankOptions.map((option) => ({
+                      label: option.label,
+                      value: option.value,
+                    }))}
+                    value={queue ? settingsFormState.minRank : createFormState.minRank}
+                  />
+                </Field>
+
+                <Field>
+                  <FieldLabel htmlFor="pwv-max-rank">Maximum rank</FieldLabel>
+                  <AppSelect
+                    id="pwv-max-rank"
+                    onValueChange={(value) =>
+                      queue
+                        ? setSettingsFormState((current) => ({
+                            ...current,
+                            maxRank: value as RankValue,
+                          }))
+                        : setCreateFormState((current) => ({
+                            ...current,
+                            maxRank: value as RankValue,
+                          }))
+                    }
+                    options={rankOptions.map((option) => ({
+                      label: option.label,
+                      value: option.value,
+                    }))}
+                    value={queue ? settingsFormState.maxRank : createFormState.maxRank}
+                  />
+                </Field>
+
+                <Field>
+                  <FieldLabel htmlFor="pwv-invite-mode">Invite mode</FieldLabel>
+                  <AppSelect
+                    id="pwv-invite-mode"
+                    onValueChange={(value) =>
+                      queue
+                        ? setSettingsFormState((current) => ({
+                            ...current,
+                            inviteMode: value as InviteMode,
+                          }))
+                        : setCreateFormState((current) => ({
+                            ...current,
+                            inviteMode: value as InviteMode,
+                          }))
+                    }
+                    options={inviteModeOptions.map((option) => ({
+                      label: option.label,
+                      value: option.value,
+                    }))}
                     value={queue ? settingsFormState.inviteMode : createFormState.inviteMode}
-                  >
-                    {inviteModeOptions.map((option) => (
-                      <NativeSelectOption key={`sheet-mode-${option.value}`} value={option.value}>
-                        {option.label}
-                      </NativeSelectOption>
-                    ))}
-                  </NativeSelect>
+                  />
                   <FieldDescription>
                     {queue
                       ? `Discord target stays fixed on ${discordContextLabel}.`
                       : "Discord DM mode requires a lobby code when selecting viewers."}
                   </FieldDescription>
                 </Field>
+                </div>
               </FieldGroup>
             </div>
           </ScrollArea>
 
-          <SheetFooter>
+          <SheetFooter className="shrink-0 border-t border-border/60 px-6 py-4">
             <Button onClick={() => setSettingsOpen(false)} size="sm" variant="outline">
               Cancel
             </Button>
