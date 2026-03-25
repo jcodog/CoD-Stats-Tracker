@@ -58,6 +58,22 @@ const dailySrChartConfig = {
   },
 } satisfies ChartConfig
 
+function getSrAxisDomain(
+  points: Array<{
+    sr: number
+  }>
+) {
+  if (points.length === 0) {
+    return [0, 100] as const
+  }
+
+  const values = points.map((point) => point.sr)
+  const minValue = Math.min(...values)
+  const maxValue = Math.max(...values)
+
+  return [Math.max(0, minValue - 100), maxValue + 100] as const
+}
+
 function ChartPanel({
   children,
   description,
@@ -131,6 +147,7 @@ export function DashboardStatsCharts({
   const filteredTimeline = timelinePoints.filter(
     (point) => timeRangeStart === null || point.createdAt >= timeRangeStart
   )
+  const srAxisDomain = getSrAxisDomain(filteredTimeline)
   const filteredDaily = dailyPoints.filter((day) => {
     if (timeRangeStart === null) {
       return true
@@ -188,6 +205,7 @@ export function DashboardStatsCharts({
                 />
                 <YAxis
                   axisLine={false}
+                  domain={srAxisDomain}
                   tickLine={false}
                   tickMargin={8}
                   width={56}
