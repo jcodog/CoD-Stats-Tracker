@@ -70,8 +70,10 @@ function getSrAxisDomain(
   const values = points.map((point) => point.sr)
   const minValue = Math.min(...values)
   const maxValue = Math.max(...values)
+  const lowerBound = Math.max(0, Math.floor((minValue - 1) / 100) * 100)
+  const upperBound = Math.ceil((maxValue + 1) / 100) * 100
 
-  return [Math.max(0, minValue - 100), maxValue + 100] as const
+  return [lowerBound, upperBound] as const
 }
 
 function ChartPanel({
