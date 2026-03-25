@@ -206,29 +206,23 @@ function getVisibleStepOrder(hasMultipleSessions: boolean) {
 }
 
 function ChoiceCard({
-  checked,
   description,
   id,
-  onSelect,
   title,
   value,
 }: {
-  checked: boolean
   description: string
   id: string
-  onSelect: (value: string) => void
   title: string
   value: string
 }) {
   return (
-    <FieldLabel className="rounded-lg">
-      <Field>
-        <RadioGroupItem
-          checked={checked}
-          id={id}
-          onClick={() => onSelect(value)}
-          value={value}
-        />
+    <FieldLabel
+      className="cursor-pointer rounded-xl border-border/70 bg-muted/10 transition-colors hover:border-border/90"
+      htmlFor={id}
+    >
+      <Field className="items-start gap-3 p-4" orientation="horizontal">
+        <RadioGroupItem id={id} value={value} />
         <FieldContent>
           <FieldTitle>{title}</FieldTitle>
           <FieldDescription>{description}</FieldDescription>
@@ -693,6 +687,16 @@ export function DashboardStatsLogMatchSheet(
       : step === "notes"
         ? "Review"
         : "Continue"
+  const selectedSessionLabel = selectedSession
+    ? `${selectedSession.usernameLabel ?? "Legacy session"} · ${selectedSession.titleLabel} Season ${selectedSession.season}`
+    : "Select a session to start logging."
+  const selectedModeKey = selectedModePresentation.key
+  const currentStepNumber = currentStepIndex >= 0 ? currentStepIndex + 1 : 1
+  const isPrimaryActionDisabled =
+    logMatchMutation.isPending ||
+    isSubmitting ||
+    (step === "mode" && modes.length === 0) ||
+    (step === "map" && filteredMaps.length === 0)
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
@@ -707,7 +711,7 @@ export function DashboardStatsLogMatchSheet(
               </DialogDescription>
             </div>
             <div className="shrink-0 text-sm text-muted-foreground tabular-nums">
-              Step {currentStepIndex + 1} of {visibleSteps.length}
+              Step {currentStepNumber} of {visibleSteps.length}
             </div>
           </div>
         </DialogHeader>
@@ -720,8 +724,8 @@ export function DashboardStatsLogMatchSheet(
           />
         </div>
 
-        <div className="min-h-0 overflow-y-auto px-6 py-6">
-          <div className="grid gap-6">
+        <div className="min-h-0 overflow-y-auto">
+          <div className="grid gap-6 px-6 py-6">
             <div className="grid gap-1">
               <h3 className="text-lg font-semibold tracking-tight">
                 {currentStep.title}
@@ -737,4 +741,409 @@ export function DashboardStatsLogMatchSheet(
                 <AlertDescription>{errorMessage}</AlertDescription>
               </Alert>
             ) : null}
+
+            {step === "session" ? (
+              <FieldGroup className="gap-6">
+                <Field>
+                  <FieldLabel htmlFor="log-match-session">
+                    Active session
+                  </FieldLabel>
+                  <AppSelect
+                    className="w-full"
+                    id="log-match-session"
+                    onValueChange={(value) => updateField("selectedSessionId", value)}
+                    options={sessions.map((session) => ({
+                      label: `${session.usernameLabel ?? "Legacy session"} · ${session.titleLabel} Season ${session.season}`,
+                      value: session.id,
+                    }))}
+                    placeholder="Select a session"
+                    value={selectedWizardSessionId}
+                  />
+                  <FieldDescription>
+                    Matches stay permanently tied to the session and username you
+                    choose here.
+                  </FieldDescription>
+                </Field>
+              </FieldGroup>
+            ) : null}
+
+            {step === "outcome" ? (
+              <FieldSet>
+                <FieldLegend>Select outcome</FieldLegend>
+                <RadioGroup
+                  className="gap-3 sm:grid-cols-2"
+                  onValueChange={(value) => {
+                    if (value === "win" || value === "loss") {
+                      updateField("outcome", value)
+                    }
+                  }}
+                  value={outcome ?? undefined}
+                >
+                  <ChoiceCard
+                    description="Use win when the session should record a victory and add SR normally."
+                    id="match-outcome-win"
+                    title="Win"
+                    value="win"
+                  />
+                  <ChoiceCard
+                    description="Use loss when the match counted as a defeat, even if loss protection applied."
+                    id="match-outcome-loss"
+                    title="Loss"
+                    value="loss"
+                  />
+                </RadioGroup>
+              </FieldSet>
+            ) : null}
+
+            {step === "srChange" ? (
+              <FieldGroup className="max-w-md">
+                <Field>
+                  <FieldLabel htmlFor="match-sr-change">SR change</FieldLabel>
+                  <Input
+                    autoComplete="off"
+                    id="match-sr-change"
+                    inputMode="numeric"
+                    name="match-sr-change"
+                    onChange={(event) => updateField("srChange", event.target.value)}
+                    placeholder={outcome === "loss" ? "-24" : "+32"}
+                    value={srChange}
+                  />
+                  <FieldDescription>
+                    Enter the exact in-game SR delta as a whole number.
+                  </FieldDescription>
+                </Field>
+              </FieldGroup>
+            ) : null}
+
+            {step === "mode" ? (
+              <FieldSet>
+                <FieldLegend>Ranked mode</FieldLegend>
+                <RadioGroup
+                  className="gap-3 sm:grid-cols-2"
+                  onValueChange={(value) => {
+                    updateField("modeId", value)
+                    updateField("mapId", null)
+                  }}
+                  value={modeId ?? undefined}
+                >
+                  {modes.map((mode) => {
+                    const supportedMapCount = modeMapCounts.get(mode.id) ?? 0
+
+                    return (
+                      <ChoiceCard
+                        description={`${supportedMapCount} active map${supportedMapCount === 1 ? "" : "s"} available for this mode.`}
+                        id={`match-mode-${mode.id}`}
+                        key={mode.id}
+                        title={mode.label}
+                        value={mode.id}
+                      />
+                    )
+                  })}
+                </RadioGroup>
+                {modes.length === 0 ? (
+                  <FieldDescription>
+                    Staff still need to configure ranked modes for the current
+                    title before matches can be logged.
+                  </FieldDescription>
+                ) : null}
+              </FieldSet>
+            ) : null}
+
+            {step === "map" ? (
+              <FieldGroup className="max-w-xl gap-4">
+                <Field>
+                  <FieldLabel htmlFor="match-map-combobox">Map</FieldLabel>
+                  <MapCombobox
+                    disabled={!modeId || filteredMaps.length === 0}
+                    maps={filteredMaps}
+                    onChange={(value) => updateField("mapId", value)}
+                    value={mapId}
+                  />
+                  <FieldDescription>
+                    {selectedMode
+                      ? filteredMaps.length > 0
+                        ? `${filteredMaps.length} map${filteredMaps.length === 1 ? "" : "s"} support ${selectedMode.label}.`
+                        : `No active maps currently support ${selectedMode.label}.`
+                      : "Choose the mode first to unlock the valid map list."}
+                  </FieldDescription>
+                </Field>
+              </FieldGroup>
+            ) : null}
+
+            {step === "stats" ? (
+              <div className="grid gap-6">
+                <FieldGroup className="gap-4 sm:grid-cols-2">
+                  <Field>
+                    <FieldLabel htmlFor="match-kills">Kills</FieldLabel>
+                    <Input
+                      autoComplete="off"
+                      id="match-kills"
+                      inputMode="numeric"
+                      onChange={(event) => updateField("kills", event.target.value)}
+                      placeholder="Optional"
+                      value={kills}
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="match-deaths">Deaths</FieldLabel>
+                    <Input
+                      autoComplete="off"
+                      id="match-deaths"
+                      inputMode="numeric"
+                      onChange={(event) => updateField("deaths", event.target.value)}
+                      placeholder="Optional"
+                      value={deaths}
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="match-team-score">Team score</FieldLabel>
+                    <Input
+                      autoComplete="off"
+                      id="match-team-score"
+                      inputMode="numeric"
+                      onChange={(event) =>
+                        updateField("teamScore", event.target.value)
+                      }
+                      placeholder="Optional"
+                      value={teamScore}
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="match-enemy-score">
+                      Enemy score
+                    </FieldLabel>
+                    <Input
+                      autoComplete="off"
+                      id="match-enemy-score"
+                      inputMode="numeric"
+                      onChange={(event) =>
+                        updateField("enemyScore", event.target.value)
+                      }
+                      placeholder="Optional"
+                      value={enemyScore}
+                    />
+                  </Field>
+                </FieldGroup>
+
+                {selectedModeKey ? <Separator /> : null}
+
+                {selectedModeKey === "hardpoint" ? (
+                  <FieldGroup className="max-w-sm">
+                    <Field>
+                      <FieldLabel htmlFor="match-hill-time">
+                        Hill time (seconds)
+                      </FieldLabel>
+                      <Input
+                        autoComplete="off"
+                        id="match-hill-time"
+                        inputMode="numeric"
+                        onChange={(event) =>
+                          updateField("hillTimeSeconds", event.target.value)
+                        }
+                        placeholder="Optional"
+                        value={hillTimeSeconds}
+                      />
+                    </Field>
+                  </FieldGroup>
+                ) : null}
+
+                {selectedModeKey === "snd" ? (
+                  <FieldGroup className="gap-4 sm:grid-cols-2">
+                    <Field>
+                      <FieldLabel htmlFor="match-plants">Plants</FieldLabel>
+                      <Input
+                        autoComplete="off"
+                        id="match-plants"
+                        inputMode="numeric"
+                        onChange={(event) => updateField("plants", event.target.value)}
+                        placeholder="Optional"
+                        value={plants}
+                      />
+                    </Field>
+                    <Field>
+                      <FieldLabel htmlFor="match-defuses">Defuses</FieldLabel>
+                      <Input
+                        autoComplete="off"
+                        id="match-defuses"
+                        inputMode="numeric"
+                        onChange={(event) => updateField("defuses", event.target.value)}
+                        placeholder="Optional"
+                        value={defuses}
+                      />
+                    </Field>
+                  </FieldGroup>
+                ) : null}
+
+                {selectedModeKey === "overload" ? (
+                  <FieldGroup className="max-w-sm">
+                    <Field>
+                      <FieldLabel htmlFor="match-overloads">Overloads</FieldLabel>
+                      <Input
+                        autoComplete="off"
+                        id="match-overloads"
+                        inputMode="numeric"
+                        onChange={(event) =>
+                          updateField("overloads", event.target.value)
+                        }
+                        placeholder="Optional"
+                        value={overloads}
+                      />
+                    </Field>
+                  </FieldGroup>
+                ) : null}
+
+                <Field
+                  className="rounded-xl border border-border/60 bg-muted/10 p-4"
+                  orientation="responsive"
+                >
+                  <Switch
+                    checked={lossProtected}
+                    onCheckedChange={(checked) =>
+                      updateField("lossProtected", checked)
+                    }
+                  />
+                  <FieldContent>
+                    <FieldTitle>Loss protected</FieldTitle>
+                    <FieldDescription>
+                      Leave this off unless the match explicitly used loss
+                      protection.
+                    </FieldDescription>
+                  </FieldContent>
+                </Field>
+              </div>
+            ) : null}
+
+            {step === "notes" ? (
+              <FieldGroup className="max-w-2xl">
+                <Field>
+                  <FieldLabel htmlFor="match-notes">Notes</FieldLabel>
+                  <Textarea
+                    autoComplete="off"
+                    id="match-notes"
+                    maxLength={280}
+                    onChange={(event) => updateField("notes", event.target.value)}
+                    placeholder="Optional short note about the match."
+                    rows={5}
+                    value={notes}
+                  />
+                  <FieldDescription>{notes.length}/280 characters</FieldDescription>
+                </Field>
+              </FieldGroup>
+            ) : null}
+
+            {step === "review" ? (
+              <div className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+                <div className="rounded-xl border border-border/60 bg-muted/10 p-5">
+                  <dl className="grid gap-4">
+                    <ReviewRow label="Session" value={selectedSessionLabel} />
+                    <ReviewRow
+                      label="Outcome"
+                      value={
+                        outcome === "win"
+                          ? "Win"
+                          : outcome === "loss"
+                            ? "Loss"
+                            : "Not set"
+                      }
+                    />
+                    <ReviewRow
+                      label="SR change"
+                      value={srChange.trim() || "Not set"}
+                    />
+                    <ReviewRow
+                      label="Mode"
+                      value={selectedMode?.label ?? "Not set"}
+                    />
+                    <ReviewRow
+                      label="Map"
+                      value={selectedMap?.name ?? "Not set"}
+                    />
+                    <ReviewRow
+                      label="Loss protected"
+                      value={lossProtected ? "Yes" : "No"}
+                    />
+                    <ReviewRow
+                      label="Notes"
+                      value={notes.trim() || "No note added"}
+                    />
+                  </dl>
+                </div>
+
+                <div className="rounded-xl border border-border/60 bg-muted/10 p-5">
+                  <div className="grid gap-1">
+                    <h4 className="text-sm font-semibold tracking-tight">
+                      Optional stats
+                    </h4>
+                    <p className="text-sm text-muted-foreground">
+                      Extra stats are optional and stay lightweight by design.
+                    </p>
+                  </div>
+                  <Separator className="my-4" />
+                  {optionalStats.length > 0 ? (
+                    <dl className="grid gap-4">
+                      {optionalStats.map((item) => (
+                        <ReviewRow
+                          key={item.label}
+                          label={item.label}
+                          value={item.value}
+                        />
+                      ))}
+                    </dl>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      No optional stats added for this match.
+                    </p>
+                  )}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="border-t border-border/60 bg-background px-6 py-4">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-muted-foreground">{selectedSessionLabel}</p>
+
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <Button
+                onClick={() => onOpenChange(false)}
+                type="button"
+                variant="ghost"
+              >
+                Cancel
+              </Button>
+
+              {currentStepIndex > 0 ? (
+                <Button onClick={goToPreviousStep} type="button" variant="outline">
+                  <IconChevronLeft aria-hidden="true" className="size-4" />
+                  Back
+                </Button>
+              ) : null}
+
+              {step === "review" ? (
+                <Button
+                  disabled={isPrimaryActionDisabled}
+                  onClick={() => {
+                    void handleSubmit()
+                  }}
+                  type="button"
+                >
+                  {primaryActionLabel}
+                </Button>
+              ) : (
+                <Button
+                  disabled={isPrimaryActionDisabled}
+                  onClick={handleContinue}
+                  type="button"
+                >
+                  {primaryActionLabel}
+                  <IconChevronRight aria-hidden="true" className="size-4" />
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
 }
