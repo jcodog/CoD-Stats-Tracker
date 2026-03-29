@@ -532,12 +532,13 @@ function DashboardStatsEditorLoaded({
                           Recent matches
                         </h2>
                         <p className="text-sm text-muted-foreground">
-                          Latest logs for the selected active session.
+                          All logged matches for the selected session within the active filter window.
                         </p>
                       </div>
                       <DashboardStatsRecentMatches
                         embedded
                         matches={recentMatchesQuery.data!}
+                        selectedTimeRange={selectedTimeRange}
                         showHeader={false}
                       />
                     </div>

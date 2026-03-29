@@ -498,7 +498,6 @@ export const getRecentSessionMatches = query({
       args.includeLossProtected
     )
       .sort((left, right) => right.createdAt - left.createdAt)
-      .slice(0, Math.max(1, Math.min(args.limit ?? 12, 40)))
 
     return games.map(buildRecentMatchSummary)
   },

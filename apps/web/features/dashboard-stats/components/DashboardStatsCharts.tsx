@@ -80,6 +80,28 @@ function getSrAxisDomain(
   return [lowerBound, upperBound] as const
 }
 
+function getDailySrAxisDomain(
+  points: Array<{
+    netSr: number
+  }>
+) {
+  if (points.length === 0) {
+    return [-100, 100] as const
+  }
+
+  const values = points.map((point) => point.netSr)
+  const minValue = Math.min(0, ...values)
+  const maxValue = Math.max(0, ...values)
+  const lowerBound = Math.floor(minValue / 100) * 100
+  const upperBound = Math.ceil(maxValue / 100) * 100
+
+  if (lowerBound === upperBound) {
+    return [-100, 100] as const
+  }
+
+  return [lowerBound, upperBound] as const
+}
+
 function ChartPanel({
   children,
   description,
@@ -170,6 +192,7 @@ export function DashboardStatsCharts({
     dateKey: formatDashboardDay(day.dateKey),
     netSr: day.netSr,
   }))
+  const dailySrAxisDomain = getDailySrAxisDomain(dailySrData)
   const srSegments = filteredTimeline.slice(1).map((point, index) => ({
     currentMatchNumber: point.matchNumber,
     currentSr: point.sr,
@@ -396,7 +419,13 @@ export function DashboardStatsCharts({
                   tickLine={false}
                   tickMargin={8}
                 />
-                <YAxis axisLine={false} tickLine={false} tickMargin={8} width={44} />
+                <YAxis
+                  axisLine={false}
+                  domain={dailySrAxisDomain}
+                  tickLine={false}
+                  tickMargin={8}
+                  width={44}
+                />
                 <ChartTooltip content={<ChartTooltipContent />} />
                 <Bar dataKey="netSr" radius={[4, 4, 0, 0]}>
                   {dailySrData.map((day) => (

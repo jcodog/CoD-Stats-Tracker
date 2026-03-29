@@ -189,7 +189,6 @@ async function queryRecentSessionMatches(args: {
   try {
     return await args.convex.query(api.queries.stats.dashboard.getRecentSessionMatches, {
       includeLossProtected: args.includeLossProtected,
-      limit: 12,
       sessionId: args.sessionId,
     })
   } catch (error) {
@@ -401,6 +400,7 @@ export function useDashboardRecentSessionMatches(
       sessionId,
       includeLossProtected
     ),
+    staleTime: 30_000,
   })
 }
 

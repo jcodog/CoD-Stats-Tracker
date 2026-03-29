@@ -1,16 +1,20 @@
 "use client"
 
+import { useEffect, useState } from "react"
+
 import type { DashboardRecentSessionMatches } from "@/features/dashboard-stats/lib/dashboard-stats-client"
 import {
   formatDashboardDateTime,
   getMapLabel,
   getModeLabel,
+  getTimeRangeStart,
 } from "@/features/dashboard-stats/lib/dashboard-stats-format"
 import {
   getDashboardMetricTextStyle,
   getDashboardOutcomeBadgeStyle,
 } from "@/features/dashboard-stats/lib/dashboard-stats-visuals"
 import { Badge } from "@workspace/ui/components/badge"
+import { Button } from "@workspace/ui/components/button"
 import {
   Empty,
   EmptyDescription,
@@ -25,17 +29,22 @@ import {
   TableHeader,
   TableRow,
 } from "@workspace/ui/components/table"
+import type { DashboardTimeRange } from "@/features/dashboard-stats/stores/dashboard-ui-store"
 import { cn } from "@workspace/ui/lib/utils"
+
+const MATCHES_PER_PAGE = 15
 
 export function DashboardStatsRecentMatches({
   className,
   embedded = false,
   matches,
+  selectedTimeRange,
   showHeader = true,
 }: {
   className?: string
   embedded?: boolean
   matches: DashboardRecentSessionMatches
+  selectedTimeRange: DashboardTimeRange
   showHeader?: boolean
 }) {
   const recentMatches = matches as Array<{
@@ -50,6 +59,34 @@ export function DashboardStatsRecentMatches({
     outcome: "loss" | "win"
     srChange: number
   }>
+  const [currentPage, setCurrentPage] = useState(1)
+  const timeRangeStart = getTimeRangeStart(selectedTimeRange)
+  const filteredMatches = recentMatches.filter(
+    (match) => timeRangeStart === null || match.createdAt >= timeRangeStart
+  )
+  const totalMatches = filteredMatches.length
+  const totalPages = Math.max(1, Math.ceil(totalMatches / MATCHES_PER_PAGE))
+  const safeCurrentPage = Math.min(currentPage, totalPages)
+  const pageStartIndex = (safeCurrentPage - 1) * MATCHES_PER_PAGE
+  const paginatedMatches = filteredMatches.slice(
+    pageStartIndex,
+    pageStartIndex + MATCHES_PER_PAGE
+  )
+  const visibleMatchStart = totalMatches === 0 ? 0 : pageStartIndex + 1
+  const visibleMatchEnd = Math.min(totalMatches, pageStartIndex + MATCHES_PER_PAGE)
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [
+    selectedTimeRange,
+    recentMatches.length,
+    recentMatches[0]?.id,
+    recentMatches[recentMatches.length - 1]?.id,
+  ])
+
+  useEffect(() => {
+    setCurrentPage((page) => Math.min(page, totalPages))
+  }, [totalPages])
 
   return (
     <section
@@ -64,13 +101,13 @@ export function DashboardStatsRecentMatches({
         <div className="flex flex-col gap-1 border-b border-border/60 px-5 py-4">
           <h2 className="text-base font-semibold">Recent matches</h2>
           <p className="text-sm text-muted-foreground">
-            Latest logs for the selected active session.
+            All logged matches for the selected session within the active filter window.
           </p>
         </div>
       ) : null}
 
       <div className="px-6 py-6">
-        {recentMatches.length === 0 ? (
+        {filteredMatches.length === 0 ? (
           <Empty
             className={cn(
               "border border-dashed border-border/60 bg-muted/10",
@@ -78,68 +115,119 @@ export function DashboardStatsRecentMatches({
             )}
           >
             <EmptyHeader>
-              <EmptyTitle>No matches logged yet</EmptyTitle>
+              <EmptyTitle>No matches in this filter</EmptyTitle>
               <EmptyDescription>
-                Use the log match flow to start building SR and win-rate history.
+                Try a wider date range or log more matches to populate this session view.
               </EmptyDescription>
             </EmptyHeader>
           </Empty>
         ) : (
-          <div
-            className={cn(
-              "overflow-x-auto",
-              embedded ? "" : "rounded-xl border border-border/60"
-            )}
-          >
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Played</TableHead>
-                  <TableHead>Outcome</TableHead>
-                  <TableHead>Mode</TableHead>
-                  <TableHead>Map</TableHead>
-                  <TableHead>SR</TableHead>
-                  <TableHead>K / D</TableHead>
-                  <TableHead>Notes</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {recentMatches.map((match) => (
-                  <TableRow key={match.id}>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {formatDashboardDateTime(match.createdAt)}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        className="capitalize"
-                        style={getDashboardOutcomeBadgeStyle(match.outcome)}
-                        variant="outline"
-                      >
-                        {match.outcome}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{getModeLabel(match.mode)}</TableCell>
-                    <TableCell>{getMapLabel(match.mapName)}</TableCell>
-                    <TableCell
-                      className="font-medium"
-                      style={getDashboardMetricTextStyle(match.srChange)}
-                    >
-                      {match.srChange > 0 ? "+" : ""}
-                      {match.srChange}
-                      {match.lossProtected ? (
-                        <span className="ml-2 text-xs text-muted-foreground">LP</span>
-                      ) : null}
-                    </TableCell>
-                    <TableCell>
-                      {match.kills ?? "-"} / {match.deaths ?? "-"}
-                    </TableCell>
-                    <TableCell className="max-w-[240px] truncate text-sm text-muted-foreground">
-                      {match.notes ?? "No note"}
-                    </TableCell>
+          <div className="grid gap-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p
+                aria-live="polite"
+                className="text-sm text-muted-foreground"
+              >
+                Showing{" "}
+                <span className="font-medium text-foreground">
+                  {visibleMatchStart}-{visibleMatchEnd}
+                </span>{" "}
+                of{" "}
+                <span className="font-medium text-foreground">{totalMatches}</span>{" "}
+                matches.
+              </p>
+              {totalPages > 1 ? (
+                <div className="flex items-center gap-2">
+                  <Button
+                    disabled={safeCurrentPage === 1}
+                    onClick={() =>
+                      setCurrentPage((page) => Math.max(page - 1, 1))
+                    }
+                    size="sm"
+                    variant="outline"
+                  >
+                    Previous
+                  </Button>
+                  <span className="min-w-[88px] text-center text-sm text-muted-foreground">
+                    Page{" "}
+                    <span className="font-medium tabular-nums text-foreground">
+                      {safeCurrentPage}
+                    </span>{" "}
+                    of{" "}
+                    <span className="font-medium tabular-nums text-foreground">
+                      {totalPages}
+                    </span>
+                  </span>
+                  <Button
+                    disabled={safeCurrentPage >= totalPages}
+                    onClick={() =>
+                      setCurrentPage((page) => Math.min(page + 1, totalPages))
+                    }
+                    size="sm"
+                    variant="outline"
+                  >
+                    Next
+                  </Button>
+                </div>
+              ) : null}
+            </div>
+
+            <div
+              className={cn(
+                "overflow-x-auto",
+                embedded ? "" : "rounded-xl border border-border/60"
+              )}
+            >
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Played</TableHead>
+                    <TableHead>Outcome</TableHead>
+                    <TableHead>Mode</TableHead>
+                    <TableHead>Map</TableHead>
+                    <TableHead>SR</TableHead>
+                    <TableHead>K / D</TableHead>
+                    <TableHead>Notes</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {paginatedMatches.map((match) => (
+                    <TableRow key={match.id}>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {formatDashboardDateTime(match.createdAt)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          className="capitalize"
+                          style={getDashboardOutcomeBadgeStyle(match.outcome)}
+                          variant="outline"
+                        >
+                          {match.outcome}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{getModeLabel(match.mode)}</TableCell>
+                      <TableCell>{getMapLabel(match.mapName)}</TableCell>
+                      <TableCell
+                        className="font-medium"
+                        style={getDashboardMetricTextStyle(match.srChange)}
+                      >
+                        {match.srChange > 0 ? "+" : ""}
+                        {match.srChange}
+                        {match.lossProtected ? (
+                          <span className="ml-2 text-xs text-muted-foreground">LP</span>
+                        ) : null}
+                      </TableCell>
+                      <TableCell>
+                        {match.kills ?? "-"} / {match.deaths ?? "-"}
+                      </TableCell>
+                      <TableCell className="max-w-[240px] truncate text-sm text-muted-foreground">
+                        {match.notes ?? "No note"}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           </div>
         )}
       </div>
