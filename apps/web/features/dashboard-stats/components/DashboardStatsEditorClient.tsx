@@ -1,6 +1,6 @@
 "use client"
 
-import { startTransition, useEffect, useState } from "react"
+import { startTransition, useEffect, useMemo, useState } from "react"
 import { useShallow } from "zustand/react/shallow"
 
 import { AppSelect } from "@/components/AppSelect"
@@ -13,7 +13,6 @@ import {
   useDashboardSessionDailyPerformance,
   useDashboardSessionOverview,
   useDashboardSessionSrTimeline,
-  useDashboardSessionWinLossBreakdown,
   useDashboardStatsState,
 } from "@/features/dashboard-stats/lib/dashboard-stats-client"
 import { DashboardStatsCharts } from "@/features/dashboard-stats/components/DashboardStatsCharts"
@@ -21,6 +20,7 @@ import { DashboardStatsCreateSessionDialog } from "@/features/dashboard-stats/co
 import { DashboardStatsLogMatchSheet } from "@/features/dashboard-stats/components/DashboardStatsLogMatchSheet"
 import { DashboardStatsRecentMatches } from "@/features/dashboard-stats/components/DashboardStatsRecentMatches"
 import { DashboardStatsSummary } from "@/features/dashboard-stats/components/DashboardStatsSummary"
+import { getTimeRangeStart } from "@/features/dashboard-stats/lib/dashboard-stats-format"
 import { useDashboardUiStore } from "@/features/dashboard-stats/stores/dashboard-ui-store"
 import {
   Alert,
@@ -115,6 +115,11 @@ function HeroToolbarGroup({
       <div className="flex flex-wrap items-center gap-2">{children}</div>
     </div>
   )
+}
+
+type DashboardWindowedMatch = {
+  createdAt: number
+  outcome: "loss" | "win"
 }
 
 export function DashboardStatsEditorClient({
@@ -230,10 +235,6 @@ function DashboardStatsEditorLoaded({
     selectedSessionId,
     includeLossProtected
   )
-  const winLossBreakdownQuery = useDashboardSessionWinLossBreakdown(
-    selectedSessionId,
-    includeLossProtected
-  )
   const dailyPerformanceQuery = useDashboardSessionDailyPerformance(
     selectedSessionId,
     includeLossProtected
@@ -245,30 +246,55 @@ function DashboardStatsEditorLoaded({
   const sessionDetailsReady =
     !!overviewQuery.data &&
     !!srTimelineQuery.data &&
-    !!winLossBreakdownQuery.data &&
     !!dailyPerformanceQuery.data &&
     !!recentMatchesQuery.data
   const sessionDetailsLoading =
     !sessionDetailsReady &&
     (overviewQuery.isPending ||
       srTimelineQuery.isPending ||
-      winLossBreakdownQuery.isPending ||
       dailyPerformanceQuery.isPending ||
       recentMatchesQuery.isPending)
   const sessionDetailsRefreshError =
     sessionDetailsReady &&
     (overviewQuery.isError ||
       srTimelineQuery.isError ||
-      winLossBreakdownQuery.isError ||
       dailyPerformanceQuery.isError ||
       recentMatchesQuery.isError)
   const sessionDetailsRefreshing =
     sessionDetailsReady &&
     (overviewQuery.isFetching ||
       srTimelineQuery.isFetching ||
-      winLossBreakdownQuery.isFetching ||
       dailyPerformanceQuery.isFetching ||
       recentMatchesQuery.isFetching)
+  const filteredRecentMatches = useMemo(() => {
+    const recentMatches = (recentMatchesQuery.data ?? []) as DashboardWindowedMatch[]
+    const timeRangeStart = getTimeRangeStart(selectedTimeRange)
+
+    return recentMatches.filter(
+      (match: DashboardWindowedMatch) =>
+        timeRangeStart === null || match.createdAt >= timeRangeStart
+    )
+  }, [recentMatchesQuery.data, selectedTimeRange])
+  const filteredWinLossBreakdown = useMemo(() => {
+    const wins = filteredRecentMatches.filter(
+      (match: DashboardWindowedMatch) => match.outcome === "win"
+    ).length
+    const losses = filteredRecentMatches.length - wins
+
+    return {
+      items: [
+        { key: "wins", label: "Wins", value: wins },
+        { key: "losses", label: "Losses", value: losses },
+      ],
+      losses,
+      total: filteredRecentMatches.length,
+      wins,
+    }
+  }, [filteredRecentMatches])
+  const filteredWinRate =
+    filteredWinLossBreakdown.total > 0
+      ? filteredWinLossBreakdown.wins / filteredWinLossBreakdown.total
+      : null
 
   if (dashboardStateQuery.isError) {
     return (
@@ -495,14 +521,16 @@ function DashboardStatsEditorLoaded({
                           Session snapshot
                         </h2>
                         <p className="text-sm text-muted-foreground">
-                          Core ranked metrics for the selected session,
-                          recalculated against the current filters.
+                          Start SR, Current SR, and Net SR reflect the stored
+                          session. Win rate follows the active time range.
                         </p>
                       </div>
                       <DashboardStatsSummary
+                        description="Start SR, Current SR, and Net SR reflect the stored session. Win rate follows the active time range."
                         embedded
                         overview={overviewQuery.data!}
                         showHeader={false}
+                        winRate={filteredWinRate}
                       />
                     </div>
 
@@ -522,7 +550,7 @@ function DashboardStatsEditorLoaded({
                         selectedTimeRange={selectedTimeRange}
                         showHeader={false}
                         srTimeline={srTimelineQuery.data!}
-                        winLossBreakdown={winLossBreakdownQuery.data!}
+                        winLossBreakdown={filteredWinLossBreakdown}
                       />
                     </div>
 

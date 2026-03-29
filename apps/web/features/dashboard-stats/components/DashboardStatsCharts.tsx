@@ -317,7 +317,7 @@ export function DashboardStatsCharts({
         </ChartPanel>
 
         <ChartPanel
-          description="Current session outcome breakdown."
+          description="Outcome breakdown for the active filter window."
           title="Win-loss split"
         >
           {winLossBreakdown.total === 0 ? (

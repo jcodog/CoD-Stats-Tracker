@@ -32,14 +32,18 @@ function SummaryMetric({
 
 export function DashboardStatsSummary({
   className,
+  description = "Start SR, Current SR, and Net SR reflect the stored session. Win rate follows the active time range.",
   embedded = false,
   overview,
   showHeader = true,
+  winRate = overview.winRate,
 }: {
   className?: string
+  description?: string
   embedded?: boolean
   overview: DashboardSessionOverview
   showHeader?: boolean
+  winRate?: number | null
 }) {
   return (
     <section
@@ -53,9 +57,7 @@ export function DashboardStatsSummary({
       {showHeader ? (
         <div className="flex flex-col gap-1 border-b border-border/60 px-5 py-4">
           <h2 className="text-base font-semibold">Session snapshot</h2>
-          <p className="text-sm text-muted-foreground">
-            Stored ranked metrics for the selected session.
-          </p>
+          <p className="text-sm text-muted-foreground">{description}</p>
         </div>
       ) : null}
       <dl className="grid border-t border-border/50 md:grid-cols-2 md:divide-x md:divide-border/50 xl:grid-cols-4">
@@ -68,7 +70,7 @@ export function DashboardStatsSummary({
         />
         <SummaryMetric
           label="Win rate"
-          value={formatDashboardPercent(overview.winRate)}
+          value={winRate === null ? "—" : formatDashboardPercent(winRate)}
         />
       </dl>
     </section>

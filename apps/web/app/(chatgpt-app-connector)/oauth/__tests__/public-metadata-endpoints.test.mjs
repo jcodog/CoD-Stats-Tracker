@@ -1,9 +1,9 @@
 import { afterAll, beforeEach, describe, expect, it } from "bun:test";
 
-import { GET as getOpenIdConfiguration } from "../../.well-known/openid-configuration/route.ts";
-import { GET as getAuthorizationServerMetadata } from "../../.well-known/oauth-authorization-server/route.ts";
-import { GET as getProtectedResourceMetadata } from "../../.well-known/oauth-protected-resource/route.ts";
-import { GET as getMcpProtectedResourceMetadata } from "../../.well-known/oauth-protected-resource/mcp/route.ts";
+import { GET as getOpenIdConfiguration } from "../../../.well-known/(chatgpt-app-connector)/openid-configuration/route.ts";
+import { GET as getAuthorizationServerMetadata } from "../../../.well-known/(chatgpt-app-connector)/oauth-authorization-server/route.ts";
+import { GET as getProtectedResourceMetadata } from "../../../.well-known/(chatgpt-app-connector)/oauth-protected-resource/route.ts";
+import { GET as getMcpProtectedResourceMetadata } from "../../../.well-known/(chatgpt-app-connector)/oauth-protected-resource/mcp/route.ts";
 
 const TEST_ORIGIN = "https://app.example.com";
 const ALT_ORIGIN = "https://other.example.com";

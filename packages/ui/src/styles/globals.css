@@ -76,8 +76,8 @@
   --chart-3: oklch(0.6 0.118 184.704);
   --chart-4: oklch(0.511 0.096 186.391);
   --chart-5: oklch(0.437 0.078 188.216);
-  --dashboard-positive: var(--chart-1);
-  --dashboard-negative: var(--destructive);
+  --dashboard-positive: var(--chart-3);
+  --dashboard-negative: oklch(0.52 0.19 27);
   --dashboard-neutral: var(--muted-foreground);
   --radius: 0.625rem;
   --sidebar: oklch(0.985 0 0);
