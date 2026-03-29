@@ -111,27 +111,23 @@ function buildOverview(args: {
   includeLossProtected: boolean
   session: Doc<"sessions">
 }) {
-  const filteredGames = getFilteredGames(args.games, args.includeLossProtected)
-  const kills = filteredGames.reduce((sum, game) => sum + getNumericValue(game.kills), 0)
-  const deaths = filteredGames.reduce((sum, game) => sum + getNumericValue(game.deaths), 0)
-  const wins = filteredGames.filter((game) => game.outcome === "win").length
-  const losses = filteredGames.length - wins
-  const netSr = filteredGames.reduce((sum, game) => sum + game.srChange, 0)
-  const filteredCurrentSr = args.session.startSr + netSr
+  const matchCount = getSessionMatchCount(args.session)
+  const wins = args.session.wins
+  const losses = args.session.losses
+  const currentSr = args.session.currentSr
+  const netSr = currentSr - args.session.startSr
 
   return {
-    actualCurrentSr: args.session.currentSr,
-    actualMatchCount: getSessionMatchCount(args.session),
-    currentSr: filteredCurrentSr,
+    actualCurrentSr: currentSr,
+    actualMatchCount: matchCount,
+    currentSr,
     endedAt: args.session.endedAt,
-    hasFilteredLossProtectedGames:
-      !args.includeLossProtected &&
-      args.games.some((game) => game.lossProtected === true),
+    hasFilteredLossProtectedGames: false,
     id: args.session._id,
     isArchived: args.session.endedAt !== null,
-    kills,
+    kills: args.session.kills,
     losses,
-    matchCount: filteredGames.length,
+    matchCount,
     netSr,
     season: args.session.season,
     startSr: args.session.startSr,
@@ -139,9 +135,9 @@ function buildOverview(args: {
     titleLabel: getSessionDisplayTitle(args.session),
     usernameLabel: getSessionUsernameLabel(args.session),
     uuid: args.session.uuid,
-    winRate: filteredGames.length > 0 ? wins / filteredGames.length : 0,
+    winRate: matchCount > 0 ? wins / matchCount : 0,
     wins,
-    deaths,
+    deaths: args.session.deaths,
   }
 }
 

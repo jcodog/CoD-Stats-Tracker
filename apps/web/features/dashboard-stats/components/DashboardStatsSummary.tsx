@@ -41,11 +41,6 @@ export function DashboardStatsSummary({
   overview: DashboardSessionOverview
   showHeader?: boolean
 }) {
-  const currentSrValue =
-    overview.currentSr === overview.actualCurrentSr
-      ? `${overview.currentSr}`
-      : `${overview.currentSr} filtered`
-
   return (
     <section
       className={cn(
@@ -59,13 +54,13 @@ export function DashboardStatsSummary({
         <div className="flex flex-col gap-1 border-b border-border/60 px-5 py-4">
           <h2 className="text-base font-semibold">Session snapshot</h2>
           <p className="text-sm text-muted-foreground">
-            The selected session’s core ranked metrics, recalculated against your current filters.
+            Stored ranked metrics for the selected session.
           </p>
         </div>
       ) : null}
       <dl className="grid border-t border-border/50 md:grid-cols-2 md:divide-x md:divide-border/50 xl:grid-cols-4">
         <SummaryMetric label="Start SR" value={`${overview.startSr}`} />
-        <SummaryMetric label="Current SR" value={currentSrValue} />
+        <SummaryMetric label="Current SR" value={`${overview.currentSr}`} />
         <SummaryMetric
           label="Net SR"
           value={`${overview.netSr > 0 ? "+" : ""}${overview.netSr}`}
