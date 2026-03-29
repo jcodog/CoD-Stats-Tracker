@@ -17,27 +17,26 @@ import {
   sessionMatchesRankedConfig,
   trimOptionalText,
 } from "../../lib/statsDashboard"
+import {
+  assertStartSr,
+  clampOptionalNonNegativeInteger,
+  validateSrChangeAndComputeNextSr,
+} from "../../lib/statsInputValidation"
 import { getStatsUserIdCandidatesForInvalidation } from "../../lib/userIds"
 
 const NOTES_MAX_LENGTH = 280
 
-function clampOptionalCount(value: number | null | undefined) {
-  if (value === null || value === undefined) {
-    return null
-  }
-
-  if (!Number.isInteger(value) || value < 0) {
-    throw new Error("Optional stat fields must be non-negative integers.")
-  }
-
-  return value
-}
-
-function assertStartSr(startSr: number) {
-  if (!Number.isInteger(startSr) || startSr < 0 || startSr > 20000) {
-    throw new Error("Start SR must be an integer between 0 and 20000.")
-  }
-}
+type ResolvedOwnedUsername =
+  | {
+      displayUsername: string
+      existingUsername: Doc<"activisionUsernames">
+      normalizedUsername: string
+    }
+  | {
+      displayUsername: string
+      existingUsername: null
+      normalizedUsername: string
+    }
 
 async function invalidateLandingMetricsForUser(args: {
   ctx: MutationCtx
@@ -66,7 +65,7 @@ async function resolveOwnedUsername(args: {
   existingUsernameId?: Doc<"activisionUsernames">["_id"]
   newUsername?: string
   ownerUserId: Doc<"users">["_id"]
-}) {
+}): Promise<ResolvedOwnedUsername> {
   const nextNewUsername = trimOptionalText(args.newUsername)
 
   if (args.existingUsernameId && nextNewUsername) {
@@ -84,7 +83,11 @@ async function resolveOwnedUsername(args: {
       throw new Error("That Activision username is not available for this account.")
     }
 
-    return existingUsername
+    return {
+      displayUsername: existingUsername.displayUsername,
+      existingUsername,
+      normalizedUsername: existingUsername.normalizedUsername,
+    }
   }
 
   const normalizedUsername = normalizeActivisionUsername(nextNewUsername!)
@@ -103,15 +106,37 @@ async function resolveOwnedUsername(args: {
     .unique()
 
   if (existingUsername) {
-    return existingUsername
+    return {
+      displayUsername: existingUsername.displayUsername,
+      existingUsername,
+      normalizedUsername,
+    }
+  }
+
+  return {
+    displayUsername: nextNewUsername!,
+    existingUsername: null,
+    normalizedUsername,
+  }
+}
+
+async function ensureOwnedUsername(args: {
+  ctx: MutationCtx
+  displayUsername: string
+  existingUsername: Doc<"activisionUsernames"> | null
+  normalizedUsername: string
+  ownerUserId: Doc<"users">["_id"]
+}) {
+  if (args.existingUsername) {
+    return args.existingUsername
   }
 
   const now = Date.now()
   const usernameId = await args.ctx.db.insert("activisionUsernames", {
     createdAt: now,
-    displayUsername: nextNewUsername!,
+    displayUsername: args.displayUsername,
     lastUsedAt: now,
-    normalizedUsername,
+    normalizedUsername: args.normalizedUsername,
     ownerUserId: args.ownerUserId,
     updatedAt: now,
   })
@@ -175,7 +200,7 @@ export const createSession = mutation({
 
     assertStartSr(args.startSr)
 
-    const activisionUsername = await resolveOwnedUsername({
+    const resolvedUsername = await resolveOwnedUsername({
       ctx,
       existingUsernameId: args.existingUsernameId,
       newUsername: args.newUsername,
@@ -197,7 +222,7 @@ export const createSession = mutation({
       (session) =>
         session.activisionUsernameSnapshot &&
         normalizeActivisionUsername(session.activisionUsernameSnapshot) ===
-          activisionUsername.normalizedUsername
+          resolvedUsername.normalizedUsername
     )
     const now = Date.now()
 
@@ -205,11 +230,6 @@ export const createSession = mutation({
       const existingSession = [...activeCurrentSessions].sort(
         (left, right) => right.startedAt - left.startedAt
       )[0]
-
-      await ctx.db.patch(activisionUsername._id, {
-        lastUsedAt: now,
-        updatedAt: now,
-      })
 
       return {
         created: false,
@@ -219,10 +239,12 @@ export const createSession = mutation({
     }
 
     if (matchingSession) {
-      await ctx.db.patch(activisionUsername._id, {
-        lastUsedAt: now,
-        updatedAt: now,
-      })
+      if (resolvedUsername.existingUsername) {
+        await ctx.db.patch(resolvedUsername.existingUsername._id, {
+          lastUsedAt: now,
+          updatedAt: now,
+        })
+      }
 
       return {
         created: false,
@@ -230,6 +252,20 @@ export const createSession = mutation({
         sessionId: matchingSession._id,
       }
     }
+
+    const activisionUsername = await ensureOwnedUsername({
+      ctx,
+      displayUsername: resolvedUsername.displayUsername,
+      existingUsername: resolvedUsername.existingUsername,
+      normalizedUsername: resolvedUsername.normalizedUsername,
+      ownerUserId: actor.user._id,
+    })
+
+    await ctx.db.patch(activisionUsername._id, {
+      isPrimary: activisionUsername.isPrimary ?? true,
+      lastUsedAt: now,
+      updatedAt: now,
+    })
 
     const sessionId = await ctx.db.insert("sessions", {
       activisionUsernameId: activisionUsername._id,
@@ -254,12 +290,6 @@ export const createSession = mutation({
       userId: actor.user.discordId,
       uuid: crypto.randomUUID(),
       wins: 0,
-    })
-
-    await ctx.db.patch(activisionUsername._id, {
-      isPrimary: activisionUsername.isPrimary ?? true,
-      lastUsedAt: now,
-      updatedAt: now,
     })
 
     const statsDelta = {
@@ -349,14 +379,18 @@ export const logMatch = mutation({
       throw new Error(`Notes must be ${NOTES_MAX_LENGTH} characters or fewer.`)
     }
 
-    const kills = clampOptionalCount(args.kills)
-    const deaths = clampOptionalCount(args.deaths)
-    const teamScore = clampOptionalCount(args.teamScore)
-    const enemyScore = clampOptionalCount(args.enemyScore)
-    const hillTimeSeconds = clampOptionalCount(args.hillTimeSeconds)
-    const plants = clampOptionalCount(args.plants)
-    const defuses = clampOptionalCount(args.defuses)
-    const overloads = clampOptionalCount(args.overloads)
+    const kills = clampOptionalNonNegativeInteger(args.kills)
+    const deaths = clampOptionalNonNegativeInteger(args.deaths)
+    const teamScore = clampOptionalNonNegativeInteger(args.teamScore)
+    const enemyScore = clampOptionalNonNegativeInteger(args.enemyScore)
+    const hillTimeSeconds = clampOptionalNonNegativeInteger(args.hillTimeSeconds)
+    const plants = clampOptionalNonNegativeInteger(args.plants)
+    const defuses = clampOptionalNonNegativeInteger(args.defuses)
+    const overloads = clampOptionalNonNegativeInteger(args.overloads)
+    const nextCurrentSr = validateSrChangeAndComputeNextSr({
+      currentSr: session.currentSr,
+      srChange: args.srChange,
+    })
     const lossProtected = args.lossProtected ?? false
     const now = Date.now()
 
@@ -387,7 +421,7 @@ export const logMatch = mutation({
 
     await ctx.db.patch(session._id, {
       bestStreak: Math.max(session.bestStreak, updatedStreak),
-      currentSr: session.currentSr + args.srChange,
+      currentSr: nextCurrentSr,
       deaths: session.deaths + (deaths ?? 0),
       kills: session.kills + (kills ?? 0),
       lastMatchLoggedAt: now,
