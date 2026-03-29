@@ -20,7 +20,14 @@ import {
 
 import { api } from "@workspace/backend/convex/_generated/api"
 import type { Doc, Id } from "@workspace/backend/convex/_generated/dataModel"
-import type { RankValue } from "@workspace/backend/lib/playingWithViewers"
+import {
+  buildInviteMessagePreview,
+  DEFAULT_INVITE_CODE_TYPE,
+  getInviteCodeTypeLabel,
+  renderInviteCodeInstructions,
+  type InviteCodeType,
+  type RankValue,
+} from "@workspace/backend/lib/playingWithViewers"
 import { AppSelect } from "@/components/AppSelect"
 import {
   type AvailableDiscordGuild,
@@ -141,8 +148,11 @@ type SelectionDialogState =
 type SelectionResultState =
   | {
       createdAt: number
+      inviteCode?: string
+      inviteCodeType?: InviteCodeType
+      inviteInstructions?: string
+      inviteMessagePreview?: string
       inviteMode: InviteMode
-      lobbyCode?: string
       selectionKind: "batch" | "entry"
       selectedUsers: QueueRoundUser[]
     }
@@ -162,6 +172,10 @@ const rankOptions: Array<{ label: string; value: RankValue }> = [
 const inviteModeOptions: Array<{ label: string; value: InviteMode }> = [
   { label: "Discord DM", value: "discord_dm" },
   { label: "Manual contact", value: "manual_creator_contact" },
+]
+const inviteCodeTypeOptions: Array<{ label: string; value: InviteCodeType }> = [
+  { label: "Party code", value: "party_code" },
+  { label: "Private match code", value: "private_match_code" },
 ]
 
 const playersPerBatchOptions = Array.from({ length: 30 }, (_, index) => index + 1)
@@ -437,10 +451,12 @@ function LockedState({ queueTitle }: Readonly<{ queueTitle: string }>) {
 }
 
 function SelectionResultSummary({
+  onCopyInviteMessage,
   onCopyMentions,
   onCopyUsernames,
   selectionResult,
 }: Readonly<{
+  onCopyInviteMessage: () => Promise<void>
   onCopyMentions: () => Promise<void>
   onCopyUsernames: () => Promise<void>
   selectionResult: SelectionResultState
@@ -468,12 +484,57 @@ function SelectionResultSummary({
         <span className="text-sm text-muted-foreground">
           {formatDateTime(selectionResult.createdAt)}
         </span>
-        {selectionResult.lobbyCode ? (
+        {selectionResult.inviteCode ? (
           <span className="rounded-md border border-border/70 bg-background px-2 py-1 font-mono text-xs text-foreground">
-            Lobby {selectionResult.lobbyCode}
+            {selectionResult.inviteCode}
           </span>
         ) : null}
       </div>
+
+      {selectionResult.inviteMode === "discord_dm" &&
+      selectionResult.inviteCode &&
+      selectionResult.inviteCodeType &&
+      selectionResult.inviteInstructions &&
+      selectionResult.inviteMessagePreview ? (
+        <div className="border-b border-border/70 px-4 py-3">
+          <div className="flex flex-col gap-3 rounded-lg border border-border/70 bg-muted/20 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="outline">
+                  {getInviteCodeTypeLabel(selectionResult.inviteCodeType)}
+                </Badge>
+                <span className="rounded-md border border-border/70 bg-background px-2 py-1 font-mono text-xs text-foreground">
+                  {selectionResult.inviteCode}
+                </span>
+              </div>
+              <Button onClick={onCopyInviteMessage} size="sm" variant="outline">
+                <IconCopy data-icon="inline-start" />
+                Copy DM preview
+              </Button>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-1">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Instructions
+                </p>
+                <p className="whitespace-pre-wrap text-sm text-foreground">
+                  {selectionResult.inviteInstructions}
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  DM preview
+                </p>
+                <p className="whitespace-pre-wrap rounded-md border border-border/70 bg-background px-3 py-2 text-sm text-foreground">
+                  {selectionResult.inviteMessagePreview}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {selectionResult.inviteMode === "discord_dm" && failedDmCount > 0 ? (
         <div className="border-b border-border/70 px-4 py-3">
@@ -586,7 +647,9 @@ export function PlayWithViewersDashboardView({
     useState<SelectionDialogState>(null)
   const [selectionResultState, setSelectionResultState] =
     useState<SelectionResultState>(null)
-  const [selectionLobbyCode, setSelectionLobbyCode] = useState("")
+  const [selectionInviteCode, setSelectionInviteCode] = useState("")
+  const [selectionInviteCodeType, setSelectionInviteCodeType] =
+    useState<InviteCodeType>(DEFAULT_INVITE_CODE_TYPE)
   const [createFormState, setCreateFormState] = useState<QueueFormState>(() =>
     getDefaultQueueFormState(preferredCreatorDisplayName)
   )
@@ -915,6 +978,17 @@ export function PlayWithViewersDashboardView({
     )
   }
 
+  async function handleCopyInviteMessage() {
+    if (!selectionResultState?.inviteMessagePreview) {
+      return
+    }
+
+    await handleCopyToClipboard(
+      selectionResultState.inviteMessagePreview,
+      "DM preview copied."
+    )
+  }
+
   async function handleCreateQueue() {
     if (!createFormState.guildId.trim()) {
       toast.error("Select a Discord server before creating the queue.")
@@ -1197,11 +1271,29 @@ export function PlayWithViewersDashboardView({
       return
     }
 
-    const lobbyCode = selectionLobbyCode.trim() || undefined
-    if (queue.inviteMode === "discord_dm" && !lobbyCode) {
-      toast.error("Lobby code is required for Discord DM mode.")
+    const inviteCode = selectionInviteCode.trim() || undefined
+    if (queue.inviteMode === "discord_dm" && !inviteCode) {
+      toast.error("Invite code is required for Discord DM mode.")
       return
     }
+
+    const inviteInstructions =
+      queue.inviteMode === "discord_dm" && inviteCode
+        ? renderInviteCodeInstructions({
+            inviteCode,
+            inviteCodeType: selectionInviteCodeType,
+          })
+        : undefined
+    const inviteMessagePreview =
+      queue.inviteMode === "discord_dm" && inviteCode
+        ? buildInviteMessagePreview({
+            creatorDisplayName: queue.creatorDisplayName,
+            gameLabel: queue.gameLabel,
+            inviteCode,
+            inviteCodeType: selectionInviteCodeType,
+            title: queue.title,
+          })
+        : undefined
 
     setIsSelectingBatch(true)
 
@@ -1212,10 +1304,12 @@ export function PlayWithViewersDashboardView({
         selectionDialogState?.kind === "entry"
           ? await inviteQueueEntryNowAndNotify({
               entryId: selectionDialogState.entryId,
-              lobbyCode,
+              inviteCode,
+              inviteCodeType: selectionInviteCodeType,
             })
           : await selectNextBatchAndNotify({
-              lobbyCode,
+              inviteCode,
+              inviteCodeType: selectionInviteCodeType,
               queueId: queue._id,
             })
 
@@ -1225,8 +1319,12 @@ export function PlayWithViewersDashboardView({
 
       setSelectionResultState({
         createdAt: Date.now(),
+        inviteCode,
+        inviteCodeType:
+          queue.inviteMode === "discord_dm" ? selectionInviteCodeType : undefined,
+        inviteInstructions,
+        inviteMessagePreview,
         inviteMode: queue.inviteMode,
-        lobbyCode,
         selectedUsers: result.selectedUsers as QueueRoundUser[],
         selectionKind,
       })
@@ -1267,7 +1365,8 @@ export function PlayWithViewersDashboardView({
 
       await syncQueueMessageIfPublished(queue._id)
       setSelectionDialogState(null)
-      setSelectionLobbyCode("")
+      setSelectionInviteCode("")
+      setSelectionInviteCodeType(DEFAULT_INVITE_CODE_TYPE)
     } catch (error) {
       toast.error(toErrorMessage(error, "Unable to select viewers right now."))
     } finally {
@@ -1277,7 +1376,8 @@ export function PlayWithViewersDashboardView({
 
   function openSelectionDialog(state: SelectionDialogState) {
     setSelectionDialogState(state)
-    setSelectionLobbyCode("")
+    setSelectionInviteCode("")
+    setSelectionInviteCodeType(DEFAULT_INVITE_CODE_TYPE)
   }
 
   if (isLoadingQueue) {
@@ -1336,7 +1436,7 @@ export function PlayWithViewersDashboardView({
         : "Batch ready to invite"
   const selectionResultDescription =
     selectionResultState?.inviteMode === "discord_dm"
-      ? "Review the Discord DM results for the selected viewers."
+      ? "Review the Discord DM results and the invite message preview for the selected viewers."
       : "Use this list to contact the selected viewers directly."
 
   return (
@@ -2216,7 +2316,8 @@ export function PlayWithViewersDashboardView({
         onOpenChange={(open) => {
           if (!open) {
             setSelectionDialogState(null)
-            setSelectionLobbyCode("")
+            setSelectionInviteCode("")
+            setSelectionInviteCodeType(DEFAULT_INVITE_CODE_TYPE)
           }
         }}
         open={selectionDialogState !== null}
@@ -2237,18 +2338,34 @@ export function PlayWithViewersDashboardView({
 
           <FieldGroup>
             {queue?.inviteMode === "discord_dm" ? (
-              <Field>
-                <FieldLabel htmlFor="pwv-lobby-code">Lobby code</FieldLabel>
-                <Input
-                  id="pwv-lobby-code"
-                  onChange={(event) => setSelectionLobbyCode(event.target.value)}
-                  placeholder="Enter the lobby code to DM"
-                  value={selectionLobbyCode}
-                />
-                <FieldDescription>
-                  Discord DM mode requires a lobby code before the round can be created.
-                </FieldDescription>
-              </Field>
+              <>
+                <Field>
+                  <FieldLabel htmlFor="pwv-invite-code-type">Invite code type</FieldLabel>
+                  <AppSelect
+                    id="pwv-invite-code-type"
+                    onValueChange={(value) =>
+                      setSelectionInviteCodeType(value as InviteCodeType)
+                    }
+                    options={inviteCodeTypeOptions.map((option) => ({
+                      label: option.label,
+                      value: option.value,
+                    }))}
+                    value={selectionInviteCodeType}
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="pwv-invite-code">Invite code</FieldLabel>
+                  <Input
+                    id="pwv-invite-code"
+                    onChange={(event) => setSelectionInviteCode(event.target.value)}
+                    placeholder={`Enter the ${getInviteCodeTypeLabel(selectionInviteCodeType).toLowerCase()} to DM`}
+                    value={selectionInviteCode}
+                  />
+                  <FieldDescription>
+                    Discord DM mode requires a code type and invite code before the round can be created.
+                  </FieldDescription>
+                </Field>
+              </>
             ) : (
               <Field>
                 <FieldLabel>Manual contact mode</FieldLabel>
@@ -2290,6 +2407,7 @@ export function PlayWithViewersDashboardView({
           </DialogHeader>
 
           <SelectionResultSummary
+            onCopyInviteMessage={handleCopyInviteMessage}
             onCopyMentions={handleCopyMentions}
             onCopyUsernames={handleCopyUsernames}
             selectionResult={selectionResultState}

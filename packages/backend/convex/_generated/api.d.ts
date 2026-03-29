@@ -150,7 +150,11 @@ export declare const api: {
           inviteQueueEntryNowAndNotify: FunctionReference<
             "action",
             "public",
-            { entryId: Id<"viewerQueueEntries">; lobbyCode?: string },
+            {
+              entryId: Id<"viewerQueueEntries">;
+              inviteCode?: string;
+              inviteCodeType?: "party_code" | "private_match_code";
+            },
             any
           >;
           listAvailableDiscordGuilds: FunctionReference<
@@ -168,7 +172,11 @@ export declare const api: {
           selectNextBatchAndNotify: FunctionReference<
             "action",
             "public",
-            { lobbyCode?: string; queueId: Id<"viewerQueues"> },
+            {
+              inviteCode?: string;
+              inviteCodeType?: "party_code" | "private_match_code";
+              queueId: Id<"viewerQueues">;
+            },
             any
           >;
           syncQueueDiscordContext: FunctionReference<
@@ -1400,7 +1408,11 @@ export declare const internal: {
           inviteQueueEntryNow: FunctionReference<
             "mutation",
             "internal",
-            { entryId: Id<"viewerQueueEntries">; lobbyCode?: string },
+            {
+              entryId: Id<"viewerQueueEntries">;
+              inviteCode?: string;
+              inviteCodeType?: "party_code" | "private_match_code";
+            },
             any
           >;
           leaveQueue: FunctionReference<
@@ -1418,7 +1430,11 @@ export declare const internal: {
           selectNextBatch: FunctionReference<
             "mutation",
             "internal",
-            { lobbyCode?: string; queueId: Id<"viewerQueues"> },
+            {
+              inviteCode?: string;
+              inviteCodeType?: "party_code" | "private_match_code";
+              queueId: Id<"viewerQueues">;
+            },
             any
           >;
           setQueueActive: FunctionReference<

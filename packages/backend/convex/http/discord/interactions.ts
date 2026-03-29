@@ -439,7 +439,7 @@ async function handleRankSelectInteraction(
   }
 
   try {
-    await ctx.runMutation(
+    const result = await ctx.runMutation(
       internal.mutations.creatorTools.playingWithViewers.queue.enqueueViewer,
       {
         queueId: queueId as any,
@@ -450,6 +450,17 @@ async function handleRankSelectInteraction(
         rank: selectedRank as any,
       }
     )
+
+    if (result.status === "already_joined") {
+      return json({
+        type: InteractionResponseType.UpdateMessage,
+        data: {
+          content: "You are already in this queue.",
+          flags: MessageFlags.Ephemeral,
+          components: [],
+        },
+      })
+    }
   } catch (error) {
     return json({
       type: InteractionResponseType.ChannelMessageWithSource,
