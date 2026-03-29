@@ -1,6 +1,12 @@
+import { internal } from "../../_generated/api"
 import type { Doc } from "../../_generated/dataModel"
 import { internalMutation, type MutationCtx } from "../../_generated/server"
 import { v } from "convex/values"
+import {
+  applyGlobalLandingStatsDelta,
+  applyUserLandingStatsDelta,
+} from "../../lib/landingMetrics"
+import { normalizeStatsLookupValue } from "../../lib/statsDashboard"
 
 const roleValidator = v.union(
   v.literal("user"),
@@ -58,8 +64,93 @@ type BillingFeaturePatch = Partial<
   >
 >
 
+function normalizeCatalogKey(value: string, fieldLabel: string) {
+  const normalizedValue = normalizeStatsLookupValue(value)
+
+  if (normalizedValue.length < 2 || normalizedValue.length > 64) {
+    throw new Error(`${fieldLabel} must be between 2 and 64 characters.`)
+  }
+
+  return normalizedValue
+}
+
+function normalizeLabel(value: string, fieldLabel: string, maxLength = 120) {
+  const normalizedValue = value.trim().replace(/\s+/g, " ")
+
+  if (normalizedValue.length === 0 || normalizedValue.length > maxLength) {
+    throw new Error(`${fieldLabel} must be between 1 and ${maxLength} characters.`)
+  }
+
+  return normalizedValue
+}
+
+function normalizeSeason(value: number) {
+  if (!Number.isInteger(value) || value < 1 || value > 999) {
+    throw new Error("Active season must be a whole number between 1 and 999.")
+  }
+
+  return value
+}
+
+function resolveArchiveReason(args: {
+  seasonChanged: boolean
+  titleChanged: boolean
+}) {
+  if (args.titleChanged && args.seasonChanged) {
+    return "title_and_season_rollover" as const
+  }
+
+  if (args.titleChanged) {
+    return "title_rollover" as const
+  }
+
+  return "season_rollover" as const
+}
+
 function uniqueKeys(values: string[]) {
   return Array.from(new Set(values))
+}
+
+function countSessionsByUserId(
+  sessions: Array<Pick<Doc<"sessions">, "userId">>
+) {
+  const counts = new Map<string, number>()
+
+  for (const session of sessions) {
+    counts.set(session.userId, (counts.get(session.userId) ?? 0) + 1)
+  }
+
+  return counts
+}
+
+async function resolveSupportedRankedModes(args: {
+  ctx: MutationCtx
+  supportedModeIds: Array<Doc<"rankedModes">["_id"]>
+  titleKey: string
+}) {
+  const uniqueModeIds = Array.from(new Set(args.supportedModeIds))
+
+  if (uniqueModeIds.length === 0) {
+    throw new Error("Select at least one active ranked mode for this map.")
+  }
+
+  const modes = await Promise.all(uniqueModeIds.map((modeId) => args.ctx.db.get(modeId)))
+
+  if (modes.some((mode) => mode === null)) {
+    throw new Error("One or more selected ranked modes could not be found.")
+  }
+
+  const resolvedModes = modes.filter((mode): mode is Doc<"rankedModes"> => mode !== null)
+
+  if (
+    resolvedModes.some(
+      (mode) => !mode.isActive || mode.titleKey !== args.titleKey
+    )
+  ) {
+    throw new Error("Maps can only use active ranked modes from the selected title.")
+  }
+
+  return resolvedModes
 }
 
 async function syncPlanFeatureAssignmentsByPlan(args: {
@@ -527,6 +618,465 @@ export const updateSubscriptionsAfterCancel = internalMutation({
         status: update.status ?? existingSubscription.status,
         updatedAt: Date.now(),
       })
+    }
+  },
+})
+
+export const upsertRankedTitle = internalMutation({
+  args: {
+    isActive: v.boolean(),
+    key: v.string(),
+    label: v.string(),
+    sortOrder: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const key = normalizeCatalogKey(args.key, "Title key")
+    const label = normalizeLabel(args.label, "Title label", 80)
+
+    if (!Number.isInteger(args.sortOrder)) {
+      throw new Error("Sort order must be a whole number.")
+    }
+
+    const [existingTitle, currentConfig] = await Promise.all([
+      ctx.db
+        .query("rankedTitles")
+        .withIndex("by_key", (query) => query.eq("key", key))
+        .unique(),
+      ctx.db
+        .query("rankedConfigs")
+        .withIndex("by_key", (query) => query.eq("key", "current"))
+        .unique(),
+    ])
+    const now = Date.now()
+
+    if (!args.isActive && currentConfig?.activeTitleKey === key) {
+      throw new Error(
+        "The current active ranked title cannot be archived. Switch the current title first."
+      )
+    }
+
+    if (!existingTitle) {
+      const titleId = await ctx.db.insert("rankedTitles", {
+        createdAt: now,
+        isActive: args.isActive,
+        key,
+        label,
+        sortOrder: args.sortOrder,
+        updatedAt: now,
+      })
+
+      return {
+        id: titleId,
+        isActive: args.isActive,
+        isNew: true,
+        key,
+        label,
+      }
+    }
+
+    const patch: Partial<Doc<"rankedTitles">> = {}
+
+    if (existingTitle.isActive !== args.isActive) patch.isActive = args.isActive
+    if (existingTitle.label !== label) patch.label = label
+    if (existingTitle.sortOrder !== args.sortOrder) patch.sortOrder = args.sortOrder
+
+    if (Object.keys(patch).length > 0) {
+      patch.updatedAt = now
+      await ctx.db.patch(existingTitle._id, patch)
+    }
+
+    return {
+      id: existingTitle._id,
+      isActive: patch.isActive ?? existingTitle.isActive,
+      isNew: false,
+      key,
+      label: patch.label ?? existingTitle.label,
+    }
+  },
+})
+
+export const upsertRankedMode = internalMutation({
+  args: {
+    isActive: v.boolean(),
+    key: v.string(),
+    label: v.string(),
+    modeId: v.optional(v.id("rankedModes")),
+    sortOrder: v.number(),
+    titleKey: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const titleKey = normalizeCatalogKey(args.titleKey, "Title key")
+    const key = normalizeCatalogKey(args.key, "Mode key")
+    const label = normalizeLabel(args.label, "Mode label", 80)
+
+    if (!Number.isInteger(args.sortOrder)) {
+      throw new Error("Sort order must be a whole number.")
+    }
+
+    const title = await ctx.db
+      .query("rankedTitles")
+      .withIndex("by_key", (query) => query.eq("key", titleKey))
+      .unique()
+
+    if (!title) {
+      throw new Error(`Ranked title not found: ${titleKey}`)
+    }
+
+    const existingByKey = await ctx.db
+      .query("rankedModes")
+      .withIndex("by_title_key", (query) =>
+        query.eq("titleKey", titleKey).eq("key", key)
+      )
+      .unique()
+    const now = Date.now()
+
+    if (!args.modeId) {
+      if (!existingByKey) {
+        const modeId = await ctx.db.insert("rankedModes", {
+          createdAt: now,
+          isActive: args.isActive,
+          key,
+          label,
+          sortOrder: args.sortOrder,
+          titleKey,
+          updatedAt: now,
+        })
+
+        return {
+          id: modeId,
+          isActive: args.isActive,
+          isNew: true,
+          key,
+          label,
+          titleKey,
+          titleLabel: title.label,
+        }
+      }
+
+      const patch: Partial<Doc<"rankedModes">> = {}
+
+      if (existingByKey.isActive !== args.isActive) patch.isActive = args.isActive
+      if (existingByKey.label !== label) patch.label = label
+      if (existingByKey.sortOrder !== args.sortOrder) patch.sortOrder = args.sortOrder
+
+      if (Object.keys(patch).length > 0) {
+        patch.updatedAt = now
+        await ctx.db.patch(existingByKey._id, patch)
+      }
+
+      return {
+        id: existingByKey._id,
+        isActive: patch.isActive ?? existingByKey.isActive,
+        isNew: false,
+        key,
+        label: patch.label ?? existingByKey.label,
+        titleKey,
+        titleLabel: title.label,
+      }
+    }
+
+    const existingMode = await ctx.db.get(args.modeId)
+
+    if (!existingMode) {
+      throw new Error("Ranked mode not found.")
+    }
+
+    if (existingByKey && existingByKey._id !== existingMode._id) {
+      throw new Error(`A ranked mode with key "${key}" already exists for ${title.label}.`)
+    }
+
+    const patch: Partial<Doc<"rankedModes">> = {}
+
+    if (existingMode.isActive !== args.isActive) patch.isActive = args.isActive
+    if (existingMode.key !== key) patch.key = key
+    if (existingMode.label !== label) patch.label = label
+    if (existingMode.sortOrder !== args.sortOrder) patch.sortOrder = args.sortOrder
+    if (existingMode.titleKey !== titleKey) patch.titleKey = titleKey
+
+    if (Object.keys(patch).length > 0) {
+      patch.updatedAt = now
+      await ctx.db.patch(existingMode._id, patch)
+    }
+
+    return {
+      id: existingMode._id,
+      isActive: patch.isActive ?? existingMode.isActive,
+      isNew: false,
+      key: patch.key ?? existingMode.key,
+      label: patch.label ?? existingMode.label,
+      titleKey,
+      titleLabel: title.label,
+    }
+  },
+})
+
+export const upsertRankedMap = internalMutation({
+  args: {
+    isActive: v.boolean(),
+    mapId: v.optional(v.id("rankedMaps")),
+    name: v.string(),
+    sortOrder: v.number(),
+    supportedModeIds: v.array(v.id("rankedModes")),
+    titleKey: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const titleKey = normalizeCatalogKey(args.titleKey, "Title key")
+    const name = normalizeLabel(args.name, "Map name", 80)
+    const normalizedName = normalizeStatsLookupValue(name)
+
+    if (!Number.isInteger(args.sortOrder)) {
+      throw new Error("Sort order must be a whole number.")
+    }
+
+    const title = await ctx.db
+      .query("rankedTitles")
+      .withIndex("by_key", (query) => query.eq("key", titleKey))
+      .unique()
+
+    if (!title) {
+      throw new Error(`Ranked title not found: ${titleKey}`)
+    }
+
+    const supportedModes = await resolveSupportedRankedModes({
+      ctx,
+      supportedModeIds: args.supportedModeIds,
+      titleKey,
+    })
+    const supportedModeIds = supportedModes.map((mode) => mode._id)
+
+    const existingByName = await ctx.db
+      .query("rankedMaps")
+      .withIndex("by_title_normalized", (query) =>
+        query.eq("titleKey", titleKey).eq("normalizedName", normalizedName)
+      )
+      .unique()
+    const now = Date.now()
+
+    if (!args.mapId) {
+      if (!existingByName) {
+        const mapId = await ctx.db.insert("rankedMaps", {
+          createdAt: now,
+          isActive: args.isActive,
+          name,
+          normalizedName,
+          sortOrder: args.sortOrder,
+          supportedModeIds,
+          titleKey,
+          updatedAt: now,
+        })
+
+        return {
+          id: mapId,
+          isActive: args.isActive,
+          isNew: true,
+          name,
+          supportedModeIds,
+          supportedModeLabels: supportedModes.map((mode) => mode.label),
+          titleKey,
+          titleLabel: title.label,
+        }
+      }
+
+      const patch: Partial<Doc<"rankedMaps">> = {}
+
+      if (existingByName.isActive !== args.isActive) patch.isActive = args.isActive
+      if (existingByName.name !== name) patch.name = name
+      if (existingByName.sortOrder !== args.sortOrder) patch.sortOrder = args.sortOrder
+      if (
+        JSON.stringify(existingByName.supportedModeIds ?? []) !==
+        JSON.stringify(supportedModeIds)
+      ) {
+        patch.supportedModeIds = supportedModeIds
+      }
+
+      if (Object.keys(patch).length > 0) {
+        patch.updatedAt = now
+        await ctx.db.patch(existingByName._id, patch)
+      }
+
+      return {
+        id: existingByName._id,
+        isActive: patch.isActive ?? existingByName.isActive,
+        isNew: false,
+        name: patch.name ?? existingByName.name,
+        supportedModeIds: patch.supportedModeIds ?? existingByName.supportedModeIds ?? [],
+        supportedModeLabels: supportedModes.map((mode) => mode.label),
+        titleKey,
+        titleLabel: title.label,
+      }
+    }
+
+    const existingMap = await ctx.db.get(args.mapId)
+
+    if (!existingMap) {
+      throw new Error("Ranked map not found.")
+    }
+
+    if (existingByName && existingByName._id !== existingMap._id) {
+      throw new Error(
+        `A map named "${name}" already exists for the ${title.label} title.`
+      )
+    }
+
+    const patch: Partial<Doc<"rankedMaps">> = {}
+
+    if (existingMap.isActive !== args.isActive) patch.isActive = args.isActive
+    if (existingMap.name !== name) patch.name = name
+    if (existingMap.normalizedName !== normalizedName) {
+      patch.normalizedName = normalizedName
+    }
+    if (existingMap.sortOrder !== args.sortOrder) patch.sortOrder = args.sortOrder
+    if (
+      JSON.stringify(existingMap.supportedModeIds ?? []) !==
+      JSON.stringify(supportedModeIds)
+    ) {
+      patch.supportedModeIds = supportedModeIds
+    }
+    if (existingMap.titleKey !== titleKey) patch.titleKey = titleKey
+
+    if (Object.keys(patch).length > 0) {
+      patch.updatedAt = now
+      await ctx.db.patch(existingMap._id, patch)
+    }
+
+    return {
+      id: existingMap._id,
+      isActive: patch.isActive ?? existingMap.isActive,
+      isNew: false,
+      name: patch.name ?? existingMap.name,
+      supportedModeIds: patch.supportedModeIds ?? existingMap.supportedModeIds ?? [],
+      supportedModeLabels: supportedModes.map((mode) => mode.label),
+      titleKey,
+      titleLabel: title.label,
+    }
+  },
+})
+
+export const setCurrentRankedConfig = internalMutation({
+  args: {
+    activeSeason: v.number(),
+    activeTitleKey: v.string(),
+    updatedByUserId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const activeTitleKey = normalizeCatalogKey(args.activeTitleKey, "Title key")
+    const activeSeason = normalizeSeason(args.activeSeason)
+    const [title, currentConfig] = await Promise.all([
+      ctx.db
+        .query("rankedTitles")
+        .withIndex("by_key", (query) => query.eq("key", activeTitleKey))
+        .unique(),
+      ctx.db
+        .query("rankedConfigs")
+        .withIndex("by_key", (query) => query.eq("key", "current"))
+        .unique(),
+    ])
+
+    if (!title) {
+      throw new Error(`Ranked title not found: ${activeTitleKey}`)
+    }
+
+    if (!title.isActive) {
+      throw new Error("Only active ranked titles can be selected as the current title.")
+    }
+
+    const now = Date.now()
+
+    if (!currentConfig) {
+      const configId = await ctx.db.insert("rankedConfigs", {
+        activeSeason,
+        activeTitleKey,
+        key: "current",
+        updatedAt: now,
+        updatedByUserId: args.updatedByUserId,
+      })
+
+      return {
+        activeSeason,
+        activeTitleKey,
+        activeTitleLabel: title.label,
+        archivedSessionCount: 0,
+        archiveReason: null,
+        configId,
+        didChange: true,
+        didInitialize: true,
+      }
+    }
+
+    const titleChanged = currentConfig.activeTitleKey !== activeTitleKey
+    const seasonChanged = currentConfig.activeSeason !== activeSeason
+
+    if (!titleChanged && !seasonChanged) {
+      return {
+        activeSeason,
+        activeTitleKey,
+        activeTitleLabel: title.label,
+        archivedSessionCount: 0,
+        archiveReason: null,
+        configId: currentConfig._id,
+        didChange: false,
+        didInitialize: false,
+      }
+    }
+
+    const archiveReason = resolveArchiveReason({
+      seasonChanged,
+      titleChanged,
+    })
+    const openSessions = await ctx.db
+      .query("sessions")
+      .withIndex("by_endedAt", (query) => query.eq("endedAt", null))
+      .collect()
+    const openSessionCountsByUserId = countSessionsByUserId(openSessions)
+
+    await Promise.all(
+      openSessions.map((session) =>
+        ctx.db.patch(session._id, {
+          archivedReason: archiveReason,
+          endedAt: now,
+        })
+      )
+    )
+
+    await ctx.db.patch(currentConfig._id, {
+      activeSeason,
+      activeTitleKey,
+      updatedAt: now,
+      updatedByUserId: args.updatedByUserId,
+    })
+
+    if (openSessions.length > 0) {
+      await applyGlobalLandingStatsDelta(ctx, {
+        activeSessions: -openSessions.length,
+      })
+
+      await Promise.all(
+        Array.from(openSessionCountsByUserId.entries()).map(
+          ([userId, openSessionCount]) =>
+            applyUserLandingStatsDelta(ctx, userId, {
+              activeSessions: -openSessionCount,
+            })
+        )
+      )
+
+      await ctx.scheduler.runAfter(
+        0,
+        internal.actions.stats.cache.invalidateLandingMetricsCache,
+        {
+          invalidateAll: true,
+        }
+      )
+    }
+
+    return {
+      activeSeason,
+      activeTitleKey,
+      activeTitleLabel: title.label,
+      archivedSessionCount: openSessions.length,
+      archiveReason,
+      configId: currentConfig._id,
+      didChange: true,
+      didInitialize: false,
     }
   },
 })

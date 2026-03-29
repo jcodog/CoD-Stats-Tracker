@@ -80,7 +80,7 @@ export const flags = {
   ),
   dashboardStatsEditor: makeBooleanFlag(
     "dashboard-stats-editor",
-    "Enables the user to be able to create a new session, end their session and log stats as well as tweak SR in case of SR loss returns and missed match logging"
+    "Enables the flagged ranked stats editor dashboard experience with session creation and guided match logging."
   ),
   checkout: makeBooleanFlag(
     "checkout",

@@ -5,6 +5,11 @@ import {
   applyGlobalLandingStatsDelta,
   applyUserLandingStatsDelta,
 } from "../../lib/landingMetrics";
+import {
+  assertNonNegativeInteger,
+  clampOptionalNonNegativeInteger,
+  validateSrChangeAndComputeNextSr,
+} from "../../lib/statsInputValidation";
 import { getStatsUserIdCandidatesForInvalidation } from "../../lib/userIds";
 
 export type Outcome = "win" | "loss";
@@ -35,8 +40,6 @@ export const logMatch = mutation({
       sessionUuid,
       mode,
       outcome,
-      kills,
-      deaths,
       srChange,
       lossProtected,
     } = args;
@@ -49,8 +52,19 @@ export const logMatch = mutation({
     if (!session) {
       throw new Error("Session not found in Convex");
     }
+    const kills = assertNonNegativeInteger(args.kills, "Kills");
+    const deaths = assertNonNegativeInteger(args.deaths, "Deaths");
+    const teamScore = clampOptionalNonNegativeInteger(args.teamScore);
+    const enemyScore = clampOptionalNonNegativeInteger(args.enemyScore);
+    const hillTimeSeconds = clampOptionalNonNegativeInteger(args.hillTimeSeconds);
+    const plants = clampOptionalNonNegativeInteger(args.plants);
+    const defuses = clampOptionalNonNegativeInteger(args.defuses);
+    const overloads = clampOptionalNonNegativeInteger(args.overloads);
     // 2. Compute new aggregate values (replicate logic from Prisma)
-    const newCurrentSr = session.currentSr + srChange;
+    const newCurrentSr = validateSrChangeAndComputeNextSr({
+      currentSr: session.currentSr,
+      srChange,
+    });
     const newStreak = outcome === "win" ? session.streak + 1 : 0;
     const newBestStreak =
       newStreak > session.bestStreak ? newStreak : session.bestStreak;
@@ -65,12 +79,12 @@ export const logMatch = mutation({
       deaths,
       srChange,
       lossProtected,
-      teamScore: args.teamScore ?? null,
-      enemyScore: args.enemyScore ?? null,
-      hillTimeSeconds: args.hillTimeSeconds ?? null,
-      plants: args.plants ?? null,
-      defuses: args.defuses ?? null,
-      overloads: args.overloads ?? null,
+      teamScore,
+      enemyScore,
+      hillTimeSeconds,
+      plants,
+      defuses,
+      overloads,
       createdAt: now,
     });
     // 4. Update the session document aggregates

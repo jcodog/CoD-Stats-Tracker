@@ -6,6 +6,11 @@ import type { Doc, Id } from "../../../_generated/dataModel"
 import { action, internalAction, type ActionCtx } from "../../../_generated/server"
 import { getClerkBackendClient } from "../../../lib/clerk"
 import {
+  getInviteCodeTypeLabel,
+  renderInviteCodeInstructions,
+  type InviteCodeType,
+} from "../../../lib/playingWithViewers"
+import {
   requireCreatorToolsActionAccess,
   requireOwnedQueueActionAccess,
   requireOwnedQueueEntryActionAccess,
@@ -37,6 +42,10 @@ const rankValidator = v.union(
 const inviteModeValidator = v.union(
   v.literal("discord_dm"),
   v.literal("manual_creator_contact")
+)
+const inviteCodeTypeValidator = v.union(
+  v.literal("party_code"),
+  v.literal("private_match_code")
 )
 
 type DiscordUserGuild = {
@@ -1114,9 +1123,15 @@ async function updateQueueMessageForQueue(
 function renderDirectMessagePayload(args: {
   creatorDisplayName: string
   gameLabel: string
-  lobbyCode?: string
+  inviteCode: string
+  inviteCodeType: InviteCodeType
   title: string
 }): RESTPostAPIChannelMessageJSONBody {
+  const inviteCodeLabel = getInviteCodeTypeLabel(args.inviteCodeType)
+  const instructions = renderInviteCodeInstructions({
+    inviteCode: args.inviteCode,
+    inviteCodeType: args.inviteCodeType,
+  })
   const fields = [
     {
       inline: true,
@@ -1128,23 +1143,22 @@ function renderDirectMessagePayload(args: {
       name: "Game",
       value: args.gameLabel,
     },
-  ]
-
-  if (args.lobbyCode) {
-    fields.push({
+    {
       inline: true,
-      name: "Lobby code",
-      value: `\`${args.lobbyCode}\``,
-    })
-  }
-
-  fields.push({
-    inline: false,
-    name: "Next step",
-    value: args.lobbyCode
-      ? "Use the lobby code above to join up and play with the creator."
-      : "Join up and play with the creator when they are ready for you.",
-  })
+      name: inviteCodeLabel,
+      value: `\`${args.inviteCode}\``,
+    },
+    {
+      inline: false,
+      name: "Instructions",
+      value: instructions,
+    },
+    {
+      inline: false,
+      name: "Queue",
+      value: args.title,
+    },
+  ]
 
   return {
     allowed_mentions: {
@@ -1196,7 +1210,8 @@ async function sendDirectMessageToViewer(args: {
 
 async function notifySelectedUsersByDirectMessage(args: {
   ctx: ActionCtx
-  lobbyCode?: string
+  inviteCode?: string
+  inviteCodeType?: InviteCodeType
   queueId: Id<"viewerQueues">
   roundId: Id<"viewerQueueRounds">
   selectedUsers: QueueRoundSelectedUser[]
@@ -1212,10 +1227,17 @@ async function notifySelectedUsersByDirectMessage(args: {
     return args.selectedUsers
   }
 
+  const inviteCode = args.inviteCode?.trim()
+
+  if (!inviteCode || !args.inviteCodeType) {
+    throw new Error("Invite code and invite code type are required for Discord DM mode.")
+  }
+
   const messagePayload = renderDirectMessagePayload({
     creatorDisplayName: queue.creatorDisplayName,
     gameLabel: queue.gameLabel,
-    lobbyCode: args.lobbyCode,
+    inviteCode,
+    inviteCodeType: args.inviteCodeType,
     title: queue.title,
   })
 
@@ -1468,7 +1490,8 @@ export const fixQueueChannelPermissions = action({
 
 export const selectNextBatchAndNotify = action({
   args: {
-    lobbyCode: v.optional(v.string()),
+    inviteCode: v.optional(v.string()),
+    inviteCodeType: v.optional(inviteCodeTypeValidator),
     queueId: v.id("viewerQueues"),
   },
   handler: async (ctx, args) => {
@@ -1480,7 +1503,8 @@ export const selectNextBatchAndNotify = action({
     )
     const selectedUsers = await notifySelectedUsersByDirectMessage({
       ctx,
-      lobbyCode: args.lobbyCode?.trim() || undefined,
+      inviteCode: args.inviteCode?.trim() || undefined,
+      inviteCodeType: args.inviteCodeType,
       queueId: args.queueId,
       roundId: result.roundId,
       selectedUsers: result.selectedUsers as QueueRoundSelectedUser[],
@@ -1497,7 +1521,8 @@ export const selectNextBatchAndNotify = action({
 export const inviteQueueEntryNowAndNotify = action({
   args: {
     entryId: v.id("viewerQueueEntries"),
-    lobbyCode: v.optional(v.string()),
+    inviteCode: v.optional(v.string()),
+    inviteCodeType: v.optional(inviteCodeTypeValidator),
   },
   handler: async (ctx, args) => {
     await requireOwnedQueueEntryActionAccess(ctx, args.entryId)
@@ -1508,7 +1533,8 @@ export const inviteQueueEntryNowAndNotify = action({
     )
     const selectedUsers = await notifySelectedUsersByDirectMessage({
       ctx,
-      lobbyCode: args.lobbyCode?.trim() || undefined,
+      inviteCode: args.inviteCode?.trim() || undefined,
+      inviteCodeType: args.inviteCodeType,
       queueId: result.queueId,
       roundId: result.roundId,
       selectedUsers: result.selectedUsers as QueueRoundSelectedUser[],

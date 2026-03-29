@@ -10,6 +10,7 @@ import type {
   StaffImpactPreview,
   StaffManagementDashboard,
   StaffMutationResponse,
+  StaffRankedDashboard,
   StaffWebhookEventDetail,
   StaffWebhookLedgerDashboard,
 } from "@workspace/backend/convex/lib/staffTypes"
@@ -17,10 +18,12 @@ import type {
 import type {
   BillingActionRequest,
   ManagementActionRequest,
+  RankedActionRequest,
 } from "@/features/staff/lib/staff-schemas"
 import {
   billingActionSchema,
   managementActionSchema,
+  rankedActionSchema,
 } from "@/features/staff/lib/staff-schemas"
 
 export class StaffClientError extends Error {
@@ -55,6 +58,7 @@ function toStaffClientError(error: unknown) {
 export const staffQueryKeys = {
   billing: ["staff", "billing"] as const,
   management: ["staff", "management"] as const,
+  ranked: ["staff", "ranked"] as const,
   webhookDetail: (eventId: string) =>
     ["staff", "webhooks", "detail", eventId] as const,
   webhooks: ["staff", "webhooks"] as const,
@@ -75,6 +79,16 @@ async function callBillingDashboard(
 ): Promise<StaffBillingDashboard> {
   try {
     return await convex.action(api.actions.staff.billing.getDashboard, {})
+  } catch (error) {
+    throw toStaffClientError(error)
+  }
+}
+
+async function callRankedDashboard(
+  convex: ConvexReactClient
+): Promise<StaffRankedDashboard> {
+  try {
+    return await convex.action(api.actions.staff.ranked.getDashboard, {})
   } catch (error) {
     throw toStaffClientError(error)
   }
@@ -237,6 +251,41 @@ async function callBillingAction<T>(
   }
 }
 
+async function callRankedAction<T>(
+  convex: ConvexReactClient,
+  request: RankedActionRequest
+) {
+  const action = rankedActionSchema.parse(request)
+
+  try {
+    switch (action.action) {
+      case "setCurrentRankedConfig":
+        return (await convex.action(
+          api.actions.staff.ranked.setCurrentRankedConfig,
+          action.input
+        )) as T
+      case "upsertRankedMap":
+        return (await convex.action(api.actions.staff.ranked.upsertRankedMap, {
+          ...action.input,
+          mapId: action.input.mapId as Id<"rankedMaps"> | undefined,
+          supportedModeIds: action.input.supportedModeIds as Id<"rankedModes">[],
+        })) as T
+      case "upsertRankedMode":
+        return (await convex.action(api.actions.staff.ranked.upsertRankedMode, {
+          ...action.input,
+          modeId: action.input.modeId as Id<"rankedModes"> | undefined,
+        })) as T
+      case "upsertRankedTitle":
+        return (await convex.action(
+          api.actions.staff.ranked.upsertRankedTitle,
+          action.input
+        )) as T
+    }
+  } catch (error) {
+    throw toStaffClientError(error)
+  }
+}
+
 export function useStaffManagementDashboard(initialData: StaffManagementDashboard) {
   const convex = useConvex()
   const { isAuthenticated, isLoading } = useConvexAuth()
@@ -258,6 +307,18 @@ export function useStaffBillingDashboard(initialData: StaffBillingDashboard) {
     initialData,
     queryFn: () => callBillingDashboard(convex),
     queryKey: staffQueryKeys.billing,
+  })
+}
+
+export function useStaffRankedDashboard(initialData: StaffRankedDashboard) {
+  const convex = useConvex()
+  const { isAuthenticated, isLoading } = useConvexAuth()
+
+  return useQuery({
+    enabled: !isLoading && isAuthenticated,
+    initialData,
+    queryFn: () => callRankedDashboard(convex),
+    queryKey: staffQueryKeys.ranked,
   })
 }
 
@@ -312,6 +373,15 @@ export function useStaffBillingClient() {
   }
 }
 
+export function useStaffRankedClient() {
+  const convex = useConvex()
+
+  return {
+    runAction: <T = StaffMutationResponse>(request: RankedActionRequest) =>
+      callRankedAction<T>(convex, request),
+  }
+}
+
 export function useStaffWebhookClient() {
   const convex = useConvex()
 
@@ -328,13 +398,15 @@ export function useInvalidateStaffQueries() {
       queryClient.invalidateQueries({ queryKey: staffQueryKeys.billing }),
     invalidateManagement: () =>
       queryClient.invalidateQueries({ queryKey: staffQueryKeys.management }),
+    invalidateRanked: () =>
+      queryClient.invalidateQueries({ queryKey: staffQueryKeys.ranked }),
     invalidateWebhooks: () =>
       queryClient.invalidateQueries({ queryKey: staffQueryKeys.webhooks }),
   }
 }
 
 export function useStaffMutation<TVariables, TResult>(args: {
-  invalidate: Array<"billing" | "management" | "webhooks">
+  invalidate: Array<"billing" | "management" | "ranked" | "webhooks">
   mutationFn: (variables: TVariables) => Promise<TResult>
 }) {
   const queryClient = useQueryClient()
@@ -350,6 +422,8 @@ export function useStaffMutation<TVariables, TResult>(args: {
                 ? staffQueryKeys.billing
                 : scope === "management"
                   ? staffQueryKeys.management
+                  : scope === "ranked"
+                    ? staffQueryKeys.ranked
                   : staffQueryKeys.webhooks,
           })
         )

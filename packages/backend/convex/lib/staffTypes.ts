@@ -338,3 +338,56 @@ export type StaffMutationResponse = {
   summary: string
   syncSummary?: StaffBillingSyncSummary | null
 }
+
+export type StaffRankedTitleRecord = {
+  activeMapCount: number
+  activeModeCount: number
+  isActive: boolean
+  key: string
+  label: string
+  mapCount: number
+  modeCount: number
+  sortOrder: number
+}
+
+export type StaffRankedModeRecord = {
+  id: string
+  isActive: boolean
+  key: string
+  label: string
+  sortOrder: number
+  titleKey: string
+  titleLabel: string
+  updatedAt: number
+}
+
+export type StaffRankedMapRecord = {
+  id: string
+  isActive: boolean
+  name: string
+  normalizedName: string
+  sortOrder: number
+  supportedModeIds: string[]
+  supportedModeLabels: string[]
+  titleKey: string
+  titleLabel: string
+  updatedAt: number
+}
+
+export type StaffRankedCurrentConfig = {
+  activeSeason: number
+  activeTitleKey: string
+  activeTitleLabel: string
+  openSessionCount: number
+  updatedAt: number
+}
+
+export type StaffRankedDashboard = {
+  actorRole: UserRole
+  currentConfig: StaffRankedCurrentConfig | null
+  generatedAt: number
+  maps: StaffRankedMapRecord[]
+  modes: StaffRankedModeRecord[]
+  openSessionCount: number
+  titles: StaffRankedTitleRecord[]
+}

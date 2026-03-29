@@ -85,8 +85,8 @@ export const getSessionAggregatedStats = query({
       const srChanges = subset.map((g) => g.srChange as number);
       const wins = subset.filter((g) => g.outcome === "win").length;
       const losses = subset.filter((g) => g.outcome === "loss").length;
-      const kills = sum(subset.map((g) => g.kills as number));
-      const deaths = sum(subset.map((g) => g.deaths as number));
+      const kills = sum(subset.map((g) => g.kills ?? 0));
+      const deaths = sum(subset.map((g) => g.deaths ?? 0));
 
       const hillTimes = subset.map((g) => g.hillTimeSeconds ?? 0);
       const plants = subset.map((g) => g.plants ?? 0);

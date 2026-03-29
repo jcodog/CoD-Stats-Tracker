@@ -16,6 +16,7 @@ import type {
 } from "@workspace/backend/convex/lib/staffTypes"
 import { resolveAppPlanKey } from "@workspace/backend/convex/lib/billingAccess"
 import type { UserRole } from "@workspace/backend/convex/lib/staffRoles"
+import { AppSelect } from "@/components/AppSelect"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -69,10 +70,6 @@ import {
   FieldLabel,
 } from "@workspace/ui/components/field"
 import { Input } from "@workspace/ui/components/input"
-import {
-  NativeSelect,
-  NativeSelectOption,
-} from "@workspace/ui/components/native-select"
 import {
   Table,
   TableBody,
@@ -2027,30 +2024,25 @@ export function StaffBillingView({
                   <div className="grid gap-4 lg:grid-cols-[minmax(0,16rem)_minmax(0,1fr)]">
                     <Field>
                       <FieldLabel>Feature</FieldLabel>
-                      <NativeSelect
-                        onChange={(event) => {
+                      <AppSelect
+                        onValueChange={(value) => {
                           const nextFeature = data.features.find(
-                            (feature) => feature.key === event.target.value
+                            (feature) => feature.key === value
                           )
 
                           setAssignmentEditor({
-                            featureKey: event.target.value,
+                            featureKey: value,
                             planKeys: nextFeature?.linkedPlanKeys ?? [],
                           })
                         }}
-                        value={selectedAssignmentFeature.key}
-                      >
-                        {data.features
+                        options={data.features
                           .filter((feature) => feature.active)
-                          .map((feature) => (
-                            <NativeSelectOption
-                              key={feature.key}
-                              value={feature.key}
-                            >
-                              {feature.name}
-                            </NativeSelectOption>
-                          ))}
-                      </NativeSelect>
+                          .map((feature) => ({
+                            label: feature.name,
+                            value: feature.key,
+                          }))}
+                        value={selectedAssignmentFeature.key}
+                      />
                       <FieldDescription>
                         Archived features cannot be assigned to plans.
                       </FieldDescription>
@@ -3066,22 +3058,23 @@ function PlanFormDialog(args: {
             <div className="grid gap-4 md:grid-cols-3">
               <Field>
                 <FieldLabel>Plan type</FieldLabel>
-                <NativeSelect
-                  onChange={(event) =>
+                <AppSelect
+                  onValueChange={(value) =>
                     args.setPlanForm((current) =>
                       current
                         ? {
                             ...current,
-                            planType: event.target.value as "free" | "paid",
+                            planType: value as "free" | "paid",
                           }
                         : current
                     )
                   }
+                  options={[
+                    { label: "Paid", value: "paid" },
+                    { label: "Free", value: "free" },
+                  ]}
                   value={args.planForm.planType}
-                >
-                  <NativeSelectOption value="paid">Paid</NativeSelectOption>
-                  <NativeSelectOption value="free">Free</NativeSelectOption>
-                </NativeSelect>
+                />
               </Field>
               <Field>
                 <FieldLabel>Currency</FieldLabel>
@@ -3254,28 +3247,24 @@ function FeatureFormDialog(args: {
             <div className="grid gap-4 md:grid-cols-3">
               <Field>
                 <FieldLabel>Applies to</FieldLabel>
-                <NativeSelect
-                  onChange={(event) =>
+                <AppSelect
+                  onValueChange={(value) =>
                     args.setFeatureForm((current) =>
                       current
                         ? {
                             ...current,
-                            appliesTo: event.target
-                              .value as FeatureFormState["appliesTo"],
+                            appliesTo: value as FeatureFormState["appliesTo"],
                           }
                         : current
                     )
                   }
+                  options={[
+                    { label: "Both", value: "both" },
+                    { label: "Entitlement", value: "entitlement" },
+                    { label: "Marketing", value: "marketing" },
+                  ]}
                   value={args.featureForm.appliesTo}
-                >
-                  <NativeSelectOption value="both">Both</NativeSelectOption>
-                  <NativeSelectOption value="entitlement">
-                    Entitlement
-                  </NativeSelectOption>
-                  <NativeSelectOption value="marketing">
-                    Marketing
-                  </NativeSelectOption>
-                </NativeSelect>
+                />
               </Field>
               <Field>
                 <FieldLabel>Category</FieldLabel>

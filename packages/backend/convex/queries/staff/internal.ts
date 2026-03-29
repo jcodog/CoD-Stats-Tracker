@@ -7,6 +7,9 @@ import { resolveConfiguredUserRole } from "../../lib/staffRoleConfig"
 type UserRecord = Doc<"users">
 type BillingPlanRecord = Doc<"billingPlans">
 type BillingFeatureRecord = Doc<"billingFeatures">
+type RankedTitleRecord = Doc<"rankedTitles">
+type RankedModeRecord = Doc<"rankedModes">
+type RankedMapRecord = Doc<"rankedMaps">
 
 function sortUsers(left: UserRecord, right: UserRecord) {
   return left.name.localeCompare(right.name)
@@ -20,6 +23,38 @@ function sortBySortOrderAndKey<
   }
 
   return left.key.localeCompare(right.key)
+}
+
+function sortRankedTitles(left: RankedTitleRecord, right: RankedTitleRecord) {
+  if (left.sortOrder !== right.sortOrder) {
+    return left.sortOrder - right.sortOrder
+  }
+
+  return left.label.localeCompare(right.label) || left.key.localeCompare(right.key)
+}
+
+function sortRankedMaps(left: RankedMapRecord, right: RankedMapRecord) {
+  if (left.titleKey !== right.titleKey) {
+    return left.titleKey.localeCompare(right.titleKey)
+  }
+
+  if (left.sortOrder !== right.sortOrder) {
+    return left.sortOrder - right.sortOrder
+  }
+
+  return left.name.localeCompare(right.name)
+}
+
+function sortRankedModes(left: RankedModeRecord, right: RankedModeRecord) {
+  if (left.titleKey !== right.titleKey) {
+    return left.titleKey.localeCompare(right.titleKey)
+  }
+
+  if (left.sortOrder !== right.sortOrder) {
+    return left.sortOrder - right.sortOrder
+  }
+
+  return left.label.localeCompare(right.label) || left.key.localeCompare(right.key)
 }
 
 export const getUserByClerkUserId = internalQuery({
@@ -224,6 +259,33 @@ export const getOverviewRecords = internalQuery({
           }) ?? undefined,
         status: user.status,
       })),
+    }
+  },
+})
+
+export const getRankedRecords = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const [titles, modes, maps, config, openSessions] = await Promise.all([
+      ctx.db.query("rankedTitles").collect(),
+      ctx.db.query("rankedModes").collect(),
+      ctx.db.query("rankedMaps").collect(),
+      ctx.db
+        .query("rankedConfigs")
+        .withIndex("by_key", (query) => query.eq("key", "current"))
+        .unique(),
+      ctx.db
+        .query("sessions")
+        .withIndex("by_endedAt", (query) => query.eq("endedAt", null))
+        .collect(),
+    ])
+
+    return {
+      config,
+      maps: maps.sort(sortRankedMaps),
+      modes: modes.sort(sortRankedModes),
+      openSessionCount: openSessions.length,
+      titles: titles.sort(sortRankedTitles),
     }
   },
 })

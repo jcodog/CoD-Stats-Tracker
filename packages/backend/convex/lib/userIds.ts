@@ -29,7 +29,7 @@ function addUserDocumentCandidates(
 }
 
 export async function getStatsUserIdCandidatesForIdentity(
-  ctx: QueryCtx,
+  ctx: UserLookupCtx,
   identity: UserIdentity,
 ) {
   const candidates = new Set<string>();

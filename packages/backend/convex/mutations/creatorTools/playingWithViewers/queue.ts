@@ -20,6 +20,10 @@ const inviteModeValidator = v.union(
   v.literal("discord_dm"),
   v.literal("manual_creator_contact")
 )
+const inviteCodeTypeValidator = v.union(
+  v.literal("party_code"),
+  v.literal("private_match_code")
+)
 const selectedQueueUserValidator = v.object({
   discordUserId: v.string(),
   username: v.string(),
@@ -198,7 +202,10 @@ export const enqueueViewer = internalMutation({
       .first()
 
     if (existingEntry) {
-      throw new Error("Viewer is already in the queue")
+      return {
+        entryId: existingEntry._id,
+        status: "already_joined" as const,
+      }
     }
 
     const entryId = await ctx.db.insert("viewerQueueEntries", {
@@ -211,14 +218,18 @@ export const enqueueViewer = internalMutation({
       joinedAt: Date.now(),
     })
 
-    return { entryId }
+    return {
+      entryId,
+      status: "enqueued" as const,
+    }
   },
 })
 
 export const selectNextBatch = internalMutation({
   args: {
     queueId: v.id("viewerQueues"),
-    lobbyCode: v.optional(v.string()),
+    inviteCode: v.optional(v.string()),
+    inviteCodeType: v.optional(inviteCodeTypeValidator),
   },
   handler: async (ctx, args) => {
     const queue = await ctx.db.get(args.queueId)
@@ -227,10 +238,14 @@ export const selectNextBatch = internalMutation({
       throw new Error("Queue not found")
     }
 
-    const lobbyCode = args.lobbyCode?.trim()
+    const inviteCode = args.inviteCode?.trim()
 
-    if (queue.inviteMode === "discord_dm" && !lobbyCode) {
-      throw new Error("Lobby code is required for discord_dm mode")
+    if (queue.inviteMode === "discord_dm" && !inviteCode) {
+      throw new Error("Invite code is required for discord_dm mode")
+    }
+
+    if (queue.inviteMode === "discord_dm" && !args.inviteCodeType) {
+      throw new Error("Invite code type is required for discord_dm mode")
     }
 
     const entries = await ctx.db
@@ -267,7 +282,7 @@ export const selectNextBatch = internalMutation({
     const roundId = await ctx.db.insert("viewerQueueRounds", {
       queueId: args.queueId,
       mode: queue.inviteMode,
-      lobbyCode: lobbyCode || undefined,
+      lobbyCode: inviteCode || undefined,
       selectedUsers,
       selectedCount: selectedUsers.length,
       createdAt: now,
@@ -289,7 +304,8 @@ export const selectNextBatch = internalMutation({
 export const inviteQueueEntryNow = internalMutation({
   args: {
     entryId: v.id("viewerQueueEntries"),
-    lobbyCode: v.optional(v.string()),
+    inviteCode: v.optional(v.string()),
+    inviteCodeType: v.optional(inviteCodeTypeValidator),
   },
   handler: async (ctx, args) => {
     const entry = await ctx.db.get(args.entryId)
@@ -304,10 +320,14 @@ export const inviteQueueEntryNow = internalMutation({
       throw new Error("Queue not found")
     }
 
-    const lobbyCode = args.lobbyCode?.trim()
+    const inviteCode = args.inviteCode?.trim()
 
-    if (queue.inviteMode === "discord_dm" && !lobbyCode) {
-      throw new Error("Lobby code is required for discord_dm mode")
+    if (queue.inviteMode === "discord_dm" && !inviteCode) {
+      throw new Error("Invite code is required for discord_dm mode")
+    }
+
+    if (queue.inviteMode === "discord_dm" && !args.inviteCodeType) {
+      throw new Error("Invite code type is required for discord_dm mode")
     }
 
     const selectedUsers = [
@@ -327,7 +347,7 @@ export const inviteQueueEntryNow = internalMutation({
     const roundId = await ctx.db.insert("viewerQueueRounds", {
       queueId: queue._id,
       mode: queue.inviteMode,
-      lobbyCode: lobbyCode || undefined,
+      lobbyCode: inviteCode || undefined,
       selectedUsers,
       selectedCount: selectedUsers.length,
       createdAt: now,

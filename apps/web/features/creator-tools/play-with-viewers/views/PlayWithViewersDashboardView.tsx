@@ -20,7 +20,15 @@ import {
 
 import { api } from "@workspace/backend/convex/_generated/api"
 import type { Doc, Id } from "@workspace/backend/convex/_generated/dataModel"
-import type { RankValue } from "@workspace/backend/lib/playingWithViewers"
+import {
+  buildInviteMessagePreview,
+  DEFAULT_INVITE_CODE_TYPE,
+  getInviteCodeTypeLabel,
+  renderInviteCodeInstructions,
+  type InviteCodeType,
+  type RankValue,
+} from "@workspace/backend/lib/playingWithViewers"
+import { AppSelect } from "@/components/AppSelect"
 import {
   type AvailableDiscordGuild,
   type QueueChannelBotPermissionStatus,
@@ -84,10 +92,6 @@ import {
   FieldLabel,
 } from "@workspace/ui/components/field"
 import { Input } from "@workspace/ui/components/input"
-import {
-  NativeSelect,
-  NativeSelectOption,
-} from "@workspace/ui/components/native-select"
 import { ScrollArea } from "@workspace/ui/components/scroll-area"
 import {
   Sheet,
@@ -144,8 +148,11 @@ type SelectionDialogState =
 type SelectionResultState =
   | {
       createdAt: number
+      inviteCode?: string
+      inviteCodeType?: InviteCodeType
+      inviteInstructions?: string
+      inviteMessagePreview?: string
       inviteMode: InviteMode
-      lobbyCode?: string
       selectionKind: "batch" | "entry"
       selectedUsers: QueueRoundUser[]
     }
@@ -165,6 +172,10 @@ const rankOptions: Array<{ label: string; value: RankValue }> = [
 const inviteModeOptions: Array<{ label: string; value: InviteMode }> = [
   { label: "Discord DM", value: "discord_dm" },
   { label: "Manual contact", value: "manual_creator_contact" },
+]
+const inviteCodeTypeOptions: Array<{ label: string; value: InviteCodeType }> = [
+  { label: "Party code", value: "party_code" },
+  { label: "Private match code", value: "private_match_code" },
 ]
 
 const playersPerBatchOptions = Array.from({ length: 30 }, (_, index) => index + 1)
@@ -343,7 +354,7 @@ function Panel({
   return (
     <section
       className={cn(
-        "overflow-hidden rounded-lg border border-border/70 bg-card/80",
+        "overflow-hidden rounded-xl border border-border/60 bg-background",
         className
       )}
     >
@@ -357,10 +368,21 @@ function ToolbarGroup({
   label,
 }: Readonly<{ children: React.ReactNode; label: string }>) {
   return (
-    <div className="flex items-center gap-2 border-r border-border/70 pr-4 last:border-r-0 last:pr-0">
-      <span className="text-xs font-medium text-muted-foreground">{label}</span>
-      {children}
+    <div className="flex shrink-0 items-center gap-3">
+      <span className="whitespace-nowrap text-sm font-medium text-muted-foreground">
+        {label}
+      </span>
+      <div className="flex flex-wrap items-center gap-2">{children}</div>
     </div>
+  )
+}
+
+function ToolbarDivider() {
+  return (
+    <span
+      aria-hidden="true"
+      className="hidden h-5 w-px bg-border/60 lg:block"
+    />
   )
 }
 
@@ -429,10 +451,12 @@ function LockedState({ queueTitle }: Readonly<{ queueTitle: string }>) {
 }
 
 function SelectionResultSummary({
+  onCopyInviteMessage,
   onCopyMentions,
   onCopyUsernames,
   selectionResult,
 }: Readonly<{
+  onCopyInviteMessage: () => Promise<void>
   onCopyMentions: () => Promise<void>
   onCopyUsernames: () => Promise<void>
   selectionResult: SelectionResultState
@@ -460,12 +484,57 @@ function SelectionResultSummary({
         <span className="text-sm text-muted-foreground">
           {formatDateTime(selectionResult.createdAt)}
         </span>
-        {selectionResult.lobbyCode ? (
+        {selectionResult.inviteCode ? (
           <span className="rounded-md border border-border/70 bg-background px-2 py-1 font-mono text-xs text-foreground">
-            Lobby {selectionResult.lobbyCode}
+            {selectionResult.inviteCode}
           </span>
         ) : null}
       </div>
+
+      {selectionResult.inviteMode === "discord_dm" &&
+      selectionResult.inviteCode &&
+      selectionResult.inviteCodeType &&
+      selectionResult.inviteInstructions &&
+      selectionResult.inviteMessagePreview ? (
+        <div className="border-b border-border/70 px-4 py-3">
+          <div className="flex flex-col gap-3 rounded-lg border border-border/70 bg-muted/20 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="outline">
+                  {getInviteCodeTypeLabel(selectionResult.inviteCodeType)}
+                </Badge>
+                <span className="rounded-md border border-border/70 bg-background px-2 py-1 font-mono text-xs text-foreground">
+                  {selectionResult.inviteCode}
+                </span>
+              </div>
+              <Button onClick={onCopyInviteMessage} size="sm" variant="outline">
+                <IconCopy data-icon="inline-start" />
+                Copy DM preview
+              </Button>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-1">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Instructions
+                </p>
+                <p className="whitespace-pre-wrap text-sm text-foreground">
+                  {selectionResult.inviteInstructions}
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  DM preview
+                </p>
+                <p className="whitespace-pre-wrap rounded-md border border-border/70 bg-background px-3 py-2 text-sm text-foreground">
+                  {selectionResult.inviteMessagePreview}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {selectionResult.inviteMode === "discord_dm" && failedDmCount > 0 ? (
         <div className="border-b border-border/70 px-4 py-3">
@@ -578,7 +647,9 @@ export function PlayWithViewersDashboardView({
     useState<SelectionDialogState>(null)
   const [selectionResultState, setSelectionResultState] =
     useState<SelectionResultState>(null)
-  const [selectionLobbyCode, setSelectionLobbyCode] = useState("")
+  const [selectionInviteCode, setSelectionInviteCode] = useState("")
+  const [selectionInviteCodeType, setSelectionInviteCodeType] =
+    useState<InviteCodeType>(DEFAULT_INVITE_CODE_TYPE)
   const [createFormState, setCreateFormState] = useState<QueueFormState>(() =>
     getDefaultQueueFormState(preferredCreatorDisplayName)
   )
@@ -907,6 +978,17 @@ export function PlayWithViewersDashboardView({
     )
   }
 
+  async function handleCopyInviteMessage() {
+    if (!selectionResultState?.inviteMessagePreview) {
+      return
+    }
+
+    await handleCopyToClipboard(
+      selectionResultState.inviteMessagePreview,
+      "DM preview copied."
+    )
+  }
+
   async function handleCreateQueue() {
     if (!createFormState.guildId.trim()) {
       toast.error("Select a Discord server before creating the queue.")
@@ -1189,11 +1271,29 @@ export function PlayWithViewersDashboardView({
       return
     }
 
-    const lobbyCode = selectionLobbyCode.trim() || undefined
-    if (queue.inviteMode === "discord_dm" && !lobbyCode) {
-      toast.error("Lobby code is required for Discord DM mode.")
+    const inviteCode = selectionInviteCode.trim() || undefined
+    if (queue.inviteMode === "discord_dm" && !inviteCode) {
+      toast.error("Invite code is required for Discord DM mode.")
       return
     }
+
+    const inviteInstructions =
+      queue.inviteMode === "discord_dm" && inviteCode
+        ? renderInviteCodeInstructions({
+            inviteCode,
+            inviteCodeType: selectionInviteCodeType,
+          })
+        : undefined
+    const inviteMessagePreview =
+      queue.inviteMode === "discord_dm" && inviteCode
+        ? buildInviteMessagePreview({
+            creatorDisplayName: queue.creatorDisplayName,
+            gameLabel: queue.gameLabel,
+            inviteCode,
+            inviteCodeType: selectionInviteCodeType,
+            title: queue.title,
+          })
+        : undefined
 
     setIsSelectingBatch(true)
 
@@ -1204,10 +1304,12 @@ export function PlayWithViewersDashboardView({
         selectionDialogState?.kind === "entry"
           ? await inviteQueueEntryNowAndNotify({
               entryId: selectionDialogState.entryId,
-              lobbyCode,
+              inviteCode,
+              inviteCodeType: selectionInviteCodeType,
             })
           : await selectNextBatchAndNotify({
-              lobbyCode,
+              inviteCode,
+              inviteCodeType: selectionInviteCodeType,
               queueId: queue._id,
             })
 
@@ -1217,8 +1319,12 @@ export function PlayWithViewersDashboardView({
 
       setSelectionResultState({
         createdAt: Date.now(),
+        inviteCode,
+        inviteCodeType:
+          queue.inviteMode === "discord_dm" ? selectionInviteCodeType : undefined,
+        inviteInstructions,
+        inviteMessagePreview,
         inviteMode: queue.inviteMode,
-        lobbyCode,
         selectedUsers: result.selectedUsers as QueueRoundUser[],
         selectionKind,
       })
@@ -1259,7 +1365,8 @@ export function PlayWithViewersDashboardView({
 
       await syncQueueMessageIfPublished(queue._id)
       setSelectionDialogState(null)
-      setSelectionLobbyCode("")
+      setSelectionInviteCode("")
+      setSelectionInviteCodeType(DEFAULT_INVITE_CODE_TYPE)
     } catch (error) {
       toast.error(toErrorMessage(error, "Unable to select viewers right now."))
     } finally {
@@ -1269,7 +1376,8 @@ export function PlayWithViewersDashboardView({
 
   function openSelectionDialog(state: SelectionDialogState) {
     setSelectionDialogState(state)
-    setSelectionLobbyCode("")
+    setSelectionInviteCode("")
+    setSelectionInviteCodeType(DEFAULT_INVITE_CODE_TYPE)
   }
 
   if (isLoadingQueue) {
@@ -1328,7 +1436,7 @@ export function PlayWithViewersDashboardView({
         : "Batch ready to invite"
   const selectionResultDescription =
     selectionResultState?.inviteMode === "discord_dm"
-      ? "Review the Discord DM results for the selected viewers."
+      ? "Review the Discord DM results and the invite message preview for the selected viewers."
       : "Use this list to contact the selected viewers directly."
 
   return (
@@ -1463,181 +1571,186 @@ export function PlayWithViewersDashboardView({
       ) : queue ? (
         <>
           <Panel>
-            <div className="flex flex-wrap items-center gap-3 overflow-x-auto px-4 py-3">
-              <ToolbarGroup label="State">
-                <span
-                  className={cn(
-                    "text-sm font-medium",
-                    queue.isActive ? "text-foreground" : "text-muted-foreground"
-                  )}
-                >
-                  {queue.isActive ? "Open" : "Closed"}
-                </span>
-                <Switch
-                  checked={queue.isActive}
-                  disabled={toolbarFieldPending === "active"}
-                  onCheckedChange={handleToggleQueueActive}
-                  size="sm"
-                />
-              </ToolbarGroup>
+            <div className="flex flex-col gap-4 px-5 py-5">
+              <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+                <ToolbarGroup label="State">
+                  <span
+                    className={cn(
+                      "text-sm font-medium",
+                      queue.isActive ? "text-foreground" : "text-muted-foreground"
+                    )}
+                  >
+                    {queue.isActive ? "Open" : "Closed"}
+                  </span>
+                  <Switch
+                    checked={queue.isActive}
+                    disabled={toolbarFieldPending === "active"}
+                    onCheckedChange={handleToggleQueueActive}
+                    size="sm"
+                  />
+                </ToolbarGroup>
 
-              <ToolbarGroup label="Ranks">
-                <NativeSelect
-                  disabled={toolbarFieldPending !== null}
-                  onChange={(event) =>
-                    handleToolbarSettingsChange("minRank", {
-                      minRank: event.target.value as RankValue,
-                    })
-                  }
-                  size="sm"
-                  value={queue.minRank}
-                >
-                  {rankOptions.map((option) => (
-                    <NativeSelectOption key={`min-${option.value}`} value={option.value}>
-                      Min {option.label}
-                    </NativeSelectOption>
-                  ))}
-                </NativeSelect>
-                <NativeSelect
-                  disabled={toolbarFieldPending !== null}
-                  onChange={(event) =>
-                    handleToolbarSettingsChange("maxRank", {
-                      maxRank: event.target.value as RankValue,
-                    })
-                  }
-                  size="sm"
-                  value={queue.maxRank}
-                >
-                  {rankOptions.map((option) => (
-                    <NativeSelectOption key={`max-${option.value}`} value={option.value}>
-                      Max {option.label}
-                    </NativeSelectOption>
-                  ))}
-                </NativeSelect>
-              </ToolbarGroup>
+                <ToolbarDivider />
 
-              <ToolbarGroup label="Batch">
-                <NativeSelect
-                  disabled={toolbarFieldPending !== null}
-                  onChange={(event) =>
-                    handleToolbarSettingsChange("playersPerBatch", {
-                      playersPerBatch: Number(event.target.value),
-                    })
-                  }
-                  size="sm"
-                  value={String(queue.playersPerBatch)}
-                >
-                  {playersPerBatchOptions.map((value) => (
-                    <NativeSelectOption key={value} value={String(value)}>
-                      {value} per batch
-                    </NativeSelectOption>
-                  ))}
-                </NativeSelect>
-                <NativeSelect
-                  disabled={toolbarFieldPending !== null}
-                  onChange={(event) =>
-                    handleToolbarSettingsChange("matchesPerViewer", {
-                      matchesPerViewer: Number(event.target.value),
-                    })
-                  }
-                  size="sm"
-                  value={String(queue.matchesPerViewer)}
-                >
-                  {matchesPerViewerOptions.map((value) => (
-                    <NativeSelectOption key={value} value={String(value)}>
-                      {value} match{value === 1 ? "" : "es"}
-                    </NativeSelectOption>
-                  ))}
-                </NativeSelect>
-              </ToolbarGroup>
+                <ToolbarGroup label="Ranks">
+                  <AppSelect
+                    className="w-[144px] max-w-full"
+                    disabled={toolbarFieldPending !== null}
+                    onValueChange={(value) =>
+                      handleToolbarSettingsChange("minRank", {
+                        minRank: value as RankValue,
+                      })
+                    }
+                    options={rankOptions.map((option) => ({
+                      label: `Min ${option.label}`,
+                      value: option.value,
+                    }))}
+                    size="sm"
+                    value={queue.minRank}
+                  />
+                  <AppSelect
+                    className="w-[144px] max-w-full"
+                    disabled={toolbarFieldPending !== null}
+                    onValueChange={(value) =>
+                      handleToolbarSettingsChange("maxRank", {
+                        maxRank: value as RankValue,
+                      })
+                    }
+                    options={rankOptions.map((option) => ({
+                      label: `Max ${option.label}`,
+                      value: option.value,
+                    }))}
+                    size="sm"
+                    value={queue.maxRank}
+                  />
+                </ToolbarGroup>
 
-              <ToolbarGroup label="Invite mode">
-                <NativeSelect
-                  disabled={toolbarFieldPending !== null}
-                  onChange={(event) =>
-                    handleToolbarSettingsChange("inviteMode", {
-                      inviteMode: event.target.value as InviteMode,
-                    })
-                  }
-                  size="sm"
-                  value={queue.inviteMode}
-                >
-                  {inviteModeOptions.map((option) => (
-                    <NativeSelectOption key={option.value} value={option.value}>
-                      {option.label}
-                    </NativeSelectOption>
-                  ))}
-                </NativeSelect>
-              </ToolbarGroup>
+                <ToolbarDivider />
 
-              <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  onClick={() => setSettingsOpen(true)}
-                  size="sm"
-                  variant="outline"
-                >
-                  <IconSettings data-icon="inline-start" />
-                  Settings
-                </Button>
-                <Button
-                  disabled={hasPublishedMessage || isPublishing}
-                  onClick={handlePublishQueueMessage}
-                  size="sm"
-                  variant="outline"
-                >
-                  <IconBrandDiscord data-icon="inline-start" />
-                  {isPublishing
-                    ? "Publishing..."
-                    : hasDiscordSyncError
-                      ? "Retry publish"
-                      : "Publish"}
-                </Button>
-                <Button
-                  disabled={!queue.messageId || isRefreshing}
-                  onClick={handleRefreshQueueMessage}
-                  size="sm"
-                  variant="outline"
-                >
-                  <IconRefresh data-icon="inline-start" />
-                  {isRefreshing ? "Refreshing..." : "Refresh"}
-                </Button>
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button
-                      disabled={entries.length === 0 || isClearingQueue}
-                      size="sm"
-                      variant="ghost"
-                    >
-                      <IconTrash data-icon="inline-start" />
-                      {isClearingQueue ? "Clearing..." : "Clear queue"}
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent size="sm">
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Clear the active queue?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        This removes every waiting viewer from the active list.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction
-                        onClick={handleClearQueue}
-                        variant="destructive"
+                <ToolbarGroup label="Batch">
+                  <AppSelect
+                    className="w-[148px] max-w-full"
+                    disabled={toolbarFieldPending !== null}
+                    onValueChange={(value) =>
+                      handleToolbarSettingsChange("playersPerBatch", {
+                        playersPerBatch: Number(value),
+                      })
+                    }
+                    options={playersPerBatchOptions.map((value) => ({
+                      label: `${value} per batch`,
+                      value: String(value),
+                    }))}
+                    size="sm"
+                    value={String(queue.playersPerBatch)}
+                  />
+                  <AppSelect
+                    className="w-[124px] max-w-full"
+                    disabled={toolbarFieldPending !== null}
+                    onValueChange={(value) =>
+                      handleToolbarSettingsChange("matchesPerViewer", {
+                        matchesPerViewer: Number(value),
+                      })
+                    }
+                    options={matchesPerViewerOptions.map((value) => ({
+                      label: `${value} match${value === 1 ? "" : "es"}`,
+                      value: String(value),
+                    }))}
+                    size="sm"
+                    value={String(queue.matchesPerViewer)}
+                  />
+                </ToolbarGroup>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-border/50 pt-4">
+                <ToolbarGroup label="Invite mode">
+                  <AppSelect
+                    className="w-[168px] max-w-full"
+                    disabled={toolbarFieldPending !== null}
+                    onValueChange={(value) =>
+                      handleToolbarSettingsChange("inviteMode", {
+                        inviteMode: value as InviteMode,
+                      })
+                    }
+                    options={inviteModeOptions.map((option) => ({
+                      label: option.label,
+                      value: option.value,
+                    }))}
+                    size="sm"
+                    value={queue.inviteMode}
+                  />
+                </ToolbarGroup>
+
+                <ToolbarDivider />
+
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <Button
+                    onClick={() => setSettingsOpen(true)}
+                    size="sm"
+                    variant="outline"
+                  >
+                    <IconSettings data-icon="inline-start" />
+                    Settings
+                  </Button>
+                  <Button
+                    disabled={hasPublishedMessage || isPublishing}
+                    onClick={handlePublishQueueMessage}
+                    size="sm"
+                    variant="outline"
+                  >
+                    <IconBrandDiscord data-icon="inline-start" />
+                    {isPublishing
+                      ? "Publishing..."
+                      : hasDiscordSyncError
+                        ? "Retry publish"
+                        : "Publish"}
+                  </Button>
+                  <Button
+                    disabled={!queue.messageId || isRefreshing}
+                    onClick={handleRefreshQueueMessage}
+                    size="sm"
+                    variant="outline"
+                  >
+                    <IconRefresh data-icon="inline-start" />
+                    {isRefreshing ? "Refreshing..." : "Refresh"}
+                  </Button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        disabled={entries.length === 0 || isClearingQueue}
+                        size="sm"
+                        variant="ghost"
                       >
-                        Clear queue
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-                <Button
-                  disabled={entries.length === 0}
-                  onClick={() => openSelectionDialog({ kind: "batch" })}
-                  size="sm"
-                >
-                  <IconArrowRight data-icon="inline-start" />
-                  Next batch
-                </Button>
+                        <IconTrash data-icon="inline-start" />
+                        {isClearingQueue ? "Clearing..." : "Clear queue"}
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent size="sm">
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Clear the active queue?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This removes every waiting viewer from the active list.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={handleClearQueue}
+                          variant="destructive"
+                        >
+                          Clear queue
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                  <Button
+                    disabled={entries.length === 0}
+                    onClick={() => openSelectionDialog({ kind: "batch" })}
+                    size="sm"
+                  >
+                    <IconArrowRight data-icon="inline-start" />
+                    Next batch
+                  </Button>
+                </div>
               </div>
             </div>
           </Panel>
@@ -1760,8 +1873,8 @@ export function PlayWithViewersDashboardView({
       ) : null}
 
       <Sheet onOpenChange={setSettingsOpen} open={settingsOpen}>
-        <SheetContent className="w-full sm:max-w-xl">
-          <SheetHeader>
+        <SheetContent className="w-full p-0 sm:max-w-2xl lg:max-w-[54rem]">
+          <SheetHeader className="shrink-0 border-b border-border/60 px-6 py-5 text-left">
             <SheetTitle>
               {queue ? "Queue settings" : "Create Play With Viewers queue"}
             </SheetTitle>
@@ -1772,34 +1885,34 @@ export function PlayWithViewersDashboardView({
             </SheetDescription>
           </SheetHeader>
 
-          <ScrollArea className="flex-1">
-            <div className="p-4 pt-0">
+          <ScrollArea className="min-h-0 flex-1">
+            <div className="px-6 py-6">
               <FieldGroup>
+                <div className="grid gap-6">
                 {!queue ? (
                   <>
                     <Field>
                       <FieldLabel htmlFor="pwv-guild-id">Discord server</FieldLabel>
-                      <NativeSelect
+                      <AppSelect
                         disabled={
                           isLoadingAvailableGuilds ||
                           Boolean(availableGuildsError) ||
                           availableGuilds.length === 0
                         }
                         id="pwv-guild-id"
-                        onChange={(event) =>
+                        onValueChange={(value) =>
                           setCreateFormState((current) => ({
                             ...current,
-                            guildId: event.target.value,
+                            guildId: value,
                           }))
                         }
+                        options={availableGuilds.map((guild) => ({
+                          label: guild.name,
+                          value: guild.id,
+                        }))}
+                        placeholder="Select a Discord server"
                         value={createFormState.guildId}
-                      >
-                        {availableGuilds.map((guild) => (
-                          <NativeSelectOption key={guild.id} value={guild.id}>
-                            {guild.name}
-                          </NativeSelectOption>
-                        ))}
-                      </NativeSelect>
+                      />
                       <FieldDescription>
                         {isLoadingAvailableGuilds
                           ? "Checking the Discord servers you own where the bot is already installed."
@@ -1907,6 +2020,7 @@ export function PlayWithViewersDashboardView({
                     Creator message
                   </FieldLabel>
                   <Textarea
+                    className="min-h-[120px] resize-y"
                     id="pwv-creator-message"
                     onChange={(event) =>
                       queue
@@ -1930,6 +2044,7 @@ export function PlayWithViewersDashboardView({
                 <Field>
                   <FieldLabel htmlFor="pwv-rules">Rules text</FieldLabel>
                   <Textarea
+                    className="min-h-[140px] resize-y"
                     id="pwv-rules"
                     onChange={(event) =>
                       queue
@@ -1946,159 +2061,143 @@ export function PlayWithViewersDashboardView({
                   />
                 </Field>
 
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <Field>
-                    <FieldLabel htmlFor="pwv-players-per-batch">
-                      Players per batch
-                    </FieldLabel>
-                    <NativeSelect
-                      id="pwv-players-per-batch"
-                      onChange={(event) =>
-                        queue
-                          ? setSettingsFormState((current) => ({
-                              ...current,
-                              playersPerBatch: event.target.value,
-                            }))
-                          : setCreateFormState((current) => ({
-                              ...current,
-                              playersPerBatch: event.target.value,
-                            }))
-                      }
-                      value={
-                        queue
-                          ? settingsFormState.playersPerBatch
-                          : createFormState.playersPerBatch
-                      }
-                    >
-                      {playersPerBatchOptions.map((value) => (
-                        <NativeSelectOption key={`sheet-batch-${value}`} value={String(value)}>
-                          {value}
-                        </NativeSelectOption>
-                      ))}
-                    </NativeSelect>
-                  </Field>
-
-                  <Field>
-                    <FieldLabel htmlFor="pwv-matches-per-viewer">
-                      Matches per viewer
-                    </FieldLabel>
-                    <NativeSelect
-                      id="pwv-matches-per-viewer"
-                      onChange={(event) =>
-                        queue
-                          ? setSettingsFormState((current) => ({
-                              ...current,
-                              matchesPerViewer: event.target.value,
-                            }))
-                          : setCreateFormState((current) => ({
-                              ...current,
-                              matchesPerViewer: event.target.value,
-                            }))
-                      }
-                      value={
-                        queue
-                          ? settingsFormState.matchesPerViewer
-                          : createFormState.matchesPerViewer
-                      }
-                    >
-                      {matchesPerViewerOptions.map((value) => (
-                        <NativeSelectOption
-                          key={`sheet-matches-${value}`}
-                          value={String(value)}
-                        >
-                          {value}
-                        </NativeSelectOption>
-                      ))}
-                    </NativeSelect>
-                  </Field>
-                </div>
-
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <Field>
-                    <FieldLabel htmlFor="pwv-min-rank">Minimum rank</FieldLabel>
-                    <NativeSelect
-                      id="pwv-min-rank"
-                      onChange={(event) =>
-                        queue
-                          ? setSettingsFormState((current) => ({
-                              ...current,
-                              minRank: event.target.value as RankValue,
-                            }))
-                          : setCreateFormState((current) => ({
-                              ...current,
-                              minRank: event.target.value as RankValue,
-                            }))
-                      }
-                      value={queue ? settingsFormState.minRank : createFormState.minRank}
-                    >
-                      {rankOptions.map((option) => (
-                        <NativeSelectOption key={`sheet-min-${option.value}`} value={option.value}>
-                          {option.label}
-                        </NativeSelectOption>
-                      ))}
-                    </NativeSelect>
-                  </Field>
-
-                  <Field>
-                    <FieldLabel htmlFor="pwv-max-rank">Maximum rank</FieldLabel>
-                    <NativeSelect
-                      id="pwv-max-rank"
-                      onChange={(event) =>
-                        queue
-                          ? setSettingsFormState((current) => ({
-                              ...current,
-                              maxRank: event.target.value as RankValue,
-                            }))
-                          : setCreateFormState((current) => ({
-                              ...current,
-                              maxRank: event.target.value as RankValue,
-                            }))
-                      }
-                      value={queue ? settingsFormState.maxRank : createFormState.maxRank}
-                    >
-                      {rankOptions.map((option) => (
-                        <NativeSelectOption key={`sheet-max-${option.value}`} value={option.value}>
-                          {option.label}
-                        </NativeSelectOption>
-                      ))}
-                    </NativeSelect>
-                  </Field>
-                </div>
-
                 <Field>
-                  <FieldLabel htmlFor="pwv-invite-mode">Invite mode</FieldLabel>
-                  <NativeSelect
-                    id="pwv-invite-mode"
-                    onChange={(event) =>
+                  <FieldLabel htmlFor="pwv-players-per-batch">
+                    Players per batch
+                  </FieldLabel>
+                  <AppSelect
+                    id="pwv-players-per-batch"
+                    onValueChange={(value) =>
                       queue
                         ? setSettingsFormState((current) => ({
                             ...current,
-                            inviteMode: event.target.value as InviteMode,
+                            playersPerBatch: value,
                           }))
                         : setCreateFormState((current) => ({
                             ...current,
-                            inviteMode: event.target.value as InviteMode,
+                            playersPerBatch: value,
                           }))
                     }
+                    options={playersPerBatchOptions.map((value) => ({
+                      label: String(value),
+                      value: String(value),
+                    }))}
+                    value={
+                      queue
+                        ? settingsFormState.playersPerBatch
+                        : createFormState.playersPerBatch
+                    }
+                  />
+                </Field>
+
+                <Field>
+                  <FieldLabel htmlFor="pwv-matches-per-viewer">
+                    Matches per viewer
+                  </FieldLabel>
+                  <AppSelect
+                    id="pwv-matches-per-viewer"
+                    onValueChange={(value) =>
+                      queue
+                        ? setSettingsFormState((current) => ({
+                            ...current,
+                            matchesPerViewer: value,
+                          }))
+                        : setCreateFormState((current) => ({
+                            ...current,
+                            matchesPerViewer: value,
+                          }))
+                    }
+                    options={matchesPerViewerOptions.map((value) => ({
+                      label: String(value),
+                      value: String(value),
+                    }))}
+                    value={
+                      queue
+                        ? settingsFormState.matchesPerViewer
+                        : createFormState.matchesPerViewer
+                    }
+                  />
+                </Field>
+
+                <Field>
+                  <FieldLabel htmlFor="pwv-min-rank">Minimum rank</FieldLabel>
+                  <AppSelect
+                    id="pwv-min-rank"
+                    onValueChange={(value) =>
+                      queue
+                        ? setSettingsFormState((current) => ({
+                            ...current,
+                            minRank: value as RankValue,
+                          }))
+                        : setCreateFormState((current) => ({
+                            ...current,
+                            minRank: value as RankValue,
+                          }))
+                    }
+                    options={rankOptions.map((option) => ({
+                      label: option.label,
+                      value: option.value,
+                    }))}
+                    value={queue ? settingsFormState.minRank : createFormState.minRank}
+                  />
+                </Field>
+
+                <Field>
+                  <FieldLabel htmlFor="pwv-max-rank">Maximum rank</FieldLabel>
+                  <AppSelect
+                    id="pwv-max-rank"
+                    onValueChange={(value) =>
+                      queue
+                        ? setSettingsFormState((current) => ({
+                            ...current,
+                            maxRank: value as RankValue,
+                          }))
+                        : setCreateFormState((current) => ({
+                            ...current,
+                            maxRank: value as RankValue,
+                          }))
+                    }
+                    options={rankOptions.map((option) => ({
+                      label: option.label,
+                      value: option.value,
+                    }))}
+                    value={queue ? settingsFormState.maxRank : createFormState.maxRank}
+                  />
+                </Field>
+
+                <Field>
+                  <FieldLabel htmlFor="pwv-invite-mode">Invite mode</FieldLabel>
+                  <AppSelect
+                    id="pwv-invite-mode"
+                    onValueChange={(value) =>
+                      queue
+                        ? setSettingsFormState((current) => ({
+                            ...current,
+                            inviteMode: value as InviteMode,
+                          }))
+                        : setCreateFormState((current) => ({
+                            ...current,
+                            inviteMode: value as InviteMode,
+                          }))
+                    }
+                    options={inviteModeOptions.map((option) => ({
+                      label: option.label,
+                      value: option.value,
+                    }))}
                     value={queue ? settingsFormState.inviteMode : createFormState.inviteMode}
-                  >
-                    {inviteModeOptions.map((option) => (
-                      <NativeSelectOption key={`sheet-mode-${option.value}`} value={option.value}>
-                        {option.label}
-                      </NativeSelectOption>
-                    ))}
-                  </NativeSelect>
+                  />
                   <FieldDescription>
                     {queue
                       ? `Discord target stays fixed on ${discordContextLabel}.`
                       : "Discord DM mode requires a lobby code when selecting viewers."}
                   </FieldDescription>
                 </Field>
+                </div>
               </FieldGroup>
             </div>
           </ScrollArea>
 
-          <SheetFooter>
+          <SheetFooter className="shrink-0 border-t border-border/60 px-6 py-4">
             <Button onClick={() => setSettingsOpen(false)} size="sm" variant="outline">
               Cancel
             </Button>
@@ -2217,7 +2316,8 @@ export function PlayWithViewersDashboardView({
         onOpenChange={(open) => {
           if (!open) {
             setSelectionDialogState(null)
-            setSelectionLobbyCode("")
+            setSelectionInviteCode("")
+            setSelectionInviteCodeType(DEFAULT_INVITE_CODE_TYPE)
           }
         }}
         open={selectionDialogState !== null}
@@ -2238,18 +2338,34 @@ export function PlayWithViewersDashboardView({
 
           <FieldGroup>
             {queue?.inviteMode === "discord_dm" ? (
-              <Field>
-                <FieldLabel htmlFor="pwv-lobby-code">Lobby code</FieldLabel>
-                <Input
-                  id="pwv-lobby-code"
-                  onChange={(event) => setSelectionLobbyCode(event.target.value)}
-                  placeholder="Enter the lobby code to DM"
-                  value={selectionLobbyCode}
-                />
-                <FieldDescription>
-                  Discord DM mode requires a lobby code before the round can be created.
-                </FieldDescription>
-              </Field>
+              <>
+                <Field>
+                  <FieldLabel htmlFor="pwv-invite-code-type">Invite code type</FieldLabel>
+                  <AppSelect
+                    id="pwv-invite-code-type"
+                    onValueChange={(value) =>
+                      setSelectionInviteCodeType(value as InviteCodeType)
+                    }
+                    options={inviteCodeTypeOptions.map((option) => ({
+                      label: option.label,
+                      value: option.value,
+                    }))}
+                    value={selectionInviteCodeType}
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="pwv-invite-code">Invite code</FieldLabel>
+                  <Input
+                    id="pwv-invite-code"
+                    onChange={(event) => setSelectionInviteCode(event.target.value)}
+                    placeholder={`Enter the ${getInviteCodeTypeLabel(selectionInviteCodeType).toLowerCase()} to DM`}
+                    value={selectionInviteCode}
+                  />
+                  <FieldDescription>
+                    Discord DM mode requires a code type and invite code before the round can be created.
+                  </FieldDescription>
+                </Field>
+              </>
             ) : (
               <Field>
                 <FieldLabel>Manual contact mode</FieldLabel>
@@ -2291,6 +2407,7 @@ export function PlayWithViewersDashboardView({
           </DialogHeader>
 
           <SelectionResultSummary
+            onCopyInviteMessage={handleCopyInviteMessage}
             onCopyMentions={handleCopyMentions}
             onCopyUsernames={handleCopyUsernames}
             selectionResult={selectionResultState}
