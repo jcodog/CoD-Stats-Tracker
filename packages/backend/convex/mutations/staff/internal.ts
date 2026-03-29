@@ -1,6 +1,11 @@
+import { internal } from "../../_generated/api"
 import type { Doc } from "../../_generated/dataModel"
 import { internalMutation, type MutationCtx } from "../../_generated/server"
 import { v } from "convex/values"
+import {
+  applyGlobalLandingStatsDelta,
+  applyUserLandingStatsDelta,
+} from "../../lib/landingMetrics"
 import { normalizeStatsLookupValue } from "../../lib/statsDashboard"
 
 const roleValidator = v.union(
@@ -104,6 +109,18 @@ function resolveArchiveReason(args: {
 
 function uniqueKeys(values: string[]) {
   return Array.from(new Set(values))
+}
+
+function countSessionsByUserId(
+  sessions: Array<Pick<Doc<"sessions">, "userId">>
+) {
+  const counts = new Map<string, number>()
+
+  for (const session of sessions) {
+    counts.set(session.userId, (counts.get(session.userId) ?? 0) + 1)
+  }
+
+  return counts
 }
 
 async function resolveSupportedRankedModes(args: {
@@ -1010,6 +1027,7 @@ export const setCurrentRankedConfig = internalMutation({
       .query("sessions")
       .withIndex("by_endedAt", (query) => query.eq("endedAt", null))
       .collect()
+    const openSessionCountsByUserId = countSessionsByUserId(openSessions)
 
     await Promise.all(
       openSessions.map((session) =>
@@ -1026,6 +1044,29 @@ export const setCurrentRankedConfig = internalMutation({
       updatedAt: now,
       updatedByUserId: args.updatedByUserId,
     })
+
+    if (openSessions.length > 0) {
+      await applyGlobalLandingStatsDelta(ctx, {
+        activeSessions: -openSessions.length,
+      })
+
+      await Promise.all(
+        Array.from(openSessionCountsByUserId.entries()).map(
+          ([userId, openSessionCount]) =>
+            applyUserLandingStatsDelta(ctx, userId, {
+              activeSessions: -openSessionCount,
+            })
+        )
+      )
+
+      await ctx.scheduler.runAfter(
+        0,
+        internal.actions.stats.cache.invalidateLandingMetricsCache,
+        {
+          invalidateAll: true,
+        }
+      )
+    }
 
     return {
       activeSeason,

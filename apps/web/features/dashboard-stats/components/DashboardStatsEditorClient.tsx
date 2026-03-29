@@ -133,8 +133,8 @@ export function DashboardStatsEditorClient({
             Stats editor unavailable
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Your authenticated Convex session could not be established for the
-            flagged dashboard.
+            We could not establish your dashboard session or load the current
+            dashboard state for this account.
           </p>
         </div>
       </section>
