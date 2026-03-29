@@ -35,7 +35,7 @@ type MatchHistoryRouteDeps = {
 const defaultDeps: MatchHistoryRouteDeps = {
   authenticate: requireAuthenticatedAppRequest,
   getMatchesByDiscordIdPaginated: async (discordId, paginationOpts) =>
-    fetchQuery((api as any).queries.chatgpt.getMatchesByDiscordIdPaginated, {
+    fetchQuery(api.queries.chatgpt.getMatchesByDiscordIdPaginated, {
       discordId,
       paginationOpts,
     }),

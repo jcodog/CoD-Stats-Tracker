@@ -21,10 +21,8 @@ import {
 import { api } from "@workspace/backend/convex/_generated/api"
 import type { Doc, Id } from "@workspace/backend/convex/_generated/dataModel"
 import {
-  buildInviteMessagePreview,
   DEFAULT_INVITE_CODE_TYPE,
   getInviteCodeTypeLabel,
-  renderInviteCodeInstructions,
   type InviteCodeType,
   type RankValue,
 } from "@workspace/backend/lib/playingWithViewers"
@@ -148,10 +146,6 @@ type SelectionDialogState =
 type SelectionResultState =
   | {
       createdAt: number
-      inviteCode?: string
-      inviteCodeType?: InviteCodeType
-      inviteInstructions?: string
-      inviteMessagePreview?: string
       inviteMode: InviteMode
       selectionKind: "batch" | "entry"
       selectedUsers: QueueRoundUser[]
@@ -247,10 +241,6 @@ function toErrorMessage(error: unknown, fallback: string) {
 
 function getRankLabel(rank: RankValue) {
   return rankOptions.find((option) => option.value === rank)?.label ?? rank
-}
-
-function getInviteModeLabel(mode: InviteMode) {
-  return inviteModeOptions.find((option) => option.value === mode)?.label ?? mode
 }
 
 function getInitials(value: string) {
@@ -451,12 +441,10 @@ function LockedState({ queueTitle }: Readonly<{ queueTitle: string }>) {
 }
 
 function SelectionResultSummary({
-  onCopyInviteMessage,
   onCopyMentions,
   onCopyUsernames,
   selectionResult,
 }: Readonly<{
-  onCopyInviteMessage: () => Promise<void>
   onCopyMentions: () => Promise<void>
   onCopyUsernames: () => Promise<void>
   selectionResult: SelectionResultState
@@ -475,66 +463,13 @@ function SelectionResultSummary({
   return (
     <div className="flex flex-col">
       <div className="flex flex-wrap items-center gap-2 border-b border-border/70 px-4 py-3">
-        <Badge variant="secondary">
-          {getInviteModeLabel(selectionResult.inviteMode)}
-        </Badge>
         <Badge variant="outline">
           {selectionResult.selectedUsers.length} selected
         </Badge>
         <span className="text-sm text-muted-foreground">
           {formatDateTime(selectionResult.createdAt)}
         </span>
-        {selectionResult.inviteCode ? (
-          <span className="rounded-md border border-border/70 bg-background px-2 py-1 font-mono text-xs text-foreground">
-            {selectionResult.inviteCode}
-          </span>
-        ) : null}
       </div>
-
-      {selectionResult.inviteMode === "discord_dm" &&
-      selectionResult.inviteCode &&
-      selectionResult.inviteCodeType &&
-      selectionResult.inviteInstructions &&
-      selectionResult.inviteMessagePreview ? (
-        <div className="border-b border-border/70 px-4 py-3">
-          <div className="flex flex-col gap-3 rounded-lg border border-border/70 bg-muted/20 p-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="outline">
-                  {getInviteCodeTypeLabel(selectionResult.inviteCodeType)}
-                </Badge>
-                <span className="rounded-md border border-border/70 bg-background px-2 py-1 font-mono text-xs text-foreground">
-                  {selectionResult.inviteCode}
-                </span>
-              </div>
-              <Button onClick={onCopyInviteMessage} size="sm" variant="outline">
-                <IconCopy data-icon="inline-start" />
-                Copy DM preview
-              </Button>
-            </div>
-
-            <div className="flex flex-col gap-3">
-              <div className="flex flex-col gap-1">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Instructions
-                </p>
-                <p className="whitespace-pre-wrap text-sm text-foreground">
-                  {selectionResult.inviteInstructions}
-                </p>
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  DM preview
-                </p>
-                <p className="whitespace-pre-wrap rounded-md border border-border/70 bg-background px-3 py-2 text-sm text-foreground">
-                  {selectionResult.inviteMessagePreview}
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
 
       {selectionResult.inviteMode === "discord_dm" && failedDmCount > 0 ? (
         <div className="border-b border-border/70 px-4 py-3">
@@ -978,17 +913,6 @@ export function PlayWithViewersDashboardView({
     )
   }
 
-  async function handleCopyInviteMessage() {
-    if (!selectionResultState?.inviteMessagePreview) {
-      return
-    }
-
-    await handleCopyToClipboard(
-      selectionResultState.inviteMessagePreview,
-      "DM preview copied."
-    )
-  }
-
   async function handleCreateQueue() {
     if (!createFormState.guildId.trim()) {
       toast.error("Select a Discord server before creating the queue.")
@@ -1277,24 +1201,6 @@ export function PlayWithViewersDashboardView({
       return
     }
 
-    const inviteInstructions =
-      queue.inviteMode === "discord_dm" && inviteCode
-        ? renderInviteCodeInstructions({
-            inviteCode,
-            inviteCodeType: selectionInviteCodeType,
-          })
-        : undefined
-    const inviteMessagePreview =
-      queue.inviteMode === "discord_dm" && inviteCode
-        ? buildInviteMessagePreview({
-            creatorDisplayName: queue.creatorDisplayName,
-            gameLabel: queue.gameLabel,
-            inviteCode,
-            inviteCodeType: selectionInviteCodeType,
-            title: queue.title,
-          })
-        : undefined
-
     setIsSelectingBatch(true)
 
     try {
@@ -1319,11 +1225,6 @@ export function PlayWithViewersDashboardView({
 
       setSelectionResultState({
         createdAt: Date.now(),
-        inviteCode,
-        inviteCodeType:
-          queue.inviteMode === "discord_dm" ? selectionInviteCodeType : undefined,
-        inviteInstructions,
-        inviteMessagePreview,
         inviteMode: queue.inviteMode,
         selectedUsers: result.selectedUsers as QueueRoundUser[],
         selectionKind,
@@ -2407,7 +2308,6 @@ export function PlayWithViewersDashboardView({
           </DialogHeader>
 
           <SelectionResultSummary
-            onCopyInviteMessage={handleCopyInviteMessage}
             onCopyMentions={handleCopyMentions}
             onCopyUsernames={handleCopyUsernames}
             selectionResult={selectionResultState}

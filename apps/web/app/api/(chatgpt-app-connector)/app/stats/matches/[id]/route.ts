@@ -28,7 +28,7 @@ type MatchDetailRouteDeps = {
 const defaultDeps: MatchDetailRouteDeps = {
   authenticate: requireAuthenticatedAppRequest,
   getMatchById: async (discordId, matchId) =>
-    fetchQuery((api as any).queries.chatgpt.getMatchById, {
+    fetchQuery(api.queries.chatgpt.getMatchById, {
       discordId,
       matchId,
     }),

@@ -1,21 +1,31 @@
 "use client"
 
+import type { CSSProperties } from "react"
+
 import type { DashboardSessionOverview } from "@/features/dashboard-stats/lib/dashboard-stats-client"
 import { formatDashboardPercent } from "@/features/dashboard-stats/lib/dashboard-stats-format"
+import { getDashboardMetricTextStyle } from "@/features/dashboard-stats/lib/dashboard-stats-visuals"
 import { cn } from "@workspace/ui/lib/utils"
 
 function SummaryMetric({
   label,
   value,
+  valueStyle,
 }: {
   embedded?: boolean
   label: string
   value: string
+  valueStyle?: CSSProperties
 }) {
   return (
     <div className="px-6 py-5">
       <dt className="text-sm text-muted-foreground">{label}</dt>
-      <dd className="mt-2 text-3xl font-semibold tracking-tight">{value}</dd>
+      <dd
+        className="mt-2 text-3xl font-semibold tracking-tight"
+        style={valueStyle}
+      >
+        {value}
+      </dd>
     </div>
   )
 }
@@ -59,6 +69,7 @@ export function DashboardStatsSummary({
         <SummaryMetric
           label="Net SR"
           value={`${overview.netSr > 0 ? "+" : ""}${overview.netSr}`}
+          valueStyle={getDashboardMetricTextStyle(overview.netSr)}
         />
         <SummaryMetric
           label="Win rate"

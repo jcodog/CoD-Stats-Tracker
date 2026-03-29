@@ -8,7 +8,6 @@ import {
   type BillingSubscriptionStatus,
 } from "../../lib/billing"
 
-type BillingCustomerRecord = Doc<"billingCustomers">
 type BillingSubscriptionRecord = Doc<"billingSubscriptions">
 type BillingAccessGrantRecord = Doc<"billingAccessGrants">
 

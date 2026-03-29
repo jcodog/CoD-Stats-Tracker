@@ -525,18 +525,16 @@ export const getMatchById = query({
       throw new Error("invalid_match_id");
     }
 
-    let match = null;
-
     try {
-      match = await ctx.db.get(matchId as Id<"games">);
+      const match = await ctx.db.get(matchId as Id<"games">);
+
+      if (!match || match.userId !== discordId) {
+        return null;
+      }
+
+      return buildMatchDetail(match);
     } catch {
       return null;
     }
-
-    if (!match || match.userId !== discordId) {
-      return null;
-    }
-
-    return buildMatchDetail(match);
   },
 });

@@ -6,6 +6,7 @@ import type {
   APIUser,
   RESTPostAPIInteractionCallbackJSONBody,
 } from "discord-api-types/v10"
+import type { Doc, Id } from "../../_generated/dataModel"
 import {
   ApplicationCommandType,
   ComponentType,
@@ -15,7 +16,7 @@ import {
 } from "discord-api-types/v10"
 import { pingCommand } from "../../lib/commands/ping"
 import { internal } from "../../_generated/api"
-import { httpAction } from "../../_generated/server"
+import { httpAction, type ActionCtx } from "../../_generated/server"
 
 type ParsedCustomId =
   | { kind: "join"; queueId: string }
@@ -23,6 +24,9 @@ type ParsedCustomId =
   | { kind: "status"; queueId: string }
   | { kind: "rank"; queueId: string }
   | null
+
+type DiscordInteractionCtx = Pick<ActionCtx, "runAction" | "runMutation" | "runQuery">
+type ViewerRank = (typeof DISCORD_RANK_OPTIONS)[number]["value"]
 
 const DISCORD_RANK_OPTIONS = [
   { label: "Bronze", value: "bronze" },
@@ -264,13 +268,20 @@ function buildRankSelectResponse(
 
 function getSelectedRankFromComponentInteraction(
   interaction: APIMessageComponentInteraction
-): string | null {
+): ViewerRank | null {
   if (interaction.data.component_type !== ComponentType.StringSelect) {
     return null
   }
 
   const firstValue = interaction.data.values?.[0]?.trim()
-  return firstValue || null
+
+  if (!firstValue) {
+    return null
+  }
+
+  return DISCORD_RANK_OPTIONS.some((option) => option.value === firstValue)
+    ? (firstValue as ViewerRank)
+    : null
 }
 
 function buildStatusMessage(params: {
@@ -301,13 +312,14 @@ function buildStatusMessage(params: {
 }
 
 async function handleJoinInteraction(
-  ctx: Parameters<typeof httpAction>[0] extends never ? never : any,
+  ctx: DiscordInteractionCtx,
   interaction: APIMessageComponentInteraction,
   queueId: string
 ): Promise<Response> {
+  const queueDocumentId = queueId as Id<"viewerQueues">
   const queue = await ctx.runQuery(
     internal.queries.creatorTools.playingWithViewers.queue.getQueueById,
-    { queueId: queueId as any }
+    { queueId: queueDocumentId }
   )
 
   if (!queue.isActive) {
@@ -324,10 +336,11 @@ async function handleJoinInteraction(
 }
 
 async function handleLeaveInteraction(
-  ctx: Parameters<typeof httpAction>[0] extends never ? never : any,
+  ctx: DiscordInteractionCtx,
   interaction: APIMessageComponentInteraction,
   queueId: string
 ): Promise<Response> {
+  const queueDocumentId = queueId as Id<"viewerQueues">
   const user = getDiscordUser(interaction)
 
   if (!user) {
@@ -338,7 +351,7 @@ async function handleLeaveInteraction(
     await ctx.runMutation(
       internal.mutations.creatorTools.playingWithViewers.queue.leaveQueue,
       {
-        queueId: queueId as any,
+        queueId: queueDocumentId,
         discordUserId: user.id,
       }
     )
@@ -356,7 +369,7 @@ async function handleLeaveInteraction(
     await ctx.runAction(
       internal.actions.creatorTools.playingWithViewers.discord.syncQueueMessageAfterViewerInteraction,
       {
-        queueId: queueId as any,
+        queueId: queueDocumentId,
       }
     )
   } catch (error) {
@@ -377,10 +390,11 @@ async function handleLeaveInteraction(
 }
 
 async function handleStatusInteraction(
-  ctx: Parameters<typeof httpAction>[0] extends never ? never : any,
+  ctx: DiscordInteractionCtx,
   interaction: APIMessageComponentInteraction,
   queueId: string
 ): Promise<Response> {
+  const queueDocumentId = queueId as Id<"viewerQueues">
   const user = getDiscordUser(interaction)
 
   if (!user) {
@@ -389,17 +403,15 @@ async function handleStatusInteraction(
 
   const queue = await ctx.runQuery(
     internal.queries.creatorTools.playingWithViewers.queue.getQueueById,
-    { queueId: queueId as any }
+    { queueId: queueDocumentId }
   )
 
   const entries = await ctx.runQuery(
     internal.queries.creatorTools.playingWithViewers.queue.getQueueEntries,
-    { queueId: queueId as any }
-  )
+    { queueId: queueDocumentId }
+  ) as Doc<"viewerQueueEntries">[]
 
-  const index = entries.findIndex(
-    (entry: any) => entry.discordUserId === user.id
-  )
+  const index = entries.findIndex((entry) => entry.discordUserId === user.id)
   const joined = index !== -1
   const queuePosition = joined ? index + 1 : null
 
@@ -422,10 +434,11 @@ async function handleStatusInteraction(
 }
 
 async function handleRankSelectInteraction(
-  ctx: Parameters<typeof httpAction>[0] extends never ? never : any,
+  ctx: DiscordInteractionCtx,
   interaction: APIMessageComponentInteraction,
   queueId: string
 ): Promise<Response> {
+  const queueDocumentId = queueId as Id<"viewerQueues">
   const user = getDiscordUser(interaction)
 
   if (!user) {
@@ -442,12 +455,12 @@ async function handleRankSelectInteraction(
     const result = await ctx.runMutation(
       internal.mutations.creatorTools.playingWithViewers.queue.enqueueViewer,
       {
-        queueId: queueId as any,
+        queueId: queueDocumentId,
         discordUserId: user.id,
         username: user.username,
         displayName: user.global_name ?? user.username,
         avatarUrl: getDiscordAvatarUrl(interaction),
-        rank: selectedRank as any,
+        rank: selectedRank,
       }
     )
 
@@ -475,7 +488,7 @@ async function handleRankSelectInteraction(
     await ctx.runAction(
       internal.actions.creatorTools.playingWithViewers.discord.syncQueueMessageAfterViewerInteraction,
       {
-        queueId: queueId as any,
+        queueId: queueDocumentId,
       }
     )
   } catch (error) {
@@ -497,7 +510,7 @@ async function handleRankSelectInteraction(
 }
 
 async function handleMessageComponentInteraction(
-  ctx: Parameters<typeof httpAction>[0] extends never ? never : any,
+  ctx: DiscordInteractionCtx,
   interaction: APIMessageComponentInteraction
 ): Promise<Response> {
   const parsed = parseCustomId(interaction.data.custom_id)

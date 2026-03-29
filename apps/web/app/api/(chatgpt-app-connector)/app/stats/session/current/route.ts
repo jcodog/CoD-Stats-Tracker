@@ -26,7 +26,7 @@ type CurrentSessionRouteDeps = {
 const defaultDeps: CurrentSessionRouteDeps = {
   authenticate: requireAuthenticatedAppRequest,
   getActiveSessionByDiscordId: async (discordId) =>
-    fetchQuery((api as any).queries.chatgpt.getActiveSessionByDiscordId, {
+    fetchQuery(api.queries.chatgpt.getActiveSessionByDiscordId, {
       discordId,
     }),
   touchConnectionLastUsedAt: touchChatGptConnectionLastUsedAt,

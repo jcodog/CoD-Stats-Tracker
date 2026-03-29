@@ -2,12 +2,12 @@
   "name": "cod-stats",
   "version": "0.1.0",
   "devDependencies": {
-    "@typescript/native-preview": "^7.0.0-dev.20260325.1",
+    "@typescript/native-preview": "^7.0.0-dev.20260329.1",
     "@workspace/eslint-config": "workspace:*",
     "@workspace/typescript-config": "workspace:*",
     "prettier": "^3.8.1",
     "prettier-plugin-tailwindcss": "^0.7.2",
-    "turbo": "^2.8.20",
+    "turbo": "^2.8.21",
     "typescript": "6.0.2"
   },
   "engines": {

@@ -221,8 +221,6 @@ export async function handleAuthorizeGet(
     );
   }
 
-  let codeChallengeMethod: "S256" | undefined;
-
   if (!codeChallenge || !codeChallengeMethodRaw) {
     return authorizeError(
       redirectUri,
@@ -249,8 +247,7 @@ export async function handleAuthorizeGet(
       "Invalid code_challenge format",
     );
   }
-
-  codeChallengeMethod = "S256";
+  const codeChallengeMethod = "S256";
 
   const { userId, sessionId, getToken } = await deps.getAuth();
   if (!userId || !sessionId) {

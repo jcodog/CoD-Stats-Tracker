@@ -26,6 +26,9 @@
   --color-chart-3: var(--chart-3);
   --color-chart-2: var(--chart-2);
   --color-chart-1: var(--chart-1);
+  --color-dashboard-positive: var(--dashboard-positive);
+  --color-dashboard-negative: var(--dashboard-negative);
+  --color-dashboard-neutral: var(--dashboard-neutral);
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
@@ -73,6 +76,9 @@
   --chart-3: oklch(0.6 0.118 184.704);
   --chart-4: oklch(0.511 0.096 186.391);
   --chart-5: oklch(0.437 0.078 188.216);
+  --dashboard-positive: var(--chart-1);
+  --dashboard-negative: var(--destructive);
+  --dashboard-neutral: var(--muted-foreground);
   --radius: 0.625rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
@@ -110,6 +116,9 @@
   --chart-3: oklch(0.6 0.118 184.704);
   --chart-4: oklch(0.511 0.096 186.391);
   --chart-5: oklch(0.437 0.078 188.216);
+  --dashboard-positive: var(--chart-1);
+  --dashboard-negative: var(--destructive);
+  --dashboard-neutral: var(--muted-foreground);
   --sidebar: oklch(0.205 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.704 0.14 182.503);

@@ -1,6 +1,7 @@
 import Stripe from "stripe"
 
 import { internal } from "../_generated/api"
+import type { ActionCtx } from "../_generated/server"
 import {
   deriveAttentionStatus,
   getExpandedStripeCustomer,
@@ -9,7 +10,6 @@ import {
   getStripeManagedGrantMode,
   getStripeManagedGrantSource,
   getStripeInvoiceId,
-  getStripePaymentIntentId,
   getStripeProductId,
   getStripeScheduleId,
   getSubscriptionItemCurrentPeriodEnd,
@@ -20,10 +20,7 @@ import {
   mapSubscriptionScheduleChange,
 } from "./billingStripe"
 
-type BillingLifecycleCtx = {
-  runMutation: (reference: any, args: any) => Promise<any>
-  runQuery: (reference: any, args: any) => Promise<any>
-}
+type BillingLifecycleCtx = Pick<ActionCtx, "runMutation" | "runQuery">
 
 async function getStripeCustomerIfAvailable(args: {
   customer: string | Stripe.Customer | Stripe.DeletedCustomer | null | undefined

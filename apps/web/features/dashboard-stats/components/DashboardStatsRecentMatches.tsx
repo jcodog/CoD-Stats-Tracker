@@ -6,6 +6,10 @@ import {
   getMapLabel,
   getModeLabel,
 } from "@/features/dashboard-stats/lib/dashboard-stats-format"
+import {
+  getDashboardMetricTextStyle,
+  getDashboardOutcomeBadgeStyle,
+} from "@/features/dashboard-stats/lib/dashboard-stats-visuals"
 import { Badge } from "@workspace/ui/components/badge"
 import {
   Empty,
@@ -106,13 +110,20 @@ export function DashboardStatsRecentMatches({
                       {formatDashboardDateTime(match.createdAt)}
                     </TableCell>
                     <TableCell>
-                      <Badge variant={match.outcome === "win" ? "secondary" : "outline"}>
+                      <Badge
+                        className="capitalize"
+                        style={getDashboardOutcomeBadgeStyle(match.outcome)}
+                        variant="outline"
+                      >
                         {match.outcome}
                       </Badge>
                     </TableCell>
                     <TableCell>{getModeLabel(match.mode)}</TableCell>
                     <TableCell>{getMapLabel(match.mapName)}</TableCell>
-                    <TableCell className="font-medium">
+                    <TableCell
+                      className="font-medium"
+                      style={getDashboardMetricTextStyle(match.srChange)}
+                    >
                       {match.srChange > 0 ? "+" : ""}
                       {match.srChange}
                       {match.lossProtected ? (

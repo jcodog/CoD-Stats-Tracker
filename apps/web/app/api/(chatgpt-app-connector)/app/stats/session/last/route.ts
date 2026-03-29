@@ -26,7 +26,7 @@ type LastSessionRouteDeps = {
 const defaultDeps: LastSessionRouteDeps = {
   authenticate: requireAuthenticatedAppRequest,
   getLastCompletedSessionByDiscordId: async (discordId) =>
-    fetchQuery((api as any).queries.chatgpt.getLastCompletedSessionByDiscordId, {
+    fetchQuery(api.queries.chatgpt.getLastCompletedSessionByDiscordId, {
       discordId,
     }),
   touchConnectionLastUsedAt: touchChatGptConnectionLastUsedAt,

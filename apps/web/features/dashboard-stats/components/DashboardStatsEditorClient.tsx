@@ -18,7 +18,6 @@ import {
 } from "@/features/dashboard-stats/lib/dashboard-stats-client"
 import { DashboardStatsCharts } from "@/features/dashboard-stats/components/DashboardStatsCharts"
 import { DashboardStatsCreateSessionDialog } from "@/features/dashboard-stats/components/DashboardStatsCreateSessionDialog"
-import { DashboardStatsHistory } from "@/features/dashboard-stats/components/DashboardStatsHistory"
 import { DashboardStatsLogMatchSheet } from "@/features/dashboard-stats/components/DashboardStatsLogMatchSheet"
 import { DashboardStatsRecentMatches } from "@/features/dashboard-stats/components/DashboardStatsRecentMatches"
 import { DashboardStatsSummary } from "@/features/dashboard-stats/components/DashboardStatsSummary"
@@ -243,6 +242,33 @@ function DashboardStatsEditorLoaded({
     selectedSessionId,
     includeLossProtected
   )
+  const sessionDetailsReady =
+    !!overviewQuery.data &&
+    !!srTimelineQuery.data &&
+    !!winLossBreakdownQuery.data &&
+    !!dailyPerformanceQuery.data &&
+    !!recentMatchesQuery.data
+  const sessionDetailsLoading =
+    !sessionDetailsReady &&
+    (overviewQuery.isPending ||
+      srTimelineQuery.isPending ||
+      winLossBreakdownQuery.isPending ||
+      dailyPerformanceQuery.isPending ||
+      recentMatchesQuery.isPending)
+  const sessionDetailsRefreshError =
+    sessionDetailsReady &&
+    (overviewQuery.isError ||
+      srTimelineQuery.isError ||
+      winLossBreakdownQuery.isError ||
+      dailyPerformanceQuery.isError ||
+      recentMatchesQuery.isError)
+  const sessionDetailsRefreshing =
+    sessionDetailsReady &&
+    (overviewQuery.isFetching ||
+      srTimelineQuery.isFetching ||
+      winLossBreakdownQuery.isFetching ||
+      dailyPerformanceQuery.isFetching ||
+      recentMatchesQuery.isFetching)
 
   if (dashboardStateQuery.isError) {
     return (
@@ -429,19 +455,11 @@ function DashboardStatsEditorLoaded({
                   <div className="border-t border-border/50">
                     <SurfaceSkeleton />
                   </div>
-                ) : overviewQuery.isPending ||
-                  srTimelineQuery.isPending ||
-                  winLossBreakdownQuery.isPending ||
-                  dailyPerformanceQuery.isPending ||
-                  recentMatchesQuery.isPending ? (
+                ) : sessionDetailsLoading ? (
                   <div className="border-t border-border/50">
                     <SurfaceSkeleton />
                   </div>
-                ) : overviewQuery.isError ||
-                  srTimelineQuery.isError ||
-                  winLossBreakdownQuery.isError ||
-                  dailyPerformanceQuery.isError ||
-                  recentMatchesQuery.isError ? (
+                ) : !sessionDetailsReady ? (
                   <div className="border-t border-border/50 px-6 py-6">
                     <Alert variant="destructive">
                       <AlertTitle>Session details failed to load</AlertTitle>
@@ -451,12 +469,26 @@ function DashboardStatsEditorLoaded({
                       </AlertDescription>
                     </Alert>
                   </div>
-                ) : overviewQuery.data &&
-                  srTimelineQuery.data &&
-                  winLossBreakdownQuery.data &&
-                  dailyPerformanceQuery.data &&
-                  recentMatchesQuery.data ? (
+                ) : (
                   <>
+                    {sessionDetailsRefreshing ? (
+                      <div className="border-t border-border/50 px-6 py-3 text-sm text-muted-foreground">
+                        Refreshing session data…
+                      </div>
+                    ) : null}
+
+                    {sessionDetailsRefreshError ? (
+                      <div className="border-t border-border/50 px-6 py-6">
+                        <Alert variant="destructive">
+                          <AlertTitle>Session refresh failed</AlertTitle>
+                          <AlertDescription>
+                            Showing the last available session results while the
+                            latest refresh is unavailable.
+                          </AlertDescription>
+                        </Alert>
+                      </div>
+                    ) : null}
+
                     <div className="border-t border-border/50 px-6 py-6">
                       <div className="mb-3 grid gap-1">
                         <h2 className="text-base font-semibold">
@@ -469,7 +501,7 @@ function DashboardStatsEditorLoaded({
                       </div>
                       <DashboardStatsSummary
                         embedded
-                        overview={overviewQuery.data}
+                        overview={overviewQuery.data!}
                         showHeader={false}
                       />
                     </div>
@@ -485,61 +517,36 @@ function DashboardStatsEditorLoaded({
                         </p>
                       </div>
                       <DashboardStatsCharts
-                        dailyPerformance={dailyPerformanceQuery.data}
+                        dailyPerformance={dailyPerformanceQuery.data!}
                         embedded
                         selectedTimeRange={selectedTimeRange}
                         showHeader={false}
-                        srTimeline={srTimelineQuery.data}
-                        winLossBreakdown={winLossBreakdownQuery.data}
+                        srTimeline={srTimelineQuery.data!}
+                        winLossBreakdown={winLossBreakdownQuery.data!}
                       />
                     </div>
 
-                    <div className="grid border-t border-border/50 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,0.95fr)]">
-                      <div className="min-w-0 px-6 py-6">
-                        <div className="mb-3 grid gap-1">
-                          <h2 className="text-base font-semibold">
-                            Recent matches
-                          </h2>
-                          <p className="text-sm text-muted-foreground">
-                            Latest logs for the selected active session.
-                          </p>
-                        </div>
-                        <DashboardStatsRecentMatches
-                          embedded
-                          matches={recentMatchesQuery.data}
-                          showHeader={false}
-                        />
+                    <div className="border-t border-border/50 px-6 py-6">
+                      <div className="mb-3 grid gap-1">
+                        <h2 className="text-base font-semibold">
+                          Recent matches
+                        </h2>
+                        <p className="text-sm text-muted-foreground">
+                          Latest logs for the selected active session.
+                        </p>
                       </div>
-                      <div className="min-w-0 border-t border-border/50 px-6 py-6 xl:border-t-0 xl:border-l">
-                        <div className="mb-3 grid gap-1">
-                          <h2 className="text-base font-semibold">
-                            Session history
-                          </h2>
-                          <p className="text-sm text-muted-foreground">
-                            Archived sessions remain visible after staff roll
-                            the title or season.
-                          </p>
-                        </div>
-                        <DashboardStatsHistory
-                          archivedSessions={dashboardState.archivedSessions}
-                          embedded
-                          showHeader={false}
-                        />
-                      </div>
+                      <DashboardStatsRecentMatches
+                        embedded
+                        matches={recentMatchesQuery.data!}
+                        showHeader={false}
+                      />
                     </div>
                   </>
-                ) : null}
+                )}
               </div>
             </SurfaceFrame>
           </div>
         )}
-
-        {activeSessions.length === 0 &&
-        dashboardState.archivedSessions.length > 0 ? (
-          <DashboardStatsHistory
-            archivedSessions={dashboardState.archivedSessions}
-          />
-        ) : null}
       </div>
 
       {dashboardState.currentConfig ? (

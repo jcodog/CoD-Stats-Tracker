@@ -127,7 +127,6 @@ async function handleMcpRequest(request: Request) {
       path: new URL(request.url).pathname,
       error: error instanceof Error ? error.message : String(error),
     });
-    shouldCloseImmediately = true;
     return internalErrorResponse(requestId);
   } finally {
     if (shouldCloseImmediately) {

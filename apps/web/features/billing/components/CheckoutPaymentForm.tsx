@@ -128,7 +128,7 @@ export function CheckoutPaymentForm({
             : undefined,
           layout: {
             defaultCollapsed: false,
-            radios: true,
+            radios: "always",
             spacedAccordionItems: false,
             type: "accordion",
           },

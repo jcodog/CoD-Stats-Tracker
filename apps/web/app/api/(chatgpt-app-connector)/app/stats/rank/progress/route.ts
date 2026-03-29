@@ -28,11 +28,11 @@ type RankProgressRouteDeps = {
 const defaultDeps: RankProgressRouteDeps = {
   authenticate: requireAuthenticatedAppRequest,
   getActiveSessionByDiscordId: async (discordId) =>
-    fetchQuery((api as any).queries.chatgpt.getActiveSessionByDiscordId, {
+    fetchQuery(api.queries.chatgpt.getActiveSessionByDiscordId, {
       discordId,
     }),
   getLastCompletedSessionByDiscordId: async (discordId) =>
-    fetchQuery((api as any).queries.chatgpt.getLastCompletedSessionByDiscordId, {
+    fetchQuery(api.queries.chatgpt.getLastCompletedSessionByDiscordId, {
       discordId,
     }),
   touchConnectionLastUsedAt: touchChatGptConnectionLastUsedAt,

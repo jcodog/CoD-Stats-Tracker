@@ -9,6 +9,7 @@ import {
   LineChart,
   Pie,
   PieChart,
+  ReferenceLine,
   XAxis,
   YAxis,
 } from "recharts"
@@ -22,6 +23,11 @@ import {
   formatDashboardDay,
   getTimeRangeStart,
 } from "@/features/dashboard-stats/lib/dashboard-stats-format"
+import {
+  DASHBOARD_NEGATIVE_COLOR,
+  DASHBOARD_POSITIVE_COLOR,
+  getDashboardMetricColor,
+} from "@/features/dashboard-stats/lib/dashboard-stats-visuals"
 import type { DashboardTimeRange } from "@/features/dashboard-stats/stores/dashboard-ui-store"
 import {
   ChartContainer,
@@ -35,25 +41,23 @@ import { cn } from "@workspace/ui/lib/utils"
 
 const srChartConfig = {
   sr: {
-    color: "var(--color-chart-1)",
     label: "SR",
   },
 } satisfies ChartConfig
 
 const winLossChartConfig = {
   losses: {
-    color: "var(--color-chart-4)",
+    color: DASHBOARD_NEGATIVE_COLOR,
     label: "Losses",
   },
   wins: {
-    color: "var(--color-chart-1)",
+    color: DASHBOARD_POSITIVE_COLOR,
     label: "Wins",
   },
 } satisfies ChartConfig
 
 const dailySrChartConfig = {
   netSr: {
-    color: "var(--color-chart-2)",
     label: "Net SR",
   },
 } satisfies ChartConfig
@@ -166,6 +170,27 @@ export function DashboardStatsCharts({
     dateKey: formatDashboardDay(day.dateKey),
     netSr: day.netSr,
   }))
+  const srSegments = filteredTimeline.slice(1).map((point, index) => ({
+    currentMatchNumber: point.matchNumber,
+    currentSr: point.sr,
+    previousMatchNumber: filteredTimeline[index]?.matchNumber ?? 0,
+    previousSr: filteredTimeline[index]?.sr ?? 0,
+    srChange: point.srChange,
+  }))
+  const winLossSummaryItems = [
+    {
+      color: DASHBOARD_POSITIVE_COLOR,
+      key: "wins",
+      label: "Wins",
+      value: winLossBreakdown.wins,
+    },
+    {
+      color: DASHBOARD_NEGATIVE_COLOR,
+      key: "losses",
+      label: "Losses",
+      value: winLossBreakdown.losses,
+    },
+  ]
 
   return (
     <section
@@ -221,10 +246,45 @@ export function DashboardStatsCharts({
                     />
                   }
                 />
+                {srSegments.map((segment) => (
+                  <ReferenceLine
+                    ifOverflow="extendDomain"
+                    key={`${segment.previousMatchNumber}-${segment.currentMatchNumber}`}
+                    segment={[
+                      {
+                        x: segment.previousMatchNumber,
+                        y: segment.previousSr,
+                      },
+                      {
+                        x: segment.currentMatchNumber,
+                        y: segment.currentSr,
+                      },
+                    ]}
+                    stroke={getDashboardMetricColor(segment.srChange)}
+                    strokeLinecap="round"
+                    strokeWidth={2}
+                  />
+                ))}
                 <Line
+                  activeDot={({ cx, cy, payload }) => {
+                    if (typeof cx !== "number" || typeof cy !== "number") {
+                      return null
+                    }
+
+                    return (
+                      <circle
+                        cx={cx}
+                        cy={cy}
+                        fill={getDashboardMetricColor(payload?.srChange ?? 0)}
+                        r={4}
+                        stroke="var(--background)"
+                        strokeWidth={1.5}
+                      />
+                    )
+                  }}
                   dataKey="sr"
                   dot={false}
-                  stroke="var(--color-sr)"
+                  stroke="transparent"
                   strokeWidth={2}
                   type="monotone"
                 />
@@ -243,26 +303,43 @@ export function DashboardStatsCharts({
               title="No matches yet"
             />
           ) : (
-            <ChartContainer className="h-[260px] w-full" config={winLossChartConfig}>
-              <PieChart>
-                <ChartTooltip content={<ChartTooltipContent />} />
-                <Pie
-                  data={winLossItems}
-                  dataKey="value"
-                  innerRadius={72}
-                  outerRadius={96}
-                  paddingAngle={3}
-                >
-                  {winLossItems.map((item) => (
-                    <Cell key={item.key} fill={`var(--color-${item.key})`} />
-                  ))}
-                </Pie>
-                <ChartLegend
-                  content={<ChartLegendContent />}
-                  verticalAlign="bottom"
-                />
-              </PieChart>
-            </ChartContainer>
+            <div className="flex flex-col gap-4">
+              <ChartContainer className="h-[260px] w-full" config={winLossChartConfig}>
+                <PieChart>
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Pie
+                    data={winLossItems}
+                    dataKey="value"
+                    innerRadius={72}
+                    nameKey="key"
+                    outerRadius={96}
+                    paddingAngle={3}
+                  >
+                    {winLossItems.map((item) => (
+                      <Cell key={item.key} fill={`var(--color-${item.key})`} />
+                    ))}
+                  </Pie>
+                </PieChart>
+              </ChartContainer>
+              <div className="flex flex-wrap items-center justify-center gap-6">
+                {winLossSummaryItems.map((item) => (
+                  <div className="flex items-center gap-2" key={item.key}>
+                    <span
+                      aria-hidden="true"
+                      className="size-2.5 rounded-full"
+                      style={{ backgroundColor: item.color }}
+                    />
+                    <span className="text-sm text-muted-foreground">{item.label}</span>
+                    <span
+                      className="font-mono text-sm font-medium tabular-nums"
+                      style={{ color: item.color }}
+                    >
+                      {item.value}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
         </ChartPanel>
 
@@ -288,7 +365,11 @@ export function DashboardStatsCharts({
                 <YAxis axisLine={false} tickLine={false} tickMargin={8} width={44} />
                 <ChartTooltip content={<ChartTooltipContent />} />
                 <ChartLegend content={<ChartLegendContent />} />
-                <Bar dataKey="wins" fill="var(--color-wins)" radius={[4, 4, 0, 0]} />
+                <Bar
+                  dataKey="wins"
+                  fill="var(--color-wins)"
+                  radius={[4, 4, 0, 0]}
+                />
                 <Bar
                   dataKey="losses"
                   fill="var(--color-losses)"
@@ -317,7 +398,14 @@ export function DashboardStatsCharts({
                 />
                 <YAxis axisLine={false} tickLine={false} tickMargin={8} width={44} />
                 <ChartTooltip content={<ChartTooltipContent />} />
-                <Bar dataKey="netSr" fill="var(--color-netSr)" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="netSr" radius={[4, 4, 0, 0]}>
+                  {dailySrData.map((day) => (
+                    <Cell
+                      fill={getDashboardMetricColor(day.netSr)}
+                      key={day.dateKey}
+                    />
+                  ))}
+                </Bar>
               </BarChart>
             </ChartContainer>
           )}
