@@ -36,10 +36,16 @@ http.route({
           await ctx.runMutation(internal.mutations.users.upsertFromClerk, {
             data: event.data,
           })
+          await ctx.runAction(internal.actions.users.syncProvisionedClerkRole, {
+            data: event.data,
+          })
           break
         }
         case "user.updated": {
           await ctx.runMutation(internal.mutations.users.updateFromClerk, {
+            data: event.data,
+          })
+          await ctx.runAction(internal.actions.users.syncProvisionedClerkRole, {
             data: event.data,
           })
           break

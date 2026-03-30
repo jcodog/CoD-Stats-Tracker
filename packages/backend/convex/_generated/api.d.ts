@@ -1053,6 +1053,14 @@ export declare const internal: {
         >;
       };
     };
+    users: {
+      syncProvisionedClerkRole: FunctionReference<
+        "action",
+        "internal",
+        { data: any },
+        any
+      >;
+    };
   };
   mutations: {
     billing: {

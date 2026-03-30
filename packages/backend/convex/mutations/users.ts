@@ -4,12 +4,16 @@ import type { UserJSON } from "@clerk/nextjs/server"
 import { DataModel } from "../_generated/dataModel"
 import { parseUserRole } from "../lib/staffRoles"
 import { resolveConfiguredUserRole } from "../lib/staffRoleConfig"
+import {
+  getDiscordIdFromClerkUser,
+  resolveProvisionedUserRoleFromClerk,
+} from "../lib/clerkUsers"
 
 export const upsertFromClerk = internalMutation({
   args: { data: v.any() as Validator<UserJSON> },
   handler: async (ctx, { data }) => {
     const clerkUserId = data.id
-    const discordId = getDiscordIdFromClerk(data)
+    const discordId = getDiscordIdFromClerkUser(data)
 
     if (!discordId) {
       throw new Error(
@@ -18,11 +22,7 @@ export const upsertFromClerk = internalMutation({
     }
 
     const name = data.username ?? `Slayer ${discordId.slice(-4)}`
-    const publicMetadataRole = parseUserRole(data.public_metadata?.role)
-    const desiredRole = resolveConfiguredUserRole({
-      discordId,
-      role: publicMetadataRole,
-    })
+    const desiredRole = resolveProvisionedUserRoleFromClerk(data)
     const now = Date.now()
 
     const existingByClerk = await userByClerkUserId(ctx, clerkUserId)
@@ -48,7 +48,7 @@ export const upsertFromClerk = internalMutation({
         name,
         plan: "free",
         status: "active",
-        role: desiredRole ?? "user",
+        role: desiredRole,
         cleoDashLinked: false,
         chatgptLinked: false,
         chatgptLinkedAt: undefined,
@@ -79,7 +79,7 @@ export const upsertFromClerk = internalMutation({
 
     const nextRole = resolveConfiguredUserRole({
       discordId,
-      role: doc.role ?? publicMetadataRole ?? null,
+      role: doc.role ?? desiredRole,
     })
 
     if (doc.role !== nextRole && nextRole) {
@@ -121,7 +121,7 @@ export const updateFromClerk = internalMutation({
       return
     }
 
-    const discordId = getDiscordIdFromClerk(data)
+    const discordId = getDiscordIdFromClerkUser(data)
     if (!discordId) {
       throw new Error(
         "Discord account not linked in Clerk. A Discord ID is required for CleoAI Cod Stats Service."
@@ -162,20 +162,6 @@ export const updateFromClerk = internalMutation({
     return
   },
 })
-
-const getDiscordIdFromClerk = (data: UserJSON): string | null => {
-  const accounts = Array.isArray(data.external_accounts)
-    ? data.external_accounts
-    : []
-  const discord = accounts.find(
-    (acc) => (acc.provider ?? "").toLowerCase() === "oauth_discord"
-  )
-
-  return typeof discord?.provider_user_id === "string" &&
-    discord.provider_user_id.length > 0
-    ? discord.provider_user_id
-    : null
-}
 
 const userByClerkUserId = async (
   ctx: MutationCtx,
