@@ -47,6 +47,7 @@ type MapFormState = {
 type ConfigFormState = {
   activeSeason: string
   activeTitleKey: string
+  sessionWritesEnabled: boolean
 }
 
 function isAdminRole(role: UserRole) {
@@ -69,6 +70,7 @@ function buildDefaultConfigForm(data: StaffRankedDashboard): ConfigFormState {
   return {
     activeSeason: String(data.currentConfig?.activeSeason ?? 1),
     activeTitleKey: data.currentConfig?.activeTitleKey ?? fallbackTitleKey,
+    sessionWritesEnabled: data.currentConfig?.sessionWritesEnabled ?? true,
   }
 }
 
@@ -178,6 +180,7 @@ export function StaffRankedStatsView({
         input: {
           activeSeason,
           activeTitleKey: configForm.activeTitleKey,
+          sessionWritesEnabled: configForm.sessionWritesEnabled,
         },
       })
     } catch (error) {
@@ -284,6 +287,7 @@ export function StaffRankedStatsView({
             ? {
                 activeSeason: data.currentConfig.activeSeason,
                 activeTitleLabel: data.currentConfig.activeTitleLabel,
+                sessionWritesEnabled: data.currentConfig.sessionWritesEnabled,
               }
             : null
         }
@@ -298,6 +302,7 @@ export function StaffRankedStatsView({
             ? {
                 activeSeason: data.currentConfig.activeSeason,
                 activeTitleLabel: data.currentConfig.activeTitleLabel,
+                sessionWritesEnabled: data.currentConfig.sessionWritesEnabled,
                 updatedAt: data.currentConfig.updatedAt,
               }
             : null
@@ -317,6 +322,12 @@ export function StaffRankedStatsView({
         onSave={() => {
           void handleConfigSubmit()
         }}
+        onSessionWritesEnabledChange={(value) =>
+          setConfigForm((current) => ({
+            ...current,
+            sessionWritesEnabled: value,
+          }))
+        }
         openSessionCount={data.openSessionCount}
         pending={rankedMutation.isPending}
       />

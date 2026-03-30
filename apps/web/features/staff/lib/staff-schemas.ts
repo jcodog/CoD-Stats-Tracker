@@ -159,6 +159,7 @@ export const rankedActionSchema = z.discriminatedUnion("action", [
     input: z.object({
       activeSeason: z.number().int().min(1).max(999),
       activeTitleKey: catalogKeySchema,
+      sessionWritesEnabled: z.boolean(),
     }),
   }),
   z.object({

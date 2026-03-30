@@ -151,6 +151,15 @@ export async function getCurrentRankedConfig(ctx: Pick<QueryCtx | MutationCtx, "
   }
 }
 
+export function isRankedSessionWritesEnabled(
+  config:
+    | Pick<Doc<"rankedConfigs">, "sessionWritesEnabled">
+    | null
+    | undefined
+) {
+  return config?.sessionWritesEnabled !== false
+}
+
 export async function collectOwnedSessions(
   ctx: Pick<QueryCtx | MutationCtx, "db">,
   actor: Pick<AuthenticatedStatsActor, "statsUserIdCandidates" | "user">

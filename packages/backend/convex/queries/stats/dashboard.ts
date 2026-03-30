@@ -7,6 +7,7 @@ import {
   getCurrentRankedConfig,
   getOwnedSessionById,
   getOwnedSessionGames,
+  isRankedSessionWritesEnabled,
   getSessionDisplayTitle,
   getSessionMatchCount,
   getSessionUsernameLabel,
@@ -215,6 +216,7 @@ export const getCurrentDashboardState = query({
               activeSeason: config.activeSeason,
               activeTitleKey: config.activeTitleKey,
               activeTitleLabel: title.label,
+              sessionWritesEnabled: isRankedSessionWritesEnabled(config),
             }
           : null,
       hasCurrentTitleMaps: activeLoggableMaps.length > 0,

@@ -956,6 +956,7 @@ export const setCurrentRankedConfig = internalMutation({
   args: {
     activeSeason: v.number(),
     activeTitleKey: v.string(),
+    sessionWritesEnabled: v.boolean(),
     updatedByUserId: v.id("users"),
   },
   handler: async (ctx, args) => {
@@ -987,6 +988,7 @@ export const setCurrentRankedConfig = internalMutation({
         activeSeason,
         activeTitleKey,
         key: "current",
+        sessionWritesEnabled: args.sessionWritesEnabled,
         updatedAt: now,
         updatedByUserId: args.updatedByUserId,
       })
@@ -1000,13 +1002,18 @@ export const setCurrentRankedConfig = internalMutation({
         configId,
         didChange: true,
         didInitialize: true,
+        seasonChanged: false,
+        sessionWritesEnabled: args.sessionWritesEnabled,
+        titleChanged: false,
       }
     }
 
     const titleChanged = currentConfig.activeTitleKey !== activeTitleKey
     const seasonChanged = currentConfig.activeSeason !== activeSeason
+    const currentSessionWritesEnabled = currentConfig.sessionWritesEnabled !== false
+    const writesChanged = currentSessionWritesEnabled !== args.sessionWritesEnabled
 
-    if (!titleChanged && !seasonChanged) {
+    if (!titleChanged && !seasonChanged && !writesChanged) {
       return {
         activeSeason,
         activeTitleKey,
@@ -1016,31 +1023,43 @@ export const setCurrentRankedConfig = internalMutation({
         configId: currentConfig._id,
         didChange: false,
         didInitialize: false,
+        seasonChanged: false,
+        sessionWritesEnabled: currentSessionWritesEnabled,
+        titleChanged: false,
       }
     }
 
-    const archiveReason = resolveArchiveReason({
-      seasonChanged,
-      titleChanged,
-    })
-    const openSessions = await ctx.db
-      .query("sessions")
-      .withIndex("by_endedAt", (query) => query.eq("endedAt", null))
-      .collect()
+    const archiveReason =
+      titleChanged || seasonChanged
+        ? resolveArchiveReason({
+            seasonChanged,
+            titleChanged,
+          })
+        : null
+    const openSessions =
+      titleChanged || seasonChanged
+        ? await ctx.db
+            .query("sessions")
+            .withIndex("by_endedAt", (query) => query.eq("endedAt", null))
+            .collect()
+        : []
     const openSessionCountsByUserId = countSessionsByUserId(openSessions)
 
-    await Promise.all(
-      openSessions.map((session) =>
-        ctx.db.patch(session._id, {
-          archivedReason: archiveReason,
-          endedAt: now,
-        })
+    if (openSessions.length > 0) {
+      await Promise.all(
+        openSessions.map((session) =>
+          ctx.db.patch(session._id, {
+            archivedReason: archiveReason ?? undefined,
+            endedAt: now,
+          })
+        )
       )
-    )
+    }
 
     await ctx.db.patch(currentConfig._id, {
       activeSeason,
       activeTitleKey,
+      sessionWritesEnabled: args.sessionWritesEnabled,
       updatedAt: now,
       updatedByUserId: args.updatedByUserId,
     })
@@ -1077,6 +1096,9 @@ export const setCurrentRankedConfig = internalMutation({
       configId: currentConfig._id,
       didChange: true,
       didInitialize: false,
+      seasonChanged,
+      sessionWritesEnabled: args.sessionWritesEnabled,
+      titleChanged,
     }
   },
 })

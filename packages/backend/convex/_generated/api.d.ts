@@ -417,7 +417,11 @@ export declare const api: {
         setCurrentRankedConfig: FunctionReference<
           "action",
           "public",
-          { activeSeason: number; activeTitleKey: string },
+          {
+            activeSeason: number;
+            activeTitleKey: string;
+            sessionWritesEnabled: boolean;
+          },
           any
         >;
         upsertRankedMap: FunctionReference<
@@ -1576,6 +1580,7 @@ export declare const internal: {
           {
             activeSeason: number;
             activeTitleKey: string;
+            sessionWritesEnabled: boolean;
             updatedByUserId: Id<"users">;
           },
           any

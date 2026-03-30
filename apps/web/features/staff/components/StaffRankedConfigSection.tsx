@@ -5,11 +5,14 @@ import { Alert, AlertDescription, AlertTitle } from "@workspace/ui/components/al
 import { Button } from "@workspace/ui/components/button"
 import {
   Field,
+  FieldContent,
   FieldDescription,
   FieldGroup,
   FieldLabel,
+  FieldTitle,
 } from "@workspace/ui/components/field"
 import { Input } from "@workspace/ui/components/input"
+import { Switch } from "@workspace/ui/components/switch"
 
 import { AppSelect } from "@/components/AppSelect"
 
@@ -41,6 +44,7 @@ export function StaffRankedConfigSection({
   currentConfig,
   onActiveSeasonChange,
   onActiveTitleChange,
+  onSessionWritesEnabledChange,
   onSave,
   openSessionCount,
   pending,
@@ -49,16 +53,19 @@ export function StaffRankedConfigSection({
   configForm: {
     activeSeason: string
     activeTitleKey: string
+    sessionWritesEnabled: boolean
   }
   currentConfig:
     | {
         activeSeason: number
         activeTitleLabel: string
+        sessionWritesEnabled: boolean
         updatedAt: number
       }
     | null
   onActiveSeasonChange: (value: string) => void
   onActiveTitleChange: (value: string) => void
+  onSessionWritesEnabledChange: (value: boolean) => void
   onSave: () => void
   openSessionCount: number
   pending: boolean
@@ -88,37 +95,71 @@ export function StaffRankedConfigSection({
               </div>
             ) : (
               <FieldGroup>
-                <div className="grid gap-4 md:grid-cols-[minmax(0,1.3fr)_180px]">
-                  <Field>
-                    <FieldLabel htmlFor="ranked-active-title">Active title</FieldLabel>
-                    <AppSelect
-                      id="ranked-active-title"
-                      onValueChange={onActiveTitleChange}
-                      options={activeTitleOptions.map((title) => ({
-                        label: title.label,
-                        value: title.key,
-                      }))}
-                      placeholder="Select a title"
-                      value={configForm.activeTitleKey}
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="ranked-active-season">Season</FieldLabel>
-                    <Input
-                      autoComplete="off"
-                      id="ranked-active-season"
-                      inputMode="numeric"
-                      name="ranked-active-season"
-                      onChange={(event) => onActiveSeasonChange(event.target.value)}
-                      value={configForm.activeSeason}
-                    />
-                    <FieldDescription>
-                      One save updates the current config and runs the archival rollover.
-                    </FieldDescription>
-                  </Field>
+                <div className="grid gap-4">
+                  <div className="grid gap-4 md:grid-cols-[minmax(0,1.3fr)_180px]">
+                    <Field>
+                      <FieldLabel htmlFor="ranked-active-title">Active title</FieldLabel>
+                      <AppSelect
+                        id="ranked-active-title"
+                        onValueChange={onActiveTitleChange}
+                        options={activeTitleOptions.map((title) => ({
+                          label: title.label,
+                          value: title.key,
+                        }))}
+                        placeholder="Select a title"
+                        value={configForm.activeTitleKey}
+                      />
+                    </Field>
+                    <Field>
+                      <FieldLabel htmlFor="ranked-active-season">Season</FieldLabel>
+                      <Input
+                        autoComplete="off"
+                        id="ranked-active-season"
+                        inputMode="numeric"
+                        name="ranked-active-season"
+                        onChange={(event) => onActiveSeasonChange(event.target.value)}
+                        value={configForm.activeSeason}
+                      />
+                      <FieldDescription>
+                        One save updates the current config and runs the archival rollover.
+                      </FieldDescription>
+                    </Field>
+                  </div>
+
+                  <div className="rounded-xl border border-border/60 bg-muted/10 p-4">
+                    <Field className="items-start gap-3" orientation="horizontal">
+                      <Switch
+                        checked={configForm.sessionWritesEnabled}
+                        id="ranked-session-writes"
+                        onCheckedChange={onSessionWritesEnabledChange}
+                      />
+                      <FieldContent>
+                        <FieldTitle>
+                          Allow session creation and match logging
+                        </FieldTitle>
+                        <FieldDescription>
+                          Turn this off after ranked ends to freeze new sessions and
+                          match logs while leaving the current title, season, and
+                          history visible.
+                        </FieldDescription>
+                      </FieldContent>
+                    </Field>
+                  </div>
                 </div>
               </FieldGroup>
             )}
+
+            {!configForm.sessionWritesEnabled ? (
+              <Alert>
+                <IconAlertTriangle />
+                <AlertTitle>Player writes will be paused on save</AlertTitle>
+                <AlertDescription>
+                  Players will still be able to review existing ranked sessions, but
+                  they will not be able to create new sessions or log new matches
+                  until this is turned back on.
+                </AlertDescription>
+              </Alert>
+            ) : null}
 
             <div className="flex flex-col gap-3 border-t border-border/60 pt-4 lg:flex-row lg:items-center lg:justify-between">
               <div className="text-sm text-muted-foreground">
@@ -162,6 +203,16 @@ export function StaffRankedConfigSection({
               <div className="flex items-center justify-between gap-4">
                 <span className="text-muted-foreground">Active titles available</span>
                 <span className="font-medium">{activeTitleOptions.length}</span>
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <span className="text-muted-foreground">Player writes</span>
+                <span className="font-medium">
+                  {currentConfig
+                    ? currentConfig.sessionWritesEnabled
+                      ? "Enabled"
+                      : "Paused"
+                    : "Not set"}
+                </span>
               </div>
             </div>
           </div>

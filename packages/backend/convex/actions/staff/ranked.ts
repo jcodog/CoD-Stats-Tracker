@@ -4,6 +4,7 @@ import { v } from "convex/values"
 import { action } from "../../_generated/server"
 import { internal } from "../../_generated/api"
 import { requireAuthorizedStaffAction } from "../../lib/staffActionAuth"
+import { isRankedSessionWritesEnabled } from "../../lib/statsDashboard"
 import type {
   StaffMutationResponse,
   StaffRankedDashboard,
@@ -60,6 +61,7 @@ export const getDashboard = action({
               titleLabelByKey.get(records.config.activeTitleKey) ??
               records.config.activeTitleKey,
             openSessionCount: records.openSessionCount,
+            sessionWritesEnabled: isRankedSessionWritesEnabled(records.config),
             updatedAt: records.config.updatedAt,
           }
         : null,
@@ -112,6 +114,7 @@ export const setCurrentRankedConfig = action({
   args: {
     activeSeason: v.number(),
     activeTitleKey: v.string(),
+    sessionWritesEnabled: v.boolean(),
   },
   handler: async (ctx, args): Promise<StaffMutationResponse> => {
     const operator = await requireAuthorizedStaffAction(ctx, "staff")
@@ -120,24 +123,32 @@ export const setCurrentRankedConfig = action({
       {
         activeSeason: args.activeSeason,
         activeTitleKey: args.activeTitleKey,
+        sessionWritesEnabled: args.sessionWritesEnabled,
         updatedByUserId: operator.actorUserId,
       }
     )
+    const writesStateLabel = result.sessionWritesEnabled ? "enabled" : "paused"
 
     if (!result.didChange) {
       return {
-        summary: `Current ranked config is already ${result.activeTitleLabel} season ${result.activeSeason}.`,
+        summary: `Current ranked config is already ${result.activeTitleLabel} season ${result.activeSeason}, with session creation and match logging ${writesStateLabel}.`,
       }
     }
 
     const summary = result.didInitialize
-      ? `Set the current ranked config to ${result.activeTitleLabel} season ${result.activeSeason}.`
-      : `Switched the current ranked config to ${result.activeTitleLabel} season ${result.activeSeason} and archived ${formatPlural(result.archivedSessionCount, "open session")}.`
+      ? `Set the current ranked config to ${result.activeTitleLabel} season ${result.activeSeason}. Session creation and match logging are ${writesStateLabel}.`
+      : result.titleChanged || result.seasonChanged
+        ? `Switched the current ranked config to ${result.activeTitleLabel} season ${result.activeSeason} and archived ${formatPlural(result.archivedSessionCount, "open session")}. Session creation and match logging are ${writesStateLabel}.`
+        : result.sessionWritesEnabled
+          ? `Resumed ranked session creation and match logging for ${result.activeTitleLabel} season ${result.activeSeason}.`
+          : `Paused ranked session creation and match logging for ${result.activeTitleLabel} season ${result.activeSeason}.`
 
     await ctx.runMutation(internal.mutations.staff.internal.insertAuditLog, {
       action: result.didInitialize
         ? "ranked.config.initialize"
-        : "ranked.config.rollover",
+        : result.titleChanged || result.seasonChanged
+          ? "ranked.config.rollover"
+          : "ranked.config.update",
       actorClerkUserId: operator.actorClerkUserId,
       actorName: operator.actorDisplayName,
       actorRole: operator.actorRole,
@@ -147,6 +158,7 @@ export const setCurrentRankedConfig = action({
           activeTitleKey: result.activeTitleKey,
           archiveReason: result.archiveReason,
           archivedSessionCount: result.archivedSessionCount,
+          sessionWritesEnabled: result.sessionWritesEnabled,
         },
         null,
         2

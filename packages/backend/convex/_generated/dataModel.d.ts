@@ -953,6 +953,7 @@ export type DataModel = {
       activeSeason: number;
       activeTitleKey: string;
       key: "current";
+      sessionWritesEnabled?: boolean;
       updatedAt: number;
       updatedByUserId: Id<"users">;
       _id: Id<"rankedConfigs">;
@@ -964,6 +965,7 @@ export type DataModel = {
       | "activeSeason"
       | "activeTitleKey"
       | "key"
+      | "sessionWritesEnabled"
       | "updatedAt"
       | "updatedByUserId";
     indexes: {

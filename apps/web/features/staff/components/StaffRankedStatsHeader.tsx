@@ -31,6 +31,7 @@ export function StaffRankedStatsHeader({
     | {
         activeSeason: number
         activeTitleLabel: string
+        sessionWritesEnabled: boolean
       }
     | null
   openSessionCount: number
@@ -54,6 +55,11 @@ export function StaffRankedStatsHeader({
               <>
                 <Badge variant="secondary">{currentConfig.activeTitleLabel}</Badge>
                 <Badge variant="outline">Season {currentConfig.activeSeason}</Badge>
+                <Badge variant="outline">
+                  {currentConfig.sessionWritesEnabled
+                    ? "Player writes enabled"
+                    : "Player writes paused"}
+                </Badge>
               </>
             ) : (
               <Badge variant="outline">Config not set</Badge>

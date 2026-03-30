@@ -379,6 +379,7 @@ export type StaffRankedCurrentConfig = {
   activeTitleKey: string
   activeTitleLabel: string
   openSessionCount: number
+  sessionWritesEnabled: boolean
   updatedAt: number
 }
 

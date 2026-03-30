@@ -201,11 +201,18 @@ function DashboardStatsEditorLoaded({
     activeTitleLabel && activeSeason !== null
       ? `${activeTitleLabel} / Season ${activeSeason}`
       : null
-  const canCreateSession =
+  const sessionWritesPaused =
+    dashboardState.currentConfig?.sessionWritesEnabled === false
+  const sessionWritesMessage = sessionWritesPaused
+    ? "Staff have paused new ranked session creation and match logging for the current title and season. Existing sessions stay visible."
+    : null
+  const showCreateSessionButton =
     setupMessage === null &&
     (activeSessions.length === 0 || dashboardState.planKey !== "free")
+  const canCreateSession = showCreateSessionButton && !sessionWritesPaused
   const canLogMatches =
     setupMessage === null &&
+    !sessionWritesPaused &&
     selectedSession !== null &&
     (availableModesQuery.data?.length ?? 0) > 0 &&
     (availableMapsQuery.data?.length ?? 0) > 0
@@ -340,8 +347,9 @@ function DashboardStatsEditorLoaded({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            {canCreateSession ? (
+            {showCreateSessionButton ? (
               <Button
+                disabled={!canCreateSession}
                 onClick={() => setCreateSessionOpen(true)}
                 variant="outline"
               >
@@ -364,6 +372,13 @@ function DashboardStatsEditorLoaded({
           </Alert>
         ) : null}
 
+        {sessionWritesMessage ? (
+          <Alert>
+            <AlertTitle>Ranked writes are paused</AlertTitle>
+            <AlertDescription>{sessionWritesMessage}</AlertDescription>
+          </Alert>
+        ) : null}
+
         {activeSessions.length === 0 ? (
           <SurfaceFrame>
             <div className="grid gap-0 xl:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
@@ -374,6 +389,8 @@ function DashboardStatsEditorLoaded({
                     <EmptyDescription>
                       {setupMessage
                         ? "The ranked setup is blocked until staff finish configuration."
+                        : sessionWritesPaused && dashboardState.currentConfig
+                          ? `${dashboardState.currentConfig.activeTitleLabel} season ${dashboardState.currentConfig.activeSeason} is still visible, but staff have paused new session creation and match logging.`
                         : dashboardState.currentConfig
                           ? `Start a ${dashboardState.currentConfig.activeTitleLabel} season ${dashboardState.currentConfig.activeSeason} session to unlock logging and charts.`
                           : "Staff still need to configure the current ranked season."}
@@ -391,9 +408,12 @@ function DashboardStatsEditorLoaded({
                     Premium and creator users can run multiple active sessions,
                     one per username.
                   </p>
-                  {canCreateSession ? (
+                  {showCreateSessionButton ? (
                     <div className="pt-2">
-                      <Button onClick={() => setCreateSessionOpen(true)}>
+                      <Button
+                        disabled={!canCreateSession}
+                        onClick={() => setCreateSessionOpen(true)}
+                      >
                         Create session
                       </Button>
                     </div>

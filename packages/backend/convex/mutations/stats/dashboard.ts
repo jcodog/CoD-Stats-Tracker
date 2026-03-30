@@ -12,6 +12,7 @@ import {
   collectOwnedSessions,
   getCurrentRankedConfig,
   getOwnedSessionById,
+  isRankedSessionWritesEnabled,
   normalizeActivisionUsername,
   requireAuthenticatedStatsActor,
   sessionMatchesRankedConfig,
@@ -198,6 +199,12 @@ export const createSession = mutation({
       )
     }
 
+    if (!isRankedSessionWritesEnabled(config)) {
+      throw new Error(
+        "Ranked session creation is currently paused while staff keep the season visible."
+      )
+    }
+
     assertStartSr(args.startSr)
 
     const resolvedUsername = await resolveOwnedUsername({
@@ -349,6 +356,12 @@ export const logMatch = mutation({
     const { config, title } = await getCurrentRankedConfig(ctx)
     if (!config || !title || !title.isActive) {
       throw new Error("Ranked logging is unavailable until staff configure the active title.")
+    }
+
+    if (!isRankedSessionWritesEnabled(config)) {
+      throw new Error(
+        "Ranked match logging is currently paused while staff keep the season visible."
+      )
     }
 
     if (
