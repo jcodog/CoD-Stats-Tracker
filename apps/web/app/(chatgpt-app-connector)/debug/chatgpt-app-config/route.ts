@@ -4,6 +4,7 @@ import {
   buildOAuthAbsoluteUrlFromIssuer,
   getOAuthServerConfig,
 } from "@workspace/backend/server/oauth/config";
+import { getServerEnv } from "@workspace/backend/server/env";
 import { resolveWidgetUiMeta } from "@workspace/backend/server/widget-meta";
 
 export const runtime = "nodejs";
@@ -29,7 +30,7 @@ function buildConfigErrorResponse(error: unknown) {
 }
 
 export async function GET(request: Request) {
-  if (process.env.NODE_ENV === "production") {
+  if (getServerEnv().NODE_ENV === "production") {
     return NextResponse.json(
       {
         error: "not_found",

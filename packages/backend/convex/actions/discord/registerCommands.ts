@@ -5,11 +5,17 @@ import { action } from "../../_generated/server"
 import type { RESTPutAPIApplicationCommandsJSONBody } from "discord-api-types/v10"
 
 import { pingCommand } from "../../lib/commands/ping"
+import { getConvexEnv } from "../../env"
 
 const DISCORD_API_BASE = "https://discord.com/api/v10"
 
+type DiscordEnvKey =
+  | "DISCORD_APPLICATION_ID"
+  | "DISCORD_BOT_TOKEN"
+  | "DISCORD_DEV_GUILD_ID"
+
 function getRequiredEnv(name: string): string {
-  const value = process.env[name]?.trim()
+  const value = getConvexEnv()[name as DiscordEnvKey]?.trim()
 
   if (!value) {
     throw new Error(`${name} is not configured`)
@@ -33,7 +39,7 @@ export const registerDiscordCommands = action({
 
     const guildId =
       args.scope === "guild"
-        ? args.guildId?.trim() || process.env.DISCORD_DEV_GUILD_ID?.trim()
+        ? args.guildId?.trim() || getConvexEnv().DISCORD_DEV_GUILD_ID?.trim()
         : undefined
 
     if (args.scope === "guild" && !guildId) {

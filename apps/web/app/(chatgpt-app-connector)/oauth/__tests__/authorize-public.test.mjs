@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it } from "bun:test";
 
 import { handleAuthorizeGet } from "../authorize/route.ts";
+import { resetServerEnvForTests } from "@workspace/backend/server/env";
 
 const TEST_ORIGIN = "https://app.example.com";
 const TEST_REDIRECT_URI = "https://chatgpt.com/connector_platform_oauth_redirect";
@@ -27,6 +28,7 @@ function configureOAuthEnv() {
   process.env.OAUTH_ISSUER = TEST_ORIGIN;
   process.env.OAUTH_ALLOWED_REDIRECT_URIS = TEST_REDIRECT_URI;
   process.env.OAUTH_ALLOWED_SCOPES = "profile.read,stats.read";
+  resetServerEnvForTests();
 }
 
 function restoreOAuthEnv() {
@@ -39,6 +41,8 @@ function restoreOAuthEnv() {
 
     process.env[key] = previousValue;
   }
+
+  resetServerEnvForTests();
 }
 
 function createAuthorizeRequest() {

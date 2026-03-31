@@ -2,6 +2,8 @@
   "name": "cod-stats",
   "version": "0.1.0",
   "devDependencies": {
+    "@t3-oss/env-core": "^0.13.8",
+    "@t3-oss/env-nextjs": "^0.13.8",
     "@typescript/native-preview": "^7.0.0-dev.20260329.1",
     "@workspace/eslint-config": "workspace:*",
     "@workspace/typescript-config": "workspace:*",
@@ -31,6 +33,7 @@
     "test:app": "bun run --cwd apps/web test",
     "test:app:api": "bun run --cwd apps/web test:api",
     "test:app:debug": "bun run --cwd apps/web test:debug",
+    "test:backend:env": "bun test \"packages/backend/convex/__tests__/env.test.mjs\"",
     "test:app:mcp": "bun run --cwd apps/web test:mcp",
     "test:app:oauth": "bun run --cwd apps/web test:oauth",
     "test:app:smoke": "node scripts/chatgpt-app-smoke.mjs",

@@ -5,6 +5,7 @@ import { internal } from "../../../_generated/api"
 import type { Doc, Id } from "../../../_generated/dataModel"
 import { action, internalAction, type ActionCtx } from "../../../_generated/server"
 import { getClerkBackendClient } from "../../../lib/clerk"
+import { getConvexEnv } from "../../../env"
 import {
   getInviteCodeTypeLabel,
   renderInviteCodeInstructions,
@@ -167,8 +168,10 @@ const PLAY_WITH_VIEWERS_REQUIRED_SERVER_PERMISSION_FLAGS = [
   PermissionFlagsBits.UseExternalApps,
 ] as const
 
-function getRequiredEnv(name: string): string {
-  const value = process.env[name]?.trim()
+type DiscordEnvKey = "DISCORD_APPLICATION_ID" | "DISCORD_BOT_TOKEN"
+
+function getRequiredEnv(name: DiscordEnvKey): string {
+  const value = getConvexEnv()[name]?.trim()
 
   if (!value) {
     throw new Error(`${name} is not configured`)

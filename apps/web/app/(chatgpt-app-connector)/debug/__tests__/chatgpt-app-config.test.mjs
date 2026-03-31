@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it } from "bun:test";
 
 import { GET as getChatGptAppConfig } from "../chatgpt-app-config/route.ts";
+import { resetServerEnvForTests } from "@workspace/backend/server/env";
 
 const TEST_ISSUER = "https://stats-dev.cleoai.cloud";
 
@@ -32,6 +33,8 @@ function configureEnv(overrides = {}) {
 
     process.env[key] = value;
   }
+
+  resetServerEnvForTests();
 }
 
 function restoreEnv() {
@@ -44,6 +47,8 @@ function restoreEnv() {
 
     process.env[key] = value;
   }
+
+  resetServerEnvForTests();
 }
 
 beforeEach(() => {

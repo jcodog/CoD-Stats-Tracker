@@ -1,7 +1,8 @@
 import { loadStripe } from "@stripe/stripe-js"
 import type { Appearance } from "@stripe/stripe-js"
+import { env } from "@/env/client"
 
-const stripePublishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+const stripePublishableKey = env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
 
 export const stripePromise = stripePublishableKey
   ? loadStripe(stripePublishableKey)

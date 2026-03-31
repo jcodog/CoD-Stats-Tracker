@@ -1,6 +1,7 @@
 import { afterAll, describe, expect, it } from "bun:test";
 
 import { getAppPublicOrigin } from "@workspace/backend/server/app-public-origin";
+import { resetServerEnvForTests } from "@workspace/backend/server/env";
 
 const previousNodeEnv = process.env.NODE_ENV;
 const previousAppPublicOrigin = process.env.APP_PUBLIC_ORIGIN;
@@ -17,6 +18,8 @@ function setEnv(nodeEnv, appPublicOrigin) {
   } else {
     process.env.APP_PUBLIC_ORIGIN = appPublicOrigin;
   }
+
+  resetServerEnvForTests();
 }
 
 afterAll(() => {

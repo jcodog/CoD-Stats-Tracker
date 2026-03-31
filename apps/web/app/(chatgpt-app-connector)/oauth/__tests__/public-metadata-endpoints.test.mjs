@@ -4,6 +4,7 @@ import { GET as getOpenIdConfiguration } from "../../../.well-known/(chatgpt-app
 import { GET as getAuthorizationServerMetadata } from "../../../.well-known/(chatgpt-app-connector)/oauth-authorization-server/route.ts";
 import { GET as getProtectedResourceMetadata } from "../../../.well-known/(chatgpt-app-connector)/oauth-protected-resource/route.ts";
 import { GET as getMcpProtectedResourceMetadata } from "../../../.well-known/(chatgpt-app-connector)/oauth-protected-resource/mcp/route.ts";
+import { resetServerEnvForTests } from "@workspace/backend/server/env";
 
 const TEST_ORIGIN = "https://app.example.com";
 const ALT_ORIGIN = "https://other.example.com";
@@ -39,6 +40,7 @@ function configureOAuthEnv({
   process.env.OAUTH_ALLOWED_REDIRECT_URIS =
     "https://chatgpt.com/connector_platform_oauth_redirect,https://platform.openai.com/apps-manage/oauth";
   process.env.OAUTH_ALLOWED_SCOPES = "profile.read,stats.read";
+  resetServerEnvForTests();
 }
 
 function restoreOAuthEnv() {
@@ -51,6 +53,8 @@ function restoreOAuthEnv() {
 
     process.env[key] = previousValue;
   }
+
+  resetServerEnvForTests();
 }
 
 beforeEach(() => {
@@ -186,6 +190,7 @@ describe("OAuth metadata endpoints are public JSON routes", () => {
   it("fails when OAUTH_ALLOWED_SCOPES omits enforced app scopes", async () => {
     configureOAuthEnv();
     process.env.OAUTH_ALLOWED_SCOPES = "profile.read";
+    resetServerEnvForTests();
 
     const response = await getAuthorizationServerMetadata(
       new Request(`${TEST_ORIGIN}/.well-known/oauth-authorization-server`),

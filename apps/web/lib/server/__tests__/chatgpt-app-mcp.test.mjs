@@ -11,6 +11,7 @@ import { GET as getRankTemplateRoute } from "../../../app/(chatgpt-app-connector
 import { GET as getSettingsTemplateRoute } from "../../../app/(chatgpt-app-connector)/ui/codstats/settings.html/route.ts";
 import { createChatGptAppMcpServer } from "@workspace/backend/server/chatgpt-app-mcp";
 import { renderCodstatsTemplateHtml } from "@workspace/backend/server/chatgpt-app-ui-templates";
+import { resetServerEnvForTests } from "@workspace/backend/server/env";
 import {
   CHATGPT_APP_ERROR_CODES,
   CHATGPT_APP_VIEWS,
@@ -39,6 +40,7 @@ beforeAll(() => {
   process.env.OAUTH_RESOURCE = TEST_ORIGIN;
   process.env.OAUTH_ISSUER = TEST_ORIGIN;
   process.env.APP_PUBLIC_ORIGIN = TEST_APP_PUBLIC_ORIGIN;
+  resetServerEnvForTests();
 });
 
 afterAll(() => {
@@ -59,6 +61,8 @@ afterAll(() => {
   } else {
     process.env.APP_PUBLIC_ORIGIN = previousAppPublicOrigin;
   }
+
+  resetServerEnvForTests();
 });
 
 afterEach(() => {

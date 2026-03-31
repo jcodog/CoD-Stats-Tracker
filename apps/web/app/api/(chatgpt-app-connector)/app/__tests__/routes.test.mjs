@@ -13,6 +13,7 @@ import {
   CHATGPT_APP_ERROR_CODES,
   CHATGPT_APP_VIEWS,
 } from "@workspace/backend/server/chatgpt-app-contract";
+import { resetServerEnvForTests } from "@workspace/backend/server/env";
 import { isPublicRoute } from "../../../../../proxy.ts";
 
 const ACTIVE_USER = {
@@ -48,6 +49,7 @@ beforeAll(() => {
   process.env.OAUTH_JWT_SECRET = "test-secret";
   process.env.OAUTH_ALLOWED_REDIRECT_URIS =
     "https://chatgpt.com/connector_platform_oauth_redirect,https://platform.openai.com/apps-manage/oauth";
+  resetServerEnvForTests();
 });
 
 afterAll(() => {
@@ -59,6 +61,8 @@ afterAll(() => {
       process.env[key] = value;
     }
   }
+
+  resetServerEnvForTests();
 });
 
 function createRequest(url) {

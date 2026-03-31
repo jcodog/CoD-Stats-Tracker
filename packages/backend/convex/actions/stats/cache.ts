@@ -4,6 +4,7 @@ import { createClient } from "redis";
 import { v } from "convex/values";
 
 import { internalAction } from "../../_generated/server";
+import { getConvexEnv } from "../../env";
 
 const LANDING_METRICS_CACHE_PREFIX = "landing:metrics";
 const LANDING_METRICS_TRACE_LIST_KEY = `${LANDING_METRICS_CACHE_PREFIX}:trace`;
@@ -20,8 +21,10 @@ let redisClient: ActionRedisClient | null = null;
 let redisClientPromise: Promise<ActionRedisClient | null> | null = null;
 
 function resolveRedisUrl() {
+  const env = getConvexEnv();
+
   for (const envKey of REDIS_URL_ENV_KEYS) {
-    const value = process.env[envKey];
+    const value = env[envKey];
     if (value) {
       return value;
     }

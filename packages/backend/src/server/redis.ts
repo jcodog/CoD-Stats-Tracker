@@ -1,4 +1,5 @@
 import { createClient, type RedisClientType } from "redis";
+import { getServerEnv } from "./env";
 
 type AppRedisClient = RedisClientType;
 
@@ -12,8 +13,10 @@ let redisClient: AppRedisClient | null = null;
 let redisClientPromise: Promise<AppRedisClient | null> | null = null;
 
 function resolveRedisUrl() {
+  const env = getServerEnv();
+
   for (const envKey of REDIS_URL_ENV_KEYS) {
-    const value = process.env[envKey];
+    const value = env[envKey];
     if (value) {
       return { url: value, envKey };
     }

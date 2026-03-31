@@ -24,6 +24,19 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Environment files
+
+Use the example files as the source of truth for local setup:
+
+- `apps/web/.env.local.example` documents browser-safe `NEXT_PUBLIC_*` values plus the shared server vars consumed by the Next app.
+- `packages/backend/.env.local.example` documents shared backend server vars and Convex-only runtime vars.
+
+Typed env ownership in this repo is split across:
+
+- `apps/web/env/client.ts` for browser-safe client env reads only
+- `packages/backend/src/server/env.ts` for Next route handlers and shared backend server helpers
+- `packages/backend/convex/env.ts` for Convex runtime only
+
 ## Billing environment
 
 Stripe billing requires server-side keys, a publishable key for Elements, and a
@@ -77,10 +90,10 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 
 Required env vars:
 
-- `APP_PUBLIC_ORIGIN` (canonical HTTPS app origin used for MCP template URLs and UI metadata)
+- `APP_PUBLIC_ORIGIN` (canonical HTTPS app origin used for hosted MCP template URLs)
 - `OAUTH_JWT_SECRET`
 - `OAUTH_ALLOWED_REDIRECT_URIS` (comma-separated exact allowlist)
-- `OAUTH_ISSUER` (canonical HTTPS app origin; discovery `issuer` must match this exactly)
+- `OAUTH_ISSUER` (canonical HTTPS app origin used for OAuth discovery metadata and widget `ui.domain` / `ui.csp`)
 
 Optional env vars:
 
@@ -203,11 +216,11 @@ The Apps SDK verifier requires resource metadata for every registered UI templat
 - `ui://codstats/rank.html`
 - `ui://codstats/settings.html`
 
-- `ui.domain` is set to the `APP_PUBLIC_ORIGIN` origin.
+- `ui.domain` is derived from the `OAUTH_ISSUER` hostname.
 - `ui.csp` is a minimal allowlist object:
-  - `connectDomains` includes the `APP_PUBLIC_ORIGIN` origin.
-  - `resourceDomains` includes the `APP_PUBLIC_ORIGIN` origin.
-  - `baseUriDomains` includes the `APP_PUBLIC_ORIGIN` origin.
+  - `connectDomains` includes the `OAUTH_ISSUER` origin.
+  - `resourceDomains` includes the `OAUTH_ISSUER` origin.
+  - `baseUriDomains` remains an empty array.
   - `frameDomains` remains an empty array.
 
 Set `APP_PUBLIC_ORIGIN` and `OAUTH_ISSUER` to your canonical app URL (for example `https://stats-dev.cleoai.cloud` or `https://stats.cleoai.cloud`). These values should match in normal deployments.

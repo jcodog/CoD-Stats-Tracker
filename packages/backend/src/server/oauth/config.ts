@@ -1,4 +1,5 @@
 import { CHATGPT_APP_SCOPES } from "@workspace/backend/server/chatgpt-app-scopes";
+import { getServerEnv, type ServerEnv } from "@workspace/backend/server/env";
 
 type OAuthServerConfig = {
   staticClientId: string | null;
@@ -20,16 +21,18 @@ const ENFORCED_CHATGPT_APP_SCOPES = [
 let didWarnMissingIssuer = false;
 let didWarnIssuerOriginMismatch = false;
 
-function requireEnv(name: string) {
-  const value = process.env[name]?.trim();
+type ServerEnvKey = keyof ServerEnv;
+
+function requireEnv(name: ServerEnvKey) {
+  const value = getServerEnv()[name]?.trim();
   if (!value) {
     throw new Error(`Missing required env var: ${name}`);
   }
   return value;
 }
 
-function optionalEnv(name: string) {
-  const value = process.env[name]?.trim();
+function optionalEnv(name: ServerEnvKey) {
+  const value = getServerEnv()[name]?.trim();
   return value && value.length > 0 ? value : null;
 }
 
@@ -97,7 +100,7 @@ function parseAllowedRedirectUris() {
 }
 
 function parseAllowedScopes() {
-  const raw = process.env.OAUTH_ALLOWED_SCOPES?.trim();
+  const raw = getServerEnv().OAUTH_ALLOWED_SCOPES?.trim();
   if (!raw) {
     return null;
   }
@@ -124,9 +127,10 @@ function parseAllowedScopes() {
 
 function resolveIssuer(requestOrigin: string) {
   const rawIssuer = optionalEnv("OAUTH_ISSUER");
+  const env = getServerEnv();
 
   if (!rawIssuer) {
-    if (process.env.NODE_ENV === "production") {
+    if (env.NODE_ENV === "production") {
       throw new Error(
         "Missing required env var: OAUTH_ISSUER. Set OAUTH_ISSUER to your canonical HTTPS app origin (for example https://stats.cleoai.cloud).",
       );
@@ -154,7 +158,7 @@ function resolveIssuer(requestOrigin: string) {
       `Request origin ${requestUrl.origin} does not match configured OAUTH_ISSUER origin ${issuer.origin}. ` +
       "Refusing to serve OAuth discovery metadata with a swapped issuer.";
 
-    if (process.env.NODE_ENV === "production") {
+    if (env.NODE_ENV === "production") {
       throw new Error(message);
     }
 
@@ -187,9 +191,10 @@ export function buildOAuthAbsoluteUrlFromIssuer(issuer: string, path: string) {
 }
 
 export function getOAuthServerConfig(requestOrigin: string): OAuthServerConfig {
+  const env = getServerEnv();
   const issuer = resolveIssuer(requestOrigin);
-  const resource = process.env.OAUTH_RESOURCE
-    ? normalizeResourceIdentifier(process.env.OAUTH_RESOURCE)
+  const resource = env.OAUTH_RESOURCE
+    ? normalizeResourceIdentifier(env.OAUTH_RESOURCE)
     : normalizeResourceIdentifier(issuer.issuer);
 
   const audienceFromEnv = optionalEnv("OAUTH_AUDIENCE");

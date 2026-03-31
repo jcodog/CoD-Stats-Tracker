@@ -1,13 +1,40 @@
-import { describe, expect, it } from "bun:test";
+import { afterAll, describe, expect, it } from "bun:test";
 
 import { handleRevokePost } from "../revoke/route.ts";
+import { resetServerEnvForTests } from "@workspace/backend/server/env";
+
+const OAUTH_ENV_KEYS = [
+  "OAUTH_JWT_SECRET",
+  "OAUTH_ISSUER",
+  "OAUTH_ALLOWED_REDIRECT_URIS",
+];
+
+const previousEnv = Object.fromEntries(
+  OAUTH_ENV_KEYS.map((key) => [key, process.env[key]]),
+);
 
 function configureOAuthEnv() {
   process.env.OAUTH_JWT_SECRET = "test_jwt_secret";
   process.env.OAUTH_ISSUER = "https://app.example.com";
   process.env.OAUTH_ALLOWED_REDIRECT_URIS =
     "https://chatgpt.com/connector_platform_oauth_redirect";
+  resetServerEnvForTests();
 }
+
+afterAll(() => {
+  for (const key of OAUTH_ENV_KEYS) {
+    const value = previousEnv[key];
+
+    if (value === undefined) {
+      delete process.env[key];
+      continue;
+    }
+
+    process.env[key] = value;
+  }
+
+  resetServerEnvForTests();
+});
 
 function createSettingsDeps() {
   const mutationCalls = [];
