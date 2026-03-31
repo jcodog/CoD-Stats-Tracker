@@ -109,7 +109,7 @@ function HeroToolbarGroup({
 }) {
   return (
     <div className="grid shrink-0 gap-2">
-      <span className="whitespace-nowrap text-[11px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
+      <span className="text-[11px] font-medium tracking-[0.2em] whitespace-nowrap text-muted-foreground uppercase">
         {label}
       </span>
       <div className="flex flex-wrap items-center gap-2">{children}</div>
@@ -196,7 +196,10 @@ function DashboardStatsEditorLoaded({
     dashboardState.currentConfig?.activeTitleLabel ??
     selectedSession?.titleLabel ??
     null
-  const activeSeason = dashboardState.currentConfig?.activeSeason ?? selectedSession?.season ?? null
+  const activeSeason =
+    dashboardState.currentConfig?.activeSeason ??
+    selectedSession?.season ??
+    null
   const sessionMetaLabel =
     activeTitleLabel && activeSeason !== null
       ? `${activeTitleLabel} / Season ${activeSeason}`
@@ -274,7 +277,8 @@ function DashboardStatsEditorLoaded({
       dailyPerformanceQuery.isFetching ||
       recentMatchesQuery.isFetching)
   const filteredRecentMatches = useMemo(() => {
-    const recentMatches = (recentMatchesQuery.data ?? []) as DashboardWindowedMatch[]
+    const recentMatches = (recentMatchesQuery.data ??
+      []) as DashboardWindowedMatch[]
     const timeRangeStart = getTimeRangeStart(selectedTimeRange)
 
     return recentMatches.filter(
@@ -336,7 +340,9 @@ function DashboardStatsEditorLoaded({
                 <>
                   <span>{dashboardState.currentConfig.activeTitleLabel}</span>
                   <span aria-hidden="true">/</span>
-                  <span>Season {dashboardState.currentConfig.activeSeason}</span>
+                  <span>
+                    Season {dashboardState.currentConfig.activeSeason}
+                  </span>
                 </>
               ) : (
                 <span>Ranked config pending</span>
@@ -366,14 +372,14 @@ function DashboardStatsEditorLoaded({
         </header>
 
         {setupMessage ? (
-          <Alert>
+          <Alert variant="destructive">
             <AlertTitle>Ranked setup still needs staff support</AlertTitle>
             <AlertDescription>{setupMessage}</AlertDescription>
           </Alert>
         ) : null}
 
         {sessionWritesMessage ? (
-          <Alert>
+          <Alert variant="destructive">
             <AlertTitle>Ranked writes are paused</AlertTitle>
             <AlertDescription>{sessionWritesMessage}</AlertDescription>
           </Alert>
@@ -391,9 +397,9 @@ function DashboardStatsEditorLoaded({
                         ? "The ranked setup is blocked until staff finish configuration."
                         : sessionWritesPaused && dashboardState.currentConfig
                           ? `${dashboardState.currentConfig.activeTitleLabel} season ${dashboardState.currentConfig.activeSeason} is still visible, but staff have paused new session creation and match logging.`
-                        : dashboardState.currentConfig
-                          ? `Start a ${dashboardState.currentConfig.activeTitleLabel} season ${dashboardState.currentConfig.activeSeason} session to unlock logging and charts.`
-                          : "Staff still need to configure the current ranked season."}
+                          : dashboardState.currentConfig
+                            ? `Start a ${dashboardState.currentConfig.activeTitleLabel} season ${dashboardState.currentConfig.activeSeason} session to unlock logging and charts.`
+                            : "Staff still need to configure the current ranked season."}
                     </EmptyDescription>
                   </EmptyHeader>
                 </Empty>
@@ -433,7 +439,8 @@ function DashboardStatsEditorLoaded({
                         Session controls
                       </h2>
                       <p className="text-sm text-muted-foreground">
-                        {sessionMetaLabel ?? "Switch between your active sessions here."}
+                        {sessionMetaLabel ??
+                          "Switch between your active sessions here."}
                       </p>
                     </div>
 
@@ -463,9 +470,7 @@ function DashboardStatsEditorLoaded({
                               value === "14d" ||
                               value === "30d"
                             ) {
-                              startTransition(() =>
-                                setSelectedTimeRange(value)
-                              )
+                              startTransition(() => setSelectedTimeRange(value))
                             }
                           }}
                           type="single"
@@ -580,7 +585,8 @@ function DashboardStatsEditorLoaded({
                           Recent matches
                         </h2>
                         <p className="text-sm text-muted-foreground">
-                          All logged matches for the selected session within the active filter window.
+                          All logged matches for the selected session within the
+                          active filter window.
                         </p>
                       </div>
                       <DashboardStatsRecentMatches
