@@ -36,27 +36,7 @@ function createConvexEnv() {
       VERCEL_PROJECT_ID_OR_NAME: z.string().optional(),
       VERCEL_TEAM_ID: z.string().optional(),
     },
-    runtimeEnv: {
-      CLERK_JWT_ISSUER_URL: process.env.CLERK_JWT_ISSUER_URL,
-      CLERK_SECRET_KEY: process.env.CLERK_SECRET_KEY,
-      CLERK_WEBHOOK_SECRET: process.env.CLERK_WEBHOOK_SECRET,
-      CONVEX_DEPLOYMENT: process.env.CONVEX_DEPLOYMENT,
-      DISCORD_APPLICATION_ID: process.env.DISCORD_APPLICATION_ID,
-      DISCORD_APPLICATION_PUBLIC_KEY:
-        process.env.DISCORD_APPLICATION_PUBLIC_KEY,
-      DISCORD_BOT_TOKEN: process.env.DISCORD_BOT_TOKEN,
-      DISCORD_DEV_GUILD_ID: process.env.DISCORD_DEV_GUILD_ID,
-      KV_URL: process.env.KV_URL,
-      REDIS_TLS_URL: process.env.REDIS_TLS_URL,
-      REDIS_URL: process.env.REDIS_URL,
-      STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
-      STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
-      SUPER_ADMIN_DISCORD_ID: process.env.SUPER_ADMIN_DISCORD_ID,
-      SUPER_ADMIN_DISCORD_IDS: process.env.SUPER_ADMIN_DISCORD_IDS,
-      VERCEL_ACCESS_TOKEN: process.env.VERCEL_ACCESS_TOKEN,
-      VERCEL_PROJECT_ID_OR_NAME: process.env.VERCEL_PROJECT_ID_OR_NAME,
-      VERCEL_TEAM_ID: process.env.VERCEL_TEAM_ID,
-    },
+    runtimeEnv: process.env,
     emptyStringAsUndefined: true,
     onValidationError: (issues) => {
       throw new Error(
@@ -71,9 +51,7 @@ function createConvexAuthEnv() {
     server: {
       CLERK_JWT_ISSUER_URL: z.string().optional(),
     },
-    runtimeEnv: {
-      CLERK_JWT_ISSUER_URL: process.env.CLERK_JWT_ISSUER_URL,
-    },
+    runtimeEnv: process.env,
     emptyStringAsUndefined: true,
     onValidationError: (issues) => {
       throw new Error(

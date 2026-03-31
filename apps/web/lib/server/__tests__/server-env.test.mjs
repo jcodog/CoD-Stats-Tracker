@@ -124,4 +124,14 @@ describe("server env", () => {
       reason: "missing_api_key_env",
     });
   });
+
+  it("formats validation issues for invalid enum values", () => {
+    applyEnv({
+      NODE_ENV: "staging",
+    });
+
+    expect(() => getServerEnv()).toThrow(
+      /Invalid server environment variables: NODE_ENV:/,
+    );
+  });
 });

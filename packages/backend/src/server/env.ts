@@ -38,25 +38,7 @@ function createServerEnv() {
       REDIS_TLS_URL: z.string().optional(),
       REDIS_URL: z.string().optional(),
     },
-    runtimeEnv: {
-      APP_PUBLIC_ORIGIN: process.env.APP_PUBLIC_ORIGIN,
-      LANDING_METRICS_API_KEY: process.env.LANDING_METRICS_API_KEY,
-      LANDING_METRICS_REQUIRE_API_KEY:
-        process.env.LANDING_METRICS_REQUIRE_API_KEY,
-      NODE_ENV: process.env.NODE_ENV,
-      OAUTH_ALLOWED_REDIRECT_URIS: process.env.OAUTH_ALLOWED_REDIRECT_URIS,
-      OAUTH_ALLOWED_SCOPES: process.env.OAUTH_ALLOWED_SCOPES,
-      OAUTH_AUDIENCE: process.env.OAUTH_AUDIENCE,
-      OAUTH_CLIENT_ID: process.env.OAUTH_CLIENT_ID,
-      OAUTH_CLIENT_SECRET: process.env.OAUTH_CLIENT_SECRET,
-      OAUTH_ISSUER: process.env.OAUTH_ISSUER,
-      OAUTH_JWT_SECRET: process.env.OAUTH_JWT_SECRET,
-      OAUTH_RESOURCE: process.env.OAUTH_RESOURCE,
-      OAUTH_RESOURCE_DOCUMENTATION: process.env.OAUTH_RESOURCE_DOCUMENTATION,
-      KV_URL: process.env.KV_URL,
-      REDIS_TLS_URL: process.env.REDIS_TLS_URL,
-      REDIS_URL: process.env.REDIS_URL,
-    },
+    runtimeEnv: process.env,
     emptyStringAsUndefined: true,
     onValidationError: (issues) => {
       throw new Error(

@@ -13,6 +13,18 @@ const nextConfig = {
   devIndicators: {
     position: "bottom-right",
   },
+  async rewrites() {
+    if (process.env.VERCEL_ENV !== "preview") {
+      return []
+    }
+
+    return [
+      {
+        source: "/coverage",
+        destination: "/coverage/index.html",
+      },
+    ]
+  },
 }
 
 export default nextConfig
