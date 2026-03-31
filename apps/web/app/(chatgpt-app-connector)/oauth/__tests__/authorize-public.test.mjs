@@ -7,9 +7,11 @@ const TEST_ORIGIN = "https://app.example.com";
 const TEST_REDIRECT_URI = "https://chatgpt.com/connector_platform_oauth_redirect";
 
 const OAUTH_ENV_KEYS = [
+  "NODE_ENV",
   "OAUTH_CLIENT_ID",
   "OAUTH_CLIENT_SECRET",
   "OAUTH_JWT_SECRET",
+  "OAUTH_AUDIENCE",
   "OAUTH_RESOURCE",
   "OAUTH_ISSUER",
   "OAUTH_ALLOWED_REDIRECT_URIS",
@@ -21,9 +23,11 @@ const previousEnv = Object.fromEntries(
 );
 
 function configureOAuthEnv() {
+  process.env.NODE_ENV = "test";
   process.env.OAUTH_CLIENT_ID = "chatgpt_static_client";
   process.env.OAUTH_CLIENT_SECRET = "chatgpt_static_secret";
   process.env.OAUTH_JWT_SECRET = "chatgpt_test_jwt_secret";
+  delete process.env.OAUTH_AUDIENCE;
   process.env.OAUTH_RESOURCE = TEST_ORIGIN;
   process.env.OAUTH_ISSUER = TEST_ORIGIN;
   process.env.OAUTH_ALLOWED_REDIRECT_URIS = TEST_REDIRECT_URI;

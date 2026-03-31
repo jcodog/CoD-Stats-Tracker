@@ -21,7 +21,9 @@ import { resetServerEnvForTests } from "../env.ts";
 const TEST_ORIGIN = "https://stats-dev.cleoai.cloud";
 const ENV_KEYS = [
   "NODE_ENV",
+  "OAUTH_AUDIENCE",
   "OAUTH_ISSUER",
+  "OAUTH_RESOURCE",
   "OAUTH_JWT_SECRET",
   "OAUTH_ALLOWED_REDIRECT_URIS",
   "OAUTH_ALLOWED_SCOPES",
@@ -32,7 +34,9 @@ const originalConsoleError = console.error;
 
 function applyEnv(overrides = {}) {
   process.env.NODE_ENV = "test";
+  delete process.env.OAUTH_AUDIENCE;
   process.env.OAUTH_ISSUER = TEST_ORIGIN;
+  delete process.env.OAUTH_RESOURCE;
   process.env.OAUTH_JWT_SECRET = "test-secret";
   process.env.OAUTH_ALLOWED_REDIRECT_URIS =
     "https://chatgpt.com/connector_platform_oauth_redirect,https://platform.openai.com/apps-manage/oauth";

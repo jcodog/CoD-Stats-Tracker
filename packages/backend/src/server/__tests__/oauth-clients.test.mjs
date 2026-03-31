@@ -1,14 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
+import { resetServerEnvForTests } from "../env.ts";
 
 const TEST_ORIGIN = "https://stats-dev.cleoai.cloud";
 const ENV_KEYS = [
   "NODE_ENV",
+  "OAUTH_AUDIENCE",
   "OAUTH_ISSUER",
   "OAUTH_JWT_SECRET",
   "OAUTH_ALLOWED_REDIRECT_URIS",
   "OAUTH_ALLOWED_SCOPES",
   "OAUTH_CLIENT_ID",
   "OAUTH_CLIENT_SECRET",
+  "OAUTH_RESOURCE",
 ];
 
 const previousEnv = Object.fromEntries(
@@ -19,11 +22,13 @@ let fetchQueryResult = null;
 
 function applyEnv(overrides = {}) {
   process.env.NODE_ENV = "test";
+  delete process.env.OAUTH_AUDIENCE;
   process.env.OAUTH_ISSUER = TEST_ORIGIN;
   process.env.OAUTH_JWT_SECRET = "test-secret";
   process.env.OAUTH_ALLOWED_REDIRECT_URIS =
     "https://chatgpt.com/connector_platform_oauth_redirect,https://platform.openai.com/apps-manage/oauth";
   process.env.OAUTH_ALLOWED_SCOPES = "profile.read,stats.read";
+  process.env.OAUTH_RESOURCE = TEST_ORIGIN;
   delete process.env.OAUTH_CLIENT_ID;
   delete process.env.OAUTH_CLIENT_SECRET;
 
@@ -35,6 +40,8 @@ function applyEnv(overrides = {}) {
 
     process.env[key] = value;
   }
+
+  resetServerEnvForTests();
 }
 
 function restoreEnv() {
@@ -47,6 +54,8 @@ function restoreEnv() {
 
     process.env[key] = value;
   }
+
+  resetServerEnvForTests();
 }
 
 async function importClientsModule() {

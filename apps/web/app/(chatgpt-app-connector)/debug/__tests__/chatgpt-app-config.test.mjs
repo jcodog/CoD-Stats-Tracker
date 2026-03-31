@@ -8,6 +8,7 @@ const TEST_ISSUER = "https://stats-dev.cleoai.cloud";
 const OAUTH_ENV_KEYS = [
   "NODE_ENV",
   "OAUTH_ISSUER",
+  "OAUTH_AUDIENCE",
   "OAUTH_RESOURCE",
   "OAUTH_JWT_SECRET",
   "OAUTH_ALLOWED_REDIRECT_URIS",
@@ -20,6 +21,7 @@ const previousEnv = Object.fromEntries(
 function configureEnv(overrides = {}) {
   process.env.NODE_ENV = "test";
   process.env.OAUTH_ISSUER = TEST_ISSUER;
+  delete process.env.OAUTH_AUDIENCE;
   delete process.env.OAUTH_RESOURCE;
   process.env.OAUTH_JWT_SECRET = "chatgpt_test_secret";
   process.env.OAUTH_ALLOWED_REDIRECT_URIS =

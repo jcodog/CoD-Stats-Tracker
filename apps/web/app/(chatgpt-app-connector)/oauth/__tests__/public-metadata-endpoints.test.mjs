@@ -12,6 +12,7 @@ const ALT_ORIGIN = "https://other.example.com";
 const OAUTH_ENV_KEYS = [
   "NODE_ENV",
   "OAUTH_JWT_SECRET",
+  "OAUTH_AUDIENCE",
   "OAUTH_RESOURCE",
   "OAUTH_ISSUER",
   "OAUTH_ALLOWED_REDIRECT_URIS",
@@ -30,6 +31,7 @@ function configureOAuthEnv({
   process.env.NODE_ENV = nodeEnv;
   process.env.OAUTH_JWT_SECRET = "chatgpt_test_jwt_secret";
   process.env.OAUTH_ISSUER = issuer;
+  delete process.env.OAUTH_AUDIENCE;
 
   if (resource === undefined) {
     delete process.env.OAUTH_RESOURCE;
