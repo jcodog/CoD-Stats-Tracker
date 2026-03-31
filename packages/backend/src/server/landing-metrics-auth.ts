@@ -1,4 +1,5 @@
 import { timingSafeEqual } from "node:crypto";
+import { getServerEnv } from "./env";
 
 const LANDING_METRICS_API_KEY_HEADER = "x-landing-metrics-api-key";
 
@@ -13,7 +14,7 @@ type ApiKeyValidationResult = {
 };
 
 function getConfiguredApiKey() {
-  return process.env.LANDING_METRICS_API_KEY ?? null;
+  return getServerEnv().LANDING_METRICS_API_KEY ?? null;
 }
 
 function getProvidedApiKey(request: Request) {
@@ -47,7 +48,7 @@ function keysEqual(expected: string, provided: string) {
 }
 
 export function shouldRequireLandingMetricsApiKey() {
-  return process.env.LANDING_METRICS_REQUIRE_API_KEY === "true";
+  return getServerEnv().LANDING_METRICS_REQUIRE_API_KEY === "true";
 }
 
 export function validateLandingMetricsApiKey(

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { getServerEnv } from "@workspace/backend/server/env";
 import {
   getOAuthServerConfig,
   getOAuthSupportedScopes,
@@ -10,6 +11,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
+  const env = getServerEnv();
 
   let config;
   try {
@@ -42,7 +44,7 @@ export async function GET(request: Request) {
         "client_secret_post",
         "client_secret_basic",
       ],
-      resource_documentation: process.env.OAUTH_RESOURCE_DOCUMENTATION,
+      resource_documentation: env.OAUTH_RESOURCE_DOCUMENTATION,
     },
     {
       headers: {

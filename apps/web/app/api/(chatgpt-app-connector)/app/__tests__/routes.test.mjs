@@ -13,6 +13,7 @@ import {
   CHATGPT_APP_ERROR_CODES,
   CHATGPT_APP_VIEWS,
 } from "@workspace/backend/server/chatgpt-app-contract";
+import { resetServerEnvForTests } from "@workspace/backend/server/env";
 import { isPublicRoute } from "../../../../../proxy.ts";
 
 const ACTIVE_USER = {
@@ -39,7 +40,12 @@ const VERIFIED_TOKEN = {
   scopes: ["stats.read"],
 };
 
-const ENV_KEYS = ["OAUTH_ISSUER", "OAUTH_JWT_SECRET", "OAUTH_ALLOWED_REDIRECT_URIS"];
+const ENV_KEYS = [
+  "OAUTH_ISSUER",
+  "OAUTH_JWT_SECRET",
+  "OAUTH_ALLOWED_REDIRECT_URIS",
+  "VERCEL_ENV",
+];
 
 const previousEnv = Object.fromEntries(ENV_KEYS.map((key) => [key, process.env[key]]));
 
@@ -48,6 +54,7 @@ beforeAll(() => {
   process.env.OAUTH_JWT_SECRET = "test-secret";
   process.env.OAUTH_ALLOWED_REDIRECT_URIS =
     "https://chatgpt.com/connector_platform_oauth_redirect,https://platform.openai.com/apps-manage/oauth";
+  resetServerEnvForTests();
 });
 
 afterAll(() => {
@@ -59,6 +66,8 @@ afterAll(() => {
       process.env[key] = value;
     }
   }
+
+  resetServerEnvForTests();
 });
 
 function createRequest(url) {
@@ -165,6 +174,23 @@ describe("proxy public route allowlist", () => {
 
   it("still protects non-allowlisted routes", () => {
     expect(isPublicRoute(createProxyMatcherRequest("/dashboard"))).toBe(false);
+  });
+
+  it("only exposes coverage routes on preview deployments", () => {
+    delete process.env.VERCEL_ENV;
+    expect(isPublicRoute(createProxyMatcherRequest("/coverage"))).toBe(false);
+    expect(isPublicRoute(createProxyMatcherRequest("/coverage/index.html"))).toBe(
+      false,
+    );
+
+    process.env.VERCEL_ENV = "preview";
+    expect(isPublicRoute(createProxyMatcherRequest("/coverage"))).toBe(true);
+    expect(isPublicRoute(createProxyMatcherRequest("/coverage/index.html"))).toBe(
+      true,
+    );
+
+    process.env.VERCEL_ENV = "production";
+    expect(isPublicRoute(createProxyMatcherRequest("/coverage"))).toBe(false);
   });
 });
 

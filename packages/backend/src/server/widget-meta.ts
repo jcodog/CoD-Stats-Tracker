@@ -1,3 +1,5 @@
+import { getServerEnv } from "./env";
+
 type WidgetUiCsp = {
   resourceDomains: string[];
   connectDomains: string[];
@@ -14,6 +16,11 @@ const FALLBACK_DOMAIN = "localhost";
 
 let didWarnMissingIssuer = false;
 let didWarnMissingProtocol = false;
+
+export function resetWidgetMetaWarningsForTests() {
+  didWarnMissingIssuer = false;
+  didWarnMissingProtocol = false;
+}
 
 function createEmptyCsp(): WidgetUiCsp {
   return {
@@ -51,21 +58,16 @@ function parseIssuerUrl(rawIssuer: string) {
     );
   }
 
-  if (!issuerUrl.hostname) {
-    throw new Error(
-      `Invalid OAUTH_ISSUER: "${rawIssuer}". Include a hostname, for example https://stats.cleoai.cloud.`,
-    );
-  }
-
   return issuerUrl;
 }
 
 export function resolveWidgetUiMeta(): WidgetUiMeta {
   const csp = createEmptyCsp();
-  const rawIssuer = process.env.OAUTH_ISSUER?.trim();
+  const env = getServerEnv();
+  const rawIssuer = env.OAUTH_ISSUER?.trim();
 
   if (!rawIssuer) {
-    if (process.env.NODE_ENV === "production") {
+    if (env.NODE_ENV === "production") {
       throw new Error(
         "Missing required env var OAUTH_ISSUER. Set OAUTH_ISSUER to your canonical app URL (for example https://stats.cleoai.cloud) so ChatGPT widget ui.domain and ui.csp metadata can be validated.",
       );

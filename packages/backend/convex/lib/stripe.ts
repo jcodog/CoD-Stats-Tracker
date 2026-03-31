@@ -1,4 +1,5 @@
 import Stripe from "stripe"
+import { getConvexEnv } from "../env"
 
 const STRIPE_API_VERSION: Stripe.LatestApiVersion = "2026-03-25.dahlia" as const
 
@@ -8,7 +9,7 @@ let cachedStripe: Stripe | null = null
 let cachedSecretKey: string | null = null
 
 export function getStripe() {
-  const stripeSecretKey = process.env.STRIPE_SECRET_KEY
+  const stripeSecretKey = getConvexEnv().STRIPE_SECRET_KEY
 
   if (!stripeSecretKey) {
     throw new Error("Missing STRIPE_SECRET_KEY")

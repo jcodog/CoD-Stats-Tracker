@@ -1,4 +1,5 @@
 import { parseUserRole, type UserRole } from "./staffRoles"
+import { getConvexEnv } from "../env"
 
 let cachedConfigKey: string | null = null
 let cachedSuperAdminDiscordIds = new Set<string>()
@@ -8,9 +9,11 @@ function normalizeDiscordId(value: unknown) {
 }
 
 function getSuperAdminConfigKey() {
+  const env = getConvexEnv()
+
   return [
-    process.env.SUPER_ADMIN_DISCORD_ID ?? "",
-    process.env.SUPER_ADMIN_DISCORD_IDS ?? "",
+    env.SUPER_ADMIN_DISCORD_ID ?? "",
+    env.SUPER_ADMIN_DISCORD_IDS ?? "",
   ].join("|")
 }
 

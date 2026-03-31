@@ -17,6 +17,7 @@ import {
   getWebhookObjectIds,
 } from "./lib/billingStripe"
 import { getStripe } from "./lib/stripe"
+import { getConvexEnv } from "./env"
 import { handleDiscordInteractions } from "./http/discord/interactions"
 
 const http = httpRouter()
@@ -105,7 +106,7 @@ http.route({
   handler: httpAction(async (ctx, request) => {
     const stripe = getStripe()
     const webhookSecret = sanitizeStripeWebhookSecret(
-      process.env.STRIPE_WEBHOOK_SECRET
+      getConvexEnv().STRIPE_WEBHOOK_SECRET
     )
     const signature = request.headers.get("stripe-signature")?.trim()
 
@@ -383,7 +384,7 @@ http.route({
 })
 
 const validateRequest = async (req: Request): Promise<WebhookEvent | null> => {
-  const secret = process.env.CLERK_WEBHOOK_SECRET
+  const secret = getConvexEnv().CLERK_WEBHOOK_SECRET
   if (!secret) {
     console.error("Missing CLERK_WEBHOOK_SECRET")
     return null

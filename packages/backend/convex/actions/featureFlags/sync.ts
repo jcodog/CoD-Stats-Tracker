@@ -2,6 +2,7 @@
 
 import { internal } from "../../_generated/api"
 import { internalAction } from "../../_generated/server"
+import { getConvexEnv } from "../../env"
 
 type VercelFlagListItem = {
   id?: string
@@ -14,9 +15,10 @@ type VercelFlagListItem = {
 export const syncFromVercel = internalAction({
   args: {},
   handler: async (ctx) => {
-    const token = process.env.VERCEL_ACCESS_TOKEN
-    const project = process.env.VERCEL_PROJECT_ID_OR_NAME
-    const teamId = process.env.VERCEL_TEAM_ID
+    const env = getConvexEnv()
+    const token = env.VERCEL_ACCESS_TOKEN
+    const project = env.VERCEL_PROJECT_ID_OR_NAME
+    const teamId = env.VERCEL_TEAM_ID
 
     if (!token) throw new Error("Missing VERCEL_ACCESS_TOKEN")
     if (!project) throw new Error("Missing VERCEL_PROJECT_ID_OR_NAME")

@@ -8,6 +8,10 @@
     "dev": "convex dev",
     "deploy": "convex deploy -y",
     "lint": "eslint .",
+    "test": "bun run test:env && bun run test:server && bun run test:convex",
+    "test:convex": "bun test \"convex/__tests__\" \"convex/lib/__tests__\" \"convex/mutations/__tests__\"",
+    "test:env": "bun test \"convex/__tests__/env.test.mjs\"",
+    "test:server": "bun test \"src/server/__tests__\"",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

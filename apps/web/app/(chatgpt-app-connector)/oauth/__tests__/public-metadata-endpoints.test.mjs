@@ -4,6 +4,7 @@ import { GET as getOpenIdConfiguration } from "../../../.well-known/(chatgpt-app
 import { GET as getAuthorizationServerMetadata } from "../../../.well-known/(chatgpt-app-connector)/oauth-authorization-server/route.ts";
 import { GET as getProtectedResourceMetadata } from "../../../.well-known/(chatgpt-app-connector)/oauth-protected-resource/route.ts";
 import { GET as getMcpProtectedResourceMetadata } from "../../../.well-known/(chatgpt-app-connector)/oauth-protected-resource/mcp/route.ts";
+import { resetServerEnvForTests } from "@workspace/backend/server/env";
 
 const TEST_ORIGIN = "https://app.example.com";
 const ALT_ORIGIN = "https://other.example.com";
@@ -11,6 +12,7 @@ const ALT_ORIGIN = "https://other.example.com";
 const OAUTH_ENV_KEYS = [
   "NODE_ENV",
   "OAUTH_JWT_SECRET",
+  "OAUTH_AUDIENCE",
   "OAUTH_RESOURCE",
   "OAUTH_ISSUER",
   "OAUTH_ALLOWED_REDIRECT_URIS",
@@ -29,6 +31,7 @@ function configureOAuthEnv({
   process.env.NODE_ENV = nodeEnv;
   process.env.OAUTH_JWT_SECRET = "chatgpt_test_jwt_secret";
   process.env.OAUTH_ISSUER = issuer;
+  delete process.env.OAUTH_AUDIENCE;
 
   if (resource === undefined) {
     delete process.env.OAUTH_RESOURCE;
@@ -39,6 +42,7 @@ function configureOAuthEnv({
   process.env.OAUTH_ALLOWED_REDIRECT_URIS =
     "https://chatgpt.com/connector_platform_oauth_redirect,https://platform.openai.com/apps-manage/oauth";
   process.env.OAUTH_ALLOWED_SCOPES = "profile.read,stats.read";
+  resetServerEnvForTests();
 }
 
 function restoreOAuthEnv() {
@@ -51,6 +55,8 @@ function restoreOAuthEnv() {
 
     process.env[key] = previousValue;
   }
+
+  resetServerEnvForTests();
 }
 
 beforeEach(() => {
@@ -186,11 +192,51 @@ describe("OAuth metadata endpoints are public JSON routes", () => {
   it("fails when OAUTH_ALLOWED_SCOPES omits enforced app scopes", async () => {
     configureOAuthEnv();
     process.env.OAUTH_ALLOWED_SCOPES = "profile.read";
+    resetServerEnvForTests();
 
     const response = await getAuthorizationServerMetadata(
       new Request(`${TEST_ORIGIN}/.well-known/oauth-authorization-server`),
     );
     const body = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(body.error).toBe("server_error");
+    expect(body.error_description).toContain("required scope: stats.read");
+  });
+
+  it("returns a JSON server error for openid discovery when oauth config cannot be built", async () => {
+    configureOAuthEnv();
+    process.env.OAUTH_ALLOWED_SCOPES = "profile.read";
+    resetServerEnvForTests();
+
+    const response = await getOpenIdConfiguration(
+      new Request(`${TEST_ORIGIN}/.well-known/openid-configuration`),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(body.error).toBe("server_error");
+    expect(body.error_description).toContain("required scope: stats.read");
+  });
+
+  it("returns a JSON server error for protected resource metadata when oauth config cannot be built", async () => {
+    configureOAuthEnv();
+    process.env.OAUTH_ALLOWED_SCOPES = "profile.read";
+    resetServerEnvForTests();
+
+    let response = await getProtectedResourceMetadata(
+      new Request(`${TEST_ORIGIN}/.well-known/oauth-protected-resource`),
+    );
+    let body = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(body.error).toBe("server_error");
+    expect(body.error_description).toContain("required scope: stats.read");
+
+    response = await getMcpProtectedResourceMetadata(
+      new Request(`${TEST_ORIGIN}/.well-known/oauth-protected-resource/mcp`),
+    );
+    body = await response.json();
 
     expect(response.status).toBe(500);
     expect(body.error).toBe("server_error");

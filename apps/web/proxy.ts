@@ -29,7 +29,23 @@ export const PUBLIC_ROUTE_PATTERNS = [
   ...CHATGPT_APP_PUBLIC_ROUTE_PATTERNS,
 ]
 
-export const isPublicRoute = createRouteMatcher(PUBLIC_ROUTE_PATTERNS)
+const matchesPublicRoute = createRouteMatcher(PUBLIC_ROUTE_PATTERNS)
+
+type PublicRouteRequest = Parameters<typeof matchesPublicRoute>[0]
+
+export function isPreviewCoverageEnabled() {
+  return process.env.VERCEL_ENV === "preview"
+}
+
+function isCoveragePath(pathname: string) {
+  return pathname === "/coverage" || pathname.startsWith("/coverage/")
+}
+
+export function isPublicRoute(req: PublicRouteRequest) {
+  return matchesPublicRoute(req) || (
+    isPreviewCoverageEnabled() && isCoveragePath(req.nextUrl.pathname)
+  )
+}
 
 export default clerkMiddleware(async (auth, req) => {
   if (!isPublicRoute(req)) {

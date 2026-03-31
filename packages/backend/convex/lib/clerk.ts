@@ -1,6 +1,7 @@
 "use node"
 
 import { createClerkClient } from "@clerk/backend"
+import { getConvexEnv } from "../env"
 import { parseUserRole, type UserRole } from "./staffRoles"
 
 let cachedClerkClient:
@@ -9,7 +10,7 @@ let cachedClerkClient:
 let cachedSecretKey: string | null = null
 
 export function getClerkBackendClient() {
-  const secretKey = process.env.CLERK_SECRET_KEY
+  const secretKey = getConvexEnv().CLERK_SECRET_KEY
 
   if (!secretKey) {
     throw new Error("Missing CLERK_SECRET_KEY")

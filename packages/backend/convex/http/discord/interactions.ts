@@ -17,6 +17,7 @@ import {
 import { pingCommand } from "../../lib/commands/ping"
 import { internal } from "../../_generated/api"
 import { httpAction, type ActionCtx } from "../../_generated/server"
+import { getConvexEnv } from "../../env"
 
 type ParsedCustomId =
   | { kind: "join"; queueId: string }
@@ -188,7 +189,7 @@ async function verifyDiscordRequest(
 ): Promise<boolean> {
   const signature = request.headers.get("x-signature-ed25519")
   const timestamp = request.headers.get("x-signature-timestamp")
-  const publicKey = process.env.DISCORD_APPLICATION_PUBLIC_KEY
+  const publicKey = getConvexEnv().DISCORD_APPLICATION_PUBLIC_KEY
 
   if (!signature || !timestamp || !publicKey) {
     return false

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { useQuery } from "convex/react"
 
 import { api } from "@workspace/backend/convex/_generated/api"
+import { env } from "@/env/client"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -52,8 +53,7 @@ export function ChatGptAppSettingsSection({
   const router = useRouter()
   const user = useQuery(api.queries.users.current)
   const dedicatedConnectHref =
-    connectHref?.trim() ||
-    process.env.NEXT_PUBLIC_CHATGPT_APP_CONNECT_URL?.trim()
+    connectHref?.trim() || env.NEXT_PUBLIC_CHATGPT_APP_CONNECT_URL?.trim()
   const resolvedConnectHref = dedicatedConnectHref || CHATGPT_HOME_URL
 
   const [disconnectState, setDisconnectState] =

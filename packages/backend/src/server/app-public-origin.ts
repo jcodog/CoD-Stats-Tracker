@@ -1,3 +1,5 @@
+import { getServerEnv } from "./env";
+
 const PRODUCTION_APP_HOSTNAMES = new Set([
   "stats.cleoai.cloud",
   "stats-dev.cleoai.cloud",
@@ -66,7 +68,8 @@ function normalizeRequestOrigin(input: RequestOriginInput) {
 }
 
 export function getAppPublicOrigin(requestOriginInput?: RequestOriginInput) {
-  const rawOrigin = process.env.APP_PUBLIC_ORIGIN?.trim();
+  const env = getServerEnv();
+  const rawOrigin = env.APP_PUBLIC_ORIGIN?.trim();
 
   if (!rawOrigin) {
     throw new Error(
@@ -77,7 +80,7 @@ export function getAppPublicOrigin(requestOriginInput?: RequestOriginInput) {
   const parsedOrigin = parseOriginOrThrow(rawOrigin, "APP_PUBLIC_ORIGIN");
   const requestOrigin = normalizeRequestOrigin(requestOriginInput);
 
-  if (process.env.NODE_ENV === "production") {
+  if (env.NODE_ENV === "production") {
     if (!PRODUCTION_APP_HOSTNAMES.has(parsedOrigin.hostname)) {
       throw new Error(
         `APP_PUBLIC_ORIGIN must use one of ${Array.from(PRODUCTION_APP_HOSTNAMES).join(", ")} in production. Received "${parsedOrigin.hostname}".`,

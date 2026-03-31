@@ -12,6 +12,8 @@ node_modules
 
 # testing
 /coverage
+.coverage/
+apps/web/public/coverage/
 
 # next.js
 /.next/

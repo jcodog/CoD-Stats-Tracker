@@ -26,11 +26,13 @@ const PKCE_CODE_CHALLENGE_PATTERN = /^[A-Za-z0-9_-]{43,128}$/;
 type AuthorizeRouteDeps = {
   getAuth: typeof auth;
   runMutation: typeof fetchMutation;
+  resolveClient: typeof resolveOAuthClient;
 };
 
 const defaultDeps: AuthorizeRouteDeps = {
   getAuth: auth,
   runMutation: fetchMutation,
+  resolveClient: resolveOAuthClient,
 };
 
 function authorizeError(
@@ -153,7 +155,7 @@ export async function handleAuthorizeGet(
     );
   }
 
-  const client = await resolveOAuthClient(clientId, requestUrl.origin);
+  const client = await deps.resolveClient(clientId, requestUrl.origin);
   if (!client) {
     return authorizeError(
       redirectUri,
@@ -309,6 +311,5 @@ export async function handleAuthorizeGet(
   });
 }
 
-export async function GET(request: Request) {
-  return handleAuthorizeGet(request);
-}
+export const GET: (request: Request) => ReturnType<typeof handleAuthorizeGet> =
+  handleAuthorizeGet;

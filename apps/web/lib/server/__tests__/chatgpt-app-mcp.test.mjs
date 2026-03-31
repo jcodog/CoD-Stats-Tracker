@@ -11,6 +11,7 @@ import { GET as getRankTemplateRoute } from "../../../app/(chatgpt-app-connector
 import { GET as getSettingsTemplateRoute } from "../../../app/(chatgpt-app-connector)/ui/codstats/settings.html/route.ts";
 import { createChatGptAppMcpServer } from "@workspace/backend/server/chatgpt-app-mcp";
 import { renderCodstatsTemplateHtml } from "@workspace/backend/server/chatgpt-app-ui-templates";
+import { resetServerEnvForTests } from "@workspace/backend/server/env";
 import {
   CHATGPT_APP_ERROR_CODES,
   CHATGPT_APP_VIEWS,
@@ -31,21 +32,45 @@ const TEST_RANK_URI = "ui://codstats/rank.html";
 const TEST_SETTINGS_URI = "ui://codstats/settings.html";
 
 const originalFetch = globalThis.fetch;
+const previousNodeEnv = process.env.NODE_ENV;
 const previousOauthResource = process.env.OAUTH_RESOURCE;
+const previousOauthAudience = process.env.OAUTH_AUDIENCE;
 const previousOauthIssuer = process.env.OAUTH_ISSUER;
+const previousOauthJwtSecret = process.env.OAUTH_JWT_SECRET;
+const previousOauthAllowedRedirectUris = process.env.OAUTH_ALLOWED_REDIRECT_URIS;
+const previousOauthAllowedScopes = process.env.OAUTH_ALLOWED_SCOPES;
 const previousAppPublicOrigin = process.env.APP_PUBLIC_ORIGIN;
 
 beforeAll(() => {
+  process.env.NODE_ENV = "test";
   process.env.OAUTH_RESOURCE = TEST_ORIGIN;
+  delete process.env.OAUTH_AUDIENCE;
   process.env.OAUTH_ISSUER = TEST_ORIGIN;
+  process.env.OAUTH_JWT_SECRET = "chatgpt_test_secret";
+  process.env.OAUTH_ALLOWED_REDIRECT_URIS =
+    "https://chatgpt.com/connector_platform_oauth_redirect,https://platform.openai.com/apps-manage/oauth";
+  process.env.OAUTH_ALLOWED_SCOPES = "profile.read,stats.read";
   process.env.APP_PUBLIC_ORIGIN = TEST_APP_PUBLIC_ORIGIN;
+  resetServerEnvForTests();
 });
 
 afterAll(() => {
+  if (previousNodeEnv === undefined) {
+    delete process.env.NODE_ENV;
+  } else {
+    process.env.NODE_ENV = previousNodeEnv;
+  }
+
   if (previousOauthResource === undefined) {
     delete process.env.OAUTH_RESOURCE;
   } else {
     process.env.OAUTH_RESOURCE = previousOauthResource;
+  }
+
+  if (previousOauthAudience === undefined) {
+    delete process.env.OAUTH_AUDIENCE;
+  } else {
+    process.env.OAUTH_AUDIENCE = previousOauthAudience;
   }
 
   if (previousOauthIssuer === undefined) {
@@ -54,11 +79,31 @@ afterAll(() => {
     process.env.OAUTH_ISSUER = previousOauthIssuer;
   }
 
+  if (previousOauthJwtSecret === undefined) {
+    delete process.env.OAUTH_JWT_SECRET;
+  } else {
+    process.env.OAUTH_JWT_SECRET = previousOauthJwtSecret;
+  }
+
+  if (previousOauthAllowedRedirectUris === undefined) {
+    delete process.env.OAUTH_ALLOWED_REDIRECT_URIS;
+  } else {
+    process.env.OAUTH_ALLOWED_REDIRECT_URIS = previousOauthAllowedRedirectUris;
+  }
+
+  if (previousOauthAllowedScopes === undefined) {
+    delete process.env.OAUTH_ALLOWED_SCOPES;
+  } else {
+    process.env.OAUTH_ALLOWED_SCOPES = previousOauthAllowedScopes;
+  }
+
   if (previousAppPublicOrigin === undefined) {
     delete process.env.APP_PUBLIC_ORIGIN;
   } else {
     process.env.APP_PUBLIC_ORIGIN = previousAppPublicOrigin;
   }
+
+  resetServerEnvForTests();
 });
 
 afterEach(() => {
