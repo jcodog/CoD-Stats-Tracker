@@ -9,6 +9,8 @@ import { ClerkProvider } from "@/components/providers/ClerkProvider"
 import ConvexClientProvider from "@/components/providers/ConvexProviderWithClerk"
 import { TanstackQueryProvider } from "@/components/providers/TanstackQueryProvider"
 import { TooltipProvider } from "@workspace/ui/components/tooltip"
+import { SpeedInsights } from "@vercel/speed-insights/next"
+import { Analytics } from "@vercel/analytics/next"
 
 const inter = Inter({
   subsets: ["latin"],
@@ -34,7 +36,7 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={cn( fontMono.variable, "font-sans", inter.variable)}
+      className={cn(fontMono.variable, "font-sans", inter.variable)}
     >
       <body className="flex h-full min-h-screen w-full min-w-full flex-col antialiased">
         <ThemeProvider>
@@ -44,6 +46,8 @@ export default function RootLayout({
                 <TanstackQueryProvider>
                   {children}
                   <Toaster richColors position="top-right" closeButton />
+                  <SpeedInsights />
+                  <Analytics />
                 </TanstackQueryProvider>
               </ConvexClientProvider>
             </ClerkProvider>
