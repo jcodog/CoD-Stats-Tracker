@@ -1,7 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it } from "bun:test";
-
-import { GET as getChatGptAppConfig } from "../chatgpt-app-config/route.ts";
 import { resetServerEnvForTests } from "@workspace/backend/server/env";
+import { GET as getChatGptAppConfig, handleChatGptAppConfigGet } from "../chatgpt-app-config/route.ts";
 
 const TEST_ISSUER = "https://stats-dev.cleoai.cloud";
 
@@ -105,5 +104,67 @@ describe("/debug/chatgpt-app-config", () => {
 
     expect(response.status).toBe(404);
     expect(body.error).toBe("not_found");
+  });
+
+  it("returns a no-store config error payload when oauth config resolution fails", async () => {
+    const response = await handleChatGptAppConfigGet(
+      new Request(`${TEST_ISSUER}/debug/chatgpt-app-config`),
+      {
+        getServerEnv: () => ({
+          NODE_ENV: "test",
+        }),
+        getOAuthServerConfig: () => {
+          throw "raw config failure";
+        },
+        buildOAuthAbsoluteUrlFromIssuer: (issuer, routePath) =>
+          new URL(routePath, issuer).toString(),
+        resolveWidgetUiMeta: () => ({
+          domain: "stats-dev.cleoai.cloud",
+          csp: {
+            resourceDomains: [TEST_ISSUER],
+            connectDomains: [TEST_ISSUER],
+            frameDomains: [],
+            baseUriDomains: [],
+          },
+        }),
+      },
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(body).toEqual({
+      ok: false,
+      error: "config_error",
+      error_description: "Unable to resolve ChatGPT app config",
+    });
+  });
+
+  it("returns widget metadata failures with the original error message", async () => {
+    const response = await handleChatGptAppConfigGet(
+      new Request(`${TEST_ISSUER}/debug/chatgpt-app-config`),
+      {
+        getServerEnv: () => ({
+          NODE_ENV: "test",
+        }),
+        getOAuthServerConfig: () => ({
+          issuer: TEST_ISSUER,
+        }),
+        buildOAuthAbsoluteUrlFromIssuer: (issuer, routePath) =>
+          new URL(routePath, issuer).toString(),
+        resolveWidgetUiMeta: () => {
+          throw new Error("widget metadata exploded");
+        },
+      },
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(body).toEqual({
+      ok: false,
+      error: "config_error",
+      error_description: "widget metadata exploded",
+    });
   });
 });

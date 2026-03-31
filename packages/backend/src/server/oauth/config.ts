@@ -36,6 +36,11 @@ function optionalEnv(name: ServerEnvKey) {
   return value && value.length > 0 ? value : null;
 }
 
+export function resetOAuthConfigWarningsForTests() {
+  didWarnMissingIssuer = false;
+  didWarnIssuerOriginMismatch = false;
+}
+
 function parseCsv(value: string) {
   return value
     .split(",")

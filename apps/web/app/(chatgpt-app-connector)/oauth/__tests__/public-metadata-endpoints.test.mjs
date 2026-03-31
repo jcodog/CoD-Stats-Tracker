@@ -203,4 +203,43 @@ describe("OAuth metadata endpoints are public JSON routes", () => {
     expect(body.error).toBe("server_error");
     expect(body.error_description).toContain("required scope: stats.read");
   });
+
+  it("returns a JSON server error for openid discovery when oauth config cannot be built", async () => {
+    configureOAuthEnv();
+    process.env.OAUTH_ALLOWED_SCOPES = "profile.read";
+    resetServerEnvForTests();
+
+    const response = await getOpenIdConfiguration(
+      new Request(`${TEST_ORIGIN}/.well-known/openid-configuration`),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(body.error).toBe("server_error");
+    expect(body.error_description).toContain("required scope: stats.read");
+  });
+
+  it("returns a JSON server error for protected resource metadata when oauth config cannot be built", async () => {
+    configureOAuthEnv();
+    process.env.OAUTH_ALLOWED_SCOPES = "profile.read";
+    resetServerEnvForTests();
+
+    let response = await getProtectedResourceMetadata(
+      new Request(`${TEST_ORIGIN}/.well-known/oauth-protected-resource`),
+    );
+    let body = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(body.error).toBe("server_error");
+    expect(body.error_description).toContain("required scope: stats.read");
+
+    response = await getMcpProtectedResourceMetadata(
+      new Request(`${TEST_ORIGIN}/.well-known/oauth-protected-resource/mcp`),
+    );
+    body = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(body.error).toBe("server_error");
+    expect(body.error_description).toContain("required scope: stats.read");
+  });
 });

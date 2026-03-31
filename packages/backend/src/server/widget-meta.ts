@@ -17,6 +17,11 @@ const FALLBACK_DOMAIN = "localhost";
 let didWarnMissingIssuer = false;
 let didWarnMissingProtocol = false;
 
+export function resetWidgetMetaWarningsForTests() {
+  didWarnMissingIssuer = false;
+  didWarnMissingProtocol = false;
+}
+
 function createEmptyCsp(): WidgetUiCsp {
   return {
     resourceDomains: [],
@@ -50,12 +55,6 @@ function parseIssuerUrl(rawIssuer: string) {
   if (issuerUrl.protocol !== "https:" && issuerUrl.protocol !== "http:") {
     throw new Error(
       `Unsupported OAUTH_ISSUER protocol: "${issuerUrl.protocol}". Use http:// or https://.`,
-    );
-  }
-
-  if (!issuerUrl.hostname) {
-    throw new Error(
-      `Invalid OAUTH_ISSUER: "${rawIssuer}". Include a hostname, for example https://stats.cleoai.cloud.`,
     );
   }
 

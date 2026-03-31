@@ -10,17 +10,46 @@ const publicCoverageDir = path.join(rootDir, "apps", "web", "public", "coverage"
 const reportPath = path.join(publicCoverageDir, "index.html")
 
 const AUDITED_COVERAGE_FILES = [
+  "apps/web/app/(chatgpt-app-connector)/debug/chatgpt-app-config/route.ts",
+  "apps/web/app/(chatgpt-app-connector)/mcp/route.ts",
+  "apps/web/app/(chatgpt-app-connector)/oauth/authorize/route.ts",
+  "apps/web/app/(chatgpt-app-connector)/ui/codstats/matches.html/route.ts",
+  "apps/web/app/(chatgpt-app-connector)/ui/codstats/rank.html/route.ts",
+  "apps/web/app/(chatgpt-app-connector)/ui/codstats/session.html/route.ts",
+  "apps/web/app/(chatgpt-app-connector)/ui/codstats/settings.html/route.ts",
+  "apps/web/app/(chatgpt-app-connector)/ui/codstats/widget.html/route.ts",
+  "apps/web/app/.well-known/(chatgpt-app-connector)/oauth-authorization-server/route.ts",
+  "apps/web/app/.well-known/(chatgpt-app-connector)/openid-configuration/route.ts",
+  "apps/web/app/.well-known/(chatgpt-app-connector)/oauth-protected-resource/route.ts",
+  "apps/web/app/.well-known/(chatgpt-app-connector)/oauth-protected-resource/mcp/route.ts",
   "packages/backend/src/server/chatgpt-app-contract.ts",
   "packages/backend/src/server/chatgpt-app-scopes.ts",
   "packages/backend/src/server/chatgpt-app-ui-templates.ts",
   "packages/backend/src/server/env.ts",
   "packages/backend/src/server/oauth/access-token.ts",
+  "packages/backend/src/server/oauth/config.ts",
   "packages/backend/src/server/oauth/crypto.ts",
   "packages/backend/src/server/oauth/jwt.ts",
   "packages/backend/src/server/oauth/time.ts",
+  "packages/backend/src/server/widget-meta.ts",
+]
+
+const CONNECTOR_WATCHLIST_FILES = [
+  "apps/web/app/(chatgpt-app-connector)/oauth/revoke/route.ts",
+  "apps/web/app/api/(chatgpt-app-connector)/app/disconnect/route.ts",
+  "apps/web/app/api/(chatgpt-app-connector)/app/profile/route.ts",
+  "apps/web/app/api/(chatgpt-app-connector)/app/stats/matches/route.ts",
+  "apps/web/app/api/(chatgpt-app-connector)/app/stats/matches/[id]/route.ts",
+  "apps/web/app/api/(chatgpt-app-connector)/app/stats/rank/ladder/route.ts",
+  "apps/web/app/api/(chatgpt-app-connector)/app/stats/rank/progress/route.ts",
+  "apps/web/app/api/(chatgpt-app-connector)/app/stats/session/current/route.ts",
+  "apps/web/app/api/(chatgpt-app-connector)/app/stats/session/last/route.ts",
+  "packages/backend/src/server/chatgpt-app-mcp.ts",
+  "packages/backend/src/server/redis.ts",
 ]
 
 const auditedCoverageFileSet = new Set(AUDITED_COVERAGE_FILES)
+const connectorWatchlistFileSet = new Set(CONNECTOR_WATCHLIST_FILES)
 
 function toPosixPath(filePath) {
   return filePath.replaceAll("\\", "/")
@@ -92,6 +121,7 @@ function compressLineNumbers(lineNumbers) {
 
   for (let index = 1; index < sorted.length; index += 1) {
     const current = sorted[index]
+
     if (current === previous + 1) {
       previous = current
       continue
@@ -116,6 +146,14 @@ function formatPercent(covered, total) {
 
 function formatCount(covered, total) {
   return `${covered}/${total}`
+}
+
+function formatTimestamp(timestamp) {
+  return `${new Date(timestamp).toLocaleString("en-GB", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "UTC",
+  })} UTC`
 }
 
 function getAreaLabel(relativePath) {
@@ -153,20 +191,20 @@ function mergeCoverageRecord(target, source) {
   target.totalFunctions = Math.max(target.totalFunctions, source.totalFunctions)
   target.coveredFunctions = Math.max(
     target.coveredFunctions,
-    source.coveredFunctions
+    source.coveredFunctions,
   )
 
   if (source.reportedTotalLines !== null) {
     target.reportedTotalLines = Math.max(
       target.reportedTotalLines ?? 0,
-      source.reportedTotalLines
+      source.reportedTotalLines,
     )
   }
 
   if (source.reportedCoveredLines !== null) {
     target.reportedCoveredLines = Math.max(
       target.reportedCoveredLines ?? 0,
-      source.reportedCoveredLines
+      source.reportedCoveredLines,
     )
   }
 }
@@ -269,6 +307,7 @@ function normalizeCoverageRecord(record) {
   return {
     area: getAreaLabel(relativePath),
     audited: auditedCoverageFileSet.has(relativePath),
+    watchlist: connectorWatchlistFileSet.has(relativePath),
     coveredFunctions: record.coveredFunctions,
     coveredLines,
     filePath: relativePath,
@@ -278,36 +317,44 @@ function normalizeCoverageRecord(record) {
   }
 }
 
-function summarizeRecords(records) {
-  const normalizedRecords = records
-    .map(normalizeCoverageRecord)
-    .sort((left, right) => {
-      const lineDelta =
-        Number(formatPercent(left.coveredLines, left.totalLines)) -
-        Number(formatPercent(right.coveredLines, right.totalLines))
+function compareByCoverage(left, right) {
+  const lineDelta =
+    Number(formatPercent(left.coveredLines, left.totalLines)) -
+    Number(formatPercent(right.coveredLines, right.totalLines))
 
-      if (lineDelta !== 0) {
-        return lineDelta
-      }
+  if (lineDelta !== 0) {
+    return lineDelta
+  }
 
-      return left.filePath.localeCompare(right.filePath)
-    })
+  return left.filePath.localeCompare(right.filePath)
+}
 
-  const totals = normalizedRecords.reduce(
-    (summary, record) => {
-      summary.coveredFunctions += record.coveredFunctions
-      summary.coveredLines += record.coveredLines
-      summary.totalFunctions += record.totalFunctions
-      summary.totalLines += record.totalLines
-      return summary
+function sumRecords(records) {
+  return records.reduce(
+    (totals, record) => {
+      totals.coveredFunctions += record.coveredFunctions
+      totals.coveredLines += record.coveredLines
+      totals.totalFunctions += record.totalFunctions
+      totals.totalLines += record.totalLines
+      return totals
     },
     {
       coveredFunctions: 0,
       coveredLines: 0,
       totalFunctions: 0,
       totalLines: 0,
-    }
+    },
   )
+}
+
+function summarizeRecords(records) {
+  const normalizedRecords = records
+    .map(normalizeCoverageRecord)
+    .sort(compareByCoverage)
+
+  const totals = sumRecords(normalizedRecords)
+  const auditedRecords = normalizedRecords.filter((record) => record.audited)
+  const watchlistRecords = normalizedRecords.filter((record) => record.watchlist)
 
   const areaSummaries = new Map()
   for (const record of normalizedRecords) {
@@ -329,27 +376,28 @@ function summarizeRecords(records) {
 
   return {
     areaSummaries: Array.from(areaSummaries.values()).sort((left, right) =>
-      left.area.localeCompare(right.area)
+      left.area.localeCompare(right.area),
     ),
+    auditedRecords,
+    auditedTotals: sumRecords(auditedRecords),
     generatedAt: new Date().toISOString(),
     records: normalizedRecords,
     totals,
+    watchlistRecords,
+    watchlistTotals: sumRecords(watchlistRecords),
   }
 }
 
 function assertAuditedCoverage(summary) {
-  const auditedRecords = summary.records.filter((record) => record.audited)
   const missingFiles = AUDITED_COVERAGE_FILES.filter(
-    (filePath) => !auditedRecords.some((record) => record.filePath === filePath)
+    (filePath) => !summary.auditedRecords.some((record) => record.filePath === filePath),
   )
 
   if (missingFiles.length > 0) {
-    throw new Error(
-      `Missing audited coverage records for: ${missingFiles.join(", ")}`
-    )
+    throw new Error(`Missing audited coverage records for: ${missingFiles.join(", ")}`)
   }
 
-  const underCoveredRecords = auditedRecords.filter((record) => {
+  const underCoveredRecords = summary.auditedRecords.filter((record) => {
     return (
       record.coveredLines !== record.totalLines ||
       record.coveredFunctions !== record.totalFunctions
@@ -360,101 +408,172 @@ function assertAuditedCoverage(summary) {
     return
   }
 
-  const details = underCoveredRecords.map((record) => {
-    return [
+  const details = underCoveredRecords.map((record) =>
+    [
       record.filePath,
       `lines ${formatCount(record.coveredLines, record.totalLines)}`,
       `functions ${formatCount(record.coveredFunctions, record.totalFunctions)}`,
       `uncovered ${compressLineNumbers(record.uncoveredLines)}`,
-    ].join(" | ")
-  })
-
-  throw new Error(
-    `Audited preview coverage must remain 100%.\n${details.join("\n")}`
+    ].join(" | "),
   )
+
+  throw new Error(`Audited preview coverage must remain 100%.\n${details.join("\n")}`)
 }
 
-function renderSummaryCard(title, covered, total, tone = "default") {
-  const percent = formatPercent(covered, total)
+function getCoverageTone(record) {
+  if (record.coveredLines === record.totalLines && record.coveredFunctions === record.totalFunctions) {
+    return "perfect"
+  }
 
+  const linePercent = Number(formatPercent(record.coveredLines, record.totalLines))
+
+  if (linePercent >= 85) {
+    return "strong"
+  }
+
+  if (linePercent >= 70) {
+    return "watch"
+  }
+
+  return "risk"
+}
+
+function renderMetricCard(title, covered, total, caption, tone = "default") {
   return `
-    <section class="summary-card summary-card--${escapeHtml(tone)}">
-      <h2>${escapeHtml(title)}</h2>
-      <p class="summary-percent">${escapeHtml(percent)}%</p>
-      <p class="summary-count">${escapeHtml(formatCount(covered, total))}</p>
-    </section>
+    <article class="metric metric--${escapeHtml(tone)}">
+      <span class="metric__label">${escapeHtml(title)}</span>
+      <strong class="metric__percent">${escapeHtml(formatPercent(covered, total))}%</strong>
+      <span class="metric__count">${escapeHtml(formatCount(covered, total))}</span>
+      <p class="metric__caption">${escapeHtml(caption)}</p>
+    </article>
   `
+}
+
+function renderAuditedRows(records) {
+  return records
+    .map((record) => `
+      <tr>
+        <td class="file-path">${escapeHtml(record.filePath)}</td>
+        <td>${escapeHtml(record.area)}</td>
+        <td class="cell--good">${escapeHtml(formatPercent(record.coveredLines, record.totalLines))}%</td>
+        <td>${escapeHtml(formatCount(record.coveredLines, record.totalLines))}</td>
+        <td class="cell--good">${escapeHtml(formatPercent(record.coveredFunctions, record.totalFunctions))}%</td>
+        <td>${escapeHtml(formatCount(record.coveredFunctions, record.totalFunctions))}</td>
+        <td class="uncovered-lines">None</td>
+      </tr>
+    `)
+    .join("")
+}
+
+function renderWatchlistCards(records) {
+  if (records.length === 0) {
+    return `
+      <article class="watch-card watch-card--perfect">
+        <p class="watch-card__eyebrow">Connector watchlist</p>
+        <h3>No watchlist files were found in the current coverage run.</h3>
+      </article>
+    `
+  }
+
+  return records
+    .sort(compareByCoverage)
+    .map((record) => {
+      const tone = getCoverageTone(record)
+      const linePercent = Number(formatPercent(record.coveredLines, record.totalLines))
+      const functionPercent = Number(formatPercent(record.coveredFunctions, record.totalFunctions))
+
+      return `
+        <article class="watch-card watch-card--${escapeHtml(tone)}">
+          <div class="watch-card__header">
+            <p class="watch-card__eyebrow">Watchlist</p>
+            <span class="watch-chip watch-chip--${escapeHtml(tone)}">${escapeHtml(record.area)}</span>
+          </div>
+          <h3>${escapeHtml(record.filePath)}</h3>
+          <div class="watch-bars">
+            <div>
+              <div class="watch-bars__meta">
+                <span>Lines</span>
+                <strong>${escapeHtml(linePercent.toFixed(2))}%</strong>
+              </div>
+              <div class="progress-shell">
+                <div class="progress-fill progress-fill--${escapeHtml(tone)}" style="width: ${escapeHtml(linePercent.toFixed(2))}%"></div>
+              </div>
+              <p class="watch-count">${escapeHtml(formatCount(record.coveredLines, record.totalLines))}</p>
+            </div>
+            <div>
+              <div class="watch-bars__meta">
+                <span>Functions</span>
+                <strong>${escapeHtml(functionPercent.toFixed(2))}%</strong>
+              </div>
+              <div class="progress-shell">
+                <div class="progress-fill progress-fill--${escapeHtml(tone)}" style="width: ${escapeHtml(functionPercent.toFixed(2))}%"></div>
+              </div>
+              <p class="watch-count">${escapeHtml(formatCount(record.coveredFunctions, record.totalFunctions))}</p>
+            </div>
+          </div>
+          <p class="watch-uncovered">
+            <span>Uncovered lines</span>
+            <code>${escapeHtml(compressLineNumbers(record.uncoveredLines))}</code>
+          </p>
+        </article>
+      `
+    })
+    .join("")
 }
 
 function renderAreaRows(areaSummaries) {
   return areaSummaries
-    .map((summary) => {
-      const linePercent = formatPercent(summary.coveredLines, summary.totalLines)
-      const functionPercent = formatPercent(
-        summary.coveredFunctions,
-        summary.totalFunctions
-      )
-
-      return `
-        <tr>
-          <td>${escapeHtml(summary.area)}</td>
-          <td>${escapeHtml(linePercent)}%</td>
-          <td>${escapeHtml(formatCount(summary.coveredLines, summary.totalLines))}</td>
-          <td>${escapeHtml(functionPercent)}%</td>
-          <td>${escapeHtml(
-            formatCount(summary.coveredFunctions, summary.totalFunctions)
-          )}</td>
-        </tr>
-      `
-    })
+    .map((summary) => `
+      <tr>
+        <td>${escapeHtml(summary.area)}</td>
+        <td>${escapeHtml(formatPercent(summary.coveredLines, summary.totalLines))}%</td>
+        <td>${escapeHtml(formatCount(summary.coveredLines, summary.totalLines))}</td>
+        <td>${escapeHtml(formatPercent(summary.coveredFunctions, summary.totalFunctions))}%</td>
+        <td>${escapeHtml(formatCount(summary.coveredFunctions, summary.totalFunctions))}</td>
+      </tr>
+    `)
     .join("")
 }
 
-function renderFileRows(records, includeAuditedColumn = false) {
+function renderLedgerRows(records) {
   return records
     .map((record) => {
-      const linePercent = formatPercent(record.coveredLines, record.totalLines)
-      const functionPercent = formatPercent(
-        record.coveredFunctions,
-        record.totalFunctions
-      )
+      const tone = getCoverageTone(record)
 
       return `
         <tr>
           <td class="file-path">${escapeHtml(record.filePath)}</td>
-          ${includeAuditedColumn ? `<td>${record.audited ? "yes" : "no"}</td>` : ""}
+          <td>${record.audited ? "Gate" : record.watchlist ? "Watchlist" : "Observed"}</td>
           <td>${escapeHtml(record.area)}</td>
-          <td>${escapeHtml(linePercent)}%</td>
+          <td class="cell--${escapeHtml(tone)}">${escapeHtml(formatPercent(record.coveredLines, record.totalLines))}%</td>
           <td>${escapeHtml(formatCount(record.coveredLines, record.totalLines))}</td>
-          <td>${escapeHtml(functionPercent)}%</td>
-          <td>${escapeHtml(
-            formatCount(record.coveredFunctions, record.totalFunctions)
-          )}</td>
-          <td class="uncovered-lines">${escapeHtml(
-            compressLineNumbers(record.uncoveredLines)
-          )}</td>
+          <td class="cell--${escapeHtml(tone)}">${escapeHtml(formatPercent(record.coveredFunctions, record.totalFunctions))}%</td>
+          <td>${escapeHtml(formatCount(record.coveredFunctions, record.totalFunctions))}</td>
+          <td class="uncovered-lines">${escapeHtml(compressLineNumbers(record.uncoveredLines))}</td>
         </tr>
       `
     })
     .join("")
 }
 
+function renderMissingFileList(filePaths) {
+  if (filePaths.length === 0) {
+    return ""
+  }
+
+  return `
+    <div class="missing-panel">
+      <p class="missing-panel__title">Watchlist files missing from this run</p>
+      <ul>
+        ${filePaths.map((filePath) => `<li><code>${escapeHtml(filePath)}</code></li>`).join("")}
+      </ul>
+    </div>
+  `
+}
+
 function renderHtml(summary) {
-  const auditedRecords = summary.records.filter((record) => record.audited)
-  const auditedTotals = auditedRecords.reduce(
-    (totals, record) => {
-      totals.coveredFunctions += record.coveredFunctions
-      totals.coveredLines += record.coveredLines
-      totals.totalFunctions += record.totalFunctions
-      totals.totalLines += record.totalLines
-      return totals
-    },
-    {
-      coveredFunctions: 0,
-      coveredLines: 0,
-      totalFunctions: 0,
-      totalLines: 0,
-    }
+  const missingWatchlistFiles = CONNECTOR_WATCHLIST_FILES.filter(
+    (filePath) => !summary.watchlistRecords.some((record) => record.filePath === filePath),
   )
 
   return `<!doctype html>
@@ -466,324 +585,634 @@ function renderHtml(summary) {
     <style>
       :root {
         color-scheme: dark;
-        --bg: #0c111b;
-        --bg-elevated: #11192a;
-        --border: #24314d;
-        --text: #edf2ff;
-        --muted: #9eb0d0;
-        --accent: #8cc3ff;
-        --success: #56d39b;
-        --warning: #ffd36e;
+        --background: #071019;
+        --background-alt: #0c1521;
+        --surface: #101a27;
+        --surface-alt: #142030;
+        --surface-soft: #1a2637;
+        --border: rgba(147, 168, 195, 0.18);
+        --text: #edf4ff;
+        --muted: #91a4bc;
+        --primary: #57c2c7;
+        --primary-strong: #8ce1df;
+        --success: #34d399;
+        --warning: #f7c873;
+        --danger: #fb7f6c;
+        --radius-lg: 14px;
+        --radius-md: 12px;
+        --radius-sm: 10px;
       }
 
       * {
         box-sizing: border-box;
       }
 
+      html {
+        scroll-behavior: smooth;
+      }
+
       body {
         margin: 0;
-        font-family: "Segoe UI", Inter, sans-serif;
-        background:
-          radial-gradient(circle at top left, rgba(78, 145, 255, 0.18), transparent 35%),
-          linear-gradient(180deg, #0b1220 0%, var(--bg) 100%);
+        min-height: 100vh;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
         color: var(--text);
+        background:
+          radial-gradient(circle at top left, rgba(87, 194, 199, 0.14), transparent 32%),
+          radial-gradient(circle at top right, rgba(52, 211, 153, 0.08), transparent 28%),
+          linear-gradient(180deg, var(--background), var(--background-alt));
       }
 
       main {
+        width: min(1220px, calc(100vw - 32px));
         margin: 0 auto;
-        max-width: 1280px;
-        padding: 48px 24px 80px;
+        padding: 24px 0 64px;
+      }
+
+      .hero,
+      .panel,
+      .metric,
+      .watch-card,
+      .missing-panel,
+      details {
+        border: 1px solid var(--border);
+        background: linear-gradient(180deg, rgba(20, 32, 48, 0.94), rgba(15, 24, 36, 0.98));
+      }
+
+      .hero,
+      .panel,
+      .missing-panel {
+        border-radius: var(--radius-lg);
+      }
+
+      .hero {
+        padding: 22px;
+      }
+
+      .hero__top,
+      .watch-card__header,
+      .watch-bars__meta,
+      .status-strip {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .brand__copy {
+        display: grid;
+        gap: 2px;
+      }
+
+      .brand__title {
+        font-size: 1.1rem;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+      }
+
+      .brand__subtitle {
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+
+      .brand img {
+        width: 42px;
+        height: 42px;
+        border-radius: 12px;
+        object-fit: cover;
+        border: 1px solid rgba(147, 168, 195, 0.14);
+        background: var(--surface-soft);
+      }
+
+      .badge-row,
+      .chip-list {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .badge,
+      .chip,
+      .watch-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 7px 11px;
+        border-radius: 999px;
+        font-size: 0.74rem;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        border: 1px solid rgba(147, 168, 195, 0.14);
+      }
+
+      .badge--preview,
+      .chip {
+        color: var(--primary-strong);
+        background: rgba(87, 194, 199, 0.1);
+      }
+
+      .badge--gate {
+        color: var(--success);
+        background: rgba(52, 211, 153, 0.1);
+      }
+
+      .badge--watch {
+        color: var(--warning);
+        background: rgba(247, 200, 115, 0.1);
       }
 
       h1,
       h2,
-      h3 {
+      h3,
+      p {
         margin: 0;
       }
 
-      .eyebrow {
-        margin: 0 0 12px;
-        color: var(--accent);
-        font-size: 0.85rem;
-        font-weight: 700;
-        letter-spacing: 0.12em;
+      .hero__headline,
+      .section-grid {
+        display: grid;
+        gap: 16px;
+        grid-template-columns: minmax(0, 1.45fr) minmax(300px, 0.8fr);
+        margin-top: 18px;
+      }
+
+      .eyebrow,
+      .panel__eyebrow,
+      .hero-aside__label,
+      .missing-panel__title,
+      th,
+      .watch-card__eyebrow {
+        color: var(--primary);
+        font-size: 0.73rem;
+        font-weight: 800;
+        letter-spacing: 0.1em;
         text-transform: uppercase;
       }
 
+      .hero h1 {
+        margin-top: 10px;
+        font-size: clamp(1.85rem, 3vw, 2.65rem);
+        line-height: 1.04;
+        letter-spacing: -0.03em;
+      }
+
       .lede,
-      .sublede,
-      .generated-at,
-      .legend {
+      .panel__copy,
+      .hero-aside__body,
+      .watch-count,
+      .watch-uncovered,
+      .split-note,
+      .summary-note {
         color: var(--muted);
         line-height: 1.6;
       }
 
       .lede {
-        margin: 16px 0 16px;
-        max-width: 64rem;
+        margin-top: 14px;
+        max-width: 48rem;
       }
 
-      .sublede {
-        margin: 0 0 32px;
-        max-width: 64rem;
+      .hero-aside {
+        padding: 18px;
+        border-radius: var(--radius-md);
+        background: rgba(12, 21, 33, 0.82);
+        border: 1px solid rgba(147, 168, 195, 0.14);
       }
 
-      .generated-at {
-        margin: 0;
-        font-size: 0.95rem;
+      .hero-aside__body {
+        margin-top: 10px;
       }
 
-      .summary-grid {
+      .hero-aside code,
+      .watch-uncovered code,
+      .file-path,
+      .uncovered-lines,
+      code {
+        font-family: "Geist Mono", ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+      }
+
+      .metrics {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-        gap: 16px;
-        margin: 24px 0 40px;
+        gap: 12px;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        margin-top: 18px;
       }
 
-      .summary-card,
+      .metric,
+      .watch-card {
+        border-radius: var(--radius-md);
+        padding: 16px;
+      }
+
+      .metric--default {
+        background: rgba(20, 32, 48, 0.9);
+      }
+
+      .metric--gate,
+      .watch-card--perfect {
+        background: linear-gradient(180deg, rgba(52, 211, 153, 0.08), rgba(20, 32, 48, 0.96));
+      }
+
+      .metric--watch,
+      .watch-card--watch {
+        background: linear-gradient(180deg, rgba(247, 200, 115, 0.08), rgba(20, 32, 48, 0.96));
+      }
+
+      .watch-card--strong {
+        background: linear-gradient(180deg, rgba(87, 194, 199, 0.08), rgba(20, 32, 48, 0.96));
+      }
+
+      .watch-card--risk {
+        background: linear-gradient(180deg, rgba(251, 127, 108, 0.08), rgba(20, 32, 48, 0.96));
+      }
+
+      .metric__label,
+      .metric__count,
+      .metric__caption {
+        display: block;
+      }
+
+      .metric__label {
+        color: var(--muted);
+        font-size: 0.83rem;
+        font-weight: 700;
+      }
+
+      .metric__percent {
+        display: block;
+        margin-top: 14px;
+        font-size: 1.9rem;
+        line-height: 1;
+        letter-spacing: -0.04em;
+      }
+
+      .metric__count {
+        margin-top: 8px;
+        font-size: 0.9rem;
+        color: var(--primary-strong);
+        font-weight: 700;
+      }
+
+      .metric__caption {
+        margin-top: 8px;
+        font-size: 0.85rem;
+      }
+
       .panel {
-        border: 1px solid var(--border);
-        border-radius: 20px;
-        background: rgba(17, 25, 42, 0.84);
-        backdrop-filter: blur(16px);
-        box-shadow: 0 18px 42px rgba(0, 0, 0, 0.22);
-      }
-
-      .summary-card {
         padding: 20px;
+        margin-top: 18px;
       }
 
-      .summary-card--success {
-        border-color: rgba(86, 211, 155, 0.3);
+      .panel h2 {
+        margin-top: 10px;
+        font-size: clamp(1.35rem, 2vw, 1.8rem);
+        line-height: 1.1;
+        letter-spacing: -0.03em;
       }
 
-      .summary-card h2 {
-        color: var(--muted);
-        font-size: 1rem;
-        font-weight: 600;
+      .panel__copy {
+        margin-top: 12px;
       }
 
-      .summary-percent {
-        margin: 12px 0 8px;
-        font-size: 2.25rem;
-        font-weight: 800;
+      .summary-note {
+        margin-top: 16px;
+        padding: 14px;
+        border: 1px solid rgba(147, 168, 195, 0.14);
+        border-radius: var(--radius-sm);
+        background: rgba(12, 21, 33, 0.78);
       }
 
-      .summary-count {
-        margin: 0;
-        color: var(--muted);
+      .watch-grid {
+        display: grid;
+        gap: 12px;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        margin-top: 16px;
       }
 
-      .panel {
+      .watch-card h3 {
+        margin-top: 12px;
+        font-size: 0.98rem;
+        line-height: 1.45;
+        word-break: break-word;
+      }
+
+      .watch-bars {
+        display: grid;
+        gap: 14px;
+        margin-top: 14px;
+      }
+
+      .progress-shell {
+        width: 100%;
+        height: 8px;
+        margin-top: 8px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.07);
         overflow: hidden;
-        margin-top: 24px;
       }
 
-      .panel-header {
-        padding: 18px 20px 0;
+      .progress-fill {
+        height: 100%;
+        border-radius: 999px;
       }
 
-      .panel-header p {
-        margin: 8px 0 16px;
-        color: var(--muted);
+      .progress-fill--perfect {
+        background: var(--success);
+      }
+
+      .progress-fill--strong {
+        background: var(--primary);
+      }
+
+      .progress-fill--watch {
+        background: var(--warning);
+      }
+
+      .progress-fill--risk {
+        background: var(--danger);
       }
 
       table {
         width: 100%;
         border-collapse: collapse;
+        margin-top: 16px;
       }
 
       th,
       td {
-        padding: 14px 20px;
-        border-top: 1px solid var(--border);
+        padding: 12px 0;
+        border-top: 1px solid rgba(147, 168, 195, 0.12);
         text-align: left;
         vertical-align: top;
       }
 
       th {
         color: var(--muted);
-        font-size: 0.85rem;
-        font-weight: 700;
-        letter-spacing: 0.05em;
-        text-transform: uppercase;
       }
 
       td {
-        font-size: 0.96rem;
-      }
-
-      tr:hover td {
-        background: rgba(78, 145, 255, 0.06);
+        padding-right: 14px;
+        font-size: 0.92rem;
+        line-height: 1.5;
       }
 
       .file-path,
       .uncovered-lines {
-        font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-        font-size: 0.88rem;
+        font-size: 0.82rem;
       }
 
-      .badge-row {
-        display: flex;
-        gap: 12px;
-        margin-top: 18px;
-        flex-wrap: wrap;
+      .split-note {
+        margin-top: 14px;
+        padding: 14px;
+        border-radius: var(--radius-sm);
+        border: 1px solid rgba(87, 194, 199, 0.14);
+        background: rgba(87, 194, 199, 0.06);
       }
 
-      .badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        padding: 8px 12px;
-        border-radius: 999px;
-        font-size: 0.88rem;
-        font-weight: 700;
-      }
-
-      .badge--preview {
-        border: 1px solid rgba(86, 211, 155, 0.28);
-        background: rgba(86, 211, 155, 0.08);
+      .cell--perfect,
+      .cell--good {
         color: var(--success);
       }
 
-      .badge--gate {
-        border: 1px solid rgba(255, 211, 110, 0.28);
-        background: rgba(255, 211, 110, 0.08);
+      .cell--strong {
+        color: var(--primary-strong);
+      }
+
+      .cell--watch {
         color: var(--warning);
       }
 
-      @media (max-width: 860px) {
+      .cell--risk {
+        color: var(--danger);
+      }
+
+      .missing-panel { margin-top: 18px; padding: 18px; }
+      .missing-panel ul { margin: 12px 0 0; padding-left: 18px; }
+      .missing-panel li + li { margin-top: 8px; }
+
+      details {
+        margin-top: 18px;
+        border-radius: var(--radius-md);
+        overflow: hidden;
+      }
+
+      summary {
+        cursor: pointer;
+        list-style: none;
+        padding: 16px 18px;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+      }
+
+      summary::-webkit-details-marker { display: none; }
+      .details-body { padding: 0 18px 18px; }
+
+      @media (max-width: 1080px) {
+        .metrics,
+        .hero__headline,
+        .section-grid,
+        .watch-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @media (max-width: 720px) {
         main {
-          padding: 32px 16px 64px;
+          width: min(100vw - 20px, 1220px);
+          padding-top: 16px;
+          padding-bottom: 40px;
+        }
+
+        .hero,
+        .panel {
+          padding: 16px;
         }
 
         th,
         td {
-          padding: 12px 14px;
-        }
-
-        .summary-percent {
-          font-size: 1.9rem;
+          padding: 10px 0;
         }
       }
     </style>
   </head>
   <body>
     <main>
-      <p class="eyebrow">Preview Coverage Report</p>
-      <h1>CodStats Bun coverage</h1>
-      <p class="lede">
-        Preview builds publish a private coverage artifact to /coverage. The build gate is strict
-        only for the audited ChatGPT connector and OAuth core surface. The rest of the Bun suite is
-        still reported below so weaker areas stay visible without blocking every preview.
-      </p>
-      <p class="sublede">
-        This page intentionally omits source listings and exposes only aggregate percentages plus
-        uncovered line ranges.
-      </p>
-      <p class="generated-at">Generated at ${escapeHtml(summary.generatedAt)}</p>
-      <div class="badge-row">
-        <div class="badge badge--preview">Preview-only artifact</div>
-        <div class="badge badge--gate">Audited files must stay at 100%</div>
-      </div>
+      <section class="hero">
+        <div class="hero__top">
+          <div class="brand">
+            <img src="/logo.png" alt="CodStats logo" />
+            <div class="brand__copy">
+              <span class="brand__title">CodStats Coverage</span>
+              <span class="brand__subtitle">Preview contract coverage for the ChatGPT connector and backend edge.</span>
+            </div>
+          </div>
+          <div class="badge-row">
+            <span class="badge badge--preview">Preview only</span>
+            <span class="badge badge--gate">Hard gate = 100%</span>
+            <span class="badge badge--watch">Watchlist stays visible</span>
+          </div>
+        </div>
 
-      <section class="panel">
-        <div class="panel-header">
-          <h2>Audited gate</h2>
-          <p>
-            These files make up the critical ChatGPT connector and OAuth contract surface that the
-            preview build blocks on.
+        <div class="hero__headline">
+          <div>
+            <p class="eyebrow">Coverage</p>
+            <h1>Only the required contract surface must stay perfect.</h1>
+            <p class="lede">
+              This page is split on purpose. The required section is the merge-blocking public
+              connector contract and protocol core, and every file there must stay at 100% for
+              lines and functions. The watchlist section is still important, but it is visible
+              follow-up work rather than a failed gate.
+            </p>
+            <div class="summary-note">
+              <strong>Reading rule:</strong> if a file is not listed in the required table, its
+              percentage is not part of the 100% gate. It is still shown so weak areas are obvious
+              instead of disappearing into one blended total.
+            </div>
+          </div>
+          <aside class="hero-aside">
+            <p class="hero-aside__label">Generated</p>
+            <p class="hero-aside__body">${escapeHtml(formatTimestamp(summary.generatedAt))}</p>
+            <p class="hero-aside__body">
+              Hard gate files: <code>${escapeHtml(String(summary.auditedRecords.length))}</code><br />
+              Watchlist files: <code>${escapeHtml(String(summary.watchlistRecords.length))}</code>
+            </p>
+          </aside>
+        </div>
+
+        <div class="metrics">
+          ${renderMetricCard("Audited lines", summary.auditedTotals.coveredLines, summary.auditedTotals.totalLines, "The merge-blocking public contract layer must stay perfect.", "gate")}
+          ${renderMetricCard("Audited functions", summary.auditedTotals.coveredFunctions, summary.auditedTotals.totalFunctions, "Function coverage for the same hard-gated audited files.", "gate")}
+          ${renderMetricCard("Watchlist lines", summary.watchlistTotals.coveredLines, summary.watchlistTotals.totalLines, "Important connector files that are tracked closely but not merge-blocking yet.", "watch")}
+          ${renderMetricCard("Full suite lines", summary.totals.coveredLines, summary.totals.totalLines, "Everything Bun exercised in this preview run across web and backend code.", "default")}
+        </div>
+      </section>
+
+      <section class="section-grid">
+        <section class="panel">
+          <p class="panel__eyebrow">Required contract surface</p>
+          <h2>These files are the 100% requirement.</h2>
+          <p class="panel__copy">
+            The required bucket now covers the public connector negotiation edge: discovery metadata,
+            the authorize route, the MCP transport route, widget template routes, and the backend helpers
+            that define auth and widget metadata. This is the surface that is safe to treat as merge-blocking.
           </p>
-        </div>
-        <div class="summary-grid">
-          ${renderSummaryCard(
-            "Audited line coverage",
-            auditedTotals.coveredLines,
-            auditedTotals.totalLines,
-            "success"
-          )}
-          ${renderSummaryCard(
-            "Audited function coverage",
-            auditedTotals.coveredFunctions,
-            auditedTotals.totalFunctions,
-            "success"
-          )}
-        </div>
-        <table>
-          <thead>
-            <tr>
-              <th>File</th>
-              <th>Area</th>
-              <th>Lines</th>
-              <th>Covered lines</th>
-              <th>Functions</th>
-              <th>Covered functions</th>
-              <th>Uncovered lines</th>
-            </tr>
-          </thead>
-          <tbody>${renderFileRows(auditedRecords)}</tbody>
-        </table>
+          <div class="chip-list">
+            <span class="chip">${escapeHtml(String(summary.auditedRecords.length))} audited files</span>
+            <span class="chip">${escapeHtml(formatCount(summary.auditedTotals.coveredLines, summary.auditedTotals.totalLines))} audited lines</span>
+            <span class="chip">${escapeHtml(formatCount(summary.auditedTotals.coveredFunctions, summary.auditedTotals.totalFunctions))} audited functions</span>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>File</th>
+                <th>Area</th>
+                <th>Lines</th>
+                <th>Covered lines</th>
+                <th>Functions</th>
+                <th>Covered functions</th>
+                <th>Uncovered lines</th>
+              </tr>
+            </thead>
+            <tbody>${renderAuditedRows(summary.auditedRecords)}</tbody>
+          </table>
+        </section>
+
+        <section class="panel">
+          <p class="panel__eyebrow">Reading the split</p>
+          <h2>Watchlist files still matter.</h2>
+          <p class="panel__copy">
+            The watchlist exists so incomplete coverage does not hide behind the all-files average. It is the
+            queue for the next promotion into the required bucket. Until a file graduates, weak coverage stays
+            visible and actionable, but it is not mislabeled as a failed 100% rule.
+          </p>
+          <div class="split-note">
+            <strong>Current steering:</strong> the public discovery, authorize, widget metadata, and transport edge
+            are already required. Stateful revoke flows, deeper backend connector orchestration, Redis wiring, and
+            app API routes stay in the watchlist until their branch coverage is strong enough to make blocking.
+          </div>
+          ${renderMissingFileList(missingWatchlistFiles)}
+        </section>
       </section>
 
       <section class="panel">
-        <div class="panel-header">
-          <h2>Observed full-suite totals</h2>
-          <p>
-            Informational coverage across every collected web and backend source file that the Bun
-            suite exercised during the preview run.
-          </p>
-        </div>
-        <div class="summary-grid">
-          ${renderSummaryCard(
-            "Full-suite line coverage",
-            summary.totals.coveredLines,
-            summary.totals.totalLines
-          )}
-          ${renderSummaryCard(
-            "Full-suite function coverage",
-            summary.totals.coveredFunctions,
-            summary.totals.totalFunctions
-          )}
-        </div>
-        <table>
-          <thead>
-            <tr>
-              <th>Area</th>
-              <th>Lines</th>
-              <th>Covered lines</th>
-              <th>Functions</th>
-              <th>Covered functions</th>
-            </tr>
-          </thead>
-          <tbody>${renderAreaRows(summary.areaSummaries)}</tbody>
-        </table>
-      </section>
-
-      <section class="panel">
-        <div class="panel-header">
-          <h2>Observed file coverage</h2>
-          <p>Sorted by line coverage ascending so the weakest files surface first.</p>
-        </div>
-        <table>
-          <thead>
-            <tr>
-              <th>File</th>
-              <th>Audited</th>
-              <th>Area</th>
-              <th>Lines</th>
-              <th>Covered lines</th>
-              <th>Functions</th>
-              <th>Covered functions</th>
-              <th>Uncovered lines</th>
-            </tr>
-          </thead>
-          <tbody>${renderFileRows(summary.records, true)}</tbody>
-        </table>
-        <p class="legend">
-          Uncovered lines are shown as line-number ranges only. Full source listings are
-          intentionally omitted from the published preview artifact.
+        <p class="panel__eyebrow">Connector watchlist</p>
+        <h2>These are visible follow-up files, not hidden failures.</h2>
+        <p class="panel__copy">
+          Watchlist files are important connector and backend paths that still need deeper branch coverage before
+          they are worth making merge-blocking. They are sorted here by lowest coverage first, with exact uncovered
+          ranges so the next promotion target is obvious.
         </p>
+        <div class="watch-grid">${renderWatchlistCards(summary.watchlistRecords)}</div>
       </section>
+
+      <section class="section-grid">
+        <section class="panel">
+          <p class="panel__eyebrow">Area totals</p>
+          <h2>Whole-suite coverage by runtime area.</h2>
+          <p class="panel__copy">
+            These totals help track overall health, but they are not the same thing as the required contract gate.
+          </p>
+          <table>
+            <thead>
+              <tr>
+                <th>Area</th>
+                <th>Lines</th>
+                <th>Covered lines</th>
+                <th>Functions</th>
+                <th>Covered functions</th>
+              </tr>
+            </thead>
+            <tbody>${renderAreaRows(summary.areaSummaries)}</tbody>
+          </table>
+        </section>
+
+        <section class="panel">
+          <p class="panel__eyebrow">Preview policy</p>
+          <h2>The report is private, preview-only, and production-blocked.</h2>
+          <p class="panel__copy">
+            The artifact is generated into <code>/public/coverage</code> for preview deployments, rewritten from
+            <code>/coverage</code>, and blocked outside preview by the proxy layer. It is meant to explain gate
+            health quickly, not to publish raw source listings.
+          </p>
+          <div class="chip-list">
+            <span class="chip">Preview artifact only</span>
+            <span class="chip">No source listings</span>
+            <span class="chip">Uncovered ranges only</span>
+          </div>
+        </section>
+      </section>
+
+      <details>
+        <summary>Open full observed ledger</summary>
+        <div class="details-body">
+          <p class="panel__copy">
+            This ledger includes every collected web and backend source file from the Bun coverage run.
+            It is sorted by line coverage ascending and is useful for queueing the next promotion into the required gate.
+          </p>
+          <table>
+            <thead>
+              <tr>
+                <th>File</th>
+                <th>Bucket</th>
+                <th>Area</th>
+                <th>Lines</th>
+                <th>Covered lines</th>
+                <th>Functions</th>
+                <th>Covered functions</th>
+                <th>Uncovered lines</th>
+              </tr>
+            </thead>
+            <tbody>${renderLedgerRows(summary.records)}</tbody>
+          </table>
+        </div>
+      </details>
     </main>
   </body>
 </html>`

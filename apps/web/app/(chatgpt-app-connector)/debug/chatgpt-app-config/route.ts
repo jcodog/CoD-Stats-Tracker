@@ -10,6 +10,20 @@ import { resolveWidgetUiMeta } from "@workspace/backend/server/widget-meta";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+type ChatGptAppConfigRouteDeps = {
+  buildOAuthAbsoluteUrlFromIssuer: typeof buildOAuthAbsoluteUrlFromIssuer;
+  getOAuthServerConfig: typeof getOAuthServerConfig;
+  getServerEnv: typeof getServerEnv;
+  resolveWidgetUiMeta: typeof resolveWidgetUiMeta;
+};
+
+const defaultDeps: ChatGptAppConfigRouteDeps = {
+  buildOAuthAbsoluteUrlFromIssuer,
+  getOAuthServerConfig,
+  getServerEnv,
+  resolveWidgetUiMeta,
+};
+
 function buildConfigErrorResponse(error: unknown) {
   const description =
     error instanceof Error ? error.message : "Unable to resolve ChatGPT app config";
@@ -29,8 +43,11 @@ function buildConfigErrorResponse(error: unknown) {
   );
 }
 
-export async function GET(request: Request) {
-  if (getServerEnv().NODE_ENV === "production") {
+export async function handleChatGptAppConfigGet(
+  request: Request,
+  deps: ChatGptAppConfigRouteDeps = defaultDeps,
+) {
+  if (deps.getServerEnv().NODE_ENV === "production") {
     return NextResponse.json(
       {
         error: "not_found",
@@ -48,14 +65,14 @@ export async function GET(request: Request) {
 
   let oauthConfig;
   try {
-    oauthConfig = getOAuthServerConfig(requestUrl.origin);
+    oauthConfig = deps.getOAuthServerConfig(requestUrl.origin);
   } catch (error) {
     return buildConfigErrorResponse(error);
   }
 
   let widgetUiMeta;
   try {
-    widgetUiMeta = resolveWidgetUiMeta();
+    widgetUiMeta = deps.resolveWidgetUiMeta();
   } catch (error) {
     return buildConfigErrorResponse(error);
   }
@@ -67,24 +84,24 @@ export async function GET(request: Request) {
       widgetDomain: widgetUiMeta.domain,
       widgetCsp: widgetUiMeta.csp,
       discoveryUrls: {
-        authorizationServer: buildOAuthAbsoluteUrlFromIssuer(
+        authorizationServer: deps.buildOAuthAbsoluteUrlFromIssuer(
           oauthConfig.issuer,
           "/.well-known/oauth-authorization-server",
         ),
-        openIdConfiguration: buildOAuthAbsoluteUrlFromIssuer(
+        openIdConfiguration: deps.buildOAuthAbsoluteUrlFromIssuer(
           oauthConfig.issuer,
           "/.well-known/openid-configuration",
         ),
-        protectedResource: buildOAuthAbsoluteUrlFromIssuer(
+        protectedResource: deps.buildOAuthAbsoluteUrlFromIssuer(
           oauthConfig.issuer,
           "/.well-known/oauth-protected-resource",
         ),
-        protectedResourceMcp: buildOAuthAbsoluteUrlFromIssuer(
+        protectedResourceMcp: deps.buildOAuthAbsoluteUrlFromIssuer(
           oauthConfig.issuer,
           "/.well-known/oauth-protected-resource/mcp",
         ),
       },
-      mcpUrl: buildOAuthAbsoluteUrlFromIssuer(oauthConfig.issuer, "/mcp"),
+      mcpUrl: deps.buildOAuthAbsoluteUrlFromIssuer(oauthConfig.issuer, "/mcp"),
     },
     {
       headers: {
@@ -92,4 +109,8 @@ export async function GET(request: Request) {
       },
     },
   );
+}
+
+export async function GET(request: Request) {
+  return handleChatGptAppConfigGet(request)
 }

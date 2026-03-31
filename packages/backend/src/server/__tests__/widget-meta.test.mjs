@@ -1,6 +1,10 @@
 import { afterAll, beforeEach, describe, expect, it } from "bun:test";
 
 import { resetServerEnvForTests } from "../env.ts";
+import {
+  resetWidgetMetaWarningsForTests,
+  resolveWidgetUiMeta,
+} from "../widget-meta.ts";
 
 const ENV_KEYS = ["NODE_ENV", "OAUTH_ISSUER"];
 const previousEnv = Object.fromEntries(
@@ -37,12 +41,9 @@ function restoreEnv() {
   console.warn = originalWarn;
 }
 
-async function importWidgetMetaModule() {
-  return import(`../widget-meta.ts?case=${Date.now()}-${Math.random()}`);
-}
-
 beforeEach(() => {
   applyEnv();
+  resetWidgetMetaWarningsForTests();
 });
 
 afterAll(() => {
@@ -50,11 +51,10 @@ afterAll(() => {
 });
 
 describe("widget metadata", () => {
-  it("falls back to localhost with empty CSP metadata outside production", async () => {
+  it("falls back to localhost with empty CSP metadata outside production", () => {
     const warnings = [];
     console.warn = (message) => warnings.push(String(message));
 
-    const { resolveWidgetUiMeta } = await importWidgetMetaModule();
     expect(resolveWidgetUiMeta()).toEqual({
       domain: "localhost",
       csp: {
@@ -67,23 +67,21 @@ describe("widget metadata", () => {
     expect(warnings[0]).toContain("OAUTH_ISSUER is not set");
   });
 
-  it("requires OAUTH_ISSUER in production", async () => {
+  it("requires OAUTH_ISSUER in production", () => {
     applyEnv({
       NODE_ENV: "production",
     });
 
-    const { resolveWidgetUiMeta } = await importWidgetMetaModule();
     expect(() => resolveWidgetUiMeta()).toThrow(/Missing required env var OAUTH_ISSUER/);
   });
 
-  it("normalizes issuers without a protocol for widget metadata", async () => {
+  it("normalizes issuers without a protocol for widget metadata", () => {
     const warnings = [];
     console.warn = (message) => warnings.push(String(message));
     applyEnv({
       OAUTH_ISSUER: "stats.cleoai.cloud",
     });
 
-    const { resolveWidgetUiMeta } = await importWidgetMetaModule();
     expect(resolveWidgetUiMeta()).toEqual({
       domain: "stats.cleoai.cloud",
       csp: {
@@ -96,12 +94,11 @@ describe("widget metadata", () => {
     expect(warnings[0]).toContain("missing a protocol");
   });
 
-  it("preserves valid http issuers for local or non-production widget metadata", async () => {
+  it("preserves valid http issuers for local or non-production widget metadata", () => {
     applyEnv({
       OAUTH_ISSUER: "http://localhost:3000",
     });
 
-    const { resolveWidgetUiMeta } = await importWidgetMetaModule();
     expect(resolveWidgetUiMeta()).toEqual({
       domain: "localhost",
       csp: {
@@ -113,13 +110,19 @@ describe("widget metadata", () => {
     });
   });
 
-  it("rejects unsupported issuer protocols", async () => {
+  it("rejects unsupported issuer protocols", () => {
     applyEnv({
       OAUTH_ISSUER: "ftp://stats.cleoai.cloud",
     });
 
-    const { resolveWidgetUiMeta } = await importWidgetMetaModule();
     expect(() => resolveWidgetUiMeta()).toThrow(/Unsupported OAUTH_ISSUER protocol/);
   });
-});
 
+  it("rejects invalid issuer urls", () => {
+    applyEnv({
+      OAUTH_ISSUER: "https://",
+    });
+
+    expect(() => resolveWidgetUiMeta()).toThrow(/Invalid OAUTH_ISSUER/);
+  });
+});

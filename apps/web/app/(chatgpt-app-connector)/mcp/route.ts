@@ -6,6 +6,18 @@ import { createChatGptAppRequestId } from "@workspace/backend/server/chatgpt-app
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+type McpRouteDeps = {
+  createRequestId: typeof createChatGptAppRequestId;
+  createServer: typeof createChatGptAppMcpServer;
+  createTransport: typeof WebStandardStreamableHTTPServerTransport;
+};
+
+const defaultDeps: McpRouteDeps = {
+  createRequestId: createChatGptAppRequestId,
+  createServer: createChatGptAppMcpServer,
+  createTransport: WebStandardStreamableHTTPServerTransport,
+};
+
 const MCP_CORS_HEADERS: Readonly<Record<string, string>> = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
@@ -81,10 +93,6 @@ function normalizeMcpRequestAcceptHeader(request: Request, state: AcceptState) {
     headerValues.push("text/event-stream");
   }
 
-  if (headerValues.length === 0) {
-    return request;
-  }
-
   const nextHeaders = new Headers(request.headers);
   nextHeaders.set("accept", headerValues.join(", "));
 
@@ -101,14 +109,17 @@ function shouldEnableJsonResponse(request: Request, state: AcceptState) {
   return state.acceptsJson && !state.acceptsEventStream;
 }
 
-async function handleMcpRequest(request: Request) {
-  const requestId = createChatGptAppRequestId();
+export async function handleMcpRequest(
+  request: Request,
+  deps: McpRouteDeps = defaultDeps,
+) {
+  const requestId = deps.createRequestId();
   const acceptState = parseAcceptState(request);
   const normalizedRequest = normalizeMcpRequestAcceptHeader(request, acceptState);
-  const server = createChatGptAppMcpServer({
+  const server = deps.createServer({
     requestOrigin: new URL(request.url).origin,
   });
-  const transport = new WebStandardStreamableHTTPServerTransport({
+  const transport = new deps.createTransport({
     sessionIdGenerator: undefined,
     enableJsonResponse: shouldEnableJsonResponse(request, acceptState),
   });
@@ -142,14 +153,9 @@ export async function OPTIONS() {
   });
 }
 
-export async function GET(request: Request) {
-  return handleMcpRequest(request);
-}
-
-export async function POST(request: Request) {
-  return handleMcpRequest(request);
-}
-
-export async function DELETE(request: Request) {
-  return handleMcpRequest(request);
-}
+export const GET: (request: Request) => ReturnType<typeof handleMcpRequest> =
+  handleMcpRequest;
+export const POST: (request: Request) => ReturnType<typeof handleMcpRequest> =
+  handleMcpRequest;
+export const DELETE: (request: Request) => ReturnType<typeof handleMcpRequest> =
+  handleMcpRequest;
