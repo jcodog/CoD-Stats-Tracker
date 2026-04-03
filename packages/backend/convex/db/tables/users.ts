@@ -8,6 +8,9 @@ export const users = defineTable({
   name: v.string(),
   plan: v.union(v.literal("free"), v.literal("premium"), v.literal("creator")),
   status: v.union(v.literal("active"), v.literal("disabled")),
+  preferredMatchLoggingMode: v.optional(
+    v.union(v.literal("basic"), v.literal("comprehensive"))
+  ),
 
   role: v.optional(
     v.union(

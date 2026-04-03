@@ -70,7 +70,9 @@ async function resolveOwnedUsername(args: {
   const nextNewUsername = trimOptionalText(args.newUsername)
 
   if (args.existingUsernameId && nextNewUsername) {
-    throw new Error("Choose an existing Activision username or enter a new one.")
+    throw new Error(
+      "Choose an existing Activision username or enter a new one."
+    )
   }
 
   if (!args.existingUsernameId && !nextNewUsername) {
@@ -80,8 +82,13 @@ async function resolveOwnedUsername(args: {
   if (args.existingUsernameId) {
     const existingUsername = await args.ctx.db.get(args.existingUsernameId)
 
-    if (!existingUsername || existingUsername.ownerUserId !== args.ownerUserId) {
-      throw new Error("That Activision username is not available for this account.")
+    if (
+      !existingUsername ||
+      existingUsername.ownerUserId !== args.ownerUserId
+    ) {
+      throw new Error(
+        "That Activision username is not available for this account."
+      )
     }
 
     return {
@@ -172,7 +179,11 @@ async function resolveActiveRankedMap(args: {
 }) {
   const rankedMap = await args.ctx.db.get(args.mapId)
 
-  if (!rankedMap || !rankedMap.isActive || rankedMap.titleKey !== args.titleKey) {
+  if (
+    !rankedMap ||
+    !rankedMap.isActive ||
+    rankedMap.titleKey !== args.titleKey
+  ) {
     throw new Error("Choose an active map from the current ranked title.")
   }
 
@@ -182,6 +193,31 @@ async function resolveActiveRankedMap(args: {
 
   return rankedMap
 }
+
+export const updatePreferredMatchLoggingMode = mutation({
+  args: {
+    preferredMatchLoggingMode: v.union(
+      v.literal("basic"),
+      v.literal("comprehensive")
+    ),
+  },
+  handler: async (ctx, args) => {
+    const actor = await requireAuthenticatedStatsActor(ctx)
+
+    if (
+      actor.user.preferredMatchLoggingMode !== args.preferredMatchLoggingMode
+    ) {
+      await ctx.db.patch(actor.user._id, {
+        preferredMatchLoggingMode: args.preferredMatchLoggingMode,
+        updatedAt: Date.now(),
+      })
+    }
+
+    return {
+      preferredMatchLoggingMode: args.preferredMatchLoggingMode,
+    }
+  },
+})
 
 export const createSession = mutation({
   args: {
@@ -213,7 +249,10 @@ export const createSession = mutation({
       newUsername: args.newUsername,
       ownerUserId: actor.user._id,
     })
-    const titleSeasonKey = buildTitleSeasonKey(config.activeTitleKey, config.activeSeason)
+    const titleSeasonKey = buildTitleSeasonKey(
+      config.activeTitleKey,
+      config.activeSeason
+    )
     const ownedSessions = await collectOwnedSessions(ctx, actor)
     const activeCurrentSessions = ownedSessions.filter(
       (session) =>
@@ -350,12 +389,16 @@ export const logMatch = mutation({
     }
 
     if (session.endedAt !== null) {
-      throw new Error("Archived sessions are read-only and cannot accept new logs.")
+      throw new Error(
+        "Archived sessions are read-only and cannot accept new logs."
+      )
     }
 
     const { config, title } = await getCurrentRankedConfig(ctx)
     if (!config || !title || !title.isActive) {
-      throw new Error("Ranked logging is unavailable until staff configure the active title.")
+      throw new Error(
+        "Ranked logging is unavailable until staff configure the active title."
+      )
     }
 
     if (!isRankedSessionWritesEnabled(config)) {
@@ -372,7 +415,9 @@ export const logMatch = mutation({
         session,
       })
     ) {
-      throw new Error("This session is no longer active for the current title and season.")
+      throw new Error(
+        "This session is no longer active for the current title and season."
+      )
     }
 
     const rankedMode = await resolveActiveRankedMode({
@@ -396,7 +441,9 @@ export const logMatch = mutation({
     const deaths = clampOptionalNonNegativeInteger(args.deaths)
     const teamScore = clampOptionalNonNegativeInteger(args.teamScore)
     const enemyScore = clampOptionalNonNegativeInteger(args.enemyScore)
-    const hillTimeSeconds = clampOptionalNonNegativeInteger(args.hillTimeSeconds)
+    const hillTimeSeconds = clampOptionalNonNegativeInteger(
+      args.hillTimeSeconds
+    )
     const plants = clampOptionalNonNegativeInteger(args.plants)
     const defuses = clampOptionalNonNegativeInteger(args.defuses)
     const overloads = clampOptionalNonNegativeInteger(args.overloads)

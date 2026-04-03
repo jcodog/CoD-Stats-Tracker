@@ -3,7 +3,9 @@ import { describe, expect, it } from "bun:test"
 import {
   createSession as createDashboardSession,
   logMatch as logDashboardMatch,
+  updatePreferredMatchLoggingMode,
 } from "../stats/dashboard.ts"
+import { getCurrentDashboardState } from "../../queries/stats/dashboard.ts"
 import { logMatch as logLegacyMatch } from "../stats/games.ts"
 
 const INDEX_FIELDS = {
@@ -34,6 +36,12 @@ const INDEX_FIELDS = {
   },
   rankedConfigs: {
     by_key: ["key"],
+  },
+  rankedMaps: {
+    by_title_active_sort: ["titleKey", "isActive"],
+  },
+  rankedModes: {
+    by_title_active_sort: ["titleKey", "isActive"],
   },
   rankedTitles: {
     by_key: ["key"],
@@ -250,7 +258,10 @@ class FakeDb {
   }
 }
 
-function createMutationContext({ clerkUserId = "clerk-user-1", initialTables } = {}) {
+function createMutationContext({
+  clerkUserId = "clerk-user-1",
+  initialTables,
+} = {}) {
   const db = new FakeDb(initialTables)
   const schedulerCalls = []
 
@@ -495,7 +506,9 @@ describe("dashboard stats session creation security", () => {
         newUsername: "Other#9999",
         startSr: 5400,
       })
-    ).rejects.toThrow("Choose an existing Activision username or enter a new one.")
+    ).rejects.toThrow(
+      "Choose an existing Activision username or enter a new one."
+    )
 
     expect(db.tables.activisionUsernames).toHaveLength(1)
     expect(db.tables.activisionUsernames[0].lastUsedAt).toBe(originalLastUsedAt)
@@ -519,9 +532,13 @@ describe("dashboard stats session creation security", () => {
     expect(result.created).toBe(true)
     expect(result.reason).toBe("created")
     expect(db.tables.activisionUsernames).toHaveLength(1)
-    expect(db.tables.activisionUsernames[0].displayUsername).toBe("Premium#5555")
+    expect(db.tables.activisionUsernames[0].displayUsername).toBe(
+      "Premium#5555"
+    )
     expect(db.tables.sessions).toHaveLength(1)
-    expect(db.tables.sessions[0].activisionUsernameSnapshot).toBe("Premium#5555")
+    expect(db.tables.sessions[0].activisionUsernameSnapshot).toBe(
+      "Premium#5555"
+    )
     expect(db.tables.landingGlobalStats[0].activeSessions).toBe(1)
     expect(db.tables.landingUserStats[0].activeSessions).toBe(1)
     expect(schedulerCalls).toHaveLength(2)
@@ -579,7 +596,9 @@ describe("dashboard stats match logging security", () => {
 
     await expect(
       logDashboardMatch._handler(ctx, createDashboardLogArgs({ srChange: -4 }))
-    ).rejects.toThrow("SR change would move current SR outside the 0 to 20000 range.")
+    ).rejects.toThrow(
+      "SR change would move current SR outside the 0 to 20000 range."
+    )
 
     expect(db.tables.games).toHaveLength(0)
     expect(db.tables.sessions[0].currentSr).toBe(3)
@@ -592,10 +611,63 @@ describe("dashboard stats match logging security", () => {
 
     await expect(
       logDashboardMatch._handler(ctx, createDashboardLogArgs({ srChange: 2 }))
-    ).rejects.toThrow("SR change would move current SR outside the 0 to 20000 range.")
+    ).rejects.toThrow(
+      "SR change would move current SR outside the 0 to 20000 range."
+    )
 
     expect(db.tables.games).toHaveLength(0)
     expect(db.tables.sessions[0].currentSr).toBe(19999)
+  })
+})
+
+describe("dashboard stats logging mode preference", () => {
+  it("defaults to comprehensive when the user has no stored preference", async () => {
+    const { ctx } = createMutationContext({
+      initialTables: {
+        rankedConfigs: [createRankedConfig()],
+        rankedMaps: [createRankedMap()],
+        rankedModes: [createRankedMode()],
+        rankedTitles: [createRankedTitle()],
+        sessions: [createSessionDoc()],
+        users: [createUser({ preferredMatchLoggingMode: undefined })],
+      },
+    })
+
+    const result = await getCurrentDashboardState._handler(ctx, {})
+
+    expect(result.preferredMatchLoggingMode).toBe("comprehensive")
+  })
+
+  it("updates only the authenticated user's stored preference", async () => {
+    const firstUser = createUser({
+      _id: "users:1",
+      clerkUserId: "clerk-user-1",
+      preferredMatchLoggingMode: "comprehensive",
+    })
+    const secondUser = createUser({
+      _id: "users:2",
+      clerkUserId: "clerk-user-2",
+      discordId: "discord-user-2",
+      preferredMatchLoggingMode: "comprehensive",
+    })
+    const { ctx, db } = createMutationContext({
+      clerkUserId: "clerk-user-1",
+      initialTables: {
+        users: [firstUser, secondUser],
+      },
+    })
+
+    const result = await updatePreferredMatchLoggingMode._handler(ctx, {
+      preferredMatchLoggingMode: "basic",
+    })
+
+    expect(result).toEqual({ preferredMatchLoggingMode: "basic" })
+    expect(
+      db.tables.users.find((user) => user._id === "users:1")
+    ).toMatchObject({ preferredMatchLoggingMode: "basic" })
+    expect(
+      db.tables.users.find((user) => user._id === "users:2")
+    ).toMatchObject({ preferredMatchLoggingMode: "comprehensive" })
   })
 })
 
@@ -645,7 +717,9 @@ describe("legacy stats match logging security", () => {
 
     await expect(
       logLegacyMatch._handler(ctx, createLegacyLogArgs({ srChange: -3 }))
-    ).rejects.toThrow("SR change would move current SR outside the 0 to 20000 range.")
+    ).rejects.toThrow(
+      "SR change would move current SR outside the 0 to 20000 range."
+    )
 
     expect(db.tables.games).toHaveLength(0)
     expect(db.tables.sessions[0].currentSr).toBe(2)
@@ -658,7 +732,9 @@ describe("legacy stats match logging security", () => {
 
     await expect(
       logLegacyMatch._handler(ctx, createLegacyLogArgs({ srChange: 2 }))
-    ).rejects.toThrow("SR change would move current SR outside the 0 to 20000 range.")
+    ).rejects.toThrow(
+      "SR change would move current SR outside the 0 to 20000 range."
+    )
 
     expect(db.tables.games).toHaveLength(0)
     expect(db.tables.sessions[0].currentSr).toBe(19999)

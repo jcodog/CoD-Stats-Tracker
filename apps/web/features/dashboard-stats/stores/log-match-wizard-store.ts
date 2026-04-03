@@ -2,15 +2,9 @@
 
 import { create } from "zustand"
 
-export type LogMatchStep =
-  | "map"
-  | "mode"
-  | "notes"
-  | "stats"
-  | "outcome"
-  | "review"
-  | "session"
-  | "srChange"
+import type { LogMatchStep } from "@/features/dashboard-stats/lib/dashboard-stats-log-match-flow"
+
+export type { LogMatchStep } from "@/features/dashboard-stats/lib/dashboard-stats-log-match-flow"
 
 type LogMatchWizardState = {
   deaths: string
@@ -27,26 +21,28 @@ type LogMatchWizardState = {
   overloads: string
   plants: string
   selectedSessionId: string | null
-  setField: <TKey extends keyof Pick<
-    LogMatchWizardState,
-    | "deaths"
-    | "defuses"
-    | "enemyScore"
-    | "hillTimeSeconds"
-    | "isSubmitting"
-    | "kills"
-    | "lossProtected"
-    | "mapId"
-    | "modeId"
-    | "notes"
-    | "outcome"
-    | "overloads"
-    | "plants"
-    | "selectedSessionId"
-    | "srChange"
-    | "step"
-    | "teamScore"
-  >>(
+  setField: <
+    TKey extends keyof Pick<
+      LogMatchWizardState,
+      | "deaths"
+      | "defuses"
+      | "enemyScore"
+      | "hillTimeSeconds"
+      | "isSubmitting"
+      | "kills"
+      | "lossProtected"
+      | "mapId"
+      | "modeId"
+      | "notes"
+      | "outcome"
+      | "overloads"
+      | "plants"
+      | "selectedSessionId"
+      | "srChange"
+      | "step"
+      | "teamScore"
+    >,
+  >(
     key: TKey,
     value: LogMatchWizardState[TKey]
   ) => void
@@ -73,7 +69,7 @@ function getInitialState(selectedSessionId: string | null = null) {
     plants: "",
     selectedSessionId,
     srChange: "",
-    step: "session" as const,
+    step: "outcome" as const,
     teamScore: "",
   }
 }
@@ -81,5 +77,6 @@ function getInitialState(selectedSessionId: string | null = null) {
 export const useLogMatchWizardStore = create<LogMatchWizardState>((set) => ({
   ...getInitialState(),
   reset: (selectedSessionId = null) => set(getInitialState(selectedSessionId)),
-  setField: (key, value) => set({ [key]: value } as Partial<LogMatchWizardState>),
+  setField: (key, value) =>
+    set({ [key]: value } as Partial<LogMatchWizardState>),
 }))

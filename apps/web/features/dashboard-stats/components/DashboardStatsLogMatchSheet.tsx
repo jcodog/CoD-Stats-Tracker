@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import { useShallow } from "zustand/react/shallow"
 import {
   IconCheck,
@@ -20,10 +20,18 @@ import {
   DashboardStatsClientError,
   useLogDashboardMatch,
 } from "@/features/dashboard-stats/lib/dashboard-stats-client"
+import type { DashboardMatchLoggingMode } from "@/features/dashboard-stats/lib/dashboard-stats-logging-mode"
 import {
+  getLogMatchStepDefinition,
+  getSignedSrChange,
+  getVisibleLogMatchSteps,
+  hasWholeNumber,
+  parseOptionalInteger,
+  parseRequiredInteger,
+  sanitizeSrChangeInput,
   type LogMatchStep,
-  useLogMatchWizardStore,
-} from "@/features/dashboard-stats/stores/log-match-wizard-store"
+} from "@/features/dashboard-stats/lib/dashboard-stats-log-match-flow"
+import { useLogMatchWizardStore } from "@/features/dashboard-stats/stores/log-match-wizard-store"
 import {
   Alert,
   AlertDescription,
@@ -71,10 +79,13 @@ import { Textarea } from "@workspace/ui/components/textarea"
 import { cn } from "@workspace/ui/lib/utils"
 import { toast } from "sonner"
 
+const NOTES_MAX_LENGTH = 280
+
 type DashboardStatsLogMatchSheetProps = {
   activeSessions: DashboardState["activeSessions"]
   availableMaps: DashboardAvailableMaps
   availableModes: DashboardAvailableModes
+  loggingMode: DashboardMatchLoggingMode
   onOpenChange: (open: boolean) => void
   onSessionSelected: (sessionId: string) => void
   open: boolean
@@ -102,126 +113,12 @@ type MapOption = {
   supportedModes: ModeOption[]
 }
 
-type StepDefinition = {
-  description: string
-  label: string
-  title: string
-}
-
-type StepProgressState = "available" | "complete" | "current" | "locked"
-
-const stepDefinitions: Record<LogMatchStep, StepDefinition> = {
-  map: {
-    description:
-      "Search only the maps that support the selected ranked mode for the current title.",
-    label: "Map",
-    title: "Choose The Map",
-  },
-  mode: {
-    description:
-      "Ranked mode is required and determines which maps are valid on the next step.",
-    label: "Mode",
-    title: "Pick The Ranked Mode",
-  },
-  notes: {
-    description:
-      "Keep notes short and plain text. They are only for match context.",
-    label: "Notes",
-    title: "Add Notes If They Matter",
-  },
-  outcome: {
-    description:
-      "Start with the match result so the rest of the log stays fast and predictable.",
-    label: "Outcome",
-    title: "Record The Match Result",
-  },
-  review: {
-    description:
-      "Check the captured values before the match updates the active session.",
-    label: "Review",
-    title: "Review & Submit",
-  },
-  session: {
-    description:
-      "Choose which active session this match belongs to before entering the result.",
-    label: "Session",
-    title: "Choose The Session",
-  },
-  srChange: {
-    description:
-      "Use the exact SR delta shown in game. Enter a whole number with the sign if needed.",
-    label: "SR",
-    title: "Record The SR Change",
-  },
-  stats: {
-    description:
-      "Optional stats stay lightweight so you can log fast and only add extra context when you need it.",
-    label: "Stats",
-    title: "Add Optional Stats",
-  },
-}
-
-const fullStepOrder: LogMatchStep[] = [
-  "session",
-  "outcome",
-  "mode",
-  "map",
-  "stats",
-  "srChange",
-  "notes",
-  "review",
-]
-
-function hasWholeNumber(value: string) {
-  const trimmedValue = value.trim()
-  return trimmedValue ? Number.isInteger(Number(trimmedValue)) : false
-}
-
-function sanitizeSrChangeInput(value: string) {
-  return value.replace(/\D/g, "")
-}
-
-function parseRequiredInteger(value: string, fieldLabel: string) {
-  const trimmedValue = value.trim()
-  if (!trimmedValue) {
-    throw new Error(`${fieldLabel} is required.`)
-  }
-  const parsedValue = Number(trimmedValue)
-  if (!Number.isInteger(parsedValue)) {
-    throw new Error(`${fieldLabel} must be a whole number.`)
-  }
-  return parsedValue
-}
-
-function getSignedSrChange(value: string, outcome: "loss" | "win" | null) {
-  const parsedValue = parseRequiredInteger(value, "SR change")
-  return outcome === "loss" ? -Math.abs(parsedValue) : Math.abs(parsedValue)
-}
-
-function parseOptionalInteger(value: string) {
-  const trimmedValue = value.trim()
-  if (!trimmedValue) {
-    return undefined
-  }
-  const parsedValue = Number(trimmedValue)
-  if (!Number.isInteger(parsedValue) || parsedValue < 0) {
-    throw new Error("Optional stat fields must be non-negative whole numbers.")
-  }
-  return parsedValue
-}
-
 function getSelectedModePresentation(mode: ModeOption | null) {
   if (!mode) {
     return { key: null, label: "Not set" }
   }
 
   return { key: mode.key.trim().toLowerCase(), label: mode.label }
-}
-
-function getVisibleStepOrder(hasMultipleSessions: boolean) {
-  return hasMultipleSessions
-    ? fullStepOrder
-    : fullStepOrder.filter((step) => step !== "session")
 }
 
 function ChoiceCard({
@@ -252,18 +149,27 @@ function ChoiceCard({
 }
 
 function StepProgress({
-  getStepStatus,
+  currentStep,
+  loggingMode,
   onStepSelect,
   steps,
 }: {
-  getStepStatus: (step: LogMatchStep) => StepProgressState
+  currentStep: LogMatchStep
+  loggingMode: DashboardMatchLoggingMode
   onStepSelect: (step: LogMatchStep) => void
   steps: LogMatchStep[]
 }) {
+  const currentStepIndex = steps.indexOf(currentStep)
+
   return (
     <ol className="no-scrollbar flex items-center gap-3 overflow-x-auto px-7 py-3.5">
       {steps.map((step, index) => {
-        const status = getStepStatus(step)
+        const status =
+          index < currentStepIndex
+            ? "complete"
+            : index === currentStepIndex
+              ? "current"
+              : "upcoming"
 
         return (
           <li className="flex min-w-max items-center gap-3" key={step}>
@@ -271,11 +177,11 @@ function StepProgress({
               aria-current={status === "current" ? "step" : undefined}
               className={cn(
                 "flex items-center gap-3 rounded-md px-1 py-1 text-left transition-colors focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-                status === "locked"
+                status === "upcoming"
                   ? "cursor-default text-muted-foreground"
                   : "text-foreground hover:text-foreground"
               )}
-              disabled={status === "locked"}
+              disabled={status === "upcoming"}
               onClick={() => onStepSelect(step)}
               type="button"
             >
@@ -286,9 +192,7 @@ function StepProgress({
                     "border-foreground bg-foreground text-background",
                   status === "current" &&
                     "border-foreground text-foreground ring-2 ring-foreground/15",
-                  status === "available" &&
-                    "border-foreground/35 text-foreground",
-                  status === "locked" && "border-border text-muted-foreground"
+                  status === "upcoming" && "border-border text-muted-foreground"
                 )}
               >
                 {status === "complete" ? (
@@ -300,10 +204,10 @@ function StepProgress({
               <span
                 className={cn(
                   "text-sm font-medium whitespace-nowrap",
-                  status === "locked" && "text-muted-foreground"
+                  status === "upcoming" && "text-muted-foreground"
                 )}
               >
-                {stepDefinitions[step].label}
+                {getLogMatchStepDefinition(step, loggingMode).label}
               </span>
             </button>
             {index < steps.length - 1 ? (
@@ -403,10 +307,108 @@ function MapCombobox({
   )
 }
 
+function ReviewStepPanel({
+  loggingMode,
+  lossProtected,
+  notes,
+  optionalStats,
+  outcome,
+  selectedMap,
+  selectedMode,
+  selectedSessionLabel,
+  srChange,
+}: {
+  loggingMode: DashboardMatchLoggingMode
+  lossProtected: boolean
+  notes: string
+  optionalStats: Array<{ label: string; value: string }>
+  outcome: "loss" | "win" | null
+  selectedMap: MapOption | null
+  selectedMode: ModeOption | null
+  selectedSessionLabel: string
+  srChange: string
+}) {
+  return (
+    <div
+      className={cn(
+        "grid gap-4",
+        loggingMode === "basic"
+          ? "max-w-2xl"
+          : "lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]"
+      )}
+    >
+      <div className="rounded-xl border border-border/60 bg-muted/10 p-5">
+        <dl className="grid gap-4">
+          <ReviewRow label="Session" value={selectedSessionLabel} />
+          <ReviewRow
+            label="Outcome"
+            value={
+              outcome === "win"
+                ? "Win"
+                : outcome === "loss"
+                  ? "Loss"
+                  : "Not set"
+            }
+          />
+          <ReviewRow label="Mode" value={selectedMode?.label ?? "Not set"} />
+          <ReviewRow label="Map" value={selectedMap?.name ?? "Not set"} />
+          <ReviewRow label="SR change" value={srChange.trim() || "Not set"} />
+          {loggingMode === "comprehensive" ? (
+            <>
+              <ReviewRow
+                label="Loss protected"
+                value={lossProtected ? "Yes" : "No"}
+              />
+              <ReviewRow
+                label="Notes"
+                value={notes.trim() || "No note added"}
+              />
+            </>
+          ) : null}
+        </dl>
+      </div>
+
+      {loggingMode === "comprehensive" ? (
+        <div className="rounded-xl border border-border/60 bg-muted/10 p-5">
+          <div className="grid gap-1">
+            <h4 className="text-sm font-semibold tracking-tight">
+              Optional stats
+            </h4>
+            <p className="text-sm text-muted-foreground">
+              Extra stats remain optional and lightweight.
+            </p>
+          </div>
+          <Separator className="my-4" />
+          {optionalStats.length > 0 || lossProtected ? (
+            <dl className="grid gap-4">
+              {optionalStats.map((item) => (
+                <ReviewRow
+                  key={item.label}
+                  label={item.label}
+                  value={item.value}
+                />
+              ))}
+              <ReviewRow
+                label="Loss protected"
+                value={lossProtected ? "Yes" : "No"}
+              />
+            </dl>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              No optional stats added for this match.
+            </p>
+          )}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 export function DashboardStatsLogMatchSheet({
   activeSessions,
   availableMaps,
   availableModes,
+  loggingMode,
   onOpenChange,
   onSessionSelected,
   open,
@@ -432,7 +434,7 @@ export function DashboardStatsLogMatchSheet({
     overloads,
     plants,
     reset,
-    selectedWizardSessionId,
+    selectedSessionId: selectedWizardSessionId,
     setField,
     srChange,
     step,
@@ -453,7 +455,7 @@ export function DashboardStatsLogMatchSheet({
       overloads: state.overloads,
       plants: state.plants,
       reset: state.reset,
-      selectedWizardSessionId: state.selectedSessionId,
+      selectedSessionId: state.selectedSessionId,
       setField: state.setField,
       srChange: state.srChange,
       step: state.step,
@@ -461,31 +463,63 @@ export function DashboardStatsLogMatchSheet({
     }))
   )
 
-  const hasMultipleSessions = sessions.length > 1
+  const requiresSessionSelection = sessions.length > 1
+  const defaultSessionId =
+    sessions.find((session) => session.id === selectedSessionId)?.id ??
+    sessions[0]?.id ??
+    null
   const visibleSteps = useMemo(
-    () => getVisibleStepOrder(hasMultipleSessions),
-    [hasMultipleSessions]
+    () =>
+      getVisibleLogMatchSteps({
+        loggingMode,
+        requiresSessionSelection,
+      }),
+    [loggingMode, requiresSessionSelection]
   )
-  const currentStepIndex = visibleSteps.indexOf(step)
-  const currentStep = stepDefinitions[step]
-  const selectedSession =
-    sessions.find((session) => session.id === selectedWizardSessionId) ?? null
+  const initialStep = visibleSteps[0] ?? "outcome"
   const modesById = useMemo(
     () => new Map(modes.map((mode) => [mode.id, mode])),
     [modes]
+  )
+  const hasStaleSelectedSession = Boolean(
+    selectedWizardSessionId &&
+    !sessions.some((session) => session.id === selectedWizardSessionId)
+  )
+  const resolvedSessionId = hasStaleSelectedSession
+    ? defaultSessionId
+    : (selectedWizardSessionId ?? defaultSessionId)
+  const resolvedStep =
+    hasStaleSelectedSession && requiresSessionSelection
+      ? "session"
+      : visibleSteps.includes(step)
+        ? step
+        : initialStep
+  const resolvedModeId = modeId && modesById.has(modeId) ? modeId : null
+  const filteredMaps = useMemo(
+    () =>
+      resolvedModeId
+        ? maps.filter((map) => map.supportedModeIds.includes(resolvedModeId))
+        : [],
+    [maps, resolvedModeId]
   )
   const mapsById = useMemo(
     () => new Map(maps.map((map) => [map.id, map])),
     [maps]
   )
-  const selectedMode = modeId ? (modesById.get(modeId) ?? null) : null
-  const selectedMap = mapId ? (mapsById.get(mapId) ?? null) : null
+  const resolvedMapId =
+    mapId && filteredMaps.some((map) => map.id === mapId) ? mapId : null
+  const currentStepIndex = visibleSteps.indexOf(resolvedStep)
+  const resolvedStepIndex = currentStepIndex >= 0 ? currentStepIndex : 0
+  const currentStep = getLogMatchStepDefinition(resolvedStep, loggingMode)
+  const selectedSession =
+    sessions.find((session) => session.id === resolvedSessionId) ?? null
+  const selectedMode = resolvedModeId
+    ? (modesById.get(resolvedModeId) ?? null)
+    : null
+  const selectedMap = resolvedMapId
+    ? (mapsById.get(resolvedMapId) ?? null)
+    : null
   const selectedModePresentation = getSelectedModePresentation(selectedMode)
-  const filteredMaps = useMemo(
-    () =>
-      modeId ? maps.filter((map) => map.supportedModeIds.includes(modeId)) : [],
-    [maps, modeId]
-  )
   const modeMapCounts = useMemo(
     () =>
       new Map(
@@ -527,95 +561,16 @@ export function DashboardStatsLogMatchSheet({
       teamScore,
     ]
   )
-  const hasSelectedSession =
-    !hasMultipleSessions || Boolean(selectedWizardSessionId)
-  const hasCoreSelections =
-    hasSelectedSession && Boolean(outcome) && Boolean(modeId) && Boolean(mapId)
-  const hasOptionalStats = optionalStats.length > 0 || lossProtected
-  const stepStatusById = useMemo(() => {
-    const statuses = new Map<LogMatchStep, StepProgressState>()
-
-    const canOpenStep = (candidate: LogMatchStep) => {
-      switch (candidate) {
-        case "session":
-          return hasMultipleSessions
-        case "outcome":
-          return hasSelectedSession
-        case "mode":
-          return hasSelectedSession && Boolean(outcome)
-        case "map":
-          return hasSelectedSession && Boolean(outcome) && Boolean(modeId)
-        case "stats":
-        case "srChange":
-        case "notes":
-        case "review":
-          return hasCoreSelections
-      }
-    }
-
-    const isStepComplete = (candidate: LogMatchStep) => {
-      switch (candidate) {
-        case "session":
-          return Boolean(selectedWizardSessionId)
-        case "outcome":
-          return Boolean(outcome)
-        case "mode":
-          return Boolean(modeId)
-        case "map":
-          return Boolean(mapId)
-        case "stats":
-          return hasOptionalStats
-        case "srChange":
-          return hasWholeNumber(srChange)
-        case "notes":
-          return notes.trim().length > 0
-        case "review":
-          return false
-      }
-    }
-
-    for (const candidate of visibleSteps) {
-      const canOpen = canOpenStep(candidate)
-
-      if (!canOpen) {
-        statuses.set(candidate, "locked")
-        continue
-      }
-
-      if (candidate === step) {
-        statuses.set(candidate, "current")
-        continue
-      }
-
-      statuses.set(
-        candidate,
-        isStepComplete(candidate) ? "complete" : "available"
-      )
-    }
-
-    return statuses
-  }, [
-    hasCoreSelections,
-    hasMultipleSessions,
-    hasOptionalStats,
-    hasSelectedSession,
-    mapId,
-    modeId,
-    notes,
-    outcome,
-    selectedWizardSessionId,
-    srChange,
-    step,
-    visibleSteps,
-  ])
-  const unlockedSteps = useMemo(
-    () =>
-      visibleSteps.filter((candidate) => {
-        const status = stepStatusById.get(candidate)
-        return status !== "locked"
-      }),
-    [stepStatusById, visibleSteps]
-  )
+  const selectedSessionLabel = selectedSession
+    ? `${selectedSession.usernameLabel ?? "Legacy session"} · ${selectedSession.titleLabel} Season ${selectedSession.season}`
+    : "Select a session to start logging."
+  const selectedModeKey = selectedModePresentation.key
+  const currentStepNumber = resolvedStepIndex + 1
+  const sessionStatusMessage = hasStaleSelectedSession
+    ? requiresSessionSelection
+      ? "The previous session is no longer active. Choose another one."
+      : "The previous session is no longer active. Logging will use the current dashboard session."
+    : null
 
   function updateField<TKey extends Parameters<typeof setField>[0]>(
     key: TKey,
@@ -625,97 +580,74 @@ export function DashboardStatsLogMatchSheet({
     setField(key, value as never)
   }
 
-  function setWizardStep(nextStep: LogMatchStep) {
-    if (stepStatusById.get(nextStep) === "locked") {
-      return
-    }
-
+  function jumpToStep(nextStep: LogMatchStep) {
     setErrorMessage(null)
     setField("step", nextStep)
   }
 
-  useEffect(() => {
-    if (!open) {
-      setErrorMessage(null)
-      reset(null)
-      return
-    }
-
-    const initialSessionId =
-      sessions.find((session) => session.id === selectedSessionId)?.id ??
-      sessions[0]?.id ??
-      null
-
-    reset(initialSessionId)
-    setField("step", hasMultipleSessions ? "session" : "outcome")
-    setErrorMessage(null)
-  }, [hasMultipleSessions, open, reset, selectedSessionId, sessions, setField])
-
-  useEffect(() => {
-    if (!visibleSteps.includes(step)) {
-      setField("step", visibleSteps[0] ?? "outcome")
-    }
-  }, [setField, step, visibleSteps])
-
-  useEffect(() => {
-    if (!visibleSteps.includes(step) || stepStatusById.get(step) !== "locked") {
-      return
-    }
-
-    const fallbackStep =
-      unlockedSteps[unlockedSteps.length - 1] ?? visibleSteps[0] ?? "outcome"
-
-    setField("step", fallbackStep)
-  }, [setField, step, stepStatusById, unlockedSteps, visibleSteps])
-
-  useEffect(() => {
-    if (mapId && !filteredMaps.some((map) => map.id === mapId)) {
-      setField("mapId", null)
-    }
-  }, [filteredMaps, mapId, setField])
-
   function goToPreviousStep() {
-    const previousStep = visibleSteps[Math.max(currentStepIndex - 1, 0)]
+    const previousStep = visibleSteps[Math.max(resolvedStepIndex - 1, 0)]
     if (previousStep) {
-      setWizardStep(previousStep)
+      jumpToStep(previousStep)
     }
   }
 
-  function goToNextStep() {
-    const nextStep =
-      visibleSteps[Math.min(currentStepIndex + 1, visibleSteps.length - 1)]
-    if (nextStep) {
-      setWizardStep(nextStep)
+  function validateSessionSelection() {
+    if (!resolvedSessionId) {
+      throw new Error(
+        sessions.length === 0
+          ? "There are no active sessions available for logging."
+          : "Choose the active session you want to log into."
+      )
     }
   }
 
   function validateCurrentStep() {
-    if (step === "session" && !selectedWizardSessionId) {
-      throw new Error("Choose the active session you want to log into.")
+    if (resolvedStep === "session") {
+      validateSessionSelection()
     }
 
-    if (step === "outcome" && !outcome) {
+    if (resolvedStep !== "session") {
+      validateSessionSelection()
+    }
+
+    if (resolvedStep === "outcome" && !outcome) {
       throw new Error("Select whether the match was a win or a loss.")
     }
 
-    if (step === "srChange") {
+    if (resolvedStep === "srChange") {
       parseRequiredInteger(srChange, "SR change")
     }
 
-    if (step === "mode" && !modeId) {
+    if (resolvedStep === "mode" && !resolvedModeId) {
       throw new Error("Ranked mode is required.")
     }
 
-    if (step === "map") {
-      if (!modeId) {
+    if (resolvedStep === "map") {
+      if (!resolvedModeId) {
         throw new Error("Choose the ranked mode before selecting a map.")
       }
-      if (!mapId) {
+
+      if (!selectedMode) {
+        throw new Error("Choose an active ranked mode for the current title.")
+      }
+
+      if (filteredMaps.length === 0) {
+        throw new Error(
+          `No active maps currently support ${selectedMode.label}.`
+        )
+      }
+
+      if (!resolvedMapId) {
         throw new Error("Match map is required.")
+      }
+
+      if (!filteredMaps.some((map) => map.id === resolvedMapId)) {
+        throw new Error(`Choose a map that supports ${selectedMode.label}.`)
       }
     }
 
-    if (step === "stats") {
+    if (resolvedStep === "stats") {
       parseOptionalInteger(kills)
       parseOptionalInteger(deaths)
       parseOptionalInteger(teamScore)
@@ -726,15 +658,19 @@ export function DashboardStatsLogMatchSheet({
       parseOptionalInteger(overloads)
     }
 
-    if (step === "notes" && notes.trim().length > 280) {
-      throw new Error("Notes must stay within 280 characters.")
+    if (resolvedStep === "notes" && notes.trim().length > NOTES_MAX_LENGTH) {
+      throw new Error(`Notes must stay within ${NOTES_MAX_LENGTH} characters.`)
     }
   }
 
   function handleContinue() {
     try {
       validateCurrentStep()
-      goToNextStep()
+      const nextStep =
+        visibleSteps[Math.min(resolvedStepIndex + 1, visibleSteps.length - 1)]
+      if (nextStep) {
+        jumpToStep(nextStep)
+      }
     } catch (error) {
       setErrorMessage(
         error instanceof Error
@@ -746,15 +682,47 @@ export function DashboardStatsLogMatchSheet({
 
   async function handleSubmit() {
     try {
-      validateCurrentStep()
-      if (!selectedWizardSessionId) {
-        throw new Error("Choose the active session you want to log into.")
+      validateSessionSelection()
+      if (!outcome) {
+        throw new Error("Select whether the match was a win or a loss.")
       }
-      if (!modeId) {
-        throw new Error("Mode is required.")
+
+      parseRequiredInteger(srChange, "SR change")
+
+      if (!resolvedModeId) {
+        throw new Error("Ranked mode is required.")
       }
-      if (!mapId) {
-        throw new Error("Map is required.")
+
+      if (!selectedMode) {
+        throw new Error("Choose an active ranked mode for the current title.")
+      }
+
+      if (filteredMaps.length === 0) {
+        throw new Error(
+          `No active maps currently support ${selectedMode.label}.`
+        )
+      }
+
+      if (
+        !resolvedMapId ||
+        !filteredMaps.some((map) => map.id === resolvedMapId)
+      ) {
+        throw new Error(`Choose a map that supports ${selectedMode.label}.`)
+      }
+
+      parseOptionalInteger(kills)
+      parseOptionalInteger(deaths)
+      parseOptionalInteger(teamScore)
+      parseOptionalInteger(enemyScore)
+      parseOptionalInteger(hillTimeSeconds)
+      parseOptionalInteger(plants)
+      parseOptionalInteger(defuses)
+      parseOptionalInteger(overloads)
+
+      if (notes.trim().length > NOTES_MAX_LENGTH) {
+        throw new Error(
+          `Notes must stay within ${NOTES_MAX_LENGTH} characters.`
+        )
       }
 
       setErrorMessage(null)
@@ -766,13 +734,13 @@ export function DashboardStatsLogMatchSheet({
         hillTimeSeconds: parseOptionalInteger(hillTimeSeconds),
         kills: parseOptionalInteger(kills),
         lossProtected,
-        mapId: mapId as Id<"rankedMaps">,
-        modeId: modeId as Id<"rankedModes">,
+        mapId: resolvedMapId as Id<"rankedMaps">,
+        modeId: resolvedModeId as Id<"rankedModes">,
         notes: notes.trim() ? notes.trim() : undefined,
-        outcome: outcome ?? "loss",
+        outcome,
         overloads: parseOptionalInteger(overloads),
         plants: parseOptionalInteger(plants),
-        sessionId: selectedWizardSessionId as Id<"sessions">,
+        sessionId: resolvedSessionId as Id<"sessions">,
         srChange: getSignedSrChange(srChange, outcome),
         teamScore: parseOptionalInteger(teamScore),
       })
@@ -794,35 +762,35 @@ export function DashboardStatsLogMatchSheet({
     }
   }
 
+  const nextStep = visibleSteps[resolvedStepIndex + 1]
   const primaryActionLabel =
-    step === "review"
+    resolvedStep === "review"
       ? isSubmitting
         ? "Logging…"
         : "Log Match"
-      : step === "notes"
+      : nextStep === "review"
         ? "Review"
         : "Continue"
-  const selectedSessionLabel = selectedSession
-    ? `${selectedSession.usernameLabel ?? "Legacy session"} · ${selectedSession.titleLabel} Season ${selectedSession.season}`
-    : "Select a session to start logging."
-  const selectedModeKey = selectedModePresentation.key
-  const currentStepNumber = currentStepIndex >= 0 ? currentStepIndex + 1 : 1
   const isPrimaryActionDisabled =
     logMatchMutation.isPending ||
     isSubmitting ||
-    (step === "mode" && modes.length === 0) ||
-    (step === "map" && filteredMaps.length === 0)
+    sessions.length === 0 ||
+    (resolvedStep === "mode" && modes.length === 0) ||
+    (resolvedStep === "map" &&
+      Boolean(resolvedModeId) &&
+      filteredMaps.length === 0)
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
-      <DialogContent className="flex max-h-[min(88vh,54rem)] flex-col overflow-hidden p-0 sm:max-w-[min(92vw,72rem)]">
+      <DialogContent className="flex max-h-[min(88vh,54rem)] flex-col overflow-hidden overscroll-contain p-0 sm:max-w-[min(92vw,72rem)]">
         <DialogHeader className="border-b border-border/60 px-7 py-5 pr-14">
           <div className="flex items-start justify-between gap-4">
             <div className="grid gap-1">
               <DialogTitle>Log Ranked Match</DialogTitle>
               <DialogDescription>
-                Work through the core result first, then add optional context
-                before you submit the match to the current session.
+                {loggingMode === "basic"
+                  ? "Move through the ranked match flow without the extra stats and notes."
+                  : "Work through the core result first, then add optional context before you submit the match to the current session."}
               </DialogDescription>
             </div>
             <div className="shrink-0 text-sm text-muted-foreground tabular-nums">
@@ -831,15 +799,16 @@ export function DashboardStatsLogMatchSheet({
           </div>
         </DialogHeader>
 
-        <div className="border-b border-border/60 bg-muted/20">
-          <StepProgress
-            getStepStatus={(candidate) =>
-              stepStatusById.get(candidate) ?? "locked"
-            }
-            onStepSelect={setWizardStep}
-            steps={visibleSteps}
-          />
-        </div>
+        {visibleSteps.length > 1 ? (
+          <div className="border-b border-border/60 bg-muted/20">
+            <StepProgress
+              currentStep={resolvedStep}
+              loggingMode={loggingMode}
+              onStepSelect={jumpToStep}
+              steps={visibleSteps}
+            />
+          </div>
+        ) : null}
 
         <div className="min-h-0 flex-1 overflow-y-auto">
           <div className="grid gap-6 px-7 py-6">
@@ -852,14 +821,25 @@ export function DashboardStatsLogMatchSheet({
               </p>
             </div>
 
-            {errorMessage ? (
+            {(errorMessage ?? sessionStatusMessage) ? (
               <Alert aria-live="polite" variant="destructive">
                 <AlertTitle>Fix This Step</AlertTitle>
-                <AlertDescription>{errorMessage}</AlertDescription>
+                <AlertDescription>
+                  {errorMessage ?? sessionStatusMessage}
+                </AlertDescription>
               </Alert>
             ) : null}
 
-            {step === "session" ? (
+            {sessions.length === 0 ? (
+              <Alert variant="destructive">
+                <AlertTitle>No active session available</AlertTitle>
+                <AlertDescription>
+                  Start a current ranked session before trying to log a match.
+                </AlertDescription>
+              </Alert>
+            ) : null}
+
+            {resolvedStep === "session" ? (
               <FieldGroup className="gap-6">
                 <Field>
                   <FieldLabel htmlFor="log-match-session">
@@ -876,7 +856,7 @@ export function DashboardStatsLogMatchSheet({
                       value: session.id,
                     }))}
                     placeholder="Select a session"
-                    value={selectedWizardSessionId}
+                    value={resolvedSessionId}
                   />
                   <FieldDescription>
                     Matches stay permanently tied to the session and username
@@ -886,7 +866,7 @@ export function DashboardStatsLogMatchSheet({
               </FieldGroup>
             ) : null}
 
-            {step === "outcome" ? (
+            {resolvedStep === "outcome" ? (
               <FieldSet>
                 <FieldLegend>Select outcome</FieldLegend>
                 <RadioGroup
@@ -914,7 +894,7 @@ export function DashboardStatsLogMatchSheet({
               </FieldSet>
             ) : null}
 
-            {step === "srChange" ? (
+            {resolvedStep === "srChange" ? (
               <FieldGroup className="max-w-md">
                 <Field>
                   <FieldLabel htmlFor="match-sr-change">SR change</FieldLabel>
@@ -940,7 +920,7 @@ export function DashboardStatsLogMatchSheet({
               </FieldGroup>
             ) : null}
 
-            {step === "mode" ? (
+            {resolvedStep === "mode" ? (
               <FieldSet>
                 <FieldLegend>Ranked mode</FieldLegend>
                 <RadioGroup
@@ -949,7 +929,7 @@ export function DashboardStatsLogMatchSheet({
                     updateField("modeId", value)
                     updateField("mapId", null)
                   }}
-                  value={modeId ?? undefined}
+                  value={resolvedModeId ?? undefined}
                 >
                   {modes.map((mode) => {
                     const supportedMapCount = modeMapCounts.get(mode.id) ?? 0
@@ -974,15 +954,15 @@ export function DashboardStatsLogMatchSheet({
               </FieldSet>
             ) : null}
 
-            {step === "map" ? (
+            {resolvedStep === "map" ? (
               <FieldGroup className="max-w-xl gap-4">
                 <Field>
                   <FieldLabel htmlFor="match-map-combobox">Map</FieldLabel>
                   <MapCombobox
-                    disabled={!modeId || filteredMaps.length === 0}
+                    disabled={!resolvedModeId || filteredMaps.length === 0}
                     maps={filteredMaps}
                     onChange={(value) => updateField("mapId", value)}
-                    value={mapId}
+                    value={resolvedMapId}
                   />
                   <FieldDescription>
                     {selectedMode
@@ -995,7 +975,7 @@ export function DashboardStatsLogMatchSheet({
               </FieldGroup>
             ) : null}
 
-            {step === "stats" ? (
+            {resolvedStep === "stats" ? (
               <div className="grid gap-6">
                 <FieldGroup className="gap-4 sm:grid-cols-2">
                   <Field>
@@ -1004,10 +984,11 @@ export function DashboardStatsLogMatchSheet({
                       autoComplete="off"
                       id="match-kills"
                       inputMode="numeric"
+                      name="match-kills"
                       onChange={(event) =>
                         updateField("kills", event.target.value)
                       }
-                      placeholder="Optional"
+                      placeholder="Optional…"
                       value={kills}
                     />
                   </Field>
@@ -1017,10 +998,11 @@ export function DashboardStatsLogMatchSheet({
                       autoComplete="off"
                       id="match-deaths"
                       inputMode="numeric"
+                      name="match-deaths"
                       onChange={(event) =>
                         updateField("deaths", event.target.value)
                       }
-                      placeholder="Optional"
+                      placeholder="Optional…"
                       value={deaths}
                     />
                   </Field>
@@ -1032,10 +1014,11 @@ export function DashboardStatsLogMatchSheet({
                       autoComplete="off"
                       id="match-team-score"
                       inputMode="numeric"
+                      name="match-team-score"
                       onChange={(event) =>
                         updateField("teamScore", event.target.value)
                       }
-                      placeholder="Optional"
+                      placeholder="Optional…"
                       value={teamScore}
                     />
                   </Field>
@@ -1047,10 +1030,11 @@ export function DashboardStatsLogMatchSheet({
                       autoComplete="off"
                       id="match-enemy-score"
                       inputMode="numeric"
+                      name="match-enemy-score"
                       onChange={(event) =>
                         updateField("enemyScore", event.target.value)
                       }
-                      placeholder="Optional"
+                      placeholder="Optional…"
                       value={enemyScore}
                     />
                   </Field>
@@ -1068,10 +1052,11 @@ export function DashboardStatsLogMatchSheet({
                         autoComplete="off"
                         id="match-hill-time"
                         inputMode="numeric"
+                        name="match-hill-time"
                         onChange={(event) =>
                           updateField("hillTimeSeconds", event.target.value)
                         }
-                        placeholder="Optional"
+                        placeholder="Optional…"
                         value={hillTimeSeconds}
                       />
                     </Field>
@@ -1086,10 +1071,11 @@ export function DashboardStatsLogMatchSheet({
                         autoComplete="off"
                         id="match-plants"
                         inputMode="numeric"
+                        name="match-plants"
                         onChange={(event) =>
                           updateField("plants", event.target.value)
                         }
-                        placeholder="Optional"
+                        placeholder="Optional…"
                         value={plants}
                       />
                     </Field>
@@ -1099,10 +1085,11 @@ export function DashboardStatsLogMatchSheet({
                         autoComplete="off"
                         id="match-defuses"
                         inputMode="numeric"
+                        name="match-defuses"
                         onChange={(event) =>
                           updateField("defuses", event.target.value)
                         }
-                        placeholder="Optional"
+                        placeholder="Optional…"
                         value={defuses}
                       />
                     </Field>
@@ -1119,10 +1106,11 @@ export function DashboardStatsLogMatchSheet({
                         autoComplete="off"
                         id="match-overloads"
                         inputMode="numeric"
+                        name="match-overloads"
                         onChange={(event) =>
                           updateField("overloads", event.target.value)
                         }
-                        placeholder="Optional"
+                        placeholder="Optional…"
                         value={overloads}
                       />
                     </Field>
@@ -1150,93 +1138,41 @@ export function DashboardStatsLogMatchSheet({
               </div>
             ) : null}
 
-            {step === "notes" ? (
+            {resolvedStep === "notes" ? (
               <FieldGroup className="max-w-2xl">
                 <Field>
                   <FieldLabel htmlFor="match-notes">Notes</FieldLabel>
                   <Textarea
                     autoComplete="off"
                     id="match-notes"
-                    maxLength={280}
+                    maxLength={NOTES_MAX_LENGTH}
+                    name="match-notes"
                     onChange={(event) =>
                       updateField("notes", event.target.value)
                     }
-                    placeholder="Optional short note about the match."
+                    placeholder="Optional short note about the match…"
                     rows={5}
                     value={notes}
                   />
                   <FieldDescription>
-                    {notes.length}/280 characters
+                    {notes.length}/{NOTES_MAX_LENGTH} characters
                   </FieldDescription>
                 </Field>
               </FieldGroup>
             ) : null}
 
-            {step === "review" ? (
-              <div className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
-                <div className="rounded-xl border border-border/60 bg-muted/10 p-5">
-                  <dl className="grid gap-4">
-                    <ReviewRow label="Session" value={selectedSessionLabel} />
-                    <ReviewRow
-                      label="Outcome"
-                      value={
-                        outcome === "win"
-                          ? "Win"
-                          : outcome === "loss"
-                            ? "Loss"
-                            : "Not set"
-                      }
-                    />
-                    <ReviewRow
-                      label="Mode"
-                      value={selectedMode?.label ?? "Not set"}
-                    />
-                    <ReviewRow
-                      label="Map"
-                      value={selectedMap?.name ?? "Not set"}
-                    />
-                    <ReviewRow
-                      label="Loss protected"
-                      value={lossProtected ? "Yes" : "No"}
-                    />
-                    <ReviewRow
-                      label="SR change"
-                      value={srChange.trim() || "Not set"}
-                    />
-                    <ReviewRow
-                      label="Notes"
-                      value={notes.trim() || "No note added"}
-                    />
-                  </dl>
-                </div>
-
-                <div className="rounded-xl border border-border/60 bg-muted/10 p-5">
-                  <div className="grid gap-1">
-                    <h4 className="text-sm font-semibold tracking-tight">
-                      Optional stats
-                    </h4>
-                    <p className="text-sm text-muted-foreground">
-                      Extra stats are optional and stay lightweight by design.
-                    </p>
-                  </div>
-                  <Separator className="my-4" />
-                  {optionalStats.length > 0 ? (
-                    <dl className="grid gap-4">
-                      {optionalStats.map((item) => (
-                        <ReviewRow
-                          key={item.label}
-                          label={item.label}
-                          value={item.value}
-                        />
-                      ))}
-                    </dl>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">
-                      No optional stats added for this match.
-                    </p>
-                  )}
-                </div>
-              </div>
+            {resolvedStep === "review" ? (
+              <ReviewStepPanel
+                loggingMode={loggingMode}
+                lossProtected={lossProtected}
+                notes={notes}
+                optionalStats={optionalStats}
+                outcome={outcome}
+                selectedMap={selectedMap}
+                selectedMode={selectedMode}
+                selectedSessionLabel={selectedSessionLabel}
+                srChange={srChange}
+              />
             ) : null}
           </div>
         </div>
@@ -1256,7 +1192,7 @@ export function DashboardStatsLogMatchSheet({
                 Cancel
               </Button>
 
-              {currentStepIndex > 0 ? (
+              {resolvedStepIndex > 0 ? (
                 <Button
                   onClick={goToPreviousStep}
                   type="button"
@@ -1267,7 +1203,7 @@ export function DashboardStatsLogMatchSheet({
                 </Button>
               ) : null}
 
-              {step === "review" ? (
+              {resolvedStep === "review" ? (
                 <Button
                   disabled={isPrimaryActionDisabled}
                   onClick={() => {

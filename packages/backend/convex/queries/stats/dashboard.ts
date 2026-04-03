@@ -223,6 +223,8 @@ export const getCurrentDashboardState = query({
       hasCurrentTitleModes: activeTitleModes.length > 0,
       hasTrackedHistory: sessions.length > 0,
       planKey: actor.planKey,
+      preferredMatchLoggingMode:
+        actor.user.preferredMatchLoggingMode ?? "comprehensive",
       setupState: {
         needsConfig: config === null,
         needsMaps:
@@ -494,8 +496,7 @@ export const getRecentSessionMatches = query({
     const games = getFilteredGames(
       await getOwnedSessionGames(ctx, session),
       args.includeLossProtected
-    )
-      .sort((left, right) => right.createdAt - left.createdAt)
+    ).sort((left, right) => right.createdAt - left.createdAt)
 
     return games.map(buildRecentMatchSummary)
   },

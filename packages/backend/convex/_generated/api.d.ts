@@ -632,6 +632,12 @@ export declare const api: {
           },
           any
         >;
+        updatePreferredMatchLoggingMode: FunctionReference<
+          "mutation",
+          "public",
+          { preferredMatchLoggingMode: "basic" | "comprehensive" },
+          any
+        >;
       };
       games: {
         logMatch: FunctionReference<
