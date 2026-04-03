@@ -177,6 +177,10 @@ function hasWholeNumber(value: string) {
   return trimmedValue ? Number.isInteger(Number(trimmedValue)) : false
 }
 
+function sanitizeSrChangeInput(value: string) {
+  return value.replace(/\D/g, "")
+}
+
 function parseRequiredInteger(value: string, fieldLabel: string) {
   const trimmedValue = value.trim()
   if (!trimmedValue) {
@@ -187,6 +191,11 @@ function parseRequiredInteger(value: string, fieldLabel: string) {
     throw new Error(`${fieldLabel} must be a whole number.`)
   }
   return parsedValue
+}
+
+function getSignedSrChange(value: string, outcome: "loss" | "win" | null) {
+  const parsedValue = parseRequiredInteger(value, "SR change")
+  return outcome === "loss" ? -Math.abs(parsedValue) : Math.abs(parsedValue)
 }
 
 function parseOptionalInteger(value: string) {
@@ -764,7 +773,7 @@ export function DashboardStatsLogMatchSheet({
         overloads: parseOptionalInteger(overloads),
         plants: parseOptionalInteger(plants),
         sessionId: selectedWizardSessionId as Id<"sessions">,
-        srChange: parseRequiredInteger(srChange, "SR change"),
+        srChange: getSignedSrChange(srChange, outcome),
         teamScore: parseOptionalInteger(teamScore),
       })
 
@@ -914,10 +923,14 @@ export function DashboardStatsLogMatchSheet({
                     id="match-sr-change"
                     inputMode="numeric"
                     name="match-sr-change"
+                    pattern="[0-9]*"
                     onChange={(event) =>
-                      updateField("srChange", event.target.value)
+                      updateField(
+                        "srChange",
+                        sanitizeSrChangeInput(event.target.value)
+                      )
                     }
-                    placeholder={outcome === "loss" ? "-24" : "+32"}
+                    placeholder={outcome === "loss" ? "24" : "32"}
                     value={srChange}
                   />
                   <FieldDescription>
