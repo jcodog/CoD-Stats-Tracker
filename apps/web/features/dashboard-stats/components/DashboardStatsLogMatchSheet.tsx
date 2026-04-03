@@ -113,8 +113,6 @@ type MapOption = {
   supportedModes: ModeOption[]
 }
 
-type StepProgressState = "available" | "complete" | "current" | "locked"
-
 function getSelectedModePresentation(mode: ModeOption | null) {
   if (!mode) {
     return { key: null, label: "Not set" }
@@ -151,20 +149,27 @@ function ChoiceCard({
 }
 
 function StepProgress({
-  getStepStatus,
+  currentStep,
   loggingMode,
   onStepSelect,
   steps,
 }: {
-  getStepStatus: (step: LogMatchStep) => StepProgressState
+  currentStep: LogMatchStep
   loggingMode: DashboardMatchLoggingMode
   onStepSelect: (step: LogMatchStep) => void
   steps: LogMatchStep[]
 }) {
+  const currentStepIndex = steps.indexOf(currentStep)
+
   return (
     <ol className="no-scrollbar flex items-center gap-3 overflow-x-auto px-7 py-3.5">
       {steps.map((step, index) => {
-        const status = getStepStatus(step)
+        const status =
+          index < currentStepIndex
+            ? "complete"
+            : index === currentStepIndex
+              ? "current"
+              : "upcoming"
 
         return (
           <li className="flex min-w-max items-center gap-3" key={step}>
@@ -172,11 +177,11 @@ function StepProgress({
               aria-current={status === "current" ? "step" : undefined}
               className={cn(
                 "flex items-center gap-3 rounded-md px-1 py-1 text-left transition-colors focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-                status === "locked"
+                status === "upcoming"
                   ? "cursor-default text-muted-foreground"
                   : "text-foreground hover:text-foreground"
               )}
-              disabled={status === "locked"}
+              disabled={status === "upcoming"}
               onClick={() => onStepSelect(step)}
               type="button"
             >
@@ -187,9 +192,7 @@ function StepProgress({
                     "border-foreground bg-foreground text-background",
                   status === "current" &&
                     "border-foreground text-foreground ring-2 ring-foreground/15",
-                  status === "available" &&
-                    "border-foreground/35 text-foreground",
-                  status === "locked" && "border-border text-muted-foreground"
+                  status === "upcoming" && "border-border text-muted-foreground"
                 )}
               >
                 {status === "complete" ? (
@@ -201,7 +204,7 @@ function StepProgress({
               <span
                 className={cn(
                   "text-sm font-medium whitespace-nowrap",
-                  status === "locked" && "text-muted-foreground"
+                  status === "upcoming" && "text-muted-foreground"
                 )}
               >
                 {getLogMatchStepDefinition(step, loggingMode).label}
@@ -536,15 +539,6 @@ export function DashboardStatsLogMatchSheet({
       teamScore,
     ]
   )
-  const hasSelectedSession =
-    !requiresSessionSelection || Boolean(resolvedSessionId)
-  const hasCoreSelections =
-    hasSelectedSession &&
-    Boolean(outcome) &&
-    hasWholeNumber(srChange) &&
-    Boolean(modeId) &&
-    Boolean(mapId)
-  const hasOptionalStats = optionalStats.length > 0 || lossProtected
   const selectedSessionLabel = selectedSession
     ? `${selectedSession.usernameLabel ?? "Legacy session"} · ${selectedSession.titleLabel} Season ${selectedSession.season}`
     : "Select a session to start logging."
@@ -559,109 +553,7 @@ export function DashboardStatsLogMatchSheet({
     setField(key, value as never)
   }
 
-  const stepStatusById = useMemo(() => {
-    const statuses = new Map<LogMatchStep, StepProgressState>()
-
-    const canOpenStep = (candidate: LogMatchStep) => {
-      switch (candidate) {
-        case "session":
-          return requiresSessionSelection
-        case "outcome":
-          return hasSelectedSession
-        case "srChange":
-          return hasSelectedSession && Boolean(outcome)
-        case "mode":
-          return (
-            hasSelectedSession && Boolean(outcome) && hasWholeNumber(srChange)
-          )
-        case "map":
-          return (
-            hasSelectedSession &&
-            Boolean(outcome) &&
-            hasWholeNumber(srChange) &&
-            Boolean(modeId)
-          )
-        case "stats":
-        case "notes":
-        case "review":
-          return hasCoreSelections
-      }
-    }
-
-    const isStepComplete = (candidate: LogMatchStep) => {
-      switch (candidate) {
-        case "session":
-          return Boolean(resolvedSessionId)
-        case "outcome":
-          return Boolean(outcome)
-        case "srChange":
-          return hasWholeNumber(srChange)
-        case "mode":
-          return Boolean(modeId)
-        case "map":
-          return Boolean(mapId)
-        case "stats":
-          return hasOptionalStats
-        case "notes":
-          return notes.trim().length > 0
-        case "review":
-          return false
-      }
-    }
-
-    for (const candidate of visibleSteps) {
-      const canOpen = canOpenStep(candidate)
-
-      if (!canOpen) {
-        statuses.set(candidate, "locked")
-        continue
-      }
-
-      if (candidate === step) {
-        statuses.set(candidate, "current")
-        continue
-      }
-
-      statuses.set(
-        candidate,
-        isStepComplete(candidate) ? "complete" : "available"
-      )
-    }
-
-    return statuses
-  }, [
-    hasCoreSelections,
-    hasOptionalStats,
-    hasSelectedSession,
-    mapId,
-    modeId,
-    notes,
-    outcome,
-    requiresSessionSelection,
-    resolvedSessionId,
-    srChange,
-    step,
-    visibleSteps,
-  ])
-  const unlockedSteps = useMemo(
-    () =>
-      visibleSteps.filter((candidate) => {
-        const status = stepStatusById.get(candidate)
-        return status !== "locked"
-      }),
-    [stepStatusById, visibleSteps]
-  )
-
   function jumpToStep(nextStep: LogMatchStep) {
-    if (stepStatusById.get(nextStep) === "locked") {
-      return
-    }
-
-    setErrorMessage(null)
-    setField("step", nextStep)
-  }
-
-  function advanceToStep(nextStep: LogMatchStep) {
     setErrorMessage(null)
     setField("step", nextStep)
   }
@@ -687,17 +579,6 @@ export function DashboardStatsLogMatchSheet({
       setField("step", visibleSteps[0] ?? "outcome")
     }
   }, [setField, step, visibleSteps])
-
-  useEffect(() => {
-    if (!visibleSteps.includes(step) || stepStatusById.get(step) !== "locked") {
-      return
-    }
-
-    const fallbackStep =
-      unlockedSteps[unlockedSteps.length - 1] ?? visibleSteps[0] ?? "outcome"
-
-    setField("step", fallbackStep)
-  }, [setField, step, stepStatusById, unlockedSteps, visibleSteps])
 
   useEffect(() => {
     if (modeId && !modesById.has(modeId)) {
@@ -746,7 +627,7 @@ export function DashboardStatsLogMatchSheet({
   function goToPreviousStep() {
     const previousStep = visibleSteps[Math.max(resolvedStepIndex - 1, 0)]
     if (previousStep) {
-      advanceToStep(previousStep)
+      jumpToStep(previousStep)
     }
   }
 
@@ -827,7 +708,7 @@ export function DashboardStatsLogMatchSheet({
       const nextStep =
         visibleSteps[Math.min(resolvedStepIndex + 1, visibleSteps.length - 1)]
       if (nextStep) {
-        advanceToStep(nextStep)
+        jumpToStep(nextStep)
       }
     } catch (error) {
       setErrorMessage(
@@ -955,9 +836,7 @@ export function DashboardStatsLogMatchSheet({
         {visibleSteps.length > 1 ? (
           <div className="border-b border-border/60 bg-muted/20">
             <StepProgress
-              getStepStatus={(candidate) =>
-                stepStatusById.get(candidate) ?? "locked"
-              }
+              currentStep={step}
               loggingMode={loggingMode}
               onStepSelect={jumpToStep}
               steps={visibleSteps}
