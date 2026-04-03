@@ -475,6 +475,7 @@ export function DashboardStatsLogMatchSheet({
     [loggingMode, requiresSessionSelection]
   )
   const currentStepIndex = visibleSteps.indexOf(step)
+  const resolvedStepIndex = currentStepIndex >= 0 ? currentStepIndex : 0
   const currentStep = getLogMatchStepDefinition(step, loggingMode)
   const selectedSession =
     sessions.find((session) => session.id === resolvedSessionId) ?? null
@@ -548,7 +549,7 @@ export function DashboardStatsLogMatchSheet({
     ? `${selectedSession.usernameLabel ?? "Legacy session"} · ${selectedSession.titleLabel} Season ${selectedSession.season}`
     : "Select a session to start logging."
   const selectedModeKey = selectedModePresentation.key
-  const currentStepNumber = currentStepIndex >= 0 ? currentStepIndex + 1 : 1
+  const currentStepNumber = resolvedStepIndex + 1
 
   function updateField<TKey extends Parameters<typeof setField>[0]>(
     key: TKey,
@@ -651,11 +652,16 @@ export function DashboardStatsLogMatchSheet({
     [stepStatusById, visibleSteps]
   )
 
-  function setWizardStep(nextStep: LogMatchStep) {
+  function jumpToStep(nextStep: LogMatchStep) {
     if (stepStatusById.get(nextStep) === "locked") {
       return
     }
 
+    setErrorMessage(null)
+    setField("step", nextStep)
+  }
+
+  function advanceToStep(nextStep: LogMatchStep) {
     setErrorMessage(null)
     setField("step", nextStep)
   }
@@ -738,9 +744,9 @@ export function DashboardStatsLogMatchSheet({
   ])
 
   function goToPreviousStep() {
-    const previousStep = visibleSteps[Math.max(currentStepIndex - 1, 0)]
+    const previousStep = visibleSteps[Math.max(resolvedStepIndex - 1, 0)]
     if (previousStep) {
-      setWizardStep(previousStep)
+      advanceToStep(previousStep)
     }
   }
 
@@ -756,6 +762,10 @@ export function DashboardStatsLogMatchSheet({
 
   function validateCurrentStep() {
     if (step === "session") {
+      validateSessionSelection()
+    }
+
+    if (step !== "session") {
       validateSessionSelection()
     }
 
@@ -815,9 +825,9 @@ export function DashboardStatsLogMatchSheet({
     try {
       validateCurrentStep()
       const nextStep =
-        visibleSteps[Math.min(currentStepIndex + 1, visibleSteps.length - 1)]
+        visibleSteps[Math.min(resolvedStepIndex + 1, visibleSteps.length - 1)]
       if (nextStep) {
-        setWizardStep(nextStep)
+        advanceToStep(nextStep)
       }
     } catch (error) {
       setErrorMessage(
@@ -907,7 +917,7 @@ export function DashboardStatsLogMatchSheet({
     }
   }
 
-  const nextStep = visibleSteps[currentStepIndex + 1]
+  const nextStep = visibleSteps[resolvedStepIndex + 1]
   const primaryActionLabel =
     step === "review"
       ? isSubmitting
@@ -949,7 +959,7 @@ export function DashboardStatsLogMatchSheet({
                 stepStatusById.get(candidate) ?? "locked"
               }
               loggingMode={loggingMode}
-              onStepSelect={setWizardStep}
+              onStepSelect={jumpToStep}
               steps={visibleSteps}
             />
           </div>
@@ -1335,7 +1345,7 @@ export function DashboardStatsLogMatchSheet({
                 Cancel
               </Button>
 
-              {currentStepIndex > 0 ? (
+              {resolvedStepIndex > 0 ? (
                 <Button
                   onClick={goToPreviousStep}
                   type="button"
