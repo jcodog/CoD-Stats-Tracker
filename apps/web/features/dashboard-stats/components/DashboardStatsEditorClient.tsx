@@ -41,18 +41,6 @@ import {
   ToggleGroupItem,
 } from "@workspace/ui/components/toggle-group"
 
-function getPlanLabel(planKey: DashboardState["planKey"]) {
-  if (planKey === "creator") {
-    return "Creator"
-  }
-
-  if (planKey === "premium") {
-    return "Premium"
-  }
-
-  return "Free"
-}
-
 function getSetupMessage(state: DashboardState) {
   if (state.setupState.needsConfig) {
     return "Staff still need to set the current ranked title and season before sessions can be created."
@@ -334,22 +322,6 @@ function DashboardStatsEditorLoaded({
                 review SR movement without leaving the dashboard.
               </p>
             </div>
-
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
-              {dashboardState.currentConfig ? (
-                <>
-                  <span>{dashboardState.currentConfig.activeTitleLabel}</span>
-                  <span aria-hidden="true">/</span>
-                  <span>
-                    Season {dashboardState.currentConfig.activeSeason}
-                  </span>
-                </>
-              ) : (
-                <span>Ranked config pending</span>
-              )}
-              <span aria-hidden="true">/</span>
-              <span>{getPlanLabel(dashboardState.planKey)} plan</span>
-            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -540,7 +512,7 @@ function DashboardStatsEditorLoaded({
                       </div>
                     ) : null}
 
-                    <div className="border-t border-border/50 px-6 py-6">
+                    <div className="border-t border-border/50 px-6 pt-6">
                       <div className="mb-3 grid gap-1">
                         <h2 className="text-base font-semibold">
                           Session snapshot
@@ -559,7 +531,7 @@ function DashboardStatsEditorLoaded({
                       />
                     </div>
 
-                    <div className="border-t border-border/50 px-6 py-6">
+                    <div className="border-t border-border/50 px-6 pt-6">
                       <div className="mb-3 grid gap-1">
                         <h2 className="text-base font-semibold">
                           Session trends
