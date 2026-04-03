@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useEffectEvent, useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useShallow } from "zustand/react/shallow"
 import {
   IconCheck,
@@ -477,6 +477,7 @@ export function DashboardStatsLogMatchSheet({
       }),
     [loggingMode, requiresSessionSelection]
   )
+  const initialStep = visibleSteps[0] ?? "outcome"
   const currentStepIndex = visibleSteps.indexOf(step)
   const resolvedStepIndex = currentStepIndex >= 0 ? currentStepIndex : 0
   const currentStep = getLogMatchStepDefinition(step, loggingMode)
@@ -558,12 +559,6 @@ export function DashboardStatsLogMatchSheet({
     setField("step", nextStep)
   }
 
-  const resetWizard = useEffectEvent(() => {
-    reset(defaultSessionId)
-    setField("step", visibleSteps[0] ?? "outcome")
-    setErrorMessage(null)
-  })
-
   useEffect(() => {
     if (!open) {
       setErrorMessage(null)
@@ -571,14 +566,16 @@ export function DashboardStatsLogMatchSheet({
       return
     }
 
-    resetWizard()
-  }, [open, reset, resetWizard])
+    reset(defaultSessionId)
+    setField("step", initialStep)
+    setErrorMessage(null)
+  }, [defaultSessionId, initialStep, open, reset, setField])
 
   useEffect(() => {
     if (!visibleSteps.includes(step)) {
-      setField("step", visibleSteps[0] ?? "outcome")
+      setField("step", initialStep)
     }
-  }, [setField, step, visibleSteps])
+  }, [initialStep, setField, step, visibleSteps])
 
   useEffect(() => {
     if (modeId && !modesById.has(modeId)) {
