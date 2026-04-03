@@ -22,11 +22,14 @@ import { DashboardStatsLogMatchSheet } from "@/features/dashboard-stats/componen
 import { DashboardStatsRecentMatches } from "@/features/dashboard-stats/components/DashboardStatsRecentMatches"
 import { DashboardStatsSummary } from "@/features/dashboard-stats/components/DashboardStatsSummary"
 import { getTimeRangeStart } from "@/features/dashboard-stats/lib/dashboard-stats-format"
+import { getVisibleLogMatchSteps } from "@/features/dashboard-stats/lib/dashboard-stats-log-match-flow"
 import {
   DEFAULT_DASHBOARD_MATCH_LOGGING_MODE,
   type DashboardMatchLoggingMode,
 } from "@/features/dashboard-stats/lib/dashboard-stats-logging-mode"
+import { useCreateSessionFlowStore } from "@/features/dashboard-stats/stores/create-session-flow-store"
 import { useDashboardUiStore } from "@/features/dashboard-stats/stores/dashboard-ui-store"
+import { useLogMatchWizardStore } from "@/features/dashboard-stats/stores/log-match-wizard-store"
 import {
   Alert,
   AlertDescription,
@@ -320,6 +323,42 @@ function DashboardStatsEditorLoaded({
     filteredWinLossBreakdown.total > 0
       ? filteredWinLossBreakdown.wins / filteredWinLossBreakdown.total
       : null
+  const defaultLogMatchSessionId =
+    selectedSessionId ?? activeSessions[0]?.id ?? null
+
+  function handleCreateSessionOpenChange(nextOpen: boolean) {
+    if (!nextOpen) {
+      useCreateSessionFlowStore.getState().reset()
+    }
+
+    setCreateSessionOpen(nextOpen)
+  }
+
+  function handleOpenCreateSessionDialog() {
+    useCreateSessionFlowStore.getState().reset()
+    setCreateSessionOpen(true)
+  }
+
+  function handleLogMatchOpenChange(nextOpen: boolean) {
+    if (!nextOpen) {
+      useLogMatchWizardStore.getState().reset(null)
+    }
+
+    setLogMatchOpen(nextOpen)
+  }
+
+  function handleOpenLogMatchSheet() {
+    const initialStep =
+      getVisibleLogMatchSteps({
+        loggingMode: effectiveLoggingMode,
+        requiresSessionSelection: activeSessions.length > 1,
+      })[0] ?? "outcome"
+    const logMatchWizardStore = useLogMatchWizardStore.getState()
+
+    logMatchWizardStore.reset(defaultLogMatchSessionId)
+    logMatchWizardStore.setField("step", initialStep)
+    setLogMatchOpen(true)
+  }
 
   function handleLoggingModeChange(value: string) {
     if (value !== "basic" && value !== "comprehensive") {
@@ -375,16 +414,13 @@ function DashboardStatsEditorLoaded({
             {showCreateSessionButton ? (
               <Button
                 disabled={!canCreateSession}
-                onClick={() => setCreateSessionOpen(true)}
+                onClick={handleOpenCreateSessionDialog}
                 variant="outline"
               >
                 Create session
               </Button>
             ) : null}
-            <Button
-              disabled={!canLogMatches}
-              onClick={() => setLogMatchOpen(true)}
-            >
+            <Button disabled={!canLogMatches} onClick={handleOpenLogMatchSheet}>
               Log match
             </Button>
           </div>
@@ -437,7 +473,7 @@ function DashboardStatsEditorLoaded({
                     <div className="pt-2">
                       <Button
                         disabled={!canCreateSession}
-                        onClick={() => setCreateSessionOpen(true)}
+                        onClick={handleOpenCreateSessionDialog}
                       >
                         Create session
                       </Button>
@@ -652,7 +688,7 @@ function DashboardStatsEditorLoaded({
       {dashboardState.currentConfig ? (
         <DashboardStatsCreateSessionDialog
           currentConfig={dashboardState.currentConfig}
-          onOpenChange={setCreateSessionOpen}
+          onOpenChange={handleCreateSessionOpenChange}
           onSessionSelected={(sessionId) =>
             startTransition(() => setSelectedSessionId(sessionId))
           }
@@ -666,7 +702,7 @@ function DashboardStatsEditorLoaded({
         availableMaps={availableMapsQuery.data ?? []}
         availableModes={availableModesQuery.data ?? []}
         loggingMode={effectiveLoggingMode}
-        onOpenChange={setLogMatchOpen}
+        onOpenChange={handleLogMatchOpenChange}
         onSessionSelected={(sessionId) =>
           startTransition(() => setSelectedSessionId(sessionId))
         }

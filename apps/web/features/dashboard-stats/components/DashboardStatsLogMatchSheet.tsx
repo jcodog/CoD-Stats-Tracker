@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import { useShallow } from "zustand/react/shallow"
 import {
   IconCheck,
@@ -468,7 +468,6 @@ export function DashboardStatsLogMatchSheet({
     sessions.find((session) => session.id === selectedSessionId)?.id ??
     sessions[0]?.id ??
     null
-  const resolvedSessionId = selectedWizardSessionId ?? defaultSessionId
   const visibleSteps = useMemo(
     () =>
       getVisibleLogMatchSteps({
@@ -478,27 +477,49 @@ export function DashboardStatsLogMatchSheet({
     [loggingMode, requiresSessionSelection]
   )
   const initialStep = visibleSteps[0] ?? "outcome"
-  const currentStepIndex = visibleSteps.indexOf(step)
-  const resolvedStepIndex = currentStepIndex >= 0 ? currentStepIndex : 0
-  const currentStep = getLogMatchStepDefinition(step, loggingMode)
-  const selectedSession =
-    sessions.find((session) => session.id === resolvedSessionId) ?? null
   const modesById = useMemo(
     () => new Map(modes.map((mode) => [mode.id, mode])),
     [modes]
+  )
+  const hasStaleSelectedSession = Boolean(
+    selectedWizardSessionId &&
+    !sessions.some((session) => session.id === selectedWizardSessionId)
+  )
+  const resolvedSessionId = hasStaleSelectedSession
+    ? defaultSessionId
+    : (selectedWizardSessionId ?? defaultSessionId)
+  const resolvedStep =
+    hasStaleSelectedSession && requiresSessionSelection
+      ? "session"
+      : visibleSteps.includes(step)
+        ? step
+        : initialStep
+  const resolvedModeId = modeId && modesById.has(modeId) ? modeId : null
+  const filteredMaps = useMemo(
+    () =>
+      resolvedModeId
+        ? maps.filter((map) => map.supportedModeIds.includes(resolvedModeId))
+        : [],
+    [maps, resolvedModeId]
   )
   const mapsById = useMemo(
     () => new Map(maps.map((map) => [map.id, map])),
     [maps]
   )
-  const selectedMode = modeId ? (modesById.get(modeId) ?? null) : null
-  const selectedMap = mapId ? (mapsById.get(mapId) ?? null) : null
+  const resolvedMapId =
+    mapId && filteredMaps.some((map) => map.id === mapId) ? mapId : null
+  const currentStepIndex = visibleSteps.indexOf(resolvedStep)
+  const resolvedStepIndex = currentStepIndex >= 0 ? currentStepIndex : 0
+  const currentStep = getLogMatchStepDefinition(resolvedStep, loggingMode)
+  const selectedSession =
+    sessions.find((session) => session.id === resolvedSessionId) ?? null
+  const selectedMode = resolvedModeId
+    ? (modesById.get(resolvedModeId) ?? null)
+    : null
+  const selectedMap = resolvedMapId
+    ? (mapsById.get(resolvedMapId) ?? null)
+    : null
   const selectedModePresentation = getSelectedModePresentation(selectedMode)
-  const filteredMaps = useMemo(
-    () =>
-      modeId ? maps.filter((map) => map.supportedModeIds.includes(modeId)) : [],
-    [maps, modeId]
-  )
   const modeMapCounts = useMemo(
     () =>
       new Map(
@@ -545,6 +566,11 @@ export function DashboardStatsLogMatchSheet({
     : "Select a session to start logging."
   const selectedModeKey = selectedModePresentation.key
   const currentStepNumber = resolvedStepIndex + 1
+  const sessionStatusMessage = hasStaleSelectedSession
+    ? requiresSessionSelection
+      ? "The previous session is no longer active. Choose another one."
+      : "The previous session is no longer active. Logging will use the current dashboard session."
+    : null
 
   function updateField<TKey extends Parameters<typeof setField>[0]>(
     key: TKey,
@@ -558,68 +584,6 @@ export function DashboardStatsLogMatchSheet({
     setErrorMessage(null)
     setField("step", nextStep)
   }
-
-  useEffect(() => {
-    if (!open) {
-      setErrorMessage(null)
-      reset(null)
-      return
-    }
-
-    reset(defaultSessionId)
-    setField("step", initialStep)
-    setErrorMessage(null)
-  }, [defaultSessionId, initialStep, open, reset, setField])
-
-  useEffect(() => {
-    if (!visibleSteps.includes(step)) {
-      setField("step", initialStep)
-    }
-  }, [initialStep, setField, step, visibleSteps])
-
-  useEffect(() => {
-    if (modeId && !modesById.has(modeId)) {
-      setField("modeId", null)
-      setField("mapId", null)
-    }
-  }, [modeId, modesById, setField])
-
-  useEffect(() => {
-    if (mapId && !filteredMaps.some((map) => map.id === mapId)) {
-      setField("mapId", null)
-    }
-  }, [filteredMaps, mapId, setField])
-
-  useEffect(() => {
-    if (!open || !selectedWizardSessionId) {
-      return
-    }
-
-    if (sessions.some((session) => session.id === selectedWizardSessionId)) {
-      return
-    }
-
-    updateField("selectedSessionId", defaultSessionId)
-
-    if (requiresSessionSelection) {
-      setField("step", "session")
-      setErrorMessage(
-        "The previous session is no longer active. Choose another one."
-      )
-      return
-    }
-
-    setErrorMessage(
-      "The previous session is no longer active. Logging will use the current dashboard session."
-    )
-  }, [
-    defaultSessionId,
-    open,
-    requiresSessionSelection,
-    selectedWizardSessionId,
-    sessions,
-    setField,
-  ])
 
   function goToPreviousStep() {
     const previousStep = visibleSteps[Math.max(resolvedStepIndex - 1, 0)]
@@ -639,28 +603,28 @@ export function DashboardStatsLogMatchSheet({
   }
 
   function validateCurrentStep() {
-    if (step === "session") {
+    if (resolvedStep === "session") {
       validateSessionSelection()
     }
 
-    if (step !== "session") {
+    if (resolvedStep !== "session") {
       validateSessionSelection()
     }
 
-    if (step === "outcome" && !outcome) {
+    if (resolvedStep === "outcome" && !outcome) {
       throw new Error("Select whether the match was a win or a loss.")
     }
 
-    if (step === "srChange") {
+    if (resolvedStep === "srChange") {
       parseRequiredInteger(srChange, "SR change")
     }
 
-    if (step === "mode" && !modeId) {
+    if (resolvedStep === "mode" && !resolvedModeId) {
       throw new Error("Ranked mode is required.")
     }
 
-    if (step === "map") {
-      if (!modeId) {
+    if (resolvedStep === "map") {
+      if (!resolvedModeId) {
         throw new Error("Choose the ranked mode before selecting a map.")
       }
 
@@ -674,16 +638,16 @@ export function DashboardStatsLogMatchSheet({
         )
       }
 
-      if (!mapId) {
+      if (!resolvedMapId) {
         throw new Error("Match map is required.")
       }
 
-      if (!filteredMaps.some((map) => map.id === mapId)) {
+      if (!filteredMaps.some((map) => map.id === resolvedMapId)) {
         throw new Error(`Choose a map that supports ${selectedMode.label}.`)
       }
     }
 
-    if (step === "stats") {
+    if (resolvedStep === "stats") {
       parseOptionalInteger(kills)
       parseOptionalInteger(deaths)
       parseOptionalInteger(teamScore)
@@ -694,7 +658,7 @@ export function DashboardStatsLogMatchSheet({
       parseOptionalInteger(overloads)
     }
 
-    if (step === "notes" && notes.trim().length > NOTES_MAX_LENGTH) {
+    if (resolvedStep === "notes" && notes.trim().length > NOTES_MAX_LENGTH) {
       throw new Error(`Notes must stay within ${NOTES_MAX_LENGTH} characters.`)
     }
   }
@@ -725,7 +689,7 @@ export function DashboardStatsLogMatchSheet({
 
       parseRequiredInteger(srChange, "SR change")
 
-      if (!modeId) {
+      if (!resolvedModeId) {
         throw new Error("Ranked mode is required.")
       }
 
@@ -739,7 +703,10 @@ export function DashboardStatsLogMatchSheet({
         )
       }
 
-      if (!mapId || !filteredMaps.some((map) => map.id === mapId)) {
+      if (
+        !resolvedMapId ||
+        !filteredMaps.some((map) => map.id === resolvedMapId)
+      ) {
         throw new Error(`Choose a map that supports ${selectedMode.label}.`)
       }
 
@@ -767,8 +734,8 @@ export function DashboardStatsLogMatchSheet({
         hillTimeSeconds: parseOptionalInteger(hillTimeSeconds),
         kills: parseOptionalInteger(kills),
         lossProtected,
-        mapId: mapId as Id<"rankedMaps">,
-        modeId: modeId as Id<"rankedModes">,
+        mapId: resolvedMapId as Id<"rankedMaps">,
+        modeId: resolvedModeId as Id<"rankedModes">,
         notes: notes.trim() ? notes.trim() : undefined,
         outcome,
         overloads: parseOptionalInteger(overloads),
@@ -797,7 +764,7 @@ export function DashboardStatsLogMatchSheet({
 
   const nextStep = visibleSteps[resolvedStepIndex + 1]
   const primaryActionLabel =
-    step === "review"
+    resolvedStep === "review"
       ? isSubmitting
         ? "Logging…"
         : "Log Match"
@@ -808,8 +775,10 @@ export function DashboardStatsLogMatchSheet({
     logMatchMutation.isPending ||
     isSubmitting ||
     sessions.length === 0 ||
-    (step === "mode" && modes.length === 0) ||
-    (step === "map" && Boolean(modeId) && filteredMaps.length === 0)
+    (resolvedStep === "mode" && modes.length === 0) ||
+    (resolvedStep === "map" &&
+      Boolean(resolvedModeId) &&
+      filteredMaps.length === 0)
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
@@ -833,7 +802,7 @@ export function DashboardStatsLogMatchSheet({
         {visibleSteps.length > 1 ? (
           <div className="border-b border-border/60 bg-muted/20">
             <StepProgress
-              currentStep={step}
+              currentStep={resolvedStep}
               loggingMode={loggingMode}
               onStepSelect={jumpToStep}
               steps={visibleSteps}
@@ -852,10 +821,12 @@ export function DashboardStatsLogMatchSheet({
               </p>
             </div>
 
-            {errorMessage ? (
+            {(errorMessage ?? sessionStatusMessage) ? (
               <Alert aria-live="polite" variant="destructive">
                 <AlertTitle>Fix This Step</AlertTitle>
-                <AlertDescription>{errorMessage}</AlertDescription>
+                <AlertDescription>
+                  {errorMessage ?? sessionStatusMessage}
+                </AlertDescription>
               </Alert>
             ) : null}
 
@@ -868,7 +839,7 @@ export function DashboardStatsLogMatchSheet({
               </Alert>
             ) : null}
 
-            {step === "session" ? (
+            {resolvedStep === "session" ? (
               <FieldGroup className="gap-6">
                 <Field>
                   <FieldLabel htmlFor="log-match-session">
@@ -895,7 +866,7 @@ export function DashboardStatsLogMatchSheet({
               </FieldGroup>
             ) : null}
 
-            {step === "outcome" ? (
+            {resolvedStep === "outcome" ? (
               <FieldSet>
                 <FieldLegend>Select outcome</FieldLegend>
                 <RadioGroup
@@ -923,7 +894,7 @@ export function DashboardStatsLogMatchSheet({
               </FieldSet>
             ) : null}
 
-            {step === "srChange" ? (
+            {resolvedStep === "srChange" ? (
               <FieldGroup className="max-w-md">
                 <Field>
                   <FieldLabel htmlFor="match-sr-change">SR change</FieldLabel>
@@ -949,7 +920,7 @@ export function DashboardStatsLogMatchSheet({
               </FieldGroup>
             ) : null}
 
-            {step === "mode" ? (
+            {resolvedStep === "mode" ? (
               <FieldSet>
                 <FieldLegend>Ranked mode</FieldLegend>
                 <RadioGroup
@@ -958,7 +929,7 @@ export function DashboardStatsLogMatchSheet({
                     updateField("modeId", value)
                     updateField("mapId", null)
                   }}
-                  value={modeId ?? undefined}
+                  value={resolvedModeId ?? undefined}
                 >
                   {modes.map((mode) => {
                     const supportedMapCount = modeMapCounts.get(mode.id) ?? 0
@@ -983,15 +954,15 @@ export function DashboardStatsLogMatchSheet({
               </FieldSet>
             ) : null}
 
-            {step === "map" ? (
+            {resolvedStep === "map" ? (
               <FieldGroup className="max-w-xl gap-4">
                 <Field>
                   <FieldLabel htmlFor="match-map-combobox">Map</FieldLabel>
                   <MapCombobox
-                    disabled={!modeId || filteredMaps.length === 0}
+                    disabled={!resolvedModeId || filteredMaps.length === 0}
                     maps={filteredMaps}
                     onChange={(value) => updateField("mapId", value)}
-                    value={mapId}
+                    value={resolvedMapId}
                   />
                   <FieldDescription>
                     {selectedMode
@@ -1004,7 +975,7 @@ export function DashboardStatsLogMatchSheet({
               </FieldGroup>
             ) : null}
 
-            {step === "stats" ? (
+            {resolvedStep === "stats" ? (
               <div className="grid gap-6">
                 <FieldGroup className="gap-4 sm:grid-cols-2">
                   <Field>
@@ -1167,7 +1138,7 @@ export function DashboardStatsLogMatchSheet({
               </div>
             ) : null}
 
-            {step === "notes" ? (
+            {resolvedStep === "notes" ? (
               <FieldGroup className="max-w-2xl">
                 <Field>
                   <FieldLabel htmlFor="match-notes">Notes</FieldLabel>
@@ -1190,7 +1161,7 @@ export function DashboardStatsLogMatchSheet({
               </FieldGroup>
             ) : null}
 
-            {step === "review" ? (
+            {resolvedStep === "review" ? (
               <ReviewStepPanel
                 loggingMode={loggingMode}
                 lossProtected={lossProtected}
@@ -1232,7 +1203,7 @@ export function DashboardStatsLogMatchSheet({
                 </Button>
               ) : null}
 
-              {step === "review" ? (
+              {resolvedStep === "review" ? (
                 <Button
                   disabled={isPrimaryActionDisabled}
                   onClick={() => {

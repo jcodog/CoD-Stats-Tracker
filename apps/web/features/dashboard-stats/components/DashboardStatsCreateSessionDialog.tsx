@@ -1,6 +1,5 @@
 "use client"
 
-import { useEffect } from "react"
 import { useShallow } from "zustand/react/shallow"
 
 import type { Id } from "@workspace/backend/convex/_generated/dataModel"
@@ -12,7 +11,11 @@ import {
 } from "@/features/dashboard-stats/lib/dashboard-stats-client"
 import { useCreateSessionFlowStore } from "@/features/dashboard-stats/stores/create-session-flow-store"
 import { AppSelect } from "@/components/AppSelect"
-import { Alert, AlertDescription, AlertTitle } from "@workspace/ui/components/alert"
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+} from "@workspace/ui/components/alert"
 import { Button } from "@workspace/ui/components/button"
 import {
   Dialog,
@@ -29,7 +32,10 @@ import {
   FieldLabel,
 } from "@workspace/ui/components/field"
 import { Input } from "@workspace/ui/components/input"
-import { ToggleGroup, ToggleGroupItem } from "@workspace/ui/components/toggle-group"
+import {
+  ToggleGroup,
+  ToggleGroupItem,
+} from "@workspace/ui/components/toggle-group"
 import { toast } from "sonner"
 
 type DashboardStatsCreateSessionDialogProps = {
@@ -48,7 +54,11 @@ type UsernameOption = {
 function parseStartSr(value: string) {
   const parsedValue = Number(value)
 
-  if (!Number.isInteger(parsedValue) || parsedValue < 0 || parsedValue > 20000) {
+  if (
+    !Number.isInteger(parsedValue) ||
+    parsedValue < 0 ||
+    parsedValue > 20000
+  ) {
     throw new Error("Start SR must be a whole number between 0 and 20000.")
   }
 
@@ -90,29 +100,23 @@ export function DashboardStatsCreateSessionDialog({
     }))
   )
   const usernames = (usernamesQuery.data ?? []) as UsernameOption[]
-
-  useEffect(() => {
-    if (!open) {
-      reset()
-      return
-    }
-
-    if (usernames.length === 0) {
-      setField("selectionMode", "new")
-    } else if (!selectedExistingUsernameId) {
-      setField("selectedExistingUsernameId", usernames[0]?.id ?? null)
-    }
-  }, [open, reset, selectedExistingUsernameId, setField, usernames])
+  const effectiveSelectionMode = usernames.length === 0 ? "new" : selectionMode
+  const effectiveSelectedExistingUsernameId =
+    effectiveSelectionMode === "existing"
+      ? (selectedExistingUsernameId ?? usernames[0]?.id ?? null)
+      : null
 
   async function handleNext() {
     if (step === "username") {
-      if (selectionMode === "existing") {
-        if (!selectedExistingUsernameId) {
+      if (effectiveSelectionMode === "existing") {
+        if (!effectiveSelectedExistingUsernameId) {
           toast.error("Select one of your saved Activision usernames.")
           return
         }
       } else if (newUsernameInput.trim().length < 3) {
-        toast.error("Enter a new Activision username with at least 3 characters.")
+        toast.error(
+          "Enter a new Activision username with at least 3 characters."
+        )
         return
       }
 
@@ -125,7 +129,9 @@ export function DashboardStatsCreateSessionDialog({
         parseStartSr(startSr)
         nextStep()
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Invalid SR value.")
+        toast.error(
+          error instanceof Error ? error.message : "Invalid SR value."
+        )
       }
     }
   }
@@ -136,11 +142,14 @@ export function DashboardStatsCreateSessionDialog({
     try {
       const createdSession = await createSessionMutation.mutateAsync({
         existingUsernameId:
-          selectionMode === "existing" && selectedExistingUsernameId
-            ? (selectedExistingUsernameId as Id<"activisionUsernames">)
+          effectiveSelectionMode === "existing" &&
+          effectiveSelectedExistingUsernameId
+            ? (effectiveSelectedExistingUsernameId as Id<"activisionUsernames">)
             : undefined,
         newUsername:
-          selectionMode === "new" ? newUsernameInput.trim() : undefined,
+          effectiveSelectionMode === "new"
+            ? newUsernameInput.trim()
+            : undefined,
         startSr: parseStartSr(startSr),
       })
 
@@ -187,22 +196,30 @@ export function DashboardStatsCreateSessionDialog({
                     }
                   }}
                   type="single"
-                  value={selectionMode}
+                  value={effectiveSelectionMode}
                   variant="outline"
                 >
-                  <ToggleGroupItem disabled={usernames.length === 0} value="existing">
+                  <ToggleGroupItem
+                    disabled={usernames.length === 0}
+                    value="existing"
+                  >
                     Use saved username
                   </ToggleGroupItem>
-                  <ToggleGroupItem value="new">Create new username</ToggleGroupItem>
+                  <ToggleGroupItem value="new">
+                    Create new username
+                  </ToggleGroupItem>
                 </ToggleGroup>
                 <FieldDescription>
-                  The chosen Activision username is locked to this session after creation.
+                  The chosen Activision username is locked to this session after
+                  creation.
                 </FieldDescription>
               </Field>
 
-              {selectionMode === "existing" ? (
+              {effectiveSelectionMode === "existing" ? (
                 <Field>
-                  <FieldLabel htmlFor="existing-username">Saved username</FieldLabel>
+                  <FieldLabel htmlFor="existing-username">
+                    Saved username
+                  </FieldLabel>
                   <AppSelect
                     id="existing-username"
                     onValueChange={(value) =>
@@ -213,12 +230,14 @@ export function DashboardStatsCreateSessionDialog({
                       value: username.id,
                     }))}
                     placeholder="Select a saved username"
-                    value={selectedExistingUsernameId ?? ""}
+                    value={effectiveSelectedExistingUsernameId ?? ""}
                   />
                 </Field>
               ) : (
                 <Field>
-                  <FieldLabel htmlFor="new-username">New Activision username</FieldLabel>
+                  <FieldLabel htmlFor="new-username">
+                    New Activision username
+                  </FieldLabel>
                   <Input
                     id="new-username"
                     onChange={(event) =>
@@ -244,7 +263,8 @@ export function DashboardStatsCreateSessionDialog({
                   value={startSr}
                 />
                 <FieldDescription>
-                  Start SR is required and cannot be edited by users after the session is created.
+                  Start SR is required and cannot be edited by users after the
+                  session is created.
                 </FieldDescription>
               </Field>
             </FieldGroup>
@@ -255,8 +275,9 @@ export function DashboardStatsCreateSessionDialog({
               <Alert>
                 <AlertTitle>Immutable session details</AlertTitle>
                 <AlertDescription>
-                  Users cannot change the session username or start SR after creation.
-                  Staff correction tooling is out of scope for this rollout.
+                  Users cannot change the session username or start SR after
+                  creation. Staff correction tooling is out of scope for this
+                  rollout.
                 </AlertDescription>
               </Alert>
 
@@ -275,12 +296,16 @@ export function DashboardStatsCreateSessionDialog({
                     </dd>
                   </div>
                   <div className="flex items-center justify-between gap-4">
-                    <dt className="text-muted-foreground">Activision username</dt>
+                    <dt className="text-muted-foreground">
+                      Activision username
+                    </dt>
                     <dd className="font-medium">
-                      {selectionMode === "existing"
-                        ? usernames.find(
-                            (username) => username.id === selectedExistingUsernameId
-                          )?.displayUsername ?? "Unknown"
+                      {effectiveSelectionMode === "existing"
+                        ? (usernames.find(
+                            (username) =>
+                              username.id ===
+                              effectiveSelectedExistingUsernameId
+                          )?.displayUsername ?? "Unknown")
                         : newUsernameInput.trim()}
                     </dd>
                   </div>
@@ -304,7 +329,11 @@ export function DashboardStatsCreateSessionDialog({
 
         <DialogFooter>
           {step !== "username" ? (
-            <Button disabled={createSessionMutation.isPending || isSubmitting} onClick={prevStep} variant="outline">
+            <Button
+              disabled={createSessionMutation.isPending || isSubmitting}
+              onClick={prevStep}
+              variant="outline"
+            >
               Back
             </Button>
           ) : null}
@@ -324,7 +353,9 @@ export function DashboardStatsCreateSessionDialog({
                 void handleSubmit()
               }}
             >
-              {createSessionMutation.isPending ? "Creating..." : "Create session"}
+              {createSessionMutation.isPending
+                ? "Creating..."
+                : "Create session"}
             </Button>
           )}
         </DialogFooter>
