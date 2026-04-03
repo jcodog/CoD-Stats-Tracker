@@ -69,7 +69,7 @@ function getInitialState(selectedSessionId: string | null = null) {
     plants: "",
     selectedSessionId,
     srChange: "",
-    step: "details" as const,
+    step: "outcome" as const,
     teamScore: "",
   }
 }

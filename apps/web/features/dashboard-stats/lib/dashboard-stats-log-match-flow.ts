@@ -2,7 +2,15 @@
 
 import type { DashboardMatchLoggingMode } from "@/features/dashboard-stats/lib/dashboard-stats-logging-mode"
 
-export type LogMatchStep = "details" | "notes" | "review" | "session" | "stats"
+export type LogMatchStep =
+  | "map"
+  | "mode"
+  | "notes"
+  | "outcome"
+  | "review"
+  | "session"
+  | "srChange"
+  | "stats"
 
 type LogMatchStepDefinition = {
   description: string
@@ -11,28 +19,46 @@ type LogMatchStepDefinition = {
 }
 
 const basicStepDefinitions: Record<LogMatchStep, LogMatchStepDefinition> = {
-  details: {
+  map: {
     description:
-      "Lock in the result, SR, mode, and map. This is the fast path for everyday logging.",
-    label: "Details",
-    title: "Match details",
+      "Search only the maps that support the selected ranked mode for the current title.",
+    label: "Map",
+    title: "Choose the map",
+  },
+  mode: {
+    description:
+      "Ranked mode is required and determines which maps are valid on the next step.",
+    label: "Mode",
+    title: "Pick the ranked mode",
   },
   notes: {
     description: "Notes are only available in Comprehensive mode.",
     label: "Notes",
     title: "Notes",
   },
+  outcome: {
+    description:
+      "Start with the match result so the rest of the log stays fast and predictable.",
+    label: "Outcome",
+    title: "Record the match result",
+  },
   review: {
     description:
       "Check the essentials before the match is written into the active session.",
     label: "Review",
-    title: "Ready to log",
+    title: "Review & submit",
   },
   session: {
     description:
       "Choose which active session should receive this match before you continue.",
     label: "Session",
-    title: "Choose session",
+    title: "Choose the session",
+  },
+  srChange: {
+    description:
+      "Use the exact SR delta shown in game. Enter a whole number with the sign if needed.",
+    label: "SR",
+    title: "Record the SR change",
   },
   stats: {
     description: "Optional stats are only available in Comprehensive mode.",
@@ -45,17 +71,29 @@ const comprehensiveStepDefinitions: Record<
   LogMatchStep,
   LogMatchStepDefinition
 > = {
-  details: {
+  map: {
     description:
-      "Capture the required match result first, then add the optional context that matters.",
-    label: "Details",
-    title: "Match details",
+      "Search only the maps that support the selected ranked mode for the current title.",
+    label: "Map",
+    title: "Choose the map",
+  },
+  mode: {
+    description:
+      "Ranked mode is required and determines which maps are valid on the next step.",
+    label: "Mode",
+    title: "Pick the ranked mode",
   },
   notes: {
     description:
       "Keep notes short and plain text so they stay useful during later review.",
     label: "Notes",
     title: "Add notes",
+  },
+  outcome: {
+    description:
+      "Start with the match result so the rest of the log stays fast and predictable.",
+    label: "Outcome",
+    title: "Record the match result",
   },
   review: {
     description:
@@ -67,13 +105,19 @@ const comprehensiveStepDefinitions: Record<
     description:
       "Choose which active session should receive this match before you continue.",
     label: "Session",
-    title: "Choose session",
+    title: "Choose the session",
+  },
+  srChange: {
+    description:
+      "Use the exact SR delta shown in game. Enter a whole number with the sign if needed.",
+    label: "SR",
+    title: "Record the SR change",
   },
   stats: {
     description:
       "Optional stats stay lightweight, but this is where richer match context belongs.",
     label: "Stats",
-    title: "Optional stats",
+    title: "Add optional stats",
   },
 }
 
@@ -92,8 +136,8 @@ export function getVisibleLogMatchSteps(args: {
 }): LogMatchStep[] {
   const baseSteps: LogMatchStep[] =
     args.loggingMode === "basic"
-      ? ["details", "review"]
-      : ["details", "stats", "notes", "review"]
+      ? ["outcome", "srChange", "mode", "map", "review"]
+      : ["outcome", "srChange", "mode", "map", "stats", "notes", "review"]
 
   return args.requiresSessionSelection ? ["session", ...baseSteps] : baseSteps
 }
