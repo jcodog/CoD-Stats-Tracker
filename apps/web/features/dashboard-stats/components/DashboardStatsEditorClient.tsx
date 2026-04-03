@@ -14,6 +14,7 @@ import {
   useDashboardSessionOverview,
   useDashboardSessionSrTimeline,
   useDashboardStatsState,
+  useUpdateDashboardPreferredMatchLoggingMode,
 } from "@/features/dashboard-stats/lib/dashboard-stats-client"
 import { DashboardStatsCharts } from "@/features/dashboard-stats/components/DashboardStatsCharts"
 import { DashboardStatsCreateSessionDialog } from "@/features/dashboard-stats/components/DashboardStatsCreateSessionDialog"
@@ -21,6 +22,10 @@ import { DashboardStatsLogMatchSheet } from "@/features/dashboard-stats/componen
 import { DashboardStatsRecentMatches } from "@/features/dashboard-stats/components/DashboardStatsRecentMatches"
 import { DashboardStatsSummary } from "@/features/dashboard-stats/components/DashboardStatsSummary"
 import { getTimeRangeStart } from "@/features/dashboard-stats/lib/dashboard-stats-format"
+import {
+  DEFAULT_DASHBOARD_MATCH_LOGGING_MODE,
+  type DashboardMatchLoggingMode,
+} from "@/features/dashboard-stats/lib/dashboard-stats-logging-mode"
 import { useDashboardUiStore } from "@/features/dashboard-stats/stores/dashboard-ui-store"
 import {
   Alert,
@@ -40,6 +45,7 @@ import {
   ToggleGroup,
   ToggleGroupItem,
 } from "@workspace/ui/components/toggle-group"
+import { toast } from "sonner"
 
 function getSetupMessage(state: DashboardState) {
   if (state.setupState.needsConfig) {
@@ -88,7 +94,7 @@ function SurfaceFrame({
   )
 }
 
-function HeroToolbarGroup({
+function ToolbarGroup({
   children,
   label,
 }: {
@@ -96,8 +102,8 @@ function HeroToolbarGroup({
   label: string
 }) {
   return (
-    <div className="grid shrink-0 gap-2">
-      <span className="text-[11px] font-medium tracking-[0.2em] whitespace-nowrap text-muted-foreground uppercase">
+    <div className="grid min-w-0 gap-2">
+      <span className="text-xs font-medium whitespace-nowrap text-muted-foreground">
         {label}
       </span>
       <div className="flex flex-wrap items-center gap-2">{children}</div>
@@ -154,27 +160,43 @@ function DashboardStatsEditorLoaded({
   const [createSessionOpen, setCreateSessionOpen] = useState(false)
   const [logMatchOpen, setLogMatchOpen] = useState(false)
   const {
+    hasSyncedLoggingMode,
     includeLossProtected,
+    selectedLoggingMode,
     selectedSessionId,
     selectedTimeRange,
+    setSelectedLoggingMode,
     setIncludeLossProtected,
     setSelectedSessionId,
     setSelectedTimeRange,
+    syncSelectedLoggingMode,
   } = useDashboardUiStore(
     useShallow((state) => ({
+      hasSyncedLoggingMode: state.hasSyncedLoggingMode,
       includeLossProtected: state.includeLossProtected,
+      selectedLoggingMode: state.selectedLoggingMode,
       selectedSessionId: state.selectedSessionId,
       selectedTimeRange: state.selectedTimeRange,
+      setSelectedLoggingMode: state.setSelectedLoggingMode,
       setIncludeLossProtected: state.setIncludeLossProtected,
       setSelectedSessionId: state.setSelectedSessionId,
       setSelectedTimeRange: state.setSelectedTimeRange,
+      syncSelectedLoggingMode: state.syncSelectedLoggingMode,
     }))
   )
 
   const dashboardStateQuery = useDashboardStatsState(initialDashboardState)
+  const updateLoggingModeMutation =
+    useUpdateDashboardPreferredMatchLoggingMode()
   const availableModesQuery = useDashboardAvailableModes()
   const availableMapsQuery = useDashboardAvailableMaps()
   const dashboardState = dashboardStateQuery.data
+  const persistedLoggingMode =
+    dashboardState.preferredMatchLoggingMode ??
+    DEFAULT_DASHBOARD_MATCH_LOGGING_MODE
+  const effectiveLoggingMode = hasSyncedLoggingMode
+    ? selectedLoggingMode
+    : persistedLoggingMode
   const activeSessions = (dashboardState.activeSessions ??
     initialSessions) as typeof initialSessions
   const selectedSession =
@@ -207,6 +229,10 @@ function DashboardStatsEditorLoaded({
     selectedSession !== null &&
     (availableModesQuery.data?.length ?? 0) > 0 &&
     (availableMapsQuery.data?.length ?? 0) > 0
+
+  useEffect(() => {
+    syncSelectedLoggingMode(persistedLoggingMode)
+  }, [persistedLoggingMode, syncSelectedLoggingMode])
 
   useEffect(() => {
     if (activeSessions.length === 0) {
@@ -294,6 +320,27 @@ function DashboardStatsEditorLoaded({
     filteredWinLossBreakdown.total > 0
       ? filteredWinLossBreakdown.wins / filteredWinLossBreakdown.total
       : null
+
+  function handleLoggingModeChange(value: string) {
+    if (value !== "basic" && value !== "comprehensive") {
+      return
+    }
+
+    if (value === effectiveLoggingMode || updateLoggingModeMutation.isPending) {
+      return
+    }
+
+    const previousLoggingMode = effectiveLoggingMode
+    const nextLoggingMode = value as DashboardMatchLoggingMode
+
+    setSelectedLoggingMode(nextLoggingMode)
+    void updateLoggingModeMutation.mutateAsync(nextLoggingMode).catch(() => {
+      setSelectedLoggingMode(previousLoggingMode)
+      toast.error(
+        "Could not save your logging mode. Reverted to the last saved setting."
+      )
+    })
+  }
 
   if (dashboardStateQuery.isError) {
     return (
@@ -416,10 +463,10 @@ function DashboardStatsEditorLoaded({
                       </p>
                     </div>
 
-                    <div className="flex flex-wrap items-start justify-start gap-x-8 gap-y-4 xl:justify-end">
-                      <HeroToolbarGroup label="Session">
+                    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-[minmax(17rem,19rem)_auto_auto_auto] xl:items-start">
+                      <ToolbarGroup label="Session">
                         <AppSelect
-                          className="w-[296px] max-w-full"
+                          className="w-full min-w-0"
                           id="dashboard-session"
                           onValueChange={(value) =>
                             startTransition(() => setSelectedSessionId(value))
@@ -430,9 +477,9 @@ function DashboardStatsEditorLoaded({
                           }))}
                           value={selectedSessionId ?? ""}
                         />
-                      </HeroToolbarGroup>
+                      </ToolbarGroup>
 
-                      <HeroToolbarGroup label="Time range">
+                      <ToolbarGroup label="Time range">
                         <ToggleGroup
                           className="justify-start"
                           onValueChange={(value) => {
@@ -445,6 +492,7 @@ function DashboardStatsEditorLoaded({
                               startTransition(() => setSelectedTimeRange(value))
                             }
                           }}
+                          size="sm"
                           type="single"
                           value={selectedTimeRange}
                           variant="outline"
@@ -454,9 +502,34 @@ function DashboardStatsEditorLoaded({
                           <ToggleGroupItem value="30d">30d</ToggleGroupItem>
                           <ToggleGroupItem value="all">All</ToggleGroupItem>
                         </ToggleGroup>
-                      </HeroToolbarGroup>
+                      </ToolbarGroup>
 
-                      <HeroToolbarGroup label="Loss protection">
+                      <ToolbarGroup label="Logging mode">
+                        <ToggleGroup
+                          aria-label="Match logging mode"
+                          className="justify-start"
+                          onValueChange={handleLoggingModeChange}
+                          size="sm"
+                          type="single"
+                          value={effectiveLoggingMode}
+                          variant="outline"
+                        >
+                          <ToggleGroupItem
+                            disabled={updateLoggingModeMutation.isPending}
+                            value="comprehensive"
+                          >
+                            Comprehensive
+                          </ToggleGroupItem>
+                          <ToggleGroupItem
+                            disabled={updateLoggingModeMutation.isPending}
+                            value="basic"
+                          >
+                            Basic
+                          </ToggleGroupItem>
+                        </ToggleGroup>
+                      </ToolbarGroup>
+
+                      <ToolbarGroup label="Loss protection">
                         <span className="text-sm text-muted-foreground">
                           Show
                         </span>
@@ -469,7 +542,7 @@ function DashboardStatsEditorLoaded({
                             )
                           }
                         />
-                      </HeroToolbarGroup>
+                      </ToolbarGroup>
                     </div>
                   </div>
                 </div>
@@ -592,6 +665,7 @@ function DashboardStatsEditorLoaded({
         activeSessions={activeSessions}
         availableMaps={availableMapsQuery.data ?? []}
         availableModes={availableModesQuery.data ?? []}
+        loggingMode={effectiveLoggingMode}
         onOpenChange={setLogMatchOpen}
         onSessionSelected={(sessionId) =>
           startTransition(() => setSelectedSessionId(sessionId))

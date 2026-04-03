@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useEffectEvent, useMemo, useState } from "react"
 import { useShallow } from "zustand/react/shallow"
 import {
   IconCheck,
@@ -21,9 +21,20 @@ import {
   useLogDashboardMatch,
 } from "@/features/dashboard-stats/lib/dashboard-stats-client"
 import {
+  type DashboardMatchLoggingMode,
+  DASHBOARD_MATCH_LOGGING_MODE_LABELS,
+} from "@/features/dashboard-stats/lib/dashboard-stats-logging-mode"
+import {
+  getLogMatchStepDefinition,
+  getSignedSrChange,
+  getVisibleLogMatchSteps,
+  hasWholeNumber,
+  parseOptionalInteger,
+  parseRequiredInteger,
+  sanitizeSrChangeInput,
   type LogMatchStep,
-  useLogMatchWizardStore,
-} from "@/features/dashboard-stats/stores/log-match-wizard-store"
+} from "@/features/dashboard-stats/lib/dashboard-stats-log-match-flow"
+import { useLogMatchWizardStore } from "@/features/dashboard-stats/stores/log-match-wizard-store"
 import {
   Alert,
   AlertDescription,
@@ -71,10 +82,13 @@ import { Textarea } from "@workspace/ui/components/textarea"
 import { cn } from "@workspace/ui/lib/utils"
 import { toast } from "sonner"
 
+const NOTES_MAX_LENGTH = 280
+
 type DashboardStatsLogMatchSheetProps = {
   activeSessions: DashboardState["activeSessions"]
   availableMaps: DashboardAvailableMaps
   availableModes: DashboardAvailableModes
+  loggingMode: DashboardMatchLoggingMode
   onOpenChange: (open: boolean) => void
   onSessionSelected: (sessionId: string) => void
   open: boolean
@@ -102,126 +116,33 @@ type MapOption = {
   supportedModes: ModeOption[]
 }
 
-type StepDefinition = {
-  description: string
-  label: string
-  title: string
-}
-
 type StepProgressState = "available" | "complete" | "current" | "locked"
+type WizardFieldKey =
+  | "deaths"
+  | "defuses"
+  | "enemyScore"
+  | "hillTimeSeconds"
+  | "isSubmitting"
+  | "kills"
+  | "lossProtected"
+  | "mapId"
+  | "modeId"
+  | "notes"
+  | "outcome"
+  | "overloads"
+  | "plants"
+  | "selectedSessionId"
+  | "srChange"
+  | "step"
+  | "teamScore"
+type WizardFieldValue = boolean | LogMatchStep | string | null
+type WizardFieldChangeHandler = (
+  key: WizardFieldKey,
+  value: WizardFieldValue
+) => void
 
-const stepDefinitions: Record<LogMatchStep, StepDefinition> = {
-  map: {
-    description:
-      "Search only the maps that support the selected ranked mode for the current title.",
-    label: "Map",
-    title: "Choose The Map",
-  },
-  mode: {
-    description:
-      "Ranked mode is required and determines which maps are valid on the next step.",
-    label: "Mode",
-    title: "Pick The Ranked Mode",
-  },
-  notes: {
-    description:
-      "Keep notes short and plain text. They are only for match context.",
-    label: "Notes",
-    title: "Add Notes If They Matter",
-  },
-  outcome: {
-    description:
-      "Start with the match result so the rest of the log stays fast and predictable.",
-    label: "Outcome",
-    title: "Record The Match Result",
-  },
-  review: {
-    description:
-      "Check the captured values before the match updates the active session.",
-    label: "Review",
-    title: "Review & Submit",
-  },
-  session: {
-    description:
-      "Choose which active session this match belongs to before entering the result.",
-    label: "Session",
-    title: "Choose The Session",
-  },
-  srChange: {
-    description:
-      "Use the exact SR delta shown in game. Enter a whole number with the sign if needed.",
-    label: "SR",
-    title: "Record The SR Change",
-  },
-  stats: {
-    description:
-      "Optional stats stay lightweight so you can log fast and only add extra context when you need it.",
-    label: "Stats",
-    title: "Add Optional Stats",
-  },
-}
-
-const fullStepOrder: LogMatchStep[] = [
-  "session",
-  "outcome",
-  "mode",
-  "map",
-  "stats",
-  "srChange",
-  "notes",
-  "review",
-]
-
-function hasWholeNumber(value: string) {
-  const trimmedValue = value.trim()
-  return trimmedValue ? Number.isInteger(Number(trimmedValue)) : false
-}
-
-function sanitizeSrChangeInput(value: string) {
-  return value.replace(/\D/g, "")
-}
-
-function parseRequiredInteger(value: string, fieldLabel: string) {
-  const trimmedValue = value.trim()
-  if (!trimmedValue) {
-    throw new Error(`${fieldLabel} is required.`)
-  }
-  const parsedValue = Number(trimmedValue)
-  if (!Number.isInteger(parsedValue)) {
-    throw new Error(`${fieldLabel} must be a whole number.`)
-  }
-  return parsedValue
-}
-
-function getSignedSrChange(value: string, outcome: "loss" | "win" | null) {
-  const parsedValue = parseRequiredInteger(value, "SR change")
-  return outcome === "loss" ? -Math.abs(parsedValue) : Math.abs(parsedValue)
-}
-
-function parseOptionalInteger(value: string) {
-  const trimmedValue = value.trim()
-  if (!trimmedValue) {
-    return undefined
-  }
-  const parsedValue = Number(trimmedValue)
-  if (!Number.isInteger(parsedValue) || parsedValue < 0) {
-    throw new Error("Optional stat fields must be non-negative whole numbers.")
-  }
-  return parsedValue
-}
-
-function getSelectedModePresentation(mode: ModeOption | null) {
-  if (!mode) {
-    return { key: null, label: "Not set" }
-  }
-
-  return { key: mode.key.trim().toLowerCase(), label: mode.label }
-}
-
-function getVisibleStepOrder(hasMultipleSessions: boolean) {
-  return hasMultipleSessions
-    ? fullStepOrder
-    : fullStepOrder.filter((step) => step !== "session")
+function getSelectedModeKey(mode: ModeOption | null) {
+  return mode?.key.trim().toLowerCase() ?? null
 }
 
 function ChoiceCard({
@@ -237,7 +158,7 @@ function ChoiceCard({
 }) {
   return (
     <FieldLabel
-      className="cursor-pointer rounded-xl border-border/70 bg-muted/10 transition-colors hover:border-border/90"
+      className="cursor-pointer rounded-lg border border-border/70 bg-background transition-colors hover:border-border"
       htmlFor={id}
     >
       <Field className="items-start gap-3 p-4" orientation="horizontal">
@@ -261,7 +182,7 @@ function StepProgress({
   steps: LogMatchStep[]
 }) {
   return (
-    <ol className="no-scrollbar flex items-center gap-3 overflow-x-auto px-7 py-3.5">
+    <ol className="no-scrollbar flex items-center gap-3 overflow-x-auto px-6 py-3">
       {steps.map((step, index) => {
         const status = getStepStatus(step)
 
@@ -303,14 +224,14 @@ function StepProgress({
                   status === "locked" && "text-muted-foreground"
                 )}
               >
-                {stepDefinitions[step].label}
+                {getLogMatchStepDefinition(step, "comprehensive").label}
               </span>
             </button>
             {index < steps.length - 1 ? (
               <span
                 aria-hidden="true"
                 className={cn(
-                  "h-px w-7 bg-border/70",
+                  "h-px w-6 bg-border/70",
                   status === "complete" && "bg-foreground/35"
                 )}
               />
@@ -369,7 +290,10 @@ function MapCombobox({
           <IconChevronDown aria-hidden="true" data-icon="inline-end" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-[22rem] p-0">
+      <PopoverContent
+        align="start"
+        className="w-[var(--radix-popover-trigger-width)] min-w-[20rem] p-0"
+      >
         <Command>
           <CommandInput placeholder="Search maps…" />
           <CommandList>
@@ -403,10 +327,456 @@ function MapCombobox({
   )
 }
 
+function SessionStepPanel({
+  onSessionChange,
+  selectedSessionId,
+  sessions,
+}: {
+  onSessionChange: (value: string) => void
+  selectedSessionId: string | null
+  sessions: ActiveSessionOption[]
+}) {
+  return (
+    <FieldGroup className="max-w-2xl gap-6">
+      <Field>
+        <FieldLabel htmlFor="log-match-session">Active session</FieldLabel>
+        <AppSelect
+          className="w-full"
+          id="log-match-session"
+          onValueChange={onSessionChange}
+          options={sessions.map((session) => ({
+            label: `${session.usernameLabel ?? "Legacy session"} · ${session.titleLabel} Season ${session.season}`,
+            value: session.id,
+          }))}
+          placeholder="Select a session"
+          value={selectedSessionId}
+        />
+        <FieldDescription>
+          Matches stay permanently tied to the session and username you choose
+          here.
+        </FieldDescription>
+      </Field>
+    </FieldGroup>
+  )
+}
+
+function DetailsStepPanel({
+  filteredMaps,
+  mapId,
+  modeId,
+  modeMapCounts,
+  modes,
+  onFieldChange,
+  outcome,
+  selectedMode,
+  selectedSessionLabel,
+  srChange,
+}: {
+  filteredMaps: MapOption[]
+  mapId: string | null
+  modeId: string | null
+  modeMapCounts: Map<string, number>
+  modes: ModeOption[]
+  onFieldChange: WizardFieldChangeHandler
+  outcome: "loss" | "win" | null
+  selectedMode: ModeOption | null
+  selectedSessionLabel: string
+  srChange: string
+}) {
+  return (
+    <div className="grid gap-6">
+      <div className="rounded-lg border border-border/60 bg-muted/10 px-4 py-3">
+        <p className="text-sm text-muted-foreground">
+          Logging into{" "}
+          <span className="font-medium text-foreground">
+            {selectedSessionLabel}
+          </span>
+        </p>
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+        <div className="grid gap-6">
+          <FieldSet>
+            <FieldLegend>Select outcome</FieldLegend>
+            <RadioGroup
+              className="gap-3 sm:grid-cols-2"
+              onValueChange={(value) => {
+                if (value === "win" || value === "loss") {
+                  onFieldChange("outcome", value)
+                }
+              }}
+              value={outcome ?? undefined}
+            >
+              <ChoiceCard
+                description="Wins add SR automatically."
+                id="match-outcome-win"
+                title="Win"
+                value="win"
+              />
+              <ChoiceCard
+                description="Losses subtract SR automatically."
+                id="match-outcome-loss"
+                title="Loss"
+                value="loss"
+              />
+            </RadioGroup>
+          </FieldSet>
+
+          <FieldGroup className="max-w-sm">
+            <Field>
+              <FieldLabel htmlFor="match-sr-change">SR change</FieldLabel>
+              <Input
+                autoComplete="off"
+                id="match-sr-change"
+                inputMode="numeric"
+                name="match-sr-change"
+                onChange={(event) =>
+                  onFieldChange(
+                    "srChange",
+                    sanitizeSrChangeInput(event.target.value)
+                  )
+                }
+                pattern="[0-9]*"
+                placeholder={outcome === "loss" ? "24" : "32"}
+                value={srChange}
+              />
+              <FieldDescription>
+                Enter the exact in-game SR delta as a whole number.
+              </FieldDescription>
+            </Field>
+          </FieldGroup>
+        </div>
+
+        <div className="grid gap-6">
+          <FieldSet>
+            <FieldLegend>Ranked mode</FieldLegend>
+            <RadioGroup
+              className="gap-3 sm:grid-cols-2"
+              onValueChange={(value) => {
+                onFieldChange("modeId", value)
+                onFieldChange("mapId", null)
+              }}
+              value={modeId ?? undefined}
+            >
+              {modes.map((mode) => {
+                const supportedMapCount = modeMapCounts.get(mode.id) ?? 0
+
+                return (
+                  <ChoiceCard
+                    description={`${supportedMapCount} active map${supportedMapCount === 1 ? "" : "s"} available.`}
+                    id={`match-mode-${mode.id}`}
+                    key={mode.id}
+                    title={mode.label}
+                    value={mode.id}
+                  />
+                )
+              })}
+            </RadioGroup>
+            {modes.length === 0 ? (
+              <FieldDescription>
+                Staff still need to configure ranked modes for the current title
+                before matches can be logged.
+              </FieldDescription>
+            ) : null}
+          </FieldSet>
+
+          <FieldGroup className="max-w-xl">
+            <Field>
+              <FieldLabel htmlFor="match-map-combobox">Map</FieldLabel>
+              <MapCombobox
+                disabled={!modeId || filteredMaps.length === 0}
+                maps={filteredMaps}
+                onChange={(value) => onFieldChange("mapId", value)}
+                value={mapId}
+              />
+              <FieldDescription>
+                {selectedMode
+                  ? filteredMaps.length > 0
+                    ? `${filteredMaps.length} map${filteredMaps.length === 1 ? "" : "s"} support ${selectedMode.label}.`
+                    : `No active maps currently support ${selectedMode.label}.`
+                  : "Choose the mode first to unlock the valid map list."}
+              </FieldDescription>
+            </Field>
+          </FieldGroup>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function StatsStepPanel({
+  deaths,
+  defuses,
+  enemyScore,
+  hillTimeSeconds,
+  kills,
+  lossProtected,
+  onFieldChange,
+  overloads,
+  plants,
+  selectedModeKey,
+  teamScore,
+}: {
+  deaths: string
+  defuses: string
+  enemyScore: string
+  hillTimeSeconds: string
+  kills: string
+  lossProtected: boolean
+  onFieldChange: WizardFieldChangeHandler
+  overloads: string
+  plants: string
+  selectedModeKey: string | null
+  teamScore: string
+}) {
+  return (
+    <div className="grid gap-6">
+      <FieldGroup className="gap-4 sm:grid-cols-2">
+        <Field>
+          <FieldLabel htmlFor="match-kills">Kills</FieldLabel>
+          <Input
+            autoComplete="off"
+            id="match-kills"
+            inputMode="numeric"
+            name="match-kills"
+            onChange={(event) => onFieldChange("kills", event.target.value)}
+            placeholder="Optional…"
+            value={kills}
+          />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="match-deaths">Deaths</FieldLabel>
+          <Input
+            autoComplete="off"
+            id="match-deaths"
+            inputMode="numeric"
+            name="match-deaths"
+            onChange={(event) => onFieldChange("deaths", event.target.value)}
+            placeholder="Optional…"
+            value={deaths}
+          />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="match-team-score">Team score</FieldLabel>
+          <Input
+            autoComplete="off"
+            id="match-team-score"
+            inputMode="numeric"
+            name="match-team-score"
+            onChange={(event) => onFieldChange("teamScore", event.target.value)}
+            placeholder="Optional…"
+            value={teamScore}
+          />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="match-enemy-score">Enemy score</FieldLabel>
+          <Input
+            autoComplete="off"
+            id="match-enemy-score"
+            inputMode="numeric"
+            name="match-enemy-score"
+            onChange={(event) =>
+              onFieldChange("enemyScore", event.target.value)
+            }
+            placeholder="Optional…"
+            value={enemyScore}
+          />
+        </Field>
+      </FieldGroup>
+
+      {selectedModeKey ? <Separator /> : null}
+
+      {selectedModeKey === "hardpoint" ? (
+        <FieldGroup className="max-w-sm">
+          <Field>
+            <FieldLabel htmlFor="match-hill-time">
+              Hill time (seconds)
+            </FieldLabel>
+            <Input
+              autoComplete="off"
+              id="match-hill-time"
+              inputMode="numeric"
+              name="match-hill-time"
+              onChange={(event) =>
+                onFieldChange("hillTimeSeconds", event.target.value)
+              }
+              placeholder="Optional…"
+              value={hillTimeSeconds}
+            />
+          </Field>
+        </FieldGroup>
+      ) : null}
+
+      {selectedModeKey === "snd" ? (
+        <FieldGroup className="gap-4 sm:grid-cols-2">
+          <Field>
+            <FieldLabel htmlFor="match-plants">Plants</FieldLabel>
+            <Input
+              autoComplete="off"
+              id="match-plants"
+              inputMode="numeric"
+              name="match-plants"
+              onChange={(event) => onFieldChange("plants", event.target.value)}
+              placeholder="Optional…"
+              value={plants}
+            />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="match-defuses">Defuses</FieldLabel>
+            <Input
+              autoComplete="off"
+              id="match-defuses"
+              inputMode="numeric"
+              name="match-defuses"
+              onChange={(event) => onFieldChange("defuses", event.target.value)}
+              placeholder="Optional…"
+              value={defuses}
+            />
+          </Field>
+        </FieldGroup>
+      ) : null}
+
+      {selectedModeKey === "overload" ? (
+        <FieldGroup className="max-w-sm">
+          <Field>
+            <FieldLabel htmlFor="match-overloads">Overloads</FieldLabel>
+            <Input
+              autoComplete="off"
+              id="match-overloads"
+              inputMode="numeric"
+              name="match-overloads"
+              onChange={(event) =>
+                onFieldChange("overloads", event.target.value)
+              }
+              placeholder="Optional…"
+              value={overloads}
+            />
+          </Field>
+        </FieldGroup>
+      ) : null}
+
+      <Field
+        className="rounded-lg border border-border/60 bg-muted/10 p-4"
+        orientation="responsive"
+      >
+        <Switch
+          checked={lossProtected}
+          onCheckedChange={(checked) => onFieldChange("lossProtected", checked)}
+        />
+        <FieldContent>
+          <FieldTitle>Loss protected</FieldTitle>
+          <FieldDescription>
+            Leave this off unless the match explicitly used loss protection.
+          </FieldDescription>
+        </FieldContent>
+      </Field>
+    </div>
+  )
+}
+
+function ReviewStepPanel({
+  loggingMode,
+  lossProtected,
+  notes,
+  optionalStats,
+  outcome,
+  selectedMap,
+  selectedMode,
+  selectedSessionLabel,
+  srChange,
+}: {
+  loggingMode: DashboardMatchLoggingMode
+  lossProtected: boolean
+  notes: string
+  optionalStats: Array<{ label: string; value: string }>
+  outcome: "loss" | "win" | null
+  selectedMap: MapOption | null
+  selectedMode: ModeOption | null
+  selectedSessionLabel: string
+  srChange: string
+}) {
+  return (
+    <div
+      className={cn(
+        "grid gap-4",
+        loggingMode === "basic"
+          ? "max-w-3xl"
+          : "lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]"
+      )}
+    >
+      <div className="rounded-lg border border-border/60 bg-muted/10 p-5">
+        <dl className="grid gap-4">
+          <ReviewRow label="Session" value={selectedSessionLabel} />
+          <ReviewRow
+            label="Outcome"
+            value={
+              outcome === "win"
+                ? "Win"
+                : outcome === "loss"
+                  ? "Loss"
+                  : "Not set"
+            }
+          />
+          <ReviewRow label="SR change" value={srChange.trim() || "Not set"} />
+          <ReviewRow label="Mode" value={selectedMode?.label ?? "Not set"} />
+          <ReviewRow label="Map" value={selectedMap?.name ?? "Not set"} />
+          {loggingMode === "comprehensive" ? (
+            <>
+              <ReviewRow
+                label="Loss protected"
+                value={lossProtected ? "Yes" : "No"}
+              />
+              <ReviewRow
+                label="Notes"
+                value={notes.trim() || "No note added"}
+              />
+            </>
+          ) : null}
+        </dl>
+      </div>
+
+      {loggingMode === "comprehensive" ? (
+        <div className="rounded-lg border border-border/60 bg-muted/10 p-5">
+          <div className="grid gap-1">
+            <h4 className="text-sm font-semibold tracking-tight">
+              Optional stats
+            </h4>
+            <p className="text-sm text-muted-foreground">
+              Extra stats stay optional, but they’ll be saved with this match if
+              you added them.
+            </p>
+          </div>
+          <Separator className="my-4" />
+          {optionalStats.length > 0 || lossProtected ? (
+            <dl className="grid gap-4">
+              {optionalStats.map((item) => (
+                <ReviewRow
+                  key={item.label}
+                  label={item.label}
+                  value={item.value}
+                />
+              ))}
+              <ReviewRow
+                label="Loss protected"
+                value={lossProtected ? "Yes" : "No"}
+              />
+            </dl>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              No optional stats added for this match.
+            </p>
+          )}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 export function DashboardStatsLogMatchSheet({
   activeSessions,
   availableMaps,
   availableModes,
+  loggingMode,
   onOpenChange,
   onSessionSelected,
   open,
@@ -432,7 +802,7 @@ export function DashboardStatsLogMatchSheet({
     overloads,
     plants,
     reset,
-    selectedWizardSessionId,
+    selectedSessionId: selectedWizardSessionId,
     setField,
     srChange,
     step,
@@ -453,7 +823,7 @@ export function DashboardStatsLogMatchSheet({
       overloads: state.overloads,
       plants: state.plants,
       reset: state.reset,
-      selectedWizardSessionId: state.selectedSessionId,
+      selectedSessionId: state.selectedSessionId,
       setField: state.setField,
       srChange: state.srChange,
       step: state.step,
@@ -461,15 +831,27 @@ export function DashboardStatsLogMatchSheet({
     }))
   )
 
-  const hasMultipleSessions = sessions.length > 1
+  const defaultSessionId =
+    sessions.find((session) => session.id === selectedSessionId)?.id ??
+    (sessions.length === 1 ? (sessions[0]?.id ?? null) : null)
+  const resolvedSessionId = selectedWizardSessionId ?? defaultSessionId
+  const requiresSessionSelection =
+    resolvedSessionId === null && sessions.length > 1
   const visibleSteps = useMemo(
-    () => getVisibleStepOrder(hasMultipleSessions),
-    [hasMultipleSessions]
+    () =>
+      getVisibleLogMatchSteps({
+        loggingMode,
+        requiresSessionSelection,
+      }),
+    [loggingMode, requiresSessionSelection]
   )
   const currentStepIndex = visibleSteps.indexOf(step)
-  const currentStep = stepDefinitions[step]
+  const currentStep = getLogMatchStepDefinition(step, loggingMode)
   const selectedSession =
-    sessions.find((session) => session.id === selectedWizardSessionId) ?? null
+    sessions.find((session) => session.id === resolvedSessionId) ?? null
+  const selectedSessionLabel = selectedSession
+    ? `${selectedSession.usernameLabel ?? "Legacy session"} · ${selectedSession.titleLabel} Season ${selectedSession.season}`
+    : "No active session selected."
   const modesById = useMemo(
     () => new Map(modes.map((mode) => [mode.id, mode])),
     [modes]
@@ -480,7 +862,7 @@ export function DashboardStatsLogMatchSheet({
   )
   const selectedMode = modeId ? (modesById.get(modeId) ?? null) : null
   const selectedMap = mapId ? (mapsById.get(mapId) ?? null) : null
-  const selectedModePresentation = getSelectedModePresentation(selectedMode)
+  const selectedModeKey = getSelectedModeKey(selectedMode)
   const filteredMaps = useMemo(
     () =>
       modeId ? maps.filter((map) => map.supportedModeIds.includes(modeId)) : [],
@@ -527,46 +909,44 @@ export function DashboardStatsLogMatchSheet({
       teamScore,
     ]
   )
-  const hasSelectedSession =
-    !hasMultipleSessions || Boolean(selectedWizardSessionId)
-  const hasCoreSelections =
-    hasSelectedSession && Boolean(outcome) && Boolean(modeId) && Boolean(mapId)
+  const hasValidSessionTarget = Boolean(resolvedSessionId)
+  const hasCompleteDetails =
+    hasValidSessionTarget &&
+    Boolean(outcome) &&
+    hasWholeNumber(srChange) &&
+    Boolean(modeId) &&
+    Boolean(mapId)
   const hasOptionalStats = optionalStats.length > 0 || lossProtected
+
+  const updateField: WizardFieldChangeHandler = (key, value) => {
+    setErrorMessage(null)
+    setField(key, value)
+  }
+
   const stepStatusById = useMemo(() => {
     const statuses = new Map<LogMatchStep, StepProgressState>()
 
     const canOpenStep = (candidate: LogMatchStep) => {
       switch (candidate) {
         case "session":
-          return hasMultipleSessions
-        case "outcome":
-          return hasSelectedSession
-        case "mode":
-          return hasSelectedSession && Boolean(outcome)
-        case "map":
-          return hasSelectedSession && Boolean(outcome) && Boolean(modeId)
+          return requiresSessionSelection
+        case "details":
+          return !requiresSessionSelection || hasValidSessionTarget
         case "stats":
-        case "srChange":
         case "notes":
         case "review":
-          return hasCoreSelections
+          return hasCompleteDetails
       }
     }
 
     const isStepComplete = (candidate: LogMatchStep) => {
       switch (candidate) {
         case "session":
-          return Boolean(selectedWizardSessionId)
-        case "outcome":
-          return Boolean(outcome)
-        case "mode":
-          return Boolean(modeId)
-        case "map":
-          return Boolean(mapId)
+          return hasValidSessionTarget
+        case "details":
+          return hasCompleteDetails
         case "stats":
           return hasOptionalStats
-        case "srChange":
-          return hasWholeNumber(srChange)
         case "notes":
           return notes.trim().length > 0
         case "review":
@@ -576,17 +956,14 @@ export function DashboardStatsLogMatchSheet({
 
     for (const candidate of visibleSteps) {
       const canOpen = canOpenStep(candidate)
-
       if (!canOpen) {
         statuses.set(candidate, "locked")
         continue
       }
-
       if (candidate === step) {
         statuses.set(candidate, "current")
         continue
       }
-
       statuses.set(
         candidate,
         isStepComplete(candidate) ? "complete" : "available"
@@ -595,16 +972,11 @@ export function DashboardStatsLogMatchSheet({
 
     return statuses
   }, [
-    hasCoreSelections,
-    hasMultipleSessions,
+    hasCompleteDetails,
     hasOptionalStats,
-    hasSelectedSession,
-    mapId,
-    modeId,
+    hasValidSessionTarget,
     notes,
-    outcome,
-    selectedWizardSessionId,
-    srChange,
+    requiresSessionSelection,
     step,
     visibleSteps,
   ])
@@ -616,23 +988,21 @@ export function DashboardStatsLogMatchSheet({
       }),
     [stepStatusById, visibleSteps]
   )
-
-  function updateField<TKey extends Parameters<typeof setField>[0]>(
-    key: TKey,
-    value: Parameters<typeof setField>[1]
-  ) {
-    setErrorMessage(null)
-    setField(key, value as never)
-  }
+  const currentStepNumber = currentStepIndex >= 0 ? currentStepIndex + 1 : 1
 
   function setWizardStep(nextStep: LogMatchStep) {
     if (stepStatusById.get(nextStep) === "locked") {
       return
     }
-
     setErrorMessage(null)
     setField("step", nextStep)
   }
+
+  const resetWizard = useEffectEvent(() => {
+    reset(defaultSessionId)
+    setField("step", visibleSteps[0] ?? "details")
+    setErrorMessage(null)
+  })
 
   useEffect(() => {
     if (!open) {
@@ -641,19 +1011,12 @@ export function DashboardStatsLogMatchSheet({
       return
     }
 
-    const initialSessionId =
-      sessions.find((session) => session.id === selectedSessionId)?.id ??
-      sessions[0]?.id ??
-      null
-
-    reset(initialSessionId)
-    setField("step", hasMultipleSessions ? "session" : "outcome")
-    setErrorMessage(null)
-  }, [hasMultipleSessions, open, reset, selectedSessionId, sessions, setField])
+    resetWizard()
+  }, [open, reset, resetWizard])
 
   useEffect(() => {
     if (!visibleSteps.includes(step)) {
-      setField("step", visibleSteps[0] ?? "outcome")
+      setField("step", visibleSteps[0] ?? "details")
     }
   }, [setField, step, visibleSteps])
 
@@ -663,16 +1026,128 @@ export function DashboardStatsLogMatchSheet({
     }
 
     const fallbackStep =
-      unlockedSteps[unlockedSteps.length - 1] ?? visibleSteps[0] ?? "outcome"
+      unlockedSteps[unlockedSteps.length - 1] ?? visibleSteps[0] ?? "details"
 
     setField("step", fallbackStep)
   }, [setField, step, stepStatusById, unlockedSteps, visibleSteps])
+
+  useEffect(() => {
+    if (modeId && !modesById.has(modeId)) {
+      setField("modeId", null)
+      setField("mapId", null)
+    }
+  }, [modeId, modesById, setField])
 
   useEffect(() => {
     if (mapId && !filteredMaps.some((map) => map.id === mapId)) {
       setField("mapId", null)
     }
   }, [filteredMaps, mapId, setField])
+
+  useEffect(() => {
+    if (!open || !selectedWizardSessionId) {
+      return
+    }
+
+    if (sessions.some((session) => session.id === selectedWizardSessionId)) {
+      return
+    }
+
+    updateField("selectedSessionId", defaultSessionId)
+    if (defaultSessionId === null && sessions.length > 1) {
+      setField("step", "session")
+      setErrorMessage(
+        "The previous session is no longer active. Choose another one."
+      )
+      return
+    }
+
+    setErrorMessage(
+      "The previous session is no longer active. Logging will use the current dashboard session."
+    )
+  }, [defaultSessionId, open, selectedWizardSessionId, sessions, setField])
+
+  function validateSessionSelection() {
+    if (!resolvedSessionId) {
+      throw new Error(
+        sessions.length === 0
+          ? "There are no active sessions available for logging."
+          : "Choose the active session you want to log into."
+      )
+    }
+  }
+
+  function validateDetailsStep() {
+    validateSessionSelection()
+
+    if (!outcome) {
+      throw new Error("Select whether the match was a win or a loss.")
+    }
+
+    parseRequiredInteger(srChange, "SR change")
+
+    if (!modeId) {
+      throw new Error("Ranked mode is required.")
+    }
+
+    if (!selectedMode) {
+      throw new Error("Choose an active ranked mode for the current title.")
+    }
+
+    if (filteredMaps.length === 0) {
+      throw new Error(`No active maps currently support ${selectedMode.label}.`)
+    }
+
+    if (!mapId) {
+      throw new Error("Match map is required.")
+    }
+
+    if (!filteredMaps.some((map) => map.id === mapId)) {
+      throw new Error(`Choose a map that supports ${selectedMode.label}.`)
+    }
+  }
+
+  function validateStatsStep() {
+    parseOptionalInteger(kills)
+    parseOptionalInteger(deaths)
+    parseOptionalInteger(teamScore)
+    parseOptionalInteger(enemyScore)
+    parseOptionalInteger(hillTimeSeconds)
+    parseOptionalInteger(plants)
+    parseOptionalInteger(defuses)
+    parseOptionalInteger(overloads)
+  }
+
+  function validateNotesStep() {
+    if (notes.trim().length > NOTES_MAX_LENGTH) {
+      throw new Error(`Notes must stay within ${NOTES_MAX_LENGTH} characters.`)
+    }
+  }
+
+  function validateCurrentStep() {
+    switch (step) {
+      case "session":
+        validateSessionSelection()
+        return
+      case "details":
+        validateDetailsStep()
+        return
+      case "stats":
+        validateDetailsStep()
+        validateStatsStep()
+        return
+      case "notes":
+        validateDetailsStep()
+        validateStatsStep()
+        validateNotesStep()
+        return
+      case "review":
+        validateDetailsStep()
+        validateStatsStep()
+        validateNotesStep()
+        return
+    }
+  }
 
   function goToPreviousStep() {
     const previousStep = visibleSteps[Math.max(currentStepIndex - 1, 0)]
@@ -681,60 +1156,14 @@ export function DashboardStatsLogMatchSheet({
     }
   }
 
-  function goToNextStep() {
-    const nextStep =
-      visibleSteps[Math.min(currentStepIndex + 1, visibleSteps.length - 1)]
-    if (nextStep) {
-      setWizardStep(nextStep)
-    }
-  }
-
-  function validateCurrentStep() {
-    if (step === "session" && !selectedWizardSessionId) {
-      throw new Error("Choose the active session you want to log into.")
-    }
-
-    if (step === "outcome" && !outcome) {
-      throw new Error("Select whether the match was a win or a loss.")
-    }
-
-    if (step === "srChange") {
-      parseRequiredInteger(srChange, "SR change")
-    }
-
-    if (step === "mode" && !modeId) {
-      throw new Error("Ranked mode is required.")
-    }
-
-    if (step === "map") {
-      if (!modeId) {
-        throw new Error("Choose the ranked mode before selecting a map.")
-      }
-      if (!mapId) {
-        throw new Error("Match map is required.")
-      }
-    }
-
-    if (step === "stats") {
-      parseOptionalInteger(kills)
-      parseOptionalInteger(deaths)
-      parseOptionalInteger(teamScore)
-      parseOptionalInteger(enemyScore)
-      parseOptionalInteger(hillTimeSeconds)
-      parseOptionalInteger(plants)
-      parseOptionalInteger(defuses)
-      parseOptionalInteger(overloads)
-    }
-
-    if (step === "notes" && notes.trim().length > 280) {
-      throw new Error("Notes must stay within 280 characters.")
-    }
-  }
-
   function handleContinue() {
     try {
       validateCurrentStep()
-      goToNextStep()
+      const nextStep =
+        visibleSteps[Math.min(currentStepIndex + 1, visibleSteps.length - 1)]
+      if (nextStep) {
+        setWizardStep(nextStep)
+      }
     } catch (error) {
       setErrorMessage(
         error instanceof Error
@@ -746,16 +1175,10 @@ export function DashboardStatsLogMatchSheet({
 
   async function handleSubmit() {
     try {
-      validateCurrentStep()
-      if (!selectedWizardSessionId) {
-        throw new Error("Choose the active session you want to log into.")
-      }
-      if (!modeId) {
-        throw new Error("Mode is required.")
-      }
-      if (!mapId) {
-        throw new Error("Map is required.")
-      }
+      validateSessionSelection()
+      validateDetailsStep()
+      validateStatsStep()
+      validateNotesStep()
 
       setErrorMessage(null)
       setField("isSubmitting", true)
@@ -772,7 +1195,7 @@ export function DashboardStatsLogMatchSheet({
         outcome: outcome ?? "loss",
         overloads: parseOptionalInteger(overloads),
         plants: parseOptionalInteger(plants),
-        sessionId: selectedWizardSessionId as Id<"sessions">,
+        sessionId: resolvedSessionId as Id<"sessions">,
         srChange: getSignedSrChange(srChange, outcome),
         teamScore: parseOptionalInteger(teamScore),
       })
@@ -794,360 +1217,129 @@ export function DashboardStatsLogMatchSheet({
     }
   }
 
+  const nextStep = visibleSteps[currentStepIndex + 1]
   const primaryActionLabel =
     step === "review"
       ? isSubmitting
         ? "Logging…"
-        : "Log Match"
-      : step === "notes"
+        : "Log match"
+      : nextStep === "review"
         ? "Review"
         : "Continue"
-  const selectedSessionLabel = selectedSession
-    ? `${selectedSession.usernameLabel ?? "Legacy session"} · ${selectedSession.titleLabel} Season ${selectedSession.season}`
-    : "Select a session to start logging."
-  const selectedModeKey = selectedModePresentation.key
-  const currentStepNumber = currentStepIndex >= 0 ? currentStepIndex + 1 : 1
   const isPrimaryActionDisabled =
     logMatchMutation.isPending ||
     isSubmitting ||
-    (step === "mode" && modes.length === 0) ||
-    (step === "map" && filteredMaps.length === 0)
+    sessions.length === 0 ||
+    (step === "details" && modes.length === 0) ||
+    (step === "details" && Boolean(modeId) && filteredMaps.length === 0)
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
-      <DialogContent className="flex max-h-[min(88vh,54rem)] flex-col overflow-hidden p-0 sm:max-w-[min(92vw,72rem)]">
-        <DialogHeader className="border-b border-border/60 px-7 py-5 pr-14">
+      <DialogContent
+        className={cn(
+          "flex max-h-[min(88vh,54rem)] flex-col overflow-hidden p-0",
+          loggingMode === "basic"
+            ? "sm:max-w-[min(92vw,58rem)]"
+            : "sm:max-w-[min(92vw,72rem)]"
+        )}
+      >
+        <DialogHeader className="border-b border-border/60 px-6 py-5 pr-14">
           <div className="flex items-start justify-between gap-4">
-            <div className="grid gap-1">
+            <div className="grid gap-1.5">
               <DialogTitle>Log Ranked Match</DialogTitle>
               <DialogDescription>
-                Work through the core result first, then add optional context
-                before you submit the match to the current session.
+                {loggingMode === "basic"
+                  ? "Basic keeps everyday logging to outcome, SR, mode, and map."
+                  : "Comprehensive keeps the essentials first, then adds optional stats and notes before review."}
               </DialogDescription>
             </div>
-            <div className="shrink-0 text-sm text-muted-foreground tabular-nums">
-              Step {currentStepNumber} of {visibleSteps.length}
+            <div className="shrink-0 text-right text-sm text-muted-foreground tabular-nums">
+              <div>{DASHBOARD_MATCH_LOGGING_MODE_LABELS[loggingMode]}</div>
+              <div>
+                Step {currentStepNumber} of {visibleSteps.length}
+              </div>
             </div>
           </div>
         </DialogHeader>
 
-        <div className="border-b border-border/60 bg-muted/20">
-          <StepProgress
-            getStepStatus={(candidate) =>
-              stepStatusById.get(candidate) ?? "locked"
-            }
-            onStepSelect={setWizardStep}
-            steps={visibleSteps}
-          />
-        </div>
+        {visibleSteps.length > 1 ? (
+          <div className="border-b border-border/60 bg-muted/20">
+            <StepProgress
+              getStepStatus={(candidate) =>
+                stepStatusById.get(candidate) ?? "locked"
+              }
+              onStepSelect={setWizardStep}
+              steps={visibleSteps}
+            />
+          </div>
+        ) : null}
 
         <div className="min-h-0 flex-1 overflow-y-auto">
-          <div className="grid gap-6 px-7 py-6">
+          <div className="grid gap-6 px-6 py-6">
             <div className="grid gap-1">
-              <h3 className="text-lg font-semibold tracking-tight">
+              <h3 className="text-base font-semibold tracking-tight">
                 {currentStep.title}
               </h3>
-              <p className="max-w-2xl text-sm text-muted-foreground">
+              <p className="max-w-3xl text-sm text-muted-foreground">
                 {currentStep.description}
               </p>
             </div>
 
             {errorMessage ? (
               <Alert aria-live="polite" variant="destructive">
-                <AlertTitle>Fix This Step</AlertTitle>
+                <AlertTitle>Check this step</AlertTitle>
                 <AlertDescription>{errorMessage}</AlertDescription>
               </Alert>
             ) : null}
 
+            {sessions.length === 0 ? (
+              <Alert variant="destructive">
+                <AlertTitle>No active session available</AlertTitle>
+                <AlertDescription>
+                  Start a current ranked session before trying to log a match.
+                </AlertDescription>
+              </Alert>
+            ) : null}
+
             {step === "session" ? (
-              <FieldGroup className="gap-6">
-                <Field>
-                  <FieldLabel htmlFor="log-match-session">
-                    Active session
-                  </FieldLabel>
-                  <AppSelect
-                    className="w-full"
-                    id="log-match-session"
-                    onValueChange={(value) =>
-                      updateField("selectedSessionId", value)
-                    }
-                    options={sessions.map((session) => ({
-                      label: `${session.usernameLabel ?? "Legacy session"} · ${session.titleLabel} Season ${session.season}`,
-                      value: session.id,
-                    }))}
-                    placeholder="Select a session"
-                    value={selectedWizardSessionId}
-                  />
-                  <FieldDescription>
-                    Matches stay permanently tied to the session and username
-                    you choose here.
-                  </FieldDescription>
-                </Field>
-              </FieldGroup>
+              <SessionStepPanel
+                onSessionChange={(value) =>
+                  updateField("selectedSessionId", value)
+                }
+                selectedSessionId={resolvedSessionId}
+                sessions={sessions}
+              />
             ) : null}
 
-            {step === "outcome" ? (
-              <FieldSet>
-                <FieldLegend>Select outcome</FieldLegend>
-                <RadioGroup
-                  className="gap-3 sm:grid-cols-2"
-                  onValueChange={(value) => {
-                    if (value === "win" || value === "loss") {
-                      updateField("outcome", value)
-                    }
-                  }}
-                  value={outcome ?? undefined}
-                >
-                  <ChoiceCard
-                    description="Use win when the session should record a victory and add SR normally."
-                    id="match-outcome-win"
-                    title="Win"
-                    value="win"
-                  />
-                  <ChoiceCard
-                    description="Use loss when the match counted as a defeat, even if loss protection applied."
-                    id="match-outcome-loss"
-                    title="Loss"
-                    value="loss"
-                  />
-                </RadioGroup>
-              </FieldSet>
-            ) : null}
-
-            {step === "srChange" ? (
-              <FieldGroup className="max-w-md">
-                <Field>
-                  <FieldLabel htmlFor="match-sr-change">SR change</FieldLabel>
-                  <Input
-                    autoComplete="off"
-                    id="match-sr-change"
-                    inputMode="numeric"
-                    name="match-sr-change"
-                    pattern="[0-9]*"
-                    onChange={(event) =>
-                      updateField(
-                        "srChange",
-                        sanitizeSrChangeInput(event.target.value)
-                      )
-                    }
-                    placeholder={outcome === "loss" ? "24" : "32"}
-                    value={srChange}
-                  />
-                  <FieldDescription>
-                    Enter the exact in-game SR delta as a whole number.
-                  </FieldDescription>
-                </Field>
-              </FieldGroup>
-            ) : null}
-
-            {step === "mode" ? (
-              <FieldSet>
-                <FieldLegend>Ranked mode</FieldLegend>
-                <RadioGroup
-                  className="gap-3 sm:grid-cols-2"
-                  onValueChange={(value) => {
-                    updateField("modeId", value)
-                    updateField("mapId", null)
-                  }}
-                  value={modeId ?? undefined}
-                >
-                  {modes.map((mode) => {
-                    const supportedMapCount = modeMapCounts.get(mode.id) ?? 0
-
-                    return (
-                      <ChoiceCard
-                        description={`${supportedMapCount} active map${supportedMapCount === 1 ? "" : "s"} available for this mode.`}
-                        id={`match-mode-${mode.id}`}
-                        key={mode.id}
-                        title={mode.label}
-                        value={mode.id}
-                      />
-                    )
-                  })}
-                </RadioGroup>
-                {modes.length === 0 ? (
-                  <FieldDescription>
-                    Staff still need to configure ranked modes for the current
-                    title before matches can be logged.
-                  </FieldDescription>
-                ) : null}
-              </FieldSet>
-            ) : null}
-
-            {step === "map" ? (
-              <FieldGroup className="max-w-xl gap-4">
-                <Field>
-                  <FieldLabel htmlFor="match-map-combobox">Map</FieldLabel>
-                  <MapCombobox
-                    disabled={!modeId || filteredMaps.length === 0}
-                    maps={filteredMaps}
-                    onChange={(value) => updateField("mapId", value)}
-                    value={mapId}
-                  />
-                  <FieldDescription>
-                    {selectedMode
-                      ? filteredMaps.length > 0
-                        ? `${filteredMaps.length} map${filteredMaps.length === 1 ? "" : "s"} support ${selectedMode.label}.`
-                        : `No active maps currently support ${selectedMode.label}.`
-                      : "Choose the mode first to unlock the valid map list."}
-                  </FieldDescription>
-                </Field>
-              </FieldGroup>
+            {step === "details" ? (
+              <DetailsStepPanel
+                filteredMaps={filteredMaps}
+                mapId={mapId}
+                modeId={modeId}
+                modeMapCounts={modeMapCounts}
+                modes={modes}
+                onFieldChange={updateField}
+                outcome={outcome}
+                selectedMode={selectedMode}
+                selectedSessionLabel={selectedSessionLabel}
+                srChange={srChange}
+              />
             ) : null}
 
             {step === "stats" ? (
-              <div className="grid gap-6">
-                <FieldGroup className="gap-4 sm:grid-cols-2">
-                  <Field>
-                    <FieldLabel htmlFor="match-kills">Kills</FieldLabel>
-                    <Input
-                      autoComplete="off"
-                      id="match-kills"
-                      inputMode="numeric"
-                      onChange={(event) =>
-                        updateField("kills", event.target.value)
-                      }
-                      placeholder="Optional"
-                      value={kills}
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="match-deaths">Deaths</FieldLabel>
-                    <Input
-                      autoComplete="off"
-                      id="match-deaths"
-                      inputMode="numeric"
-                      onChange={(event) =>
-                        updateField("deaths", event.target.value)
-                      }
-                      placeholder="Optional"
-                      value={deaths}
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="match-team-score">
-                      Team score
-                    </FieldLabel>
-                    <Input
-                      autoComplete="off"
-                      id="match-team-score"
-                      inputMode="numeric"
-                      onChange={(event) =>
-                        updateField("teamScore", event.target.value)
-                      }
-                      placeholder="Optional"
-                      value={teamScore}
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="match-enemy-score">
-                      Enemy score
-                    </FieldLabel>
-                    <Input
-                      autoComplete="off"
-                      id="match-enemy-score"
-                      inputMode="numeric"
-                      onChange={(event) =>
-                        updateField("enemyScore", event.target.value)
-                      }
-                      placeholder="Optional"
-                      value={enemyScore}
-                    />
-                  </Field>
-                </FieldGroup>
-
-                {selectedModeKey ? <Separator /> : null}
-
-                {selectedModeKey === "hardpoint" ? (
-                  <FieldGroup className="max-w-sm">
-                    <Field>
-                      <FieldLabel htmlFor="match-hill-time">
-                        Hill time (seconds)
-                      </FieldLabel>
-                      <Input
-                        autoComplete="off"
-                        id="match-hill-time"
-                        inputMode="numeric"
-                        onChange={(event) =>
-                          updateField("hillTimeSeconds", event.target.value)
-                        }
-                        placeholder="Optional"
-                        value={hillTimeSeconds}
-                      />
-                    </Field>
-                  </FieldGroup>
-                ) : null}
-
-                {selectedModeKey === "snd" ? (
-                  <FieldGroup className="gap-4 sm:grid-cols-2">
-                    <Field>
-                      <FieldLabel htmlFor="match-plants">Plants</FieldLabel>
-                      <Input
-                        autoComplete="off"
-                        id="match-plants"
-                        inputMode="numeric"
-                        onChange={(event) =>
-                          updateField("plants", event.target.value)
-                        }
-                        placeholder="Optional"
-                        value={plants}
-                      />
-                    </Field>
-                    <Field>
-                      <FieldLabel htmlFor="match-defuses">Defuses</FieldLabel>
-                      <Input
-                        autoComplete="off"
-                        id="match-defuses"
-                        inputMode="numeric"
-                        onChange={(event) =>
-                          updateField("defuses", event.target.value)
-                        }
-                        placeholder="Optional"
-                        value={defuses}
-                      />
-                    </Field>
-                  </FieldGroup>
-                ) : null}
-
-                {selectedModeKey === "overload" ? (
-                  <FieldGroup className="max-w-sm">
-                    <Field>
-                      <FieldLabel htmlFor="match-overloads">
-                        Overloads
-                      </FieldLabel>
-                      <Input
-                        autoComplete="off"
-                        id="match-overloads"
-                        inputMode="numeric"
-                        onChange={(event) =>
-                          updateField("overloads", event.target.value)
-                        }
-                        placeholder="Optional"
-                        value={overloads}
-                      />
-                    </Field>
-                  </FieldGroup>
-                ) : null}
-
-                <Field
-                  className="rounded-xl border border-border/60 bg-muted/10 p-4"
-                  orientation="responsive"
-                >
-                  <Switch
-                    checked={lossProtected}
-                    onCheckedChange={(checked) =>
-                      updateField("lossProtected", checked)
-                    }
-                  />
-                  <FieldContent>
-                    <FieldTitle>Loss protected</FieldTitle>
-                    <FieldDescription>
-                      Leave this off unless the match explicitly used loss
-                      protection.
-                    </FieldDescription>
-                  </FieldContent>
-                </Field>
-              </div>
+              <StatsStepPanel
+                deaths={deaths}
+                defuses={defuses}
+                enemyScore={enemyScore}
+                hillTimeSeconds={hillTimeSeconds}
+                kills={kills}
+                lossProtected={lossProtected}
+                onFieldChange={updateField}
+                overloads={overloads}
+                plants={plants}
+                selectedModeKey={selectedModeKey}
+                teamScore={teamScore}
+              />
             ) : null}
 
             {step === "notes" ? (
@@ -1157,91 +1349,39 @@ export function DashboardStatsLogMatchSheet({
                   <Textarea
                     autoComplete="off"
                     id="match-notes"
-                    maxLength={280}
+                    maxLength={NOTES_MAX_LENGTH}
+                    name="match-notes"
                     onChange={(event) =>
                       updateField("notes", event.target.value)
                     }
-                    placeholder="Optional short note about the match."
+                    placeholder="Optional short note about the match…"
                     rows={5}
                     value={notes}
                   />
                   <FieldDescription>
-                    {notes.length}/280 characters
+                    {notes.length}/{NOTES_MAX_LENGTH} characters
                   </FieldDescription>
                 </Field>
               </FieldGroup>
             ) : null}
 
             {step === "review" ? (
-              <div className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
-                <div className="rounded-xl border border-border/60 bg-muted/10 p-5">
-                  <dl className="grid gap-4">
-                    <ReviewRow label="Session" value={selectedSessionLabel} />
-                    <ReviewRow
-                      label="Outcome"
-                      value={
-                        outcome === "win"
-                          ? "Win"
-                          : outcome === "loss"
-                            ? "Loss"
-                            : "Not set"
-                      }
-                    />
-                    <ReviewRow
-                      label="Mode"
-                      value={selectedMode?.label ?? "Not set"}
-                    />
-                    <ReviewRow
-                      label="Map"
-                      value={selectedMap?.name ?? "Not set"}
-                    />
-                    <ReviewRow
-                      label="Loss protected"
-                      value={lossProtected ? "Yes" : "No"}
-                    />
-                    <ReviewRow
-                      label="SR change"
-                      value={srChange.trim() || "Not set"}
-                    />
-                    <ReviewRow
-                      label="Notes"
-                      value={notes.trim() || "No note added"}
-                    />
-                  </dl>
-                </div>
-
-                <div className="rounded-xl border border-border/60 bg-muted/10 p-5">
-                  <div className="grid gap-1">
-                    <h4 className="text-sm font-semibold tracking-tight">
-                      Optional stats
-                    </h4>
-                    <p className="text-sm text-muted-foreground">
-                      Extra stats are optional and stay lightweight by design.
-                    </p>
-                  </div>
-                  <Separator className="my-4" />
-                  {optionalStats.length > 0 ? (
-                    <dl className="grid gap-4">
-                      {optionalStats.map((item) => (
-                        <ReviewRow
-                          key={item.label}
-                          label={item.label}
-                          value={item.value}
-                        />
-                      ))}
-                    </dl>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">
-                      No optional stats added for this match.
-                    </p>
-                  )}
-                </div>
-              </div>
+              <ReviewStepPanel
+                loggingMode={loggingMode}
+                lossProtected={lossProtected}
+                notes={notes}
+                optionalStats={optionalStats}
+                outcome={outcome}
+                selectedMap={selectedMap}
+                selectedMode={selectedMode}
+                selectedSessionLabel={selectedSessionLabel}
+                srChange={srChange}
+              />
             ) : null}
           </div>
         </div>
 
-        <div className="border-t border-border/60 bg-background px-7 py-3.5">
+        <div className="border-t border-border/60 bg-background px-6 py-3.5">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-muted-foreground">
               {selectedSessionLabel}
@@ -1258,11 +1398,11 @@ export function DashboardStatsLogMatchSheet({
 
               {currentStepIndex > 0 ? (
                 <Button
-                  onClick={goToPreviousStep}
+                  onClick={() => goToPreviousStep()}
                   type="button"
                   variant="outline"
                 >
-                  <IconChevronLeft aria-hidden="true" className="size-4" />
+                  <IconChevronLeft aria-hidden="true" />
                   Back
                 </Button>
               ) : null}
@@ -1284,7 +1424,7 @@ export function DashboardStatsLogMatchSheet({
                   type="button"
                 >
                   {primaryActionLabel}
-                  <IconChevronRight aria-hidden="true" className="size-4" />
+                  <IconChevronRight aria-hidden="true" />
                 </Button>
               )}
             </div>

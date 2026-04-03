@@ -1210,6 +1210,7 @@ export type DataModel = {
       discordId: string;
       name: string;
       plan: "free" | "premium" | "creator";
+      preferredMatchLoggingMode?: "basic" | "comprehensive";
       role?: "user" | "admin" | "staff" | "super_admin";
       status: "active" | "disabled";
       updatedAt: number;
@@ -1228,6 +1229,7 @@ export type DataModel = {
       | "discordId"
       | "name"
       | "plan"
+      | "preferredMatchLoggingMode"
       | "role"
       | "status"
       | "updatedAt";

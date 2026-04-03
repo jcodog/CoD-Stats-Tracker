@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
 import { api } from "@workspace/backend/convex/_generated/api"
 import type { Id } from "@workspace/backend/convex/_generated/dataModel"
+import type { DashboardMatchLoggingMode } from "@/features/dashboard-stats/lib/dashboard-stats-logging-mode"
 
 export class DashboardStatsClientError extends Error {
   data: unknown
@@ -85,7 +86,26 @@ function asSessionId(sessionId: string | null) {
 
 async function queryCurrentDashboardState(convex: ConvexReactClient) {
   try {
-    return await convex.query(api.queries.stats.dashboard.getCurrentDashboardState, {})
+    return await convex.query(
+      api.queries.stats.dashboard.getCurrentDashboardState,
+      {}
+    )
+  } catch (error) {
+    throw toDashboardStatsClientError(error)
+  }
+}
+
+async function mutatePreferredMatchLoggingMode(args: {
+  convex: ConvexReactClient
+  preferredMatchLoggingMode: DashboardMatchLoggingMode
+}) {
+  try {
+    return await args.convex.mutation(
+      api.mutations.stats.dashboard.updatePreferredMatchLoggingMode,
+      {
+        preferredMatchLoggingMode: args.preferredMatchLoggingMode,
+      }
+    )
   } catch (error) {
     throw toDashboardStatsClientError(error)
   }
@@ -104,7 +124,10 @@ async function queryAvailableUsernames(convex: ConvexReactClient) {
 
 async function queryAvailableMaps(convex: ConvexReactClient) {
   try {
-    return await convex.query(api.queries.stats.dashboard.getAvailableMapsForCurrentTitle, {})
+    return await convex.query(
+      api.queries.stats.dashboard.getAvailableMapsForCurrentTitle,
+      {}
+    )
   } catch (error) {
     throw toDashboardStatsClientError(error)
   }
@@ -112,7 +135,10 @@ async function queryAvailableMaps(convex: ConvexReactClient) {
 
 async function queryAvailableModes(convex: ConvexReactClient) {
   try {
-    return await convex.query(api.queries.stats.dashboard.getAvailableModesForCurrentTitle, {})
+    return await convex.query(
+      api.queries.stats.dashboard.getAvailableModesForCurrentTitle,
+      {}
+    )
   } catch (error) {
     throw toDashboardStatsClientError(error)
   }
@@ -124,10 +150,13 @@ async function querySessionOverview(args: {
   sessionId: Id<"sessions">
 }) {
   try {
-    return await args.convex.query(api.queries.stats.dashboard.getSessionOverview, {
-      includeLossProtected: args.includeLossProtected,
-      sessionId: args.sessionId,
-    })
+    return await args.convex.query(
+      api.queries.stats.dashboard.getSessionOverview,
+      {
+        includeLossProtected: args.includeLossProtected,
+        sessionId: args.sessionId,
+      }
+    )
   } catch (error) {
     throw toDashboardStatsClientError(error)
   }
@@ -139,10 +168,13 @@ async function querySessionSrTimeline(args: {
   sessionId: Id<"sessions">
 }) {
   try {
-    return await args.convex.query(api.queries.stats.dashboard.getSessionSrTimeline, {
-      includeLossProtected: args.includeLossProtected,
-      sessionId: args.sessionId,
-    })
+    return await args.convex.query(
+      api.queries.stats.dashboard.getSessionSrTimeline,
+      {
+        includeLossProtected: args.includeLossProtected,
+        sessionId: args.sessionId,
+      }
+    )
   } catch (error) {
     throw toDashboardStatsClientError(error)
   }
@@ -172,10 +204,13 @@ async function querySessionDailyPerformance(args: {
   sessionId: Id<"sessions">
 }) {
   try {
-    return await args.convex.query(api.queries.stats.dashboard.getSessionDailyPerformance, {
-      includeLossProtected: args.includeLossProtected,
-      sessionId: args.sessionId,
-    })
+    return await args.convex.query(
+      api.queries.stats.dashboard.getSessionDailyPerformance,
+      {
+        includeLossProtected: args.includeLossProtected,
+        sessionId: args.sessionId,
+      }
+    )
   } catch (error) {
     throw toDashboardStatsClientError(error)
   }
@@ -187,23 +222,36 @@ async function queryRecentSessionMatches(args: {
   sessionId: Id<"sessions">
 }) {
   try {
-    return await args.convex.query(api.queries.stats.dashboard.getRecentSessionMatches, {
-      includeLossProtected: args.includeLossProtected,
-      sessionId: args.sessionId,
-    })
+    return await args.convex.query(
+      api.queries.stats.dashboard.getRecentSessionMatches,
+      {
+        includeLossProtected: args.includeLossProtected,
+        sessionId: args.sessionId,
+      }
+    )
   } catch (error) {
     throw toDashboardStatsClientError(error)
   }
 }
 
-export type DashboardState = Awaited<ReturnType<typeof queryCurrentDashboardState>>
-export type DashboardAvailableMaps = Awaited<ReturnType<typeof queryAvailableMaps>>
-export type DashboardAvailableModes = Awaited<ReturnType<typeof queryAvailableModes>>
+export type DashboardState = Awaited<
+  ReturnType<typeof queryCurrentDashboardState>
+>
+export type DashboardAvailableMaps = Awaited<
+  ReturnType<typeof queryAvailableMaps>
+>
+export type DashboardAvailableModes = Awaited<
+  ReturnType<typeof queryAvailableModes>
+>
 export type DashboardAvailableUsernames = Awaited<
   ReturnType<typeof queryAvailableUsernames>
 >
-export type DashboardSessionOverview = Awaited<ReturnType<typeof querySessionOverview>>
-export type DashboardSessionSrTimeline = Awaited<ReturnType<typeof querySessionSrTimeline>>
+export type DashboardSessionOverview = Awaited<
+  ReturnType<typeof querySessionOverview>
+>
+export type DashboardSessionSrTimeline = Awaited<
+  ReturnType<typeof querySessionSrTimeline>
+>
 export type DashboardSessionWinLossBreakdown = Awaited<
   ReturnType<typeof querySessionWinLossBreakdown>
 >
@@ -214,9 +262,7 @@ export type DashboardRecentSessionMatches = Awaited<
   ReturnType<typeof queryRecentSessionMatches>
 >
 
-export function useDashboardStatsState(
-  initialData: DashboardState
-) {
+export function useDashboardStatsState(initialData: DashboardState) {
   const convex = useConvex()
   const { isAuthenticated, isLoading } = useConvexAuth()
 
@@ -312,7 +358,10 @@ export function useDashboardSessionSrTimeline(
         sessionId: resolvedSessionId,
       })
     },
-    queryKey: dashboardStatsQueryKeys.srTimeline(sessionId, includeLossProtected),
+    queryKey: dashboardStatsQueryKeys.srTimeline(
+      sessionId,
+      includeLossProtected
+    ),
   })
 }
 
@@ -415,13 +464,68 @@ export function useCreateDashboardSession() {
       startSr: number
     }) => {
       try {
-        return await convex.mutation(api.mutations.stats.dashboard.createSession, input)
+        return await convex.mutation(
+          api.mutations.stats.dashboard.createSession,
+          input
+        )
       } catch (error) {
         throw toDashboardStatsClientError(error)
       }
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: dashboardStatsQueryKeys.all })
+      await queryClient.invalidateQueries({
+        queryKey: dashboardStatsQueryKeys.all,
+      })
+    },
+  })
+}
+
+export function useUpdateDashboardPreferredMatchLoggingMode() {
+  const convex = useConvex()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (
+      preferredMatchLoggingMode: DashboardMatchLoggingMode
+    ) => {
+      return await mutatePreferredMatchLoggingMode({
+        convex,
+        preferredMatchLoggingMode,
+      })
+    },
+    onMutate: async (preferredMatchLoggingMode) => {
+      await queryClient.cancelQueries({
+        queryKey: dashboardStatsQueryKeys.state,
+      })
+
+      const previousDashboardState = queryClient.getQueryData<DashboardState>(
+        dashboardStatsQueryKeys.state
+      )
+
+      if (previousDashboardState) {
+        queryClient.setQueryData<DashboardState>(
+          dashboardStatsQueryKeys.state,
+          {
+            ...previousDashboardState,
+            preferredMatchLoggingMode,
+          }
+        )
+      }
+
+      return { previousDashboardState }
+    },
+    onError: (_error, _preferredMatchLoggingMode, context) => {
+      if (context?.previousDashboardState) {
+        queryClient.setQueryData<DashboardState>(
+          dashboardStatsQueryKeys.state,
+          context.previousDashboardState
+        )
+      }
+    },
+    onSettled: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: dashboardStatsQueryKeys.state,
+      })
     },
   })
 }
@@ -449,13 +553,18 @@ export function useLogDashboardMatch() {
       teamScore?: number | null
     }) => {
       try {
-        return await convex.mutation(api.mutations.stats.dashboard.logMatch, input)
+        return await convex.mutation(
+          api.mutations.stats.dashboard.logMatch,
+          input
+        )
       } catch (error) {
         throw toDashboardStatsClientError(error)
       }
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: dashboardStatsQueryKeys.all })
+      await queryClient.invalidateQueries({
+        queryKey: dashboardStatsQueryKeys.all,
+      })
     },
   })
 }

@@ -47,6 +47,7 @@ export const upsertFromClerk = internalMutation({
         discordId,
         name,
         plan: "free",
+        preferredMatchLoggingMode: "comprehensive",
         status: "active",
         role: desiredRole,
         cleoDashLinked: false,
