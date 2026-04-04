@@ -61,11 +61,11 @@ export function PolicyIntro({
         <h1 className="max-w-[44rem] text-4xl leading-[0.98] font-semibold tracking-tight text-balance sm:text-5xl">
           {title}
         </h1>
-        <p className="max-w-[42rem] text-base leading-8 text-pretty text-foreground/78 sm:text-lg">
+        <p className="max-w-[42rem] text-base leading-8 text-pretty text-foreground/86 sm:text-lg">
           {description}
         </p>
       </div>
-      <p className="max-w-[42rem] text-sm leading-7 text-pretty text-foreground/70 sm:text-base">
+      <p className="max-w-[42rem] text-sm leading-7 text-pretty text-foreground/80 sm:text-base">
         {summary}
       </p>
     </div>
@@ -88,12 +88,12 @@ export function PolicyDirectory({
     >
       <div className="border-b border-border/70 pb-3">
         <div className="text-sm font-medium text-foreground">Policy index</div>
-        <div className="mt-1 max-w-[18rem] text-sm leading-7 text-foreground/68">
+        <div className="mt-1 max-w-[18rem] text-sm leading-7 text-foreground/78">
           Public service and billing policies for CodStats.
         </div>
       </div>
 
-      <div className="border-y border-border/70">
+      <div className="border-b border-border/70">
         {POLICY_DOCUMENTS.map((policy) => {
           const isActive = policy.slug === currentSlug
 
@@ -102,7 +102,7 @@ export function PolicyDirectory({
               className={
                 isActive
                   ? "block border-b border-border/70 py-3 text-sm font-medium text-foreground last:border-b-0"
-                  : "block border-b border-border/70 py-3 text-sm text-foreground/68 transition-colors hover:text-foreground last:border-b-0"
+                  : "block border-b border-border/70 py-3 text-sm text-foreground/78 transition-colors hover:text-foreground last:border-b-0"
               }
               href={`/policies/${policy.slug}`}
               key={policy.slug}
@@ -121,31 +121,26 @@ export function PolicyIndexList({ viewport }: { viewport: PolicyViewport }) {
 
   return (
     <section className={isMobileView ? "grid gap-4" : "grid gap-4"}>
-      <div className="border-y border-border/70">
+      <div className="border-b border-border/70">
         {POLICY_DOCUMENTS.map((policy) => (
-          <article
+          <Link
             className={
               isMobileView
-                ? "grid gap-2 border-b border-border/70 py-5 last:border-b-0"
-                : "grid gap-2 border-b border-border/70 py-6 last:border-b-0"
+                ? "group block border-b border-border/70 py-5 transition-colors last:border-b-0 focus-visible:rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/80"
+                : "group block border-b border-border/70 py-6 transition-colors last:border-b-0 focus-visible:rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/80"
             }
+            href={`/policies/${policy.slug}`}
             key={policy.slug}
           >
-            <div className="flex flex-wrap items-baseline justify-between gap-3">
-              <h2 className="text-xl font-semibold tracking-tight">
+            <article className="grid gap-2">
+              <h2 className="text-xl font-semibold tracking-tight text-foreground transition-colors group-hover:text-primary group-focus-visible:text-primary">
                 {policy.title}
               </h2>
-              <Link
-                href={`/policies/${policy.slug}`}
-                className="text-sm font-medium text-primary transition-colors hover:text-foreground"
-              >
-                Read policy
-              </Link>
-            </div>
-              <p className="max-w-[42rem] text-sm leading-7 text-foreground/72">
+              <p className="max-w-[42rem] text-sm leading-7 text-foreground/80">
                 {policy.description}
               </p>
             </article>
+          </Link>
         ))}
       </div>
     </section>
@@ -158,7 +153,7 @@ export function PolicyMeta({
   lastUpdated: string
 }) {
   return (
-    <div className="border-b border-border/70 pb-4 text-sm text-foreground/62">
+    <div className="border-b border-border/70 pb-4 text-sm text-foreground/72">
       Last updated {lastUpdated}
     </div>
   )
@@ -176,7 +171,7 @@ export function PolicyBody({
   return (
     <div className={isMobileView ? "grid gap-6" : "grid gap-6"}>
       <PolicyMeta lastUpdated={policy.lastUpdated} />
-      <div className="border-y border-border/70">
+      <div className="border-b border-border/70">
         {policy.sections.map((section) => (
           <section
             className={
@@ -191,14 +186,14 @@ export function PolicyBody({
             </h2>
             {section.paragraphs?.map((paragraph) => (
               <p
-                className="max-w-[46rem] text-sm leading-7 text-foreground/78 sm:text-base"
+                className="max-w-[46rem] text-sm leading-7 text-foreground/84 sm:text-base"
                 key={paragraph}
               >
                 {paragraph}
               </p>
             ))}
             {section.bullets ? (
-              <ul className="grid max-w-[46rem] gap-2 text-sm leading-7 text-foreground/76 sm:text-base">
+              <ul className="grid max-w-[46rem] gap-2 text-sm leading-7 text-foreground/82 sm:text-base">
                 {section.bullets.map((bullet) => (
                   <li key={bullet} className="flex gap-3">
                     <span className="mt-2 block h-1.5 w-1.5 shrink-0 rounded-full bg-primary/80" />

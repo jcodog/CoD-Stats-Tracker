@@ -81,12 +81,13 @@ export function LandingBackground() {
       aria-hidden="true"
       className="pointer-events-none fixed inset-0 -z-10 overflow-hidden"
     >
-      <div className="absolute inset-0 bg-background/84" />
+      <div className="absolute inset-0 bg-background/90" />
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,hsl(var(--background)/0.12),transparent_42%)]" />
       <div className="absolute -top-32 left-1/2 h-96 w-96 -translate-x-[130%] rounded-full bg-sky-200/34 blur-3xl" />
       <div className="absolute -top-16 left-1/2 h-112 w-md -translate-x-[10%] rounded-full bg-emerald-200/26 blur-3xl" />
       <div className="absolute top-64 -right-40 h-80 w-80 rounded-full bg-blue-100/38 blur-3xl" />
-      <div className="absolute inset-x-0 bottom-0 h-64 bg-linear-to-t from-background via-background/92 to-transparent" />
+      <div className="absolute inset-0 bg-linear-to-br from-background/24 via-transparent to-background/16" />
+      <div className="absolute inset-x-0 bottom-0 h-64 bg-linear-to-t from-background via-background/96 to-transparent" />
     </div>
   )
 }
@@ -124,7 +125,7 @@ export function LandingHeader({ viewport }: { viewport: LandingViewport }) {
           <Link
             href="/pricing"
             className={cn(
-              "rounded-md px-2 py-1 text-sm font-medium text-foreground/74 transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+              "rounded-md px-2 py-1 text-sm font-medium text-foreground/82 transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
               isMobileView && "px-1.5 text-[0.8125rem]"
             )}
           >
@@ -162,7 +163,7 @@ export function LandingHeroSection({
         >
           Track Every Match. Learn Faster. Win More.
         </h1>
-        <p className="max-w-[34rem] text-base leading-8 text-pretty text-foreground/78 sm:text-lg">
+        <p className="max-w-[34rem] text-base leading-8 text-pretty text-foreground/84 sm:text-lg">
           CodStats turns ranked sessions into a clear performance view so you
           can spot patterns and improve faster.
         </p>
@@ -199,7 +200,7 @@ export function LandingSnapshotSection({
         <h2 className="text-lg font-semibold tracking-tight sm:text-xl">
           Live ranked activity
         </h2>
-        <p className="max-w-[30rem] text-sm leading-7 text-foreground/72">
+        <p className="max-w-[30rem] text-sm leading-7 text-foreground/80">
           CodStats keeps ranked match totals current and account-linked, then
           expands that same data into the full dashboard once you sign in.
         </p>
@@ -231,7 +232,7 @@ export function LandingFeatureList({
         <h2 className="text-2xl font-semibold tracking-tight text-balance sm:text-3xl">
           What You Can Review Inside the Dashboard
         </h2>
-        <p className="max-w-[21rem] text-sm leading-7 text-pretty text-foreground/72 sm:max-w-[23rem] sm:text-base">
+        <p className="max-w-[21rem] text-sm leading-7 text-pretty text-foreground/80 sm:max-w-[23rem] sm:text-base">
           CodStats is built around ranked-session review, with the core panels
           focused on the data you actually need after a run.
         </p>
@@ -251,7 +252,7 @@ export function LandingFeatureList({
               <h3 className="text-lg font-semibold tracking-tight">
                 {feature.title}
               </h3>
-              <p className="max-w-[44rem] text-sm leading-7 wrap-break-word text-foreground/72">
+              <p className="max-w-[44rem] text-sm leading-7 wrap-break-word text-foreground/80">
                 {feature.description}
               </p>
             </div>
@@ -281,7 +282,7 @@ export function LandingPlatformList({
         <h2 className="text-2xl font-semibold tracking-tight text-balance sm:text-3xl">
           What CodStats Keeps in Sync
         </h2>
-        <p className="max-w-[21rem] text-sm leading-7 text-pretty text-foreground/72 sm:max-w-[23rem] sm:text-base">
+        <p className="max-w-[21rem] text-sm leading-7 text-pretty text-foreground/80 sm:max-w-[23rem] sm:text-base">
           The landing page and dashboard are reading from the same product
           system, with account-specific tracking layered in after sign in.
         </p>
@@ -301,7 +302,7 @@ export function LandingPlatformList({
               <h3 className="text-lg font-semibold tracking-tight">
                 {item.title}
               </h3>
-              <p className="max-w-[44rem] text-sm leading-7 wrap-break-word text-foreground/72">
+              <p className="max-w-[44rem] text-sm leading-7 wrap-break-word text-foreground/80">
                 {item.detail}
               </p>
             </div>
@@ -331,7 +332,7 @@ export function LandingCreatorToolsSection({
         <h2 className="text-2xl font-semibold tracking-tight text-balance sm:text-3xl">
           Creator Tools Available Now
         </h2>
-        <p className="max-w-[21rem] text-sm leading-7 text-pretty text-foreground/72 sm:max-w-[23rem] sm:text-base">
+        <p className="max-w-[21rem] text-sm leading-7 text-pretty text-foreground/80 sm:max-w-[23rem] sm:text-base">
           CodStats already supports ranked creators directly, because community
           queues and creator-led lobbies are a real part of how this scene
           plays.
@@ -352,7 +353,7 @@ export function LandingCreatorToolsSection({
               <h3 className="text-lg font-semibold tracking-tight">
                 {item.title}
               </h3>
-              <p className="max-w-[44rem] text-sm leading-7 wrap-break-word text-foreground/72">
+              <p className="max-w-[44rem] text-sm leading-7 wrap-break-word text-foreground/80">
                 {item.detail}
               </p>
             </div>

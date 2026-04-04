@@ -79,10 +79,6 @@ export function LandingLiveStats({
           label: "Total Sessions",
           value: "Loading…",
         },
-        {
-          label: "Latest Match Sync",
-          value: "Loading…",
-        },
       ]
     : [
         {
@@ -105,10 +101,10 @@ export function LandingLiveStats({
 
   return (
     <div className="mt-5 space-y-4">
-      <p className="text-sm leading-7 text-foreground/72">
+      <p className="text-sm leading-7 text-foreground/80">
         {isPersonalized
           ? `Live for ${user?.firstName ?? "you"}: your ranked matches are being indexed against this account and fed straight into the dashboard views you use after each session.`
-          : "This panel shows the public CodStats pulse. Sign in to swap it to your own indexed matches, tracked sessions, and latest sync timing."}
+          : "This panel shows the public CodStats pulse. Sign in to swap it to your own indexed matches and tracked sessions."}
       </p>
 
       <div
@@ -120,7 +116,7 @@ export function LandingLiveStats({
             key={item.label}
             className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 py-3"
           >
-            <span className="text-sm text-foreground/66">{item.label}</span>
+            <span className="text-sm text-foreground/74">{item.label}</span>
             <span className="text-sm font-semibold text-foreground tabular-nums">
               {item.value}
             </span>
@@ -128,7 +124,7 @@ export function LandingLiveStats({
         ))}
       </div>
 
-      <p className="text-sm leading-7 text-foreground/68">
+      <p className="text-sm leading-7 text-foreground/78">
         {showUnavailable
           ? "Live metrics are temporarily unavailable."
           : showPendingState

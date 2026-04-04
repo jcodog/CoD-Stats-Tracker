@@ -52,29 +52,31 @@ function buildPricingFeatureRows(plans: PricingCatalogPlan[]) {
     .sort((left, right) => left.category.localeCompare(right.category))
 }
 
+function getPlanFeatureGridClassName(featureCount: number, isMobileView: boolean) {
+  if (isMobileView) {
+    return "grid gap-3"
+  }
+
+  if (featureCount <= 2) {
+    return "grid gap-3 md:grid-cols-2"
+  }
+
+  if (featureCount === 4) {
+    return "grid gap-3 md:grid-cols-2"
+  }
+
+  return "grid gap-3 md:grid-cols-2 xl:grid-cols-3"
+}
+
 export function PricingIntro() {
   return (
-    <section className="grid gap-6 border-b border-border/70 pb-8 lg:grid-cols-[minmax(0,1fr)_20rem] lg:gap-10">
-      <div className="grid gap-3">
-        <h1 className="max-w-[44rem] text-4xl leading-[0.96] font-semibold tracking-tight text-balance sm:text-5xl">
-          Pricing
-        </h1>
-        <p className="max-w-[40rem] text-base leading-8 text-pretty text-foreground/78 sm:text-lg">
-          Live CodStats plan and feature pricing from the current billing
-          catalog. This page is read-only and does not start checkout.
-        </p>
-      </div>
-
-      <div className="grid gap-3 text-sm leading-7 text-foreground/68">
-        <div className="border-b border-border/70 pb-3">
-          All public plan prices here come from the live billing catalog and are
-          shown in GBP when a paid interval is available.
-        </div>
-        <div className="border-b border-border/70 pb-3">
-          Subscription management and billing changes stay inside the signed-in
-          billing flow.
-        </div>
-      </div>
+    <section className="grid gap-3 border-b border-border/70 pb-8">
+      <h1 className="max-w-[44rem] text-4xl leading-[0.96] font-semibold tracking-tight text-balance sm:text-5xl">
+        Pricing
+      </h1>
+      <p className="max-w-[40rem] text-base leading-8 text-pretty text-foreground/86 sm:text-lg">
+        Choose the CodStats plan that fits how you play and track ranked.
+      </p>
     </section>
   )
 }
@@ -94,7 +96,7 @@ export function PricingPlanList({
         <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
           Plans in the current catalog
         </h2>
-        <p className="max-w-[40rem] text-sm leading-7 text-foreground/72 sm:text-base">
+        <p className="max-w-[40rem] text-sm leading-7 text-foreground/80 sm:text-base">
           No public plans are active right now. Pricing will appear here as soon
           as the current billing catalog has an active public plan.
         </p>
@@ -103,20 +105,13 @@ export function PricingPlanList({
   }
 
   return (
-    <section
-      className={
-        isMobileView
-          ? "grid gap-4"
-          : "grid gap-8 lg:grid-cols-[minmax(0,18rem)_minmax(0,1fr)] lg:items-start"
-      }
-    >
+    <section className="grid gap-5">
       <div className="grid gap-2">
         <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
           Plans in the current catalog
         </h2>
-        <p className="max-w-[22rem] text-sm leading-7 text-foreground/72 sm:max-w-[24rem] sm:text-base">
-          Each plan below reads from the same billing source of truth used by
-          the product.
+        <p className="max-w-[42rem] text-sm leading-7 text-foreground/80 sm:text-base">
+          Current public plans, pricing, and included features for CodStats.
         </p>
       </div>
 
@@ -134,45 +129,42 @@ export function PricingPlanList({
               }
             >
               <div className="grid gap-2">
-                <div className="flex flex-wrap items-baseline justify-between gap-3">
-                  <h3 className="text-xl font-semibold tracking-tight">
-                    {plan.name}
-                  </h3>
-                  <span className="text-xs text-muted-foreground">
-                    {plan.planType === "free" ? "Free plan" : "Paid plan"}
-                  </span>
-                </div>
-                <p className="max-w-[42rem] text-sm leading-7 text-foreground/72 sm:text-base">
+                <h3 className="text-xl font-semibold tracking-tight">
+                  {plan.name}
+                </h3>
+                <p className="max-w-[42rem] text-sm leading-7 text-foreground/80 sm:text-base">
                   {plan.description}
                 </p>
               </div>
 
               <div className="grid gap-1 border-t border-border/70 pt-3 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-6">
-                <div className="text-sm text-foreground/64">Monthly</div>
+                <div className="text-sm text-foreground/74">Monthly</div>
                 <div className="text-2xl font-semibold tracking-tight">
                   {plan.pricing.month
                     ? getPlanPriceLabel(plan.pricing.month)
                     : "Not offered"}
                 </div>
-                <div className="text-sm text-foreground/64">
+                <div className="text-sm text-foreground/74">
                   {plan.pricing.month ? "Billed monthly" : "No monthly price"}
                 </div>
               </div>
 
               <div className="grid gap-1 border-t border-border/70 pt-3 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-6">
-                <div className="text-sm text-foreground/64">Yearly</div>
+                <div className="text-sm text-foreground/74">Yearly</div>
                 <div className="text-2xl font-semibold tracking-tight">
                   {plan.pricing.year
                     ? getPlanPriceLabel(plan.pricing.year)
                     : "Not offered"}
                 </div>
-                <div className="text-sm text-foreground/64">
+                <div className="text-sm text-foreground/74">
                   {plan.pricing.year ? "Billed yearly" : "No yearly price"}
                 </div>
               </div>
             </div>
 
-            <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <div
+              className={`mt-5 ${getPlanFeatureGridClassName(plan.features.length, isMobileView)}`}
+            >
               {plan.features.map((feature) => (
                 <div
                   className="flex gap-3 border-t border-border/60 pt-3"
@@ -184,7 +176,7 @@ export function PricingPlanList({
                   />
                   <div className="grid gap-1">
                     <div className="text-sm font-medium">{feature.name}</div>
-                    <p className="text-sm leading-7 text-foreground/70">
+                    <p className="text-sm leading-7 text-foreground/78">
                       {feature.description}
                     </p>
                   </div>
@@ -212,7 +204,7 @@ export function PricingComparisonDesktop({
         <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
           Feature comparison
         </h2>
-        <p className="max-w-[22rem] text-sm leading-7 text-foreground/72 sm:max-w-[24rem] sm:text-base">
+        <p className="max-w-[22rem] text-sm leading-7 text-foreground/80 sm:max-w-[24rem] sm:text-base">
           A direct plan-by-plan view of what is currently included.
         </p>
       </div>
@@ -223,15 +215,12 @@ export function PricingComparisonDesktop({
             className="grid border-b border-border/70 py-4"
             style={{ gridTemplateColumns }}
           >
-            <div className="pr-6 text-sm font-medium text-foreground/66">
+            <div className="pr-6 text-sm font-medium text-foreground/74">
               Included feature
             </div>
             {catalog.plans.map((plan) => (
               <div className="px-4 text-left" key={plan.planKey}>
                 <div className="text-sm font-medium">{plan.name}</div>
-                <div className="mt-1 text-xs text-foreground/64">
-                  {plan.planType === "free" ? "Free" : "Paid"}
-                </div>
               </div>
             ))}
           </div>
@@ -249,7 +238,7 @@ export function PricingComparisonDesktop({
                 >
                   <div className="pr-6">
                     <div className="text-sm font-medium">{feature.name}</div>
-                    <div className="mt-1 text-sm leading-7 text-foreground/70">
+                    <div className="mt-1 text-sm leading-7 text-foreground/78">
                       {feature.description}
                     </div>
                   </div>
@@ -278,7 +267,7 @@ export function PricingComparisonDesktop({
                               aria-hidden="true"
                               className="size-4 shrink-0 text-muted-foreground"
                             />
-                            <span className="text-foreground/62">Not included</span>
+                            <span className="text-foreground/72">Not included</span>
                           </>
                         )}
                       </div>
@@ -305,7 +294,7 @@ export function PricingComparisonMobile({
     <section className="grid gap-4">
       <div className="grid gap-2">
         <h2 className="text-2xl font-semibold tracking-tight">Feature comparison</h2>
-        <p className="text-sm leading-7 text-foreground/72">
+        <p className="text-sm leading-7 text-foreground/80">
           A stacked mobile view of what each plan includes.
         </p>
       </div>
@@ -325,7 +314,7 @@ export function PricingComparisonMobile({
                 >
                   <div className="grid gap-1">
                     <div className="text-sm font-medium">{feature.name}</div>
-                    <p className="text-sm leading-7 text-foreground/70">
+                    <p className="text-sm leading-7 text-foreground/78">
                       {feature.description}
                     </p>
                   </div>
