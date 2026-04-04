@@ -1,13 +1,15 @@
 "use client"
 
-import { IconShieldLock } from "@tabler/icons-react"
+import { IconCreditCard, IconShieldLock } from "@tabler/icons-react"
 
 import { UserButton } from "@clerk/nextjs"
 
 export function AppUserButton({
   showStaffConsoleLink = false,
+  checkoutEnabled = false,
 }: {
   showStaffConsoleLink?: boolean
+  checkoutEnabled?: boolean
 }) {
   return (
     <UserButton
@@ -29,6 +31,19 @@ export function AppUserButton({
             label="Staff console"
             labelIcon={
               <IconShieldLock
+                aria-hidden="true"
+                data-icon="inline-start"
+                className="size-4"
+              />
+            }
+          />
+        ) : null}
+        {checkoutEnabled ? (
+          <UserButton.Link
+            href="/settings/billing"
+            label="Billing"
+            labelIcon={
+              <IconCreditCard
                 aria-hidden="true"
                 data-icon="inline-start"
                 className="size-4"

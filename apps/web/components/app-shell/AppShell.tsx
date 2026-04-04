@@ -45,15 +45,6 @@ export async function AppShell({ children }: AppShellProps) {
           },
         ]
       : []),
-    ...(checkoutEnabled
-      ? [
-          {
-            href: "/settings/billing",
-            label: "Billing",
-            matchPaths: ["/settings/billing", "/checkout"],
-          },
-        ]
-      : []),
   ]
 
   return (
@@ -85,7 +76,10 @@ export async function AppShell({ children }: AppShellProps) {
           </div>
 
           <div className="hidden items-center gap-2 md:flex">
-            <AppUserButton showStaffConsoleLink={showStaffConsoleLink} />
+            <AppUserButton
+              showStaffConsoleLink={showStaffConsoleLink}
+              checkoutEnabled={checkoutEnabled}
+            />
             <ThemeToggle />
           </div>
 

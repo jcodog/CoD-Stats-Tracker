@@ -48,10 +48,50 @@ function ChartContainer({
 }) {
   const uniqueId = React.useId()
   const chartId = `chart-${id || uniqueId.replace(/:/g, "")}`
+  const containerRef = React.useRef<HTMLDivElement | null>(null)
+  const [containerSize, setContainerSize] = React.useState({
+    height: 0,
+    width: 0,
+  })
+  const isChartReady = containerSize.width > 0 && containerSize.height > 0
+
+  React.useEffect(() => {
+    const node = containerRef.current
+    if (!node) {
+      return
+    }
+
+    const updateSize = (width: number, height: number) => {
+      setContainerSize((current) =>
+        current.width === width && current.height === height
+          ? current
+          : { height, width }
+      )
+    }
+
+    const initialRect = node.getBoundingClientRect()
+    updateSize(initialRect.width, initialRect.height)
+
+    const resizeObserver = new ResizeObserver((entries) => {
+      const entry = entries[0]
+      if (!entry) {
+        return
+      }
+
+      updateSize(entry.contentRect.width, entry.contentRect.height)
+    })
+
+    resizeObserver.observe(node)
+
+    return () => {
+      resizeObserver.disconnect()
+    }
+  }, [])
 
   return (
     <ChartContext.Provider value={{ config }}>
       <div
+        ref={containerRef}
         data-slot="chart"
         data-chart={chartId}
         className={cn(
@@ -61,15 +101,17 @@ function ChartContainer({
         {...props}
       >
         <ChartStyle id={chartId} config={config} />
-        <RechartsPrimitive.ResponsiveContainer
-          debounce={16}
-          height="100%"
-          minHeight={0}
-          minWidth={0}
-          width="100%"
-        >
-          {children}
-        </RechartsPrimitive.ResponsiveContainer>
+        {isChartReady ? (
+          <RechartsPrimitive.ResponsiveContainer
+            debounce={16}
+            height="100%"
+            minHeight={0}
+            minWidth={0}
+            width="100%"
+          >
+            {children}
+          </RechartsPrimitive.ResponsiveContainer>
+        ) : null}
       </div>
     </ChartContext.Provider>
   )
