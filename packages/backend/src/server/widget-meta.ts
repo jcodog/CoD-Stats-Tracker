@@ -48,7 +48,7 @@ function parseIssuerUrl(rawIssuer: string) {
     issuerUrl = new URL(normalizedIssuer);
   } catch {
     throw new Error(
-      `Invalid OAUTH_ISSUER: "${rawIssuer}". Use an absolute URL like https://stats.cleoai.cloud.`,
+      `Invalid OAUTH_ISSUER: "${rawIssuer}". Use an absolute URL like https://codstats.tech.`,
     );
   }
 
@@ -69,7 +69,7 @@ export function resolveWidgetUiMeta(): WidgetUiMeta {
   if (!rawIssuer) {
     if (env.NODE_ENV === "production") {
       throw new Error(
-        "Missing required env var OAUTH_ISSUER. Set OAUTH_ISSUER to your canonical app URL (for example https://stats.cleoai.cloud) so ChatGPT widget ui.domain and ui.csp metadata can be validated.",
+        "Missing required env var OAUTH_ISSUER. Set OAUTH_ISSUER to your canonical app URL (for example https://codstats.tech) so ChatGPT widget ui.domain and ui.csp metadata can be validated.",
       );
     }
 
