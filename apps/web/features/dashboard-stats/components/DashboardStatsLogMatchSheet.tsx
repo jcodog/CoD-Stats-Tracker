@@ -161,7 +161,10 @@ function StepProgress({
   const currentStepIndex = steps.indexOf(currentStep)
 
   return (
-    <ol className="flex items-start gap-1.5 overflow-hidden px-4 py-3 sm:gap-3 sm:overflow-x-auto sm:px-7 sm:py-3.5">
+    <ol
+      className="grid items-start gap-x-2 gap-y-2 px-4 py-3 sm:flex sm:gap-3 sm:overflow-x-auto sm:px-7 sm:py-3.5"
+      style={{ gridTemplateColumns: `repeat(${steps.length}, minmax(0, 1fr))` }}
+    >
       {steps.map((step, index) => {
         const status =
           index < currentStepIndex
@@ -171,11 +174,11 @@ function StepProgress({
               : "upcoming"
 
         return (
-          <li className="flex min-w-0 flex-1 items-start gap-1.5 sm:min-w-max sm:flex-none sm:items-center sm:gap-3" key={step}>
+          <li className="relative min-w-0 sm:flex sm:min-w-max sm:items-center sm:gap-3" key={step}>
             <button
               aria-current={status === "current" ? "step" : undefined}
               className={cn(
-                "flex min-w-0 flex-1 flex-col items-center gap-1.5 rounded-md px-1 py-1 text-center transition-colors focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:flex-row sm:gap-3 sm:text-left",
+                "flex w-full min-w-0 flex-col items-center gap-2 rounded-md px-1.5 py-1 text-center transition-colors focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:w-auto sm:flex-row sm:gap-3 sm:px-1 sm:text-left",
                 status === "upcoming"
                   ? "cursor-default text-muted-foreground"
                   : "text-foreground hover:text-foreground"
@@ -210,13 +213,22 @@ function StepProgress({
               </span>
             </button>
             {index < steps.length - 1 ? (
-              <span
-                aria-hidden="true"
-                className={cn(
-                  "mt-2 h-px flex-1 bg-border/70 sm:mt-0 sm:w-7 sm:flex-none",
-                  status === "complete" && "bg-foreground/35"
-                )}
-              />
+              <>
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    "absolute top-[0.875rem] left-[calc(50%+0.95rem)] right-[calc(-50%+0.95rem)] h-px bg-border/70 sm:hidden",
+                    status === "complete" && "bg-foreground/35"
+                  )}
+                />
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    "hidden h-px w-7 bg-border/70 sm:block",
+                    status === "complete" && "bg-foreground/35"
+                  )}
+                />
+              </>
             ) : null}
           </li>
         )
