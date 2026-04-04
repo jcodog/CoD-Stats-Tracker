@@ -137,7 +137,7 @@ function resolveIssuer(requestOrigin: string) {
   if (!rawIssuer) {
     if (env.NODE_ENV === "production") {
       throw new Error(
-        "Missing required env var: OAUTH_ISSUER. Set OAUTH_ISSUER to your canonical HTTPS app origin (for example https://codstats.tech).",
+        "Missing required env var: OAUTH_ISSUER. Set OAUTH_ISSUER to your canonical HTTPS app origin (for example https://stats.cleoai.cloud).",
       );
     }
 

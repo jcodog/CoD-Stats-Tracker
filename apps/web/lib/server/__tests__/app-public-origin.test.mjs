@@ -33,12 +33,6 @@ afterAll(() => {
 });
 
 describe("getAppPublicOrigin", () => {
-  it("accepts codstats.tech in production", () => {
-    setEnv("production", "https://codstats.tech");
-
-    expect(getAppPublicOrigin()).toBe("https://codstats.tech");
-  });
-
   it("accepts stats.cleoai.cloud in production", () => {
     setEnv("production", "https://stats.cleoai.cloud");
 
@@ -55,7 +49,7 @@ describe("getAppPublicOrigin", () => {
     setEnv("production", "https://preview.example.com");
 
     expect(() => getAppPublicOrigin()).toThrow(
-      /APP_PUBLIC_ORIGIN must use one of codstats\.tech, stats\.cleoai\.cloud, stats-dev\.cleoai\.cloud in production/,
+      /APP_PUBLIC_ORIGIN must use one of stats\.cleoai\.cloud, stats-dev\.cleoai\.cloud in production/,
     );
   });
 

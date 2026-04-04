@@ -57,7 +57,7 @@ export const robotsDisallow = [
   "/ui/",
 ] as const
 
-const DEFAULT_SITE_ORIGIN = "https://codstats.tech"
+const DEFAULT_SITE_ORIGIN = "https://stats.cleoai.cloud"
 const DEFAULT_DEV_ORIGIN = "http://localhost:3000"
 
 function getFallbackSiteOrigin() {
