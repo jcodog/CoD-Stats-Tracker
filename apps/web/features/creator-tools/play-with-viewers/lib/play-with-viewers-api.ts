@@ -1,24 +1,3 @@
-export const PLAY_WITH_VIEWERS_CSRF_HEADER = "x-codstats-csrf"
-export const PLAY_WITH_VIEWERS_CSRF_HEADER_VALUE = "1"
-
-export const playWithViewersApiActions = [
-  "clearQueue",
-  "createQueueInOwnedGuild",
-  "fixQueueChannelPermissions",
-  "inviteQueueEntryNowAndNotify",
-  "listAvailableDiscordGuilds",
-  "publishQueueMessage",
-  "removeQueueEntry",
-  "selectNextBatchAndNotify",
-  "setQueueActive",
-  "syncQueueDiscordContext",
-  "updateQueueMessage",
-  "updateQueueSettings",
-] as const
-
-export type PlayWithViewersApiAction =
-  (typeof playWithViewersApiActions)[number]
-
 export type AvailableDiscordGuild = {
   iconUrl: string | null
   id: string

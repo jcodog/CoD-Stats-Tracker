@@ -67,6 +67,10 @@ function toBillingClientError(error: unknown) {
   return new BillingClientError(message, status, error)
 }
 
+const BILLING_CATALOG_STALE_TIME = 10 * 60_000
+const BILLING_STATE_STALE_TIME = 2 * 60_000
+const BILLING_CENTER_STALE_TIME = 2 * 60_000
+
 async function queryPricingCatalog(convex: ConvexReactClient) {
   try {
     return (await convex.query(
@@ -273,7 +277,7 @@ export function usePricingCatalog() {
     enabled: !isLoading && isAuthenticated,
     queryFn: () => queryPricingCatalog(convex),
     queryKey: billingQueryKeys.catalog,
-    staleTime: 30_000,
+    staleTime: BILLING_CATALOG_STALE_TIME,
   })
 }
 
@@ -285,7 +289,7 @@ export function useBillingState() {
     enabled: !isLoading && isAuthenticated,
     queryFn: () => queryBillingState(convex),
     queryKey: billingQueryKeys.state,
-    staleTime: 15_000,
+    staleTime: BILLING_STATE_STALE_TIME,
   })
 }
 
@@ -297,7 +301,7 @@ export function useBillingCenter() {
     enabled: !isLoading && isAuthenticated,
     queryFn: () => queryBillingCenter(convex),
     queryKey: billingQueryKeys.center,
-    staleTime: 15_000,
+    staleTime: BILLING_CENTER_STALE_TIME,
   })
 }
 

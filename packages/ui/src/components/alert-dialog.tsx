@@ -5,16 +5,53 @@ import { AlertDialog as AlertDialogPrimitive } from "radix-ui"
 
 import { cn } from "@workspace/ui/lib/utils"
 import { Button } from "@workspace/ui/components/button"
+import {
+  Drawer,
+  DrawerClose,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerTrigger,
+} from "@workspace/ui/components/drawer"
+import { useIsMobile } from "@workspace/ui/hooks/use-mobile"
+
+const AlertDialogViewportContext = React.createContext(false)
 
 function AlertDialog({
   ...props
 }: React.ComponentProps<typeof AlertDialogPrimitive.Root>) {
-  return <AlertDialogPrimitive.Root data-slot="alert-dialog" {...props} />
+  const isMobile = useIsMobile()
+
+  return (
+    <AlertDialogViewportContext.Provider value={isMobile}>
+      {isMobile ? (
+        <Drawer
+          data-slot="alert-dialog"
+          {...(props as React.ComponentProps<typeof Drawer>)}
+        />
+      ) : (
+        <AlertDialogPrimitive.Root data-slot="alert-dialog" {...props} />
+      )}
+    </AlertDialogViewportContext.Provider>
+  )
 }
 
 function AlertDialogTrigger({
   ...props
 }: React.ComponentProps<typeof AlertDialogPrimitive.Trigger>) {
+  const isMobile = React.useContext(AlertDialogViewportContext)
+
+  if (isMobile) {
+    return (
+      <DrawerTrigger
+        data-slot="alert-dialog-trigger"
+        {...(props as React.ComponentProps<typeof DrawerTrigger>)}
+      />
+    )
+  }
+
   return (
     <AlertDialogPrimitive.Trigger data-slot="alert-dialog-trigger" {...props} />
   )
@@ -51,6 +88,19 @@ function AlertDialogContent({
 }: React.ComponentProps<typeof AlertDialogPrimitive.Content> & {
   size?: "default" | "sm"
 }) {
+  const isMobile = React.useContext(AlertDialogViewportContext)
+
+  if (isMobile) {
+    return (
+      <DrawerContent
+        data-size={size}
+        data-slot="alert-dialog-content"
+        className={cn("gap-4", className)}
+        {...(props as React.ComponentProps<typeof DrawerContent>)}
+      />
+    )
+  }
+
   return (
     <AlertDialogPortal>
       <AlertDialogOverlay />
@@ -71,6 +121,18 @@ function AlertDialogHeader({
   className,
   ...props
 }: React.ComponentProps<"div">) {
+  const isMobile = React.useContext(AlertDialogViewportContext)
+
+  if (isMobile) {
+    return (
+      <DrawerHeader
+        data-slot="alert-dialog-header"
+        className={className}
+        {...props}
+      />
+    )
+  }
+
   return (
     <div
       data-slot="alert-dialog-header"
@@ -87,6 +149,18 @@ function AlertDialogFooter({
   className,
   ...props
 }: React.ComponentProps<"div">) {
+  const isMobile = React.useContext(AlertDialogViewportContext)
+
+  if (isMobile) {
+    return (
+      <DrawerFooter
+        data-slot="alert-dialog-footer"
+        className={className}
+        {...props}
+      />
+    )
+  }
+
   return (
     <div
       data-slot="alert-dialog-footer"
@@ -119,6 +193,18 @@ function AlertDialogTitle({
   className,
   ...props
 }: React.ComponentProps<typeof AlertDialogPrimitive.Title>) {
+  const isMobile = React.useContext(AlertDialogViewportContext)
+
+  if (isMobile) {
+    return (
+      <DrawerTitle
+        data-slot="alert-dialog-title"
+        className={className}
+        {...(props as React.ComponentProps<typeof DrawerTitle>)}
+      />
+    )
+  }
+
   return (
     <AlertDialogPrimitive.Title
       data-slot="alert-dialog-title"
@@ -135,6 +221,18 @@ function AlertDialogDescription({
   className,
   ...props
 }: React.ComponentProps<typeof AlertDialogPrimitive.Description>) {
+  const isMobile = React.useContext(AlertDialogViewportContext)
+
+  if (isMobile) {
+    return (
+      <DrawerDescription
+        data-slot="alert-dialog-description"
+        className={cn("text-balance md:text-pretty", className)}
+        {...(props as React.ComponentProps<typeof DrawerDescription>)}
+      />
+    )
+  }
+
   return (
     <AlertDialogPrimitive.Description
       data-slot="alert-dialog-description"
@@ -154,6 +252,22 @@ function AlertDialogAction({
   ...props
 }: React.ComponentProps<typeof AlertDialogPrimitive.Action> &
   Pick<React.ComponentProps<typeof Button>, "variant" | "size">) {
+  const isMobile = React.useContext(AlertDialogViewportContext)
+
+  if (isMobile) {
+    return (
+      <DrawerClose asChild>
+        <Button
+          className={cn(className)}
+          data-slot="alert-dialog-action"
+          size={size}
+          variant={variant}
+          {...(props as React.ComponentProps<typeof Button>)}
+        />
+      </DrawerClose>
+    )
+  }
+
   return (
     <Button variant={variant} size={size} asChild>
       <AlertDialogPrimitive.Action
@@ -172,6 +286,22 @@ function AlertDialogCancel({
   ...props
 }: React.ComponentProps<typeof AlertDialogPrimitive.Cancel> &
   Pick<React.ComponentProps<typeof Button>, "variant" | "size">) {
+  const isMobile = React.useContext(AlertDialogViewportContext)
+
+  if (isMobile) {
+    return (
+      <DrawerClose asChild>
+        <Button
+          className={cn(className)}
+          data-slot="alert-dialog-cancel"
+          size={size}
+          variant={variant}
+          {...(props as React.ComponentProps<typeof Button>)}
+        />
+      </DrawerClose>
+    )
+  }
+
   return (
     <Button variant={variant} size={size} asChild>
       <AlertDialogPrimitive.Cancel

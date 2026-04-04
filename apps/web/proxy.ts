@@ -23,7 +23,6 @@ export const PUBLIC_ROUTE_PATTERNS = [
   "/",
   "/sign-in(.*)",
   "/sign-up(.*)",
-  "/api/landing-metrics",
   "/debug/chatgpt-app-config(.*)",
   "/.well-known/vercel/flags(.*)",
   ...CHATGPT_APP_PUBLIC_ROUTE_PATTERNS,

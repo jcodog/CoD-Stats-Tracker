@@ -13,8 +13,10 @@ export function TanstackQueryProvider({ children }: TanstackQueryProviderProps) 
       new QueryClient({
         defaultOptions: {
           queries: {
-            staleTime: 15_000,
-            gcTime: 5 * 60_000,
+            staleTime: 60_000,
+            gcTime: 15 * 60_000,
+            refetchOnMount: false,
+            refetchOnReconnect: false,
             refetchOnWindowFocus: false,
             retry: 1,
           },

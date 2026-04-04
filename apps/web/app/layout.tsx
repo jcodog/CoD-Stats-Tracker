@@ -4,13 +4,11 @@ import { Geist_Mono, Inter } from "next/font/google"
 import { cn } from "@workspace/ui/lib/utils"
 import "@workspace/ui/globals.css"
 import { Toaster } from "@workspace/ui/components/sonner"
-import { ThemeProvider } from "@/components/theme-provider"
+import { ThemeProvider } from "@/components/providers/theme-provider"
 import { ClerkProvider } from "@/components/providers/ClerkProvider"
 import ConvexClientProvider from "@/components/providers/ConvexProviderWithClerk"
 import { TanstackQueryProvider } from "@/components/providers/TanstackQueryProvider"
 import { TooltipProvider } from "@workspace/ui/components/tooltip"
-import { SpeedInsights } from "@vercel/speed-insights/next"
-import { Analytics } from "@vercel/analytics/next"
 import {
   getSiteUrl,
   getStructuredData,
@@ -19,6 +17,8 @@ import {
   siteKeywords,
   siteThemeColors,
 } from "@/lib/metadata/site"
+import { Databuddy } from "@databuddy/sdk/react"
+import { env } from "@/env/client"
 
 const inter = Inter({
   subsets: ["latin"],
@@ -107,6 +107,9 @@ export const metadata: Metadata = {
 }
 
 export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
   colorScheme: "light dark",
   themeColor: [
     {
@@ -133,7 +136,7 @@ export default function RootLayout({
       suppressHydrationWarning
       className={cn(fontMono.variable, "font-sans", inter.variable)}
     >
-      <body className="flex h-full min-h-screen w-full min-w-full flex-col antialiased">
+      <body className="flex h-full min-h-screen w-full min-w-full flex-col overflow-x-hidden scroll-smooth bg-background text-foreground antialiased">
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: structuredData }}
@@ -145,8 +148,18 @@ export default function RootLayout({
                 <TanstackQueryProvider>
                   {children}
                   <Toaster richColors position="top-right" closeButton />
-                  <SpeedInsights />
-                  <Analytics />
+                  <Databuddy
+                    clientId={env.NEXT_PUBLIC_DATABUDDY_CLIENT_ID}
+                    trackHashChanges={true}
+                    trackAttributes={true}
+                    trackOutgoingLinks={true}
+                    trackInteractions={true}
+                    trackWebVitals={true}
+                    trackErrors={true}
+                    enableBatching
+                    batchSize={50}
+                    disabled={process.env.NODE_ENV !== "production"}
+                  />
                 </TanstackQueryProvider>
               </ConvexClientProvider>
             </ClerkProvider>

@@ -1,7 +1,7 @@
 import Stripe from "stripe"
 import { getConvexEnv } from "../env"
 
-const STRIPE_API_VERSION: Stripe.LatestApiVersion = "2026-03-25.dahlia" as const
+const STRIPE_API_VERSION = "2026-03-25.dahlia" as const
 
 export const STRIPE_CATALOG_APP = "cod-stats-tracker"
 

@@ -81,6 +81,7 @@ import {
   useUpdateBillingProfile,
   useUpdateSubscriptionPlan,
 } from "@/features/billing/lib/billing-client"
+import type { RequestViewport } from "@/lib/server/request-viewport"
 import {
   formatBillingInterval,
   formatBillingStatusLabel,
@@ -1634,9 +1635,12 @@ function SubscriptionChangeConfirmationDialog(args: {
 
 export function BillingSettingsView({
   checkoutEnabled,
+  viewport = "desktop",
 }: {
   checkoutEnabled: boolean
+  viewport?: RequestViewport
 }) {
+  const isMobileView = viewport === "mobile"
   const { resolvedTheme } = useTheme()
   const billingCenterQuery = useBillingCenter()
   const billingStateQuery = useBillingState()
@@ -1705,9 +1709,22 @@ export function BillingSettingsView({
         : plan
     ),
   })
+  const effectiveSubscriptionDialogState =
+    subscriptionDialogState
+      ? {
+          ...subscriptionDialogState,
+          planKey:
+            managementPricingPlans.some(
+              (plan) => plan.planKey === subscriptionDialogState.planKey
+            )
+              ? subscriptionDialogState.planKey
+              : (managementPricingPlans[0]?.planKey ??
+                subscriptionDialogState.planKey),
+        }
+      : null
   const selectedSubscriptionPlan =
     managementPricingPlans.find(
-      (plan) => plan.planKey === subscriptionDialogState?.planKey
+      (plan) => plan.planKey === effectiveSubscriptionDialogState?.planKey
     ) ?? null
   const currentSubscriptionPlan =
     selectedSubscription
@@ -1715,26 +1732,6 @@ export function BillingSettingsView({
           (plan) => plan.planKey === selectedSubscription.planKey
         ) ?? null)
       : null
-
-  useEffect(() => {
-    if (
-      subscriptionDialogState &&
-      managementPricingPlans.length > 0 &&
-      !managementPricingPlans.some(
-        (plan) => plan.planKey === subscriptionDialogState.planKey
-      )
-    ) {
-      setSubscriptionDialogState((current) =>
-        current
-          ? {
-              ...current,
-              planKey:
-                managementPricingPlans[0]?.planKey ?? current.planKey,
-            }
-          : current
-      )
-    }
-  }, [managementPricingPlans, subscriptionDialogState])
 
   useEffect(() => {
     if (
@@ -1874,14 +1871,14 @@ export function BillingSettingsView({
   }
 
   async function handlePreviewSubscriptionUpdate() {
-    if (!subscriptionDialogState || !selectedSubscription) {
+    if (!effectiveSubscriptionDialogState || !selectedSubscription) {
       return
     }
 
     try {
       const result = await previewSubscriptionChange.mutateAsync({
-        interval: subscriptionDialogState.interval,
-        planKey: subscriptionDialogState.planKey,
+        interval: effectiveSubscriptionDialogState.interval,
+        planKey: effectiveSubscriptionDialogState.planKey,
         stripeSubscriptionId: selectedSubscription.stripeSubscriptionId,
       })
       setSubscriptionChangePreview(result)
@@ -1895,14 +1892,14 @@ export function BillingSettingsView({
   }
 
   async function handleApplySubscriptionUpdate() {
-    if (!subscriptionDialogState || !selectedSubscription) {
+    if (!effectiveSubscriptionDialogState || !selectedSubscription) {
       return
     }
 
     try {
       const result = await updateSubscription.mutateAsync({
-        interval: subscriptionDialogState.interval,
-        planKey: subscriptionDialogState.planKey,
+        interval: effectiveSubscriptionDialogState.interval,
+        planKey: effectiveSubscriptionDialogState.planKey,
         prorationDate: subscriptionChangePreview?.prorationDate ?? undefined,
         stripeSubscriptionId: selectedSubscription.stripeSubscriptionId,
       })
@@ -1984,7 +1981,7 @@ export function BillingSettingsView({
 
   if (billingCenterQuery.isPending || billingStateQuery.isPending) {
     return (
-      <div className="flex flex-col gap-6">
+      <div className={isMobileView ? "flex flex-col gap-5" : "flex flex-col gap-6"}>
         <div className="flex flex-col gap-2">
           <Skeleton className="h-8 w-40 rounded-lg" />
           <Skeleton className="h-5 w-96 max-w-full rounded-lg" />
@@ -2023,20 +2020,26 @@ export function BillingSettingsView({
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+    <div className={isMobileView ? "flex flex-col gap-5" : "flex flex-col gap-6"}>
+      <div className={isMobileView ? "grid gap-3" : "flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between"}>
         <div className="flex flex-col gap-2">
+          {isMobileView ? (
+            <p className="text-[0.72rem] font-semibold tracking-[0.24em] text-primary uppercase">
+              Billing
+            </p>
+          ) : null}
           <h1 className="text-3xl font-semibold tracking-tight">Billing</h1>
           <p className="max-w-3xl text-sm text-muted-foreground">
             Manage your billing profile, saved payment methods, subscriptions,
             and invoices without leaving the app.
           </p>
         </div>
-        <div className="flex flex-col items-start gap-2 lg:items-end">
+        <div className={isMobileView ? "grid gap-2" : "flex flex-col items-start gap-2 lg:items-end"}>
           <div className="text-sm text-muted-foreground">
             Last synced {formatDateTimeLabel(billingCenter.lastSyncedAt)}
           </div>
           <Button
+            className={isMobileView ? "w-full justify-center" : undefined}
             disabled={syncBillingCenter.isPending}
             onClick={() => void handleRefresh()}
             variant="outline"
@@ -2100,7 +2103,7 @@ export function BillingSettingsView({
         />
       ) : null}
 
-      {subscriptionDialogState && selectedSubscription ? (
+      {effectiveSubscriptionDialogState && selectedSubscription ? (
         <SubscriptionManagementDialog
           cancelPending={cancelSubscription.isPending}
           catalogPending={pricingCatalogQuery.isPending}
@@ -2145,7 +2148,7 @@ export function BillingSettingsView({
           reactivatePending={reactivateSubscription.isPending}
           resolvedTheme={resolvedTheme}
           selectedPlan={selectedSubscriptionPlan}
-          state={subscriptionDialogState}
+          state={effectiveSubscriptionDialogState}
           subscription={selectedSubscription}
         />
       ) : null}

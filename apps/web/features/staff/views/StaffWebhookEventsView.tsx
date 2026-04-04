@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import type { ColumnDef } from "@tanstack/react-table"
 import { IconCopy, IconReload } from "@tabler/icons-react"
@@ -208,7 +208,7 @@ export function StaffWebhookEventsView({
 }: {
   initialData: StaffWebhookLedgerDashboard
 }) {
-  const { data, refetch } = useStaffWebhookLedgerDashboard(initialData)
+  const { data } = useStaffWebhookLedgerDashboard(initialData)
   const queryClient = useQueryClient()
   const webhookClient = useStaffWebhookClient()
   const [selectedEventId, setSelectedEventId] =
@@ -328,14 +328,6 @@ export function StaffWebhookEventsView({
     return true
   })
 
-  useEffect(() => {
-    if (!detailQuery.data) {
-      return
-    }
-
-    void queryClient.invalidateQueries({ queryKey: staffQueryKeys.webhooks })
-  }, [detailQuery.data?.id, detailQuery.data?.payloadState, queryClient])
-
   const columns: Array<ColumnDef<StaffWebhookLedgerRecord>> = [
     {
       accessorKey: "receivedAt",
@@ -429,7 +421,6 @@ export function StaffWebhookEventsView({
     try {
       const result = await refreshLedgerMutation.mutateAsync()
       toast.success(result.summary)
-      await refetch()
     } catch (error) {
       toast.error(
         error instanceof StaffClientError
@@ -437,6 +428,21 @@ export function StaffWebhookEventsView({
           : "Webhook refresh failed."
       )
     }
+  }
+
+  async function handleRetryPayload() {
+    const result = await detailQuery.refetch()
+
+    if (result.error) {
+      toast.error(
+        result.error instanceof StaffClientError
+          ? result.error.message
+          : "Could not load that webhook payload."
+      )
+      return
+    }
+
+    await queryClient.invalidateQueries({ queryKey: staffQueryKeys.webhooks })
   }
 
   return (
@@ -676,7 +682,7 @@ export function StaffWebhookEventsView({
                 <PayloadStateBadge state={detailQuery.data.payloadState} />
                 {detailQuery.data.payloadState !== "available" ? (
                   <Button
-                    onClick={() => void detailQuery.refetch()}
+                    onClick={() => void handleRetryPayload()}
                     size="sm"
                     type="button"
                     variant="outline"

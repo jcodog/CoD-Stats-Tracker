@@ -25,7 +25,6 @@ import {
   getLogMatchStepDefinition,
   getSignedSrChange,
   getVisibleLogMatchSteps,
-  hasWholeNumber,
   parseOptionalInteger,
   parseRequiredInteger,
   sanitizeSrChangeInput,

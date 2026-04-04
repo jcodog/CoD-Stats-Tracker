@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useMemo, useState } from "react"
 
 import type { DashboardRecentSessionMatches } from "@/features/dashboard-stats/lib/dashboard-stats-client"
 import {
@@ -13,6 +13,7 @@ import {
   getDashboardMetricTextStyle,
   getDashboardOutcomeBadgeStyle,
 } from "@/features/dashboard-stats/lib/dashboard-stats-visuals"
+import type { DashboardTimeRange } from "@/features/dashboard-stats/stores/dashboard-ui-store"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import {
@@ -29,10 +30,22 @@ import {
   TableHeader,
   TableRow,
 } from "@workspace/ui/components/table"
-import type { DashboardTimeRange } from "@/features/dashboard-stats/stores/dashboard-ui-store"
 import { cn } from "@workspace/ui/lib/utils"
 
 const MATCHES_PER_PAGE = 15
+
+type DashboardMatchRow = {
+  createdAt: number
+  deaths: number | null
+  id: string
+  kills: number | null
+  lossProtected: boolean
+  mapName: string | null
+  mode: string | null
+  notes: string | null
+  outcome: "loss" | "win"
+  srChange: number
+}
 
 export function DashboardStatsRecentMatches({
   className,
@@ -47,25 +60,24 @@ export function DashboardStatsRecentMatches({
   selectedTimeRange: DashboardTimeRange
   showHeader?: boolean
 }) {
-  const recentMatches = matches as Array<{
-    createdAt: number
-    deaths: number | null
-    id: string
-    kills: number | null
-    lossProtected: boolean
-    mapName: string | null
-    mode: string | null
-    notes: string | null
-    outcome: "loss" | "win"
-    srChange: number
-  }>
-  const [currentPage, setCurrentPage] = useState(1)
+  const recentMatches = matches as DashboardMatchRow[]
   const timeRangeStart = getTimeRangeStart(selectedTimeRange)
-  const filteredMatches = recentMatches.filter(
-    (match) => timeRangeStart === null || match.createdAt >= timeRangeStart
+  const filteredMatches = useMemo(
+    () =>
+      recentMatches.filter(
+        (match) => timeRangeStart === null || match.createdAt >= timeRangeStart
+      ),
+    [recentMatches, timeRangeStart]
   )
+  const paginationScope = `${selectedTimeRange}:${recentMatches.length}:${recentMatches[0]?.id ?? "none"}:${recentMatches[recentMatches.length - 1]?.id ?? "none"}`
+  const [paginationState, setPaginationState] = useState(() => ({
+    currentPage: 1,
+    scope: paginationScope,
+  }))
   const totalMatches = filteredMatches.length
   const totalPages = Math.max(1, Math.ceil(totalMatches / MATCHES_PER_PAGE))
+  const currentPage =
+    paginationState.scope === paginationScope ? paginationState.currentPage : 1
   const safeCurrentPage = Math.min(currentPage, totalPages)
   const pageStartIndex = (safeCurrentPage - 1) * MATCHES_PER_PAGE
   const paginatedMatches = filteredMatches.slice(
@@ -75,18 +87,12 @@ export function DashboardStatsRecentMatches({
   const visibleMatchStart = totalMatches === 0 ? 0 : pageStartIndex + 1
   const visibleMatchEnd = Math.min(totalMatches, pageStartIndex + MATCHES_PER_PAGE)
 
-  useEffect(() => {
-    setCurrentPage(1)
-  }, [
-    selectedTimeRange,
-    recentMatches.length,
-    recentMatches[0]?.id,
-    recentMatches[recentMatches.length - 1]?.id,
-  ])
-
-  useEffect(() => {
-    setCurrentPage((page) => Math.min(page, totalPages))
-  }, [totalPages])
+  function setCurrentPage(nextPage: number) {
+    setPaginationState({
+      currentPage: nextPage,
+      scope: paginationScope,
+    })
+  }
 
   return (
     <section
@@ -101,7 +107,8 @@ export function DashboardStatsRecentMatches({
         <div className="flex flex-col gap-1 border-b border-border/60 px-5 py-4">
           <h2 className="text-base font-semibold">Recent matches</h2>
           <p className="text-sm text-muted-foreground">
-            All logged matches for the selected session within the active filter window.
+            All logged matches for the selected session within the active filter
+            window.
           </p>
         </div>
       ) : null}
@@ -110,24 +117,22 @@ export function DashboardStatsRecentMatches({
         {filteredMatches.length === 0 ? (
           <Empty
             className={cn(
-              "border border-dashed border-border/60 bg-muted/10",
-              embedded ? "rounded-lg" : "rounded-xl"
+              "border-y border-dashed border-border/60 bg-muted/10",
+              embedded ? "rounded-none" : "rounded-lg"
             )}
           >
             <EmptyHeader>
               <EmptyTitle>No matches in this filter</EmptyTitle>
               <EmptyDescription>
-                Try a wider date range or log more matches to populate this session view.
+                Try a wider date range or log more matches to populate this
+                session view.
               </EmptyDescription>
             </EmptyHeader>
           </Empty>
         ) : (
           <div className="grid gap-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <p
-                aria-live="polite"
-                className="text-sm text-muted-foreground"
-              >
+              <p aria-live="polite" className="text-sm text-muted-foreground">
                 Showing{" "}
                 <span className="font-medium text-foreground">
                   {visibleMatchStart}-{visibleMatchEnd}
@@ -140,9 +145,7 @@ export function DashboardStatsRecentMatches({
                 <div className="flex items-center gap-2">
                   <Button
                     disabled={safeCurrentPage === 1}
-                    onClick={() =>
-                      setCurrentPage((page) => Math.max(page - 1, 1))
-                    }
+                    onClick={() => setCurrentPage(Math.max(safeCurrentPage - 1, 1))}
                     size="sm"
                     variant="outline"
                   >
@@ -161,7 +164,7 @@ export function DashboardStatsRecentMatches({
                   <Button
                     disabled={safeCurrentPage >= totalPages}
                     onClick={() =>
-                      setCurrentPage((page) => Math.min(page + 1, totalPages))
+                      setCurrentPage(Math.min(safeCurrentPage + 1, totalPages))
                     }
                     size="sm"
                     variant="outline"
@@ -172,9 +175,66 @@ export function DashboardStatsRecentMatches({
               ) : null}
             </div>
 
+            <div className="divide-y divide-border/60 border-y border-border/60 md:hidden">
+              {paginatedMatches.map((match) => (
+                <article
+                  key={match.id}
+                  className="px-0 py-4"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="grid gap-1">
+                      <p className="text-sm font-medium text-foreground">
+                        {formatDashboardDateTime(match.createdAt)}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {getModeLabel(match.mode)} on {getMapLabel(match.mapName)}
+                      </p>
+                    </div>
+                    <Badge
+                      className="capitalize"
+                      style={getDashboardOutcomeBadgeStyle(match.outcome)}
+                      variant="outline"
+                    >
+                      {match.outcome}
+                    </Badge>
+                  </div>
+
+                  <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                    <div className="grid gap-1">
+                      <span className="text-xs text-muted-foreground">SR</span>
+                      <span
+                        className="font-medium"
+                        style={getDashboardMetricTextStyle(match.srChange)}
+                      >
+                        {match.srChange > 0 ? "+" : ""}
+                        {match.srChange}
+                        {match.lossProtected ? (
+                          <span className="ml-2 text-xs text-muted-foreground">
+                            LP
+                          </span>
+                        ) : null}
+                      </span>
+                    </div>
+                    <div className="grid gap-1">
+                      <span className="text-xs text-muted-foreground">K / D</span>
+                      <span className="text-sm text-foreground">
+                        {match.kills ?? "-"} / {match.deaths ?? "-"}
+                      </span>
+                    </div>
+                    <div className="grid gap-1">
+                      <span className="text-xs text-muted-foreground">Notes</span>
+                      <span className="text-sm text-muted-foreground">
+                        {match.notes ?? "No note"}
+                      </span>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+
             <div
               className={cn(
-                "overflow-x-auto",
+                "hidden overflow-x-auto md:block",
                 embedded ? "" : "rounded-xl border border-border/60"
               )}
             >
@@ -214,7 +274,9 @@ export function DashboardStatsRecentMatches({
                         {match.srChange > 0 ? "+" : ""}
                         {match.srChange}
                         {match.lossProtected ? (
-                          <span className="ml-2 text-xs text-muted-foreground">LP</span>
+                          <span className="ml-2 text-xs text-muted-foreground">
+                            LP
+                          </span>
                         ) : null}
                       </TableCell>
                       <TableCell>

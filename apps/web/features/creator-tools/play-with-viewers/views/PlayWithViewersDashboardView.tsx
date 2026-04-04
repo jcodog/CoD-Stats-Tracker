@@ -1,7 +1,14 @@
 "use client"
 
 import Link from "next/link"
-import { startTransition, useEffect, useMemo, useState } from "react"
+import {
+  startTransition,
+  useEffect,
+  useMemo,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from "react"
 import { useQuery } from "convex/react"
 import {
   IconAlertTriangle,
@@ -585,12 +592,11 @@ export function PlayWithViewersDashboardView({
   const [selectionInviteCode, setSelectionInviteCode] = useState("")
   const [selectionInviteCodeType, setSelectionInviteCodeType] =
     useState<InviteCodeType>(DEFAULT_INVITE_CODE_TYPE)
-  const [createFormState, setCreateFormState] = useState<QueueFormState>(() =>
-    getDefaultQueueFormState(preferredCreatorDisplayName)
+  const [createFormDraft, setCreateFormDraft] = useState<QueueFormState | null>(
+    null
   )
-  const [settingsFormState, setSettingsFormState] = useState<QueueFormState>(
-    () => getDefaultQueueFormState(preferredCreatorDisplayName)
-  )
+  const [settingsFormDraft, setSettingsFormDraft] =
+    useState<QueueFormState | null>(null)
   const [isCreatingQueue, setIsCreatingQueue] = useState(false)
   const [isSavingSettings, setIsSavingSettings] = useState(false)
   const [isPublishing, setIsPublishing] = useState(false)
@@ -626,6 +632,38 @@ export function PlayWithViewersDashboardView({
   const hasAuditedQueuePermissions = Boolean(
     queue && auditedQueueId === queue._id
   )
+  const defaultCreateFormState = useMemo(
+    () => getDefaultQueueFormState(preferredCreatorDisplayName),
+    [preferredCreatorDisplayName]
+  )
+  const createFormState = createFormDraft ?? defaultCreateFormState
+  const settingsFormState =
+    queue ? settingsFormDraft ?? toQueueFormState(queue) : defaultCreateFormState
+  const setCreateFormState: Dispatch<SetStateAction<QueueFormState>> = (
+    updater
+  ) => {
+    setCreateFormDraft((current) => {
+      const resolvedCurrent = current ?? defaultCreateFormState
+      return typeof updater === "function"
+        ? (updater as (current: QueueFormState) => QueueFormState)(
+            resolvedCurrent
+          )
+        : updater
+    })
+  }
+  const setSettingsFormState: Dispatch<SetStateAction<QueueFormState>> = (
+    updater
+  ) => {
+    setSettingsFormDraft((current) => {
+      const resolvedCurrent =
+        current ?? (queue ? toQueueFormState(queue) : defaultCreateFormState)
+      return typeof updater === "function"
+        ? (updater as (current: QueueFormState) => QueueFormState)(
+            resolvedCurrent
+          )
+        : updater
+    })
+  }
   const resolvedChannelPermsCorrect =
     queue?.channelPermsCorrect === true
       ? true
@@ -644,14 +682,6 @@ export function PlayWithViewersDashboardView({
       window.clearInterval(intervalId)
     }
   }, [])
-
-  useEffect(() => {
-    if (queue === undefined || queue !== null) {
-      return
-    }
-
-    setCreateFormState(getDefaultQueueFormState(preferredCreatorDisplayName))
-  }, [preferredCreatorDisplayName, queue])
 
   useEffect(() => {
     if (!settingsOpen || queue !== null) {
@@ -704,14 +734,6 @@ export function PlayWithViewersDashboardView({
       cancelled = true
     }
   }, [listAvailableDiscordGuilds, queue, settingsOpen])
-
-  useEffect(() => {
-    if (!queue || settingsOpen) {
-      return
-    }
-
-    setSettingsFormState(toQueueFormState(queue))
-  }, [queue, settingsOpen])
 
   useEffect(() => {
     setAuditedQueueId(null)
@@ -941,6 +963,7 @@ export function PlayWithViewersDashboardView({
         title: createFormState.title.trim(),
       })
 
+      setCreateFormDraft(null)
       setSettingsOpen(false)
 
       if (result.messagePublished) {
@@ -989,6 +1012,7 @@ export function PlayWithViewersDashboardView({
 
       await syncQueueMessageIfPublished(queue._id)
       toast.success("Queue settings saved.")
+      setSettingsFormDraft(null)
       setSettingsOpen(false)
     } catch (error) {
       toast.error(toErrorMessage(error, "Unable to save queue settings."))
@@ -1182,12 +1206,22 @@ export function PlayWithViewersDashboardView({
     try {
       await clearQueue({ queueId: queue._id })
       await syncQueueMessageIfPublished(queue._id)
+      setCreateFormDraft(null)
+      setSettingsFormDraft(null)
       toast.success("Queue cleared.")
     } catch (error) {
       toast.error(toErrorMessage(error, "Unable to clear the queue."))
     } finally {
       setIsClearingQueue(false)
     }
+  }
+
+  function handleSettingsOpenChange(nextOpen: boolean) {
+    if (!nextOpen) {
+      setSettingsFormDraft(null)
+    }
+
+    setSettingsOpen(nextOpen)
   }
 
   async function handleConfirmSelection() {
@@ -1773,7 +1807,7 @@ export function PlayWithViewersDashboardView({
         </>
       ) : null}
 
-      <Sheet onOpenChange={setSettingsOpen} open={settingsOpen}>
+      <Sheet onOpenChange={handleSettingsOpenChange} open={settingsOpen}>
         <SheetContent className="w-full p-0 sm:max-w-2xl lg:max-w-[54rem]">
           <SheetHeader className="shrink-0 border-b border-border/60 px-6 py-5 text-left">
             <SheetTitle>
@@ -2099,7 +2133,11 @@ export function PlayWithViewersDashboardView({
           </ScrollArea>
 
           <SheetFooter className="shrink-0 border-t border-border/60 px-6 py-4">
-            <Button onClick={() => setSettingsOpen(false)} size="sm" variant="outline">
+            <Button
+              onClick={() => handleSettingsOpenChange(false)}
+              size="sm"
+              variant="outline"
+            >
               Cancel
             </Button>
             {queue ? (

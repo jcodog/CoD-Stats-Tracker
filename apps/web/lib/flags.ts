@@ -78,10 +78,6 @@ export const flags = {
     "overlays",
     "Enable the user to use the overlays configurator"
   ),
-  dashboardStatsEditor: makeBooleanFlag(
-    "dashboard-stats-editor",
-    "Enables the flagged ranked stats editor dashboard experience with session creation and guided match logging."
-  ),
   checkout: makeBooleanFlag(
     "checkout",
     "Enables the new checkout page for the user"

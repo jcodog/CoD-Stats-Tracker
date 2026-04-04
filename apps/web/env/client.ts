@@ -19,6 +19,7 @@ export const env = createEnv({
     NEXT_PUBLIC_CONVEX_URL: z.string().min(1),
     NEXT_PUBLIC_CHATGPT_APP_CONNECT_URL: z.string().optional(),
     NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: z.string().optional(),
+    NEXT_PUBLIC_DATABUDDY_CLIENT_ID: z.string().min(1),
   },
   experimental__runtimeEnv: {
     NEXT_PUBLIC_CONVEX_URL: process.env.NEXT_PUBLIC_CONVEX_URL,
@@ -26,6 +27,8 @@ export const env = createEnv({
       process.env.NEXT_PUBLIC_CHATGPT_APP_CONNECT_URL,
     NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY:
       process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
+    NEXT_PUBLIC_DATABUDDY_CLIENT_ID:
+      process.env.NEXT_PUBLIC_DATABUDDY_CLIENT_ID,
   },
   emptyStringAsUndefined: true,
   onValidationError: (issues) => {

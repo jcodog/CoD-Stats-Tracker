@@ -1,5 +1,6 @@
 "use client"
 
+import { memo, useMemo } from "react"
 import {
   Bar,
   BarChart,
@@ -62,11 +63,7 @@ const dailySrChartConfig = {
   },
 } satisfies ChartConfig
 
-function getSrAxisDomain(
-  points: Array<{
-    sr: number
-  }>
-) {
+function getSrAxisDomain(points: Array<{ sr: number }>) {
   if (points.length === 0) {
     return [0, 100] as const
   }
@@ -80,11 +77,7 @@ function getSrAxisDomain(
   return [lowerBound, upperBound] as const
 }
 
-function getDailySrAxisDomain(
-  points: Array<{
-    netSr: number
-  }>
-) {
+function getDailySrAxisDomain(points: Array<{ netSr: number }>) {
   if (points.length === 0) {
     return [-100, 100] as const
   }
@@ -106,13 +99,24 @@ function ChartPanel({
   children,
   description,
   title,
+  viewport = "desktop",
 }: {
   children: React.ReactNode
   description: string
   title: string
+  viewport?: "desktop" | "mobile"
 }) {
+  const isMobileView = viewport === "mobile"
+
   return (
-    <div className="bg-background px-6 py-6">
+    <div
+      className={cn(
+        "bg-background",
+        isMobileView
+          ? "border-t border-border/60 pt-5 first:border-t-0"
+          : "px-6 py-6"
+      )}
+    >
       <div className="mb-4 grid gap-1">
         <h3 className="text-base font-semibold">{title}</h3>
         <p className="text-sm text-muted-foreground">{description}</p>
@@ -125,25 +129,33 @@ function ChartPanel({
 function ChartEmptyState({
   description,
   title,
+  viewport = "desktop",
 }: {
   description: string
   title: string
+  viewport?: "desktop" | "mobile"
 }) {
   return (
-    <div className="flex min-h-[260px] flex-col items-center justify-center rounded-xl border border-dashed border-border/50 bg-background px-6 text-center">
+    <div
+        className={cn(
+          "flex flex-col items-center justify-center border border-dashed border-border/50 bg-background px-6 text-center",
+          viewport === "mobile" ? "min-h-[220px]" : "min-h-[260px]"
+        )}
+      >
       <div className="font-medium">{title}</div>
       <p className="mt-2 max-w-sm text-sm text-muted-foreground">{description}</p>
     </div>
   )
 }
 
-export function DashboardStatsCharts({
+export const DashboardStatsCharts = memo(function DashboardStatsCharts({
   className,
   dailyPerformance,
   embedded = false,
   selectedTimeRange,
   showHeader = true,
   srTimeline,
+  viewport = "desktop",
   winLossBreakdown,
 }: {
   className?: string
@@ -152,8 +164,10 @@ export function DashboardStatsCharts({
   selectedTimeRange: DashboardTimeRange
   showHeader?: boolean
   srTimeline: DashboardSessionSrTimeline
+  viewport?: "desktop" | "mobile"
   winLossBreakdown: DashboardSessionWinLossBreakdown
 }) {
+  const isMobileView = viewport === "mobile"
   const timelinePoints = srTimeline.points as Array<{
     createdAt: number
     matchNumber: number
@@ -172,54 +186,87 @@ export function DashboardStatsCharts({
     value: number
   }>
   const timeRangeStart = getTimeRangeStart(selectedTimeRange)
-  const filteredTimeline = timelinePoints.filter(
-    (point) => timeRangeStart === null || point.createdAt >= timeRangeStart
+  const filteredTimeline = useMemo(
+    () =>
+      timelinePoints.filter(
+        (point) => timeRangeStart === null || point.createdAt >= timeRangeStart
+      ),
+    [timelinePoints, timeRangeStart]
   )
-  const srAxisDomain = getSrAxisDomain(filteredTimeline)
-  const filteredDaily = dailyPoints.filter((day) => {
-    if (timeRangeStart === null) {
-      return true
-    }
+  const srAxisDomain = useMemo(
+    () => getSrAxisDomain(filteredTimeline),
+    [filteredTimeline]
+  )
+  const filteredDaily = useMemo(
+    () =>
+      dailyPoints.filter((day) => {
+        if (timeRangeStart === null) {
+          return true
+        }
 
-    return new Date(`${day.dateKey}T00:00:00.000Z`).getTime() >= timeRangeStart
-  })
-  const dailyWinLossData = filteredDaily.map((day) => ({
-    dateKey: formatDashboardDay(day.dateKey),
-    losses: day.losses,
-    wins: day.wins,
-  }))
-  const dailySrData = filteredDaily.map((day) => ({
-    dateKey: formatDashboardDay(day.dateKey),
-    netSr: day.netSr,
-  }))
-  const dailySrAxisDomain = getDailySrAxisDomain(dailySrData)
-  const srSegments = filteredTimeline.slice(1).map((point, index) => ({
-    currentMatchNumber: point.matchNumber,
-    currentSr: point.sr,
-    previousMatchNumber: filteredTimeline[index]?.matchNumber ?? 0,
-    previousSr: filteredTimeline[index]?.sr ?? 0,
-    srChange: point.srChange,
-  }))
-  const winLossSummaryItems = [
-    {
-      color: DASHBOARD_POSITIVE_COLOR,
-      key: "wins",
-      label: "Wins",
-      value: winLossBreakdown.wins,
-    },
-    {
-      color: DASHBOARD_NEGATIVE_COLOR,
-      key: "losses",
-      label: "Losses",
-      value: winLossBreakdown.losses,
-    },
-  ]
+        return (
+          new Date(`${day.dateKey}T00:00:00.000Z`).getTime() >= timeRangeStart
+        )
+      }),
+    [dailyPoints, timeRangeStart]
+  )
+  const dailyWinLossData = useMemo(
+    () =>
+      filteredDaily.map((day) => ({
+        dateKey: formatDashboardDay(day.dateKey),
+        losses: day.losses,
+        wins: day.wins,
+      })),
+    [filteredDaily]
+  )
+  const dailySrData = useMemo(
+    () =>
+      filteredDaily.map((day) => ({
+        dateKey: formatDashboardDay(day.dateKey),
+        netSr: day.netSr,
+      })),
+    [filteredDaily]
+  )
+  const dailySrAxisDomain = useMemo(
+    () => getDailySrAxisDomain(dailySrData),
+    [dailySrData]
+  )
+  const srSegments = useMemo(
+    () =>
+      filteredTimeline.slice(1).map((point, index) => ({
+        currentMatchNumber: point.matchNumber,
+        currentSr: point.sr,
+        previousMatchNumber: filteredTimeline[index]?.matchNumber ?? 0,
+        previousSr: filteredTimeline[index]?.sr ?? 0,
+        srChange: point.srChange,
+      })),
+    [filteredTimeline]
+  )
+  const winLossSummaryItems = useMemo(
+    () => [
+      {
+        color: DASHBOARD_POSITIVE_COLOR,
+        key: "wins",
+        label: "Wins",
+        value: winLossBreakdown.wins,
+      },
+      {
+        color: DASHBOARD_NEGATIVE_COLOR,
+        key: "losses",
+        label: "Losses",
+        value: winLossBreakdown.losses,
+      },
+    ],
+    [winLossBreakdown.losses, winLossBreakdown.wins]
+  )
 
   return (
     <section
       className={cn(
         embedded
-          ? "overflow-hidden"
+          ? isMobileView
+            ? "overflow-visible"
+            : "overflow-hidden"
           : "overflow-hidden rounded-xl border border-border/60 bg-background",
         className
       )}
@@ -228,23 +275,36 @@ export function DashboardStatsCharts({
         <div className="flex flex-col gap-1 border-b border-border/60 px-5 py-4">
           <h2 className="text-base font-semibold">Session trends</h2>
           <p className="text-sm text-muted-foreground">
-            SR movement, outcomes, and daily performance for the selected active session.
+            SR movement, outcomes, and daily performance for the selected active
+            session.
           </p>
         </div>
       ) : null}
 
-      <div className="grid gap-px bg-border/40 xl:grid-cols-2">
+      <div
+        className={cn(
+          isMobileView ? "grid gap-4" : "grid gap-px bg-border/40 xl:grid-cols-2"
+        )}
+      >
         <ChartPanel
           description="Session SR change across logged matches."
           title="SR progression"
+          viewport={viewport}
         >
           {filteredTimeline.length <= 1 ? (
             <ChartEmptyState
               description="Log at least one match to chart SR movement."
               title="No SR trend yet"
+              viewport={viewport}
             />
           ) : (
-            <ChartContainer className="h-[260px] w-full" config={srChartConfig}>
+            <ChartContainer
+              className={cn(
+                  "w-full min-w-0",
+                  isMobileView ? "h-[210px]" : "h-[260px]"
+                )}
+                config={srChartConfig}
+              >
               <LineChart data={filteredTimeline}>
                 <CartesianGrid vertical={false} />
                 <XAxis
@@ -319,15 +379,23 @@ export function DashboardStatsCharts({
         <ChartPanel
           description="Outcome breakdown for the active filter window."
           title="Win-loss split"
+          viewport={viewport}
         >
           {winLossBreakdown.total === 0 ? (
             <ChartEmptyState
               description="Your first logged match will appear here."
               title="No matches yet"
+              viewport={viewport}
             />
           ) : (
             <div className="flex flex-col gap-4">
-              <ChartContainer className="h-[260px] w-full" config={winLossChartConfig}>
+              <ChartContainer
+                className={cn(
+                  "w-full min-w-0",
+                  isMobileView ? "h-[210px]" : "h-[260px]"
+                )}
+                config={winLossChartConfig}
+              >
                 <PieChart>
                   <ChartTooltip content={<ChartTooltipContent />} />
                   <Pie
@@ -344,7 +412,12 @@ export function DashboardStatsCharts({
                   </Pie>
                 </PieChart>
               </ChartContainer>
-              <div className="flex flex-wrap items-center justify-center gap-6">
+              <div
+                className={cn(
+                  "flex flex-wrap items-center gap-6",
+                  isMobileView ? "justify-start" : "justify-center"
+                )}
+              >
                 {winLossSummaryItems.map((item) => (
                   <div className="flex items-center gap-2" key={item.key}>
                     <span
@@ -369,14 +442,22 @@ export function DashboardStatsCharts({
         <ChartPanel
           description="Session outcomes grouped by day."
           title="Daily wins and losses"
+          viewport={viewport}
         >
           {dailyWinLossData.length === 0 ? (
             <ChartEmptyState
               description="Daily performance fills in once matches are logged."
               title="No daily activity"
+              viewport={viewport}
             />
           ) : (
-            <ChartContainer className="h-[260px] w-full" config={winLossChartConfig}>
+            <ChartContainer
+              className={cn(
+                  "w-full min-w-0",
+                  isMobileView ? "h-[210px]" : "h-[260px]"
+                )}
+                config={winLossChartConfig}
+              >
               <BarChart data={dailyWinLossData}>
                 <CartesianGrid vertical={false} />
                 <XAxis
@@ -388,11 +469,7 @@ export function DashboardStatsCharts({
                 <YAxis axisLine={false} tickLine={false} tickMargin={8} width={44} />
                 <ChartTooltip content={<ChartTooltipContent />} />
                 <ChartLegend content={<ChartLegendContent />} />
-                <Bar
-                  dataKey="wins"
-                  fill="var(--color-wins)"
-                  radius={[4, 4, 0, 0]}
-                />
+                <Bar dataKey="wins" fill="var(--color-wins)" radius={[4, 4, 0, 0]} />
                 <Bar
                   dataKey="losses"
                   fill="var(--color-losses)"
@@ -403,14 +480,25 @@ export function DashboardStatsCharts({
           )}
         </ChartPanel>
 
-        <ChartPanel description="Net SR change grouped by day." title="Daily SR gain">
+        <ChartPanel
+          description="Net SR change grouped by day."
+          title="Daily SR gain"
+          viewport={viewport}
+        >
           {dailySrData.length === 0 ? (
             <ChartEmptyState
               description="SR totals appear after matches are logged."
               title="No SR data yet"
+              viewport={viewport}
             />
           ) : (
-            <ChartContainer className="h-[260px] w-full" config={dailySrChartConfig}>
+            <ChartContainer
+              className={cn(
+                  "w-full min-w-0",
+                  isMobileView ? "h-[210px]" : "h-[260px]"
+                )}
+                config={dailySrChartConfig}
+              >
               <BarChart data={dailySrData}>
                 <CartesianGrid vertical={false} />
                 <XAxis
@@ -442,4 +530,4 @@ export function DashboardStatsCharts({
       </div>
     </section>
   )
-}
+})

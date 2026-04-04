@@ -20,6 +20,8 @@ type AppShellProps = {
   children: React.ReactNode
 }
 
+const protectedShellWidthClass = "max-w-[90rem]"
+
 export async function AppShell({ children }: AppShellProps) {
   const [checkoutEnabled, creatorToolsAccess, clerkUser] = await Promise.all([
     isFlagEnabled("checkout"),
@@ -34,7 +36,9 @@ export async function AppShell({ children }: AppShellProps) {
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <header className="sticky top-0 z-40 border-b border-border/70 bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/80">
-        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
+        <div
+          className={`mx-auto flex w-full ${protectedShellWidthClass} flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8`}
+        >
           <div className="flex items-center gap-3">
             <Link
               href="/dashboard"
@@ -78,7 +82,9 @@ export async function AppShell({ children }: AppShellProps) {
         </div>
       </header>
 
-      <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-4 py-8 sm:px-6 lg:px-8">
+      <main
+        className={`mx-auto flex w-full ${protectedShellWidthClass} flex-1 flex-col px-4 py-8 sm:px-6 lg:px-8`}
+      >
         {children}
       </main>
     </div>

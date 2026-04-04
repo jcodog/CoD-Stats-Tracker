@@ -1,6 +1,5 @@
 "use client"
 
-import { useEffect, useState } from "react"
 import { IconMoonStars, IconSunHigh } from "@tabler/icons-react"
 import { useTheme } from "next-themes"
 
@@ -13,13 +12,7 @@ import {
 
 export function ThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme()
-  const [mounted, setMounted] = useState(false)
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
-
-  const isDark = mounted && resolvedTheme === "dark"
+  const isDark = resolvedTheme === "dark"
 
   return (
     <Tooltip>
@@ -30,11 +23,8 @@ export function ThemeToggle() {
           size="icon-sm"
           variant="outline"
         >
-          {isDark ? (
-            <IconSunHigh aria-hidden="true" />
-          ) : (
-            <IconMoonStars aria-hidden="true" />
-          )}
+          <IconMoonStars aria-hidden="true" className="dark:hidden" />
+          <IconSunHigh aria-hidden="true" className="hidden dark:block" />
         </Button>
       </TooltipTrigger>
       <TooltipContent>Click or press D to change theme</TooltipContent>

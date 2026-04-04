@@ -1,6 +1,7 @@
 "use client"
 
-import { startTransition, useEffect, useMemo, useState } from "react"
+import dynamic from "next/dynamic"
+import { startTransition, useMemo, useState } from "react"
 import { useShallow } from "zustand/react/shallow"
 
 import { AppSelect } from "@/components/AppSelect"
@@ -16,9 +17,6 @@ import {
   useDashboardStatsState,
   useUpdateDashboardPreferredMatchLoggingMode,
 } from "@/features/dashboard-stats/lib/dashboard-stats-client"
-import { DashboardStatsCharts } from "@/features/dashboard-stats/components/DashboardStatsCharts"
-import { DashboardStatsCreateSessionDialog } from "@/features/dashboard-stats/components/DashboardStatsCreateSessionDialog"
-import { DashboardStatsLogMatchSheet } from "@/features/dashboard-stats/components/DashboardStatsLogMatchSheet"
 import { DashboardStatsRecentMatches } from "@/features/dashboard-stats/components/DashboardStatsRecentMatches"
 import { DashboardStatsSummary } from "@/features/dashboard-stats/components/DashboardStatsSummary"
 import { getTimeRangeStart } from "@/features/dashboard-stats/lib/dashboard-stats-format"
@@ -30,6 +28,7 @@ import {
 import { useCreateSessionFlowStore } from "@/features/dashboard-stats/stores/create-session-flow-store"
 import { useDashboardUiStore } from "@/features/dashboard-stats/stores/dashboard-ui-store"
 import { useLogMatchWizardStore } from "@/features/dashboard-stats/stores/log-match-wizard-store"
+import type { RequestViewport } from "@/lib/server/request-viewport"
 import {
   Alert,
   AlertDescription,
@@ -49,6 +48,36 @@ import {
   ToggleGroupItem,
 } from "@workspace/ui/components/toggle-group"
 import { toast } from "sonner"
+
+const DashboardStatsCharts = dynamic(
+  () =>
+    import("@/features/dashboard-stats/components/DashboardStatsCharts").then(
+      (module) => module.DashboardStatsCharts
+    ),
+  {
+    loading: () => <Skeleton className="h-[540px] rounded-xl" />,
+  }
+)
+
+const DashboardStatsCreateSessionDialog = dynamic(
+  () =>
+    import(
+      "@/features/dashboard-stats/components/DashboardStatsCreateSessionDialog"
+    ).then((module) => module.DashboardStatsCreateSessionDialog),
+  {
+    loading: () => null,
+  }
+)
+
+const DashboardStatsLogMatchSheet = dynamic(
+  () =>
+    import("@/features/dashboard-stats/components/DashboardStatsLogMatchSheet").then(
+      (module) => module.DashboardStatsLogMatchSheet
+    ),
+  {
+    loading: () => null,
+  }
+)
 
 function getSetupMessage(state: DashboardState) {
   if (state.setupState.needsConfig) {
@@ -73,10 +102,10 @@ function getSetupMessage(state: DashboardState) {
 function SurfaceSkeleton() {
   return (
     <div className="grid gap-5 px-6 py-6">
-      <Skeleton className="h-28 rounded-xl" />
-      <Skeleton className="h-24 rounded-xl" />
-      <Skeleton className="h-[440px] rounded-xl" />
-      <Skeleton className="h-[280px] rounded-xl" />
+      <Skeleton className="h-28 rounded-lg" />
+      <Skeleton className="h-24 rounded-lg" />
+      <Skeleton className="h-[440px] rounded-lg" />
+      <Skeleton className="h-[280px] rounded-lg" />
     </div>
   )
 }
@@ -122,9 +151,11 @@ type DashboardWindowedMatch = {
 export function DashboardStatsEditorClient({
   authFailed = false,
   initialDashboardState,
+  viewport = "desktop",
 }: {
   authFailed?: boolean
   initialDashboardState: DashboardState | null
+  viewport?: RequestViewport
 }) {
   if (authFailed || !initialDashboardState) {
     return (
@@ -143,15 +174,21 @@ export function DashboardStatsEditorClient({
   }
 
   return (
-    <DashboardStatsEditorLoaded initialDashboardState={initialDashboardState} />
+    <DashboardStatsEditorLoaded
+      initialDashboardState={initialDashboardState}
+      viewport={viewport}
+    />
   )
 }
 
 function DashboardStatsEditorLoaded({
   initialDashboardState,
+  viewport,
 }: {
   initialDashboardState: DashboardState
+  viewport: RequestViewport
 }) {
+  const isMobileView = viewport === "mobile"
   const initialSessions = initialDashboardState.activeSessions as Array<{
     id: string
     losses: number
@@ -163,7 +200,6 @@ function DashboardStatsEditorLoaded({
   const [createSessionOpen, setCreateSessionOpen] = useState(false)
   const [logMatchOpen, setLogMatchOpen] = useState(false)
   const {
-    hasSyncedLoggingMode,
     includeLossProtected,
     selectedLoggingMode,
     selectedSessionId,
@@ -172,10 +208,8 @@ function DashboardStatsEditorLoaded({
     setIncludeLossProtected,
     setSelectedSessionId,
     setSelectedTimeRange,
-    syncSelectedLoggingMode,
   } = useDashboardUiStore(
     useShallow((state) => ({
-      hasSyncedLoggingMode: state.hasSyncedLoggingMode,
       includeLossProtected: state.includeLossProtected,
       selectedLoggingMode: state.selectedLoggingMode,
       selectedSessionId: state.selectedSessionId,
@@ -184,7 +218,6 @@ function DashboardStatsEditorLoaded({
       setIncludeLossProtected: state.setIncludeLossProtected,
       setSelectedSessionId: state.setSelectedSessionId,
       setSelectedTimeRange: state.setSelectedTimeRange,
-      syncSelectedLoggingMode: state.syncSelectedLoggingMode,
     }))
   )
 
@@ -197,13 +230,17 @@ function DashboardStatsEditorLoaded({
   const persistedLoggingMode =
     dashboardState.preferredMatchLoggingMode ??
     DEFAULT_DASHBOARD_MATCH_LOGGING_MODE
-  const effectiveLoggingMode = hasSyncedLoggingMode
-    ? selectedLoggingMode
-    : persistedLoggingMode
+  const effectiveLoggingMode = selectedLoggingMode ?? persistedLoggingMode
   const activeSessions = (dashboardState.activeSessions ??
     initialSessions) as typeof initialSessions
+  const effectiveSelectedSessionId =
+    selectedSessionId &&
+    activeSessions.some((session) => session.id === selectedSessionId)
+      ? selectedSessionId
+      : activeSessions[0]?.id ?? null
   const selectedSession =
-    activeSessions.find((session) => session.id === selectedSessionId) ?? null
+    activeSessions.find((session) => session.id === effectiveSelectedSessionId) ??
+    null
   const setupMessage = getSetupMessage(dashboardState)
   const activeTitleLabel =
     dashboardState.currentConfig?.activeTitleLabel ??
@@ -233,41 +270,20 @@ function DashboardStatsEditorLoaded({
     (availableModesQuery.data?.length ?? 0) > 0 &&
     (availableMapsQuery.data?.length ?? 0) > 0
 
-  useEffect(() => {
-    syncSelectedLoggingMode(persistedLoggingMode)
-  }, [persistedLoggingMode, syncSelectedLoggingMode])
-
-  useEffect(() => {
-    if (activeSessions.length === 0) {
-      if (selectedSessionId !== null) {
-        setSelectedSessionId(null)
-      }
-
-      return
-    }
-
-    if (
-      !selectedSessionId ||
-      !activeSessions.some((session) => session.id === selectedSessionId)
-    ) {
-      setSelectedSessionId(activeSessions[0]?.id ?? null)
-    }
-  }, [activeSessions, selectedSessionId, setSelectedSessionId])
-
   const overviewQuery = useDashboardSessionOverview(
-    selectedSessionId,
+    effectiveSelectedSessionId,
     includeLossProtected
   )
   const srTimelineQuery = useDashboardSessionSrTimeline(
-    selectedSessionId,
+    effectiveSelectedSessionId,
     includeLossProtected
   )
   const dailyPerformanceQuery = useDashboardSessionDailyPerformance(
-    selectedSessionId,
+    effectiveSelectedSessionId,
     includeLossProtected
   )
   const recentMatchesQuery = useDashboardRecentSessionMatches(
-    selectedSessionId,
+    effectiveSelectedSessionId,
     includeLossProtected
   )
   const sessionDetailsReady =
@@ -324,7 +340,7 @@ function DashboardStatsEditorLoaded({
       ? filteredWinLossBreakdown.wins / filteredWinLossBreakdown.total
       : null
   const defaultLogMatchSessionId =
-    selectedSessionId ?? activeSessions[0]?.id ?? null
+    effectiveSelectedSessionId ?? activeSessions[0]?.id ?? null
 
   function handleCreateSessionOpenChange(nextOpen: boolean) {
     if (!nextOpen) {
@@ -397,10 +413,22 @@ function DashboardStatsEditorLoaded({
   return (
     <>
       <div className="flex flex-1 flex-col gap-8">
-        <header className="flex flex-col gap-5 border-b border-border/60 pb-6 lg:flex-row lg:items-end lg:justify-between">
+        <header
+          className={
+            isMobileView
+              ? "grid gap-4 border-b border-border/60 pb-5"
+              : "flex flex-col gap-5 border-b border-border/60 pb-6 lg:flex-row lg:items-end lg:justify-between"
+          }
+        >
           <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-2">
-              <h1 className="text-4xl font-semibold tracking-tight text-balance">
+              <h1
+                className={
+                  isMobileView
+                    ? "text-3xl font-semibold tracking-tight text-balance"
+                    : "text-4xl font-semibold tracking-tight text-balance"
+                }
+              >
                 Ranked stats
               </h1>
               <p className="max-w-3xl text-sm text-muted-foreground">
@@ -410,9 +438,16 @@ function DashboardStatsEditorLoaded({
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+            <div
+              className={
+                isMobileView
+                  ? "grid gap-2 sm:grid-cols-2"
+                  : "flex flex-wrap items-center gap-2"
+              }
+            >
             {showCreateSessionButton ? (
               <Button
+                className={isMobileView ? "h-11 w-full justify-center" : undefined}
                 disabled={!canCreateSession}
                 onClick={handleOpenCreateSessionDialog}
                 variant="outline"
@@ -420,7 +455,11 @@ function DashboardStatsEditorLoaded({
                 Create session
               </Button>
             ) : null}
-            <Button disabled={!canLogMatches} onClick={handleOpenLogMatchSheet}>
+            <Button
+              className={isMobileView ? "h-11 w-full justify-center" : undefined}
+              disabled={!canLogMatches}
+              onClick={handleOpenLogMatchSheet}
+            >
               Log match
             </Button>
           </div>
@@ -441,9 +480,27 @@ function DashboardStatsEditorLoaded({
         ) : null}
 
         {activeSessions.length === 0 ? (
-          <SurfaceFrame>
-            <div className="grid gap-0 xl:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
-              <div className="px-6 py-6">
+          <SurfaceFrame
+            className={
+              isMobileView
+                ? "overflow-visible rounded-none border-none bg-transparent"
+                : undefined
+            }
+          >
+            <div
+                className={
+                  isMobileView
+                    ? "grid gap-5"
+                    : "grid gap-0 xl:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]"
+                }
+              >
+                <div
+                  className={
+                    isMobileView
+                      ? "border-y border-border/60 py-5"
+                      : "px-6 py-6"
+                  }
+                >
                 <Empty className="border-none bg-transparent p-0">
                   <EmptyHeader className="items-start text-left">
                     <EmptyTitle>No active session yet</EmptyTitle>
@@ -459,10 +516,17 @@ function DashboardStatsEditorLoaded({
                   </EmptyHeader>
                 </Empty>
               </div>
-              <div className="border-t border-border/60 px-6 py-6 xl:border-t-0 xl:border-l">
-                <div className="grid gap-3 text-sm text-muted-foreground">
-                  <p>
-                    Free users can keep one active session for the current title
+                <div
+                  className={
+                    isMobileView
+                      ? "border-y border-border/60 py-5"
+                      : "border-t border-border/60 px-6 py-6 xl:border-t-0 xl:border-l"
+                  }
+                >
+                  <div className="grid gap-3 text-sm text-muted-foreground">
+                    {isMobileView ? <h2 className="text-base font-semibold tracking-tight text-foreground">Session capacity</h2> : null}
+                    <p>
+                      Free users can keep one active session for the current title
                     and season.
                   </p>
                   <p>
@@ -472,6 +536,7 @@ function DashboardStatsEditorLoaded({
                   {showCreateSessionButton ? (
                     <div className="pt-2">
                       <Button
+                        className={isMobileView ? "h-11 w-full justify-center" : undefined}
                         disabled={!canCreateSession}
                         onClick={handleOpenCreateSessionDialog}
                       >
@@ -485,10 +550,28 @@ function DashboardStatsEditorLoaded({
           </SurfaceFrame>
         ) : (
           <div className="grid gap-6">
-            <SurfaceFrame>
+            <SurfaceFrame
+              className={
+                isMobileView
+                  ? "overflow-visible rounded-none border-none bg-transparent"
+                  : undefined
+              }
+            >
               <div className="grid gap-0">
-                <div className="px-6 py-7">
-                  <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-start">
+                <div
+                  className={
+                    isMobileView
+                      ? "border-y border-border/60 py-5"
+                      : "px-6 py-7"
+                  }
+                >
+                  <div
+                    className={
+                      isMobileView
+                        ? "grid gap-5"
+                        : "grid gap-6 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-start"
+                    }
+                  >
                     <div className="grid min-w-0 gap-2">
                       <h2 className="text-base font-semibold tracking-tight">
                         Session controls
@@ -499,100 +582,174 @@ function DashboardStatsEditorLoaded({
                       </p>
                     </div>
 
-                    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-[minmax(17rem,19rem)_auto_auto_auto] xl:items-start">
-                      <ToolbarGroup label="Session">
-                        <AppSelect
-                          className="w-full min-w-0"
-                          id="dashboard-session"
-                          onValueChange={(value) =>
-                            startTransition(() => setSelectedSessionId(value))
-                          }
-                          options={activeSessions.map((session) => ({
-                            label: `${session.usernameLabel ?? "Legacy session"} | ${session.wins}-${session.losses}`,
-                            value: session.id,
-                          }))}
-                          value={selectedSessionId ?? ""}
-                        />
-                      </ToolbarGroup>
-
-                      <ToolbarGroup label="Time range">
-                        <ToggleGroup
-                          className="justify-start"
-                          onValueChange={(value) => {
-                            if (
-                              value === "all" ||
-                              value === "7d" ||
-                              value === "14d" ||
-                              value === "30d"
-                            ) {
-                              startTransition(() => setSelectedTimeRange(value))
+                    <div
+                      className={
+                        isMobileView
+                          ? "grid gap-3"
+                          : "grid gap-4 sm:grid-cols-2 xl:grid-cols-[minmax(17rem,19rem)_auto_auto_auto] xl:items-start"
+                      }
+                    >
+                      <div
+                        className={
+                          isMobileView
+                            ? "border-b border-border/60 pb-4"
+                            : undefined
+                        }
+                      >
+                        <ToolbarGroup label="Session">
+                          <AppSelect
+                            className="w-full min-w-0"
+                            id={isMobileView ? "dashboard-session-mobile" : "dashboard-session"}
+                            onValueChange={(value) =>
+                              startTransition(() => setSelectedSessionId(value))
                             }
-                          }}
-                          size="sm"
-                          type="single"
-                          value={selectedTimeRange}
-                          variant="outline"
-                        >
-                          <ToggleGroupItem value="7d">7d</ToggleGroupItem>
-                          <ToggleGroupItem value="14d">14d</ToggleGroupItem>
-                          <ToggleGroupItem value="30d">30d</ToggleGroupItem>
-                          <ToggleGroupItem value="all">All</ToggleGroupItem>
-                        </ToggleGroup>
-                      </ToolbarGroup>
+                            options={activeSessions.map((session) => ({
+                              label: `${session.usernameLabel ?? "Legacy session"} | ${session.wins}-${session.losses}`,
+                              value: session.id,
+                            }))}
+                            value={effectiveSelectedSessionId ?? ""}
+                          />
+                        </ToolbarGroup>
+                      </div>
 
-                      <ToolbarGroup label="Logging mode">
-                        <ToggleGroup
-                          aria-label="Match logging mode"
-                          className="justify-start"
-                          onValueChange={handleLoggingModeChange}
-                          size="sm"
-                          type="single"
-                          value={effectiveLoggingMode}
-                          variant="outline"
-                        >
-                          <ToggleGroupItem
-                            disabled={updateLoggingModeMutation.isPending}
-                            value="comprehensive"
+                      <div
+                        className={
+                          isMobileView
+                            ? "border-b border-border/60 pb-4"
+                            : undefined
+                        }
+                      >
+                        <ToolbarGroup label="Time range">
+                          <ToggleGroup
+                            className={
+                              isMobileView
+                                ? "grid w-full grid-cols-4 gap-2"
+                                : "justify-start"
+                            }
+                            onValueChange={(value) => {
+                              if (
+                                value === "all" ||
+                                value === "7d" ||
+                                value === "14d" ||
+                                value === "30d"
+                              ) {
+                                startTransition(() => setSelectedTimeRange(value))
+                              }
+                            }}
+                            size="sm"
+                            type="single"
+                            value={selectedTimeRange}
+                            variant="outline"
                           >
-                            Comprehensive
-                          </ToggleGroupItem>
-                          <ToggleGroupItem
-                            disabled={updateLoggingModeMutation.isPending}
-                            value="basic"
-                          >
-                            Basic
-                          </ToggleGroupItem>
-                        </ToggleGroup>
-                      </ToolbarGroup>
+                            <ToggleGroupItem className={isMobileView ? "w-full" : undefined} value="7d">
+                              7d
+                            </ToggleGroupItem>
+                            <ToggleGroupItem className={isMobileView ? "w-full" : undefined} value="14d">
+                              14d
+                            </ToggleGroupItem>
+                            <ToggleGroupItem className={isMobileView ? "w-full" : undefined} value="30d">
+                              30d
+                            </ToggleGroupItem>
+                            <ToggleGroupItem className={isMobileView ? "w-full" : undefined} value="all">
+                              All
+                            </ToggleGroupItem>
+                          </ToggleGroup>
+                        </ToolbarGroup>
+                      </div>
 
-                      <ToolbarGroup label="Loss protection">
-                        <span className="text-sm text-muted-foreground">
-                          Show
-                        </span>
-                        <Switch
-                          aria-label="Show loss protected matches"
-                          checked={includeLossProtected}
-                          onCheckedChange={(checked) =>
-                            startTransition(() =>
-                              setIncludeLossProtected(checked)
-                            )
-                          }
-                        />
-                      </ToolbarGroup>
+                      <div
+                        className={
+                          isMobileView
+                            ? "border-b border-border/60 pb-4"
+                            : undefined
+                        }
+                      >
+                        <ToolbarGroup label="Logging mode">
+                          <ToggleGroup
+                            aria-label="Match logging mode"
+                            className={
+                              isMobileView
+                                ? "grid w-full grid-cols-2 gap-2"
+                                : "justify-start"
+                            }
+                            onValueChange={handleLoggingModeChange}
+                            size="sm"
+                            type="single"
+                            value={effectiveLoggingMode}
+                            variant="outline"
+                          >
+                            <ToggleGroupItem
+                              className={isMobileView ? "w-full" : undefined}
+                              disabled={updateLoggingModeMutation.isPending}
+                              value="comprehensive"
+                            >
+                              Comprehensive
+                            </ToggleGroupItem>
+                            <ToggleGroupItem
+                              className={isMobileView ? "w-full" : undefined}
+                              disabled={updateLoggingModeMutation.isPending}
+                              value="basic"
+                            >
+                              Basic
+                            </ToggleGroupItem>
+                          </ToggleGroup>
+                        </ToolbarGroup>
+                      </div>
+
+                      <div
+                        className={
+                          isMobileView
+                            ? "flex items-center justify-between gap-4 pt-1"
+                            : undefined
+                        }
+                      >
+                        <ToolbarGroup label="Loss protection">
+                          <span className="text-sm text-muted-foreground">
+                            {isMobileView ? "Show protected losses" : "Show"}
+                          </span>
+                          <Switch
+                            aria-label="Show loss protected matches"
+                            checked={includeLossProtected}
+                            onCheckedChange={(checked) =>
+                              startTransition(() =>
+                                setIncludeLossProtected(checked)
+                              )
+                            }
+                          />
+                        </ToolbarGroup>
+                      </div>
                     </div>
                   </div>
                 </div>
 
-                {!selectedSessionId || !selectedSession ? (
-                  <div className="border-t border-border/50">
+                {!effectiveSelectedSessionId || !selectedSession ? (
+                  <div
+                    className={
+                      isMobileView
+                        ? "mt-6 border-t border-border/60"
+                        : "border-t border-border/50"
+                    }
+                  >
                     <SurfaceSkeleton />
                   </div>
                 ) : sessionDetailsLoading ? (
-                  <div className="border-t border-border/50">
+                  <div
+                    className={
+                      isMobileView
+                        ? "mt-6 border-t border-border/60"
+                        : "border-t border-border/50"
+                    }
+                  >
                     <SurfaceSkeleton />
                   </div>
                 ) : !sessionDetailsReady ? (
-                  <div className="border-t border-border/50 px-6 py-6">
+                  <div
+                    className={
+                      isMobileView
+                        ? "mt-6 border-t border-border/60 pt-5"
+                        : "border-t border-border/50 px-6 py-6"
+                    }
+                  >
                     <Alert variant="destructive">
                       <AlertTitle>Session details failed to load</AlertTitle>
                       <AlertDescription>
@@ -604,13 +761,25 @@ function DashboardStatsEditorLoaded({
                 ) : (
                   <>
                     {sessionDetailsRefreshing ? (
-                      <div className="border-t border-border/50 px-6 py-3 text-sm text-muted-foreground">
+                      <div
+                        className={
+                          isMobileView
+                            ? "mt-5 text-sm text-muted-foreground"
+                            : "border-t border-border/50 px-6 py-3 text-sm text-muted-foreground"
+                        }
+                      >
                         Refreshing session data…
                       </div>
                     ) : null}
 
                     {sessionDetailsRefreshError ? (
-                      <div className="border-t border-border/50 px-6 py-6">
+                      <div
+                        className={
+                          isMobileView
+                            ? "mt-5"
+                            : "border-t border-border/50 px-6 py-6"
+                        }
+                      >
                         <Alert variant="destructive">
                           <AlertTitle>Session refresh failed</AlertTitle>
                           <AlertDescription>
@@ -621,7 +790,13 @@ function DashboardStatsEditorLoaded({
                       </div>
                     ) : null}
 
-                    <div className="border-t border-border/50 px-6 pt-6">
+                    <div
+                      className={
+                        isMobileView
+                          ? "mt-6 border-t border-border/60 pt-5"
+                          : "border-t border-border/50 px-6 pt-6"
+                      }
+                    >
                       <div className="mb-3 grid gap-1">
                         <h2 className="text-base font-semibold">
                           Session snapshot
@@ -636,11 +811,18 @@ function DashboardStatsEditorLoaded({
                         embedded
                         overview={overviewQuery.data!}
                         showHeader={false}
+                        viewport={isMobileView ? "mobile" : "desktop"}
                         winRate={filteredWinRate}
                       />
                     </div>
 
-                    <div className="border-t border-border/50 px-6 pt-6">
+                    <div
+                      className={
+                        isMobileView
+                          ? "mt-6 border-t border-border/60 pt-5"
+                          : "border-t border-border/50 px-6 pt-6"
+                      }
+                    >
                       <div className="mb-3 grid gap-1">
                         <h2 className="text-base font-semibold">
                           Session trends
@@ -656,11 +838,18 @@ function DashboardStatsEditorLoaded({
                         selectedTimeRange={selectedTimeRange}
                         showHeader={false}
                         srTimeline={srTimelineQuery.data!}
+                        viewport={isMobileView ? "mobile" : "desktop"}
                         winLossBreakdown={filteredWinLossBreakdown}
                       />
                     </div>
 
-                    <div className="border-t border-border/50 px-6 py-6">
+                    <div
+                      className={
+                        isMobileView
+                          ? "mt-6 border-t border-border/60 pt-5"
+                          : "border-t border-border/50 px-6 py-6"
+                      }
+                    >
                       <div className="mb-3 grid gap-1">
                         <h2 className="text-base font-semibold">
                           Recent matches
@@ -707,7 +896,7 @@ function DashboardStatsEditorLoaded({
           startTransition(() => setSelectedSessionId(sessionId))
         }
         open={logMatchOpen}
-        selectedSessionId={selectedSessionId}
+        selectedSessionId={effectiveSelectedSessionId}
       />
     </>
   )

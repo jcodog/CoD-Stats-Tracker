@@ -5,29 +5,90 @@ import { Dialog as DialogPrimitive } from "radix-ui"
 
 import { cn } from "@workspace/ui/lib/utils"
 import { Button } from "@workspace/ui/components/button"
+import {
+  Drawer,
+  DrawerClose,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerOverlay,
+  DrawerPortal,
+  DrawerTitle,
+  DrawerTrigger,
+} from "@workspace/ui/components/drawer"
+import { useIsMobile } from "@workspace/ui/hooks/use-mobile"
 import { IconX } from "@tabler/icons-react"
+
+const DialogViewportContext = React.createContext(false)
 
 function Dialog({
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Root>) {
-  return <DialogPrimitive.Root data-slot="dialog" {...props} />
+  const isMobile = useIsMobile()
+
+  return (
+    <DialogViewportContext.Provider value={isMobile}>
+      {isMobile ? (
+        <Drawer
+          data-slot="dialog"
+          {...(props as React.ComponentProps<typeof Drawer>)}
+        />
+      ) : (
+        <DialogPrimitive.Root data-slot="dialog" {...props} />
+      )}
+    </DialogViewportContext.Provider>
+  )
 }
 
 function DialogTrigger({
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Trigger>) {
+  const isMobile = React.useContext(DialogViewportContext)
+
+  if (isMobile) {
+    return (
+      <DrawerTrigger
+        data-slot="dialog-trigger"
+        {...(props as React.ComponentProps<typeof DrawerTrigger>)}
+      />
+    )
+  }
+
   return <DialogPrimitive.Trigger data-slot="dialog-trigger" {...props} />
 }
 
 function DialogPortal({
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Portal>) {
+  const isMobile = React.useContext(DialogViewportContext)
+
+  if (isMobile) {
+    return (
+      <DrawerPortal
+        data-slot="dialog-portal"
+        {...(props as React.ComponentProps<typeof DrawerPortal>)}
+      />
+    )
+  }
+
   return <DialogPrimitive.Portal data-slot="dialog-portal" {...props} />
 }
 
 function DialogClose({
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Close>) {
+  const isMobile = React.useContext(DialogViewportContext)
+
+  if (isMobile) {
+    return (
+      <DrawerClose
+        data-slot="dialog-close"
+        {...(props as React.ComponentProps<typeof DrawerClose>)}
+      />
+    )
+  }
+
   return <DialogPrimitive.Close data-slot="dialog-close" {...props} />
 }
 
@@ -35,6 +96,18 @@ function DialogOverlay({
   className,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Overlay>) {
+  const isMobile = React.useContext(DialogViewportContext)
+
+  if (isMobile) {
+    return (
+      <DrawerOverlay
+        className={className}
+        data-slot="dialog-overlay"
+        {...(props as React.ComponentProps<typeof DrawerOverlay>)}
+      />
+    )
+  }
+
   return (
     <DialogPrimitive.Overlay
       data-slot="dialog-overlay"
@@ -55,6 +128,32 @@ function DialogContent({
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
 }) {
+  const isMobile = React.useContext(DialogViewportContext)
+
+  if (isMobile) {
+    return (
+      <DrawerContent
+        data-slot="dialog-content"
+        className={cn("gap-4", className)}
+        {...(props as React.ComponentProps<typeof DrawerContent>)}
+      >
+        {children}
+        {showCloseButton ? (
+          <DrawerClose asChild>
+            <Button
+              variant="ghost"
+              className="absolute top-2 right-2"
+              size="icon-sm"
+            >
+              <IconX />
+              <span className="sr-only">Close</span>
+            </Button>
+          </DrawerClose>
+        ) : null}
+      </DrawerContent>
+    )
+  }
+
   return (
     <DialogPortal>
       <DialogOverlay />
@@ -86,6 +185,18 @@ function DialogContent({
 }
 
 function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
+  const isMobile = React.useContext(DialogViewportContext)
+
+  if (isMobile) {
+    return (
+      <DrawerHeader
+        data-slot="dialog-header"
+        className={className}
+        {...props}
+      />
+    )
+  }
+
   return (
     <div
       data-slot="dialog-header"
@@ -103,6 +214,25 @@ function DialogFooter({
 }: React.ComponentProps<"div"> & {
   showCloseButton?: boolean
 }) {
+  const isMobile = React.useContext(DialogViewportContext)
+
+  if (isMobile) {
+    return (
+      <DrawerFooter
+        data-slot="dialog-footer"
+        className={className}
+        {...props}
+      >
+        {children}
+        {showCloseButton ? (
+          <DrawerClose asChild>
+            <Button variant="outline">Close</Button>
+          </DrawerClose>
+        ) : null}
+      </DrawerFooter>
+    )
+  }
+
   return (
     <div
       data-slot="dialog-footer"
@@ -126,6 +256,18 @@ function DialogTitle({
   className,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Title>) {
+  const isMobile = React.useContext(DialogViewportContext)
+
+  if (isMobile) {
+    return (
+      <DrawerTitle
+        data-slot="dialog-title"
+        className={className}
+        {...(props as React.ComponentProps<typeof DrawerTitle>)}
+      />
+    )
+  }
+
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
@@ -139,6 +281,21 @@ function DialogDescription({
   className,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Description>) {
+  const isMobile = React.useContext(DialogViewportContext)
+
+  if (isMobile) {
+    return (
+      <DrawerDescription
+        data-slot="dialog-description"
+        className={cn(
+          "*:[a]:underline *:[a]:underline-offset-3 *:[a]:hover:text-foreground",
+          className
+        )}
+        {...(props as React.ComponentProps<typeof DrawerDescription>)}
+      />
+    )
+  }
+
   return (
     <DialogPrimitive.Description
       data-slot="dialog-description"

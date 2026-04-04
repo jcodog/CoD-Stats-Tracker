@@ -1,16 +1,12 @@
 "use client"
 
 import { useCallback } from "react"
+import type { ConvexReactClient } from "convex/react"
+import { useConvex } from "convex/react"
 import { useMutation } from "@tanstack/react-query"
 import type { FunctionArgs, FunctionReturnType } from "convex/server"
 
 import { api } from "@workspace/backend/convex/_generated/api"
-
-import {
-  PLAY_WITH_VIEWERS_CSRF_HEADER,
-  PLAY_WITH_VIEWERS_CSRF_HEADER_VALUE,
-  type PlayWithViewersApiAction,
-} from "@/features/creator-tools/play-with-viewers/lib/play-with-viewers-api"
 
 export class PlayWithViewersClientError extends Error {
   data: unknown
@@ -38,77 +34,44 @@ function normalizePlayWithViewersErrorMessage(
     .replace(/^Uncaught Error:\s*/u, "")
 }
 
-async function parseJson(response: Response) {
-  try {
-    return (await response.json()) as unknown
-  } catch {
-    return null
-  }
-}
-
-async function callPlayWithViewersApi<TResult>(
-  action: PlayWithViewersApiAction,
-  input: unknown
-) {
-  const response = await fetch("/api/creator-tools/play-with-viewers", {
-    body: JSON.stringify({
-      action,
-      input,
-    }),
-    headers: {
-      "content-type": "application/json",
-      [PLAY_WITH_VIEWERS_CSRF_HEADER]: PLAY_WITH_VIEWERS_CSRF_HEADER_VALUE,
-    },
-    method: "POST",
-  })
-
-  const payload = await parseJson(response)
-
-  if (!response.ok) {
-    const message =
-      typeof payload === "object" &&
-      payload !== null &&
-      "message" in payload &&
-      typeof payload.message === "string"
-        ? payload.message
-        : `Play With Viewers request failed (${response.status}).`
-
-    throw new PlayWithViewersClientError(
-      normalizePlayWithViewersErrorMessage(
-        message,
-        "Play With Viewers request failed."
-      ),
-      response.status,
-      payload
-    )
+function toPlayWithViewersClientError(error: unknown, fallback: string) {
+  if (error instanceof PlayWithViewersClientError) {
+    return error
   }
 
-  if (
-    typeof payload !== "object" ||
-    payload === null ||
-    !("data" in payload)
-  ) {
-    throw new PlayWithViewersClientError(
-      "Play With Viewers returned an invalid response.",
-      500,
-      payload
-    )
-  }
+  const status =
+    typeof error === "object" &&
+    error !== null &&
+    "status" in error &&
+    typeof error.status === "number"
+      ? error.status
+      : 500
+  const message =
+    error instanceof Error ? error.message : "Play With Viewers request failed."
 
-  return payload.data as TResult
-}
-
-function usePlayWithViewersAction<TInput, TResult>(
-  action: PlayWithViewersApiAction
-) {
-  const { mutateAsync } = useMutation({
-    mutationFn: (input: TInput) => callPlayWithViewersApi<TResult>(action, input),
-  })
-
-  return useCallback(
-    (input: TInput) => mutateAsync(input),
-    [mutateAsync]
+  return new PlayWithViewersClientError(
+    normalizePlayWithViewersErrorMessage(message, fallback),
+    status,
+    error
   )
+}
+
+function usePlayWithViewersAction<TInput, TResult>(args: {
+  fallbackMessage: string
+  mutationFn: (convex: ConvexReactClient, input: TInput) => Promise<TResult>
+}) {
+  const convex = useConvex()
+  const { mutateAsync } = useMutation({
+    mutationFn: async (input: TInput) => {
+      try {
+        return await args.mutationFn(convex, input)
+      } catch (error) {
+        throw toPlayWithViewersClientError(error, args.fallbackMessage)
+      }
+    },
+  })
+
+  return useCallback((input: TInput) => mutateAsync(input), [mutateAsync])
 }
 
 export function useClearQueueAction() {
@@ -117,7 +80,11 @@ export function useClearQueueAction() {
     FunctionReturnType<
       typeof api.actions.creatorTools.playingWithViewers.queue.clearQueue
     >
-  >("clearQueue")
+  >({
+    fallbackMessage: "Unable to clear the Play With Viewers queue.",
+    mutationFn: (convex, input) =>
+      convex.action(api.actions.creatorTools.playingWithViewers.queue.clearQueue, input),
+  })
 }
 
 export function useCreateQueueInOwnedGuildAction() {
@@ -128,7 +95,14 @@ export function useCreateQueueInOwnedGuildAction() {
     FunctionReturnType<
       typeof api.actions.creatorTools.playingWithViewers.discord.createQueueInOwnedGuild
     >
-  >("createQueueInOwnedGuild")
+  >({
+    fallbackMessage: "Unable to create the Play With Viewers queue.",
+    mutationFn: (convex, input) =>
+      convex.action(
+        api.actions.creatorTools.playingWithViewers.discord.createQueueInOwnedGuild,
+        input
+      ),
+  })
 }
 
 export function useFixQueueChannelPermissionsAction() {
@@ -139,7 +113,14 @@ export function useFixQueueChannelPermissionsAction() {
     FunctionReturnType<
       typeof api.actions.creatorTools.playingWithViewers.discord.fixQueueChannelPermissions
     >
-  >("fixQueueChannelPermissions")
+  >({
+    fallbackMessage: "Unable to update the Play With Viewers Discord permissions.",
+    mutationFn: (convex, input) =>
+      convex.action(
+        api.actions.creatorTools.playingWithViewers.discord.fixQueueChannelPermissions,
+        input
+      ),
+  })
 }
 
 export function useInviteQueueEntryNowAndNotifyAction() {
@@ -150,7 +131,14 @@ export function useInviteQueueEntryNowAndNotifyAction() {
     FunctionReturnType<
       typeof api.actions.creatorTools.playingWithViewers.discord.inviteQueueEntryNowAndNotify
     >
-  >("inviteQueueEntryNowAndNotify")
+  >({
+    fallbackMessage: "Unable to invite that viewer right now.",
+    mutationFn: (convex, input) =>
+      convex.action(
+        api.actions.creatorTools.playingWithViewers.discord.inviteQueueEntryNowAndNotify,
+        input
+      ),
+  })
 }
 
 export function useListAvailableDiscordGuildsAction() {
@@ -161,7 +149,14 @@ export function useListAvailableDiscordGuildsAction() {
     FunctionReturnType<
       typeof api.actions.creatorTools.playingWithViewers.discord.listAvailableDiscordGuilds
     >
-  >("listAvailableDiscordGuilds")
+  >({
+    fallbackMessage: "Unable to load eligible Discord servers.",
+    mutationFn: (convex, input) =>
+      convex.action(
+        api.actions.creatorTools.playingWithViewers.discord.listAvailableDiscordGuilds,
+        input
+      ),
+  })
 }
 
 export function usePublishQueueMessageAction() {
@@ -172,7 +167,14 @@ export function usePublishQueueMessageAction() {
     FunctionReturnType<
       typeof api.actions.creatorTools.playingWithViewers.discord.publishQueueMessage
     >
-  >("publishQueueMessage")
+  >({
+    fallbackMessage: "Unable to publish the queue message.",
+    mutationFn: (convex, input) =>
+      convex.action(
+        api.actions.creatorTools.playingWithViewers.discord.publishQueueMessage,
+        input
+      ),
+  })
 }
 
 export function useRemoveQueueEntryAction() {
@@ -183,7 +185,11 @@ export function useRemoveQueueEntryAction() {
     FunctionReturnType<
       typeof api.actions.creatorTools.playingWithViewers.queue.removeQueueEntry
     >
-  >("removeQueueEntry")
+  >({
+    fallbackMessage: "Unable to remove that queue entry.",
+    mutationFn: (convex, input) =>
+      convex.action(api.actions.creatorTools.playingWithViewers.queue.removeQueueEntry, input),
+  })
 }
 
 export function useSelectNextBatchAndNotifyAction() {
@@ -194,7 +200,14 @@ export function useSelectNextBatchAndNotifyAction() {
     FunctionReturnType<
       typeof api.actions.creatorTools.playingWithViewers.discord.selectNextBatchAndNotify
     >
-  >("selectNextBatchAndNotify")
+  >({
+    fallbackMessage: "Unable to select the next viewer batch.",
+    mutationFn: (convex, input) =>
+      convex.action(
+        api.actions.creatorTools.playingWithViewers.discord.selectNextBatchAndNotify,
+        input
+      ),
+  })
 }
 
 export function useSetQueueActiveAction() {
@@ -205,7 +218,11 @@ export function useSetQueueActiveAction() {
     FunctionReturnType<
       typeof api.actions.creatorTools.playingWithViewers.queue.setQueueActive
     >
-  >("setQueueActive")
+  >({
+    fallbackMessage: "Unable to update the queue status.",
+    mutationFn: (convex, input) =>
+      convex.action(api.actions.creatorTools.playingWithViewers.queue.setQueueActive, input),
+  })
 }
 
 export function useSyncQueueDiscordContextAction() {
@@ -216,7 +233,14 @@ export function useSyncQueueDiscordContextAction() {
     FunctionReturnType<
       typeof api.actions.creatorTools.playingWithViewers.discord.syncQueueDiscordContext
     >
-  >("syncQueueDiscordContext")
+  >({
+    fallbackMessage: "Unable to sync the Play With Viewers Discord context.",
+    mutationFn: (convex, input) =>
+      convex.action(
+        api.actions.creatorTools.playingWithViewers.discord.syncQueueDiscordContext,
+        input
+      ),
+  })
 }
 
 export function useUpdateQueueMessageAction() {
@@ -227,7 +251,14 @@ export function useUpdateQueueMessageAction() {
     FunctionReturnType<
       typeof api.actions.creatorTools.playingWithViewers.discord.updateQueueMessage
     >
-  >("updateQueueMessage")
+  >({
+    fallbackMessage: "Unable to refresh the queue message.",
+    mutationFn: (convex, input) =>
+      convex.action(
+        api.actions.creatorTools.playingWithViewers.discord.updateQueueMessage,
+        input
+      ),
+  })
 }
 
 export function useUpdateQueueSettingsAction() {
@@ -238,5 +269,12 @@ export function useUpdateQueueSettingsAction() {
     FunctionReturnType<
       typeof api.actions.creatorTools.playingWithViewers.queue.updateQueueSettings
     >
-  >("updateQueueSettings")
+  >({
+    fallbackMessage: "Unable to save the queue settings.",
+    mutationFn: (convex, input) =>
+      convex.action(
+        api.actions.creatorTools.playingWithViewers.queue.updateQueueSettings,
+        input
+      ),
+  })
 }

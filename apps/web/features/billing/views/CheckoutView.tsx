@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { Elements } from "@stripe/react-stripe-js"
 import { IconCreditCard } from "@tabler/icons-react"
 import { useTheme } from "next-themes"
@@ -40,6 +40,7 @@ import {
   useCreateSubscriptionIntent,
   usePricingCatalog,
 } from "@/features/billing/lib/billing-client"
+import type { RequestViewport } from "@/lib/server/request-viewport"
 import type {
   BillingInterval,
   BillingResolvedState,
@@ -52,9 +53,12 @@ import {
 
 export function CheckoutView({
   checkoutEnabled,
+  viewport = "desktop",
 }: {
   checkoutEnabled: boolean
+  viewport?: RequestViewport
 }) {
+  const isMobileView = viewport === "mobile"
   const router = useRouter()
   const { resolvedTheme } = useTheme()
   const catalogQuery = usePricingCatalog()
@@ -63,8 +67,8 @@ export function CheckoutView({
   const createSubscriptionIntent = useCreateSubscriptionIntent()
   const abandonPendingCheckout = useAbandonPendingCheckout()
   const [selectedInterval, setSelectedInterval] =
-    useState<BillingInterval>("month")
-  const [selectedPlanKey, setSelectedPlanKey] = useState("")
+    useState<BillingInterval | null>(null)
+  const [selectedPlanKey, setSelectedPlanKey] = useState<string | null>(null)
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false)
   const [isPaymentSubmitting, setIsPaymentSubmitting] = useState(false)
   const [checkoutResult, setCheckoutResult] = useState<{
@@ -78,8 +82,15 @@ export function CheckoutView({
     catalogQuery.data?.plans.filter(
       (plan) => plan.planType === "paid" && plan.active
     ) ?? []
+  const effectiveSelectedInterval =
+    selectedInterval ?? catalogQuery.data?.currentInterval ?? "month"
+  const effectiveSelectedPlanKey =
+    selectedPlanKey ??
+    paidPlans[0]?.planKey ??
+    catalogQuery.data?.plans[0]?.planKey ??
+    ""
   const selectedPlan =
-    paidPlans.find((plan) => plan.planKey === selectedPlanKey) ??
+    paidPlans.find((plan) => plan.planKey === effectiveSelectedPlanKey) ??
     paidPlans[0] ??
     null
   const hasManagedSubscription =
@@ -106,17 +117,6 @@ export function CheckoutView({
         }).format(endsAt)}.`
       : "This account already has Creator complimentary access with no expiry."
   }
-
-  useEffect(() => {
-    if (!catalogQuery.data || selectedPlanKey) {
-      return
-    }
-
-    setSelectedInterval(catalogQuery.data.currentInterval ?? "month")
-    setSelectedPlanKey(
-      paidPlans[0]?.planKey ?? catalogQuery.data.plans[0]?.planKey ?? ""
-    )
-  }, [catalogQuery.data, paidPlans, selectedPlanKey])
 
   async function clearPendingCheckoutIntent() {
     if (!checkoutResult?.clientSecret) {
@@ -162,7 +162,7 @@ export function CheckoutView({
     try {
       const result = await createSubscriptionIntent.mutateAsync({
         attemptKey: crypto.randomUUID(),
-        interval: selectedInterval,
+        interval: effectiveSelectedInterval,
         planKey: selectedPlan.planKey,
       })
 
@@ -290,9 +290,14 @@ export function CheckoutView({
   }
 
   return (
-    <div className="grid gap-8">
-      <div className="space-y-3">
-        <h1 className="text-4xl font-semibold tracking-tight">
+    <div className={isMobileView ? "grid gap-6" : "grid gap-8"}>
+      <div className={isMobileView ? "space-y-2" : "space-y-3"}>
+        {isMobileView ? (
+          <p className="text-[0.72rem] font-semibold tracking-[0.24em] text-primary uppercase">
+            Billing
+          </p>
+        ) : null}
+        <h1 className={isMobileView ? "text-3xl font-semibold tracking-tight" : "text-4xl font-semibold tracking-tight"}>
           Secure checkout
         </h1>
         <p className="max-w-3xl text-base text-muted-foreground">
@@ -304,7 +309,7 @@ export function CheckoutView({
       <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_23rem]">
         <div className="space-y-6">
           <PlanSelector
-            interval={selectedInterval}
+            interval={effectiveSelectedInterval}
             onIntervalChange={(interval) => {
               setSelectedInterval(interval)
               setIsPaymentDialogOpen(false)
@@ -362,7 +367,7 @@ export function CheckoutView({
                 </Button>
               </>
             }
-            interval={selectedInterval}
+            interval={effectiveSelectedInterval}
             plan={selectedPlan}
             variant="checkout"
           />

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { useQuery } from "convex/react"
 
@@ -58,46 +58,24 @@ export function ChatGptAppSettingsSection({
 
   const [disconnectState, setDisconnectState] =
     useState<DisconnectState>("idle")
-  const [statusMessage, setStatusMessage] = useState<string | null>(null)
+  const [disconnectErrorMessage, setDisconnectErrorMessage] =
+    useState<string | null>(null)
   const [connectStarted, setConnectStarted] = useState(false)
 
   const linked = user?.chatgptLinked === true
-
-  useEffect(() => {
-    if (!connectStarted || linked) {
-      return
-    }
-
-    const refreshConnectionState = () => {
-      setStatusMessage("Checking connection state…")
-      router.refresh()
-    }
-
-    const onVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        refreshConnectionState()
-      }
-    }
-
-    window.addEventListener("focus", refreshConnectionState)
-    document.addEventListener("visibilitychange", onVisibilityChange)
-
-    return () => {
-      window.removeEventListener("focus", refreshConnectionState)
-      document.removeEventListener("visibilitychange", onVisibilityChange)
-    }
-  }, [connectStarted, linked, router])
-
-  useEffect(() => {
-    if (connectStarted && linked) {
-      setConnectStarted(false)
-      setStatusMessage("Connected. Account state updated.")
-    }
-  }, [connectStarted, linked])
+  const statusMessage =
+    disconnectState === "error"
+      ? disconnectErrorMessage
+      : linked && connectStarted
+        ? "Connected. Account state updated."
+        : connectStarted
+          ? "Opening ChatGPT. Run a CodStats action to complete authorization."
+          : null
 
   const handleDisconnect = async () => {
     setDisconnectState("pending")
-    setStatusMessage(null)
+    setConnectStarted(false)
+    setDisconnectErrorMessage(null)
 
     try {
       const response = await fetch("/oauth/revoke?source=settings", {
@@ -128,11 +106,10 @@ export function ChatGptAppSettingsSection({
       }
 
       setDisconnectState("idle")
-      setStatusMessage("Disconnected. Refreshing account state…")
       router.refresh()
     } catch (error) {
       setDisconnectState("error")
-      setStatusMessage(
+      setDisconnectErrorMessage(
         error instanceof Error
           ? error.message
           : "Unable to disconnect right now."
@@ -239,9 +216,6 @@ export function ChatGptAppSettingsSection({
                 href={resolvedConnectHref}
                 onClick={() => {
                   setConnectStarted(true)
-                  setStatusMessage(
-                    "Opening ChatGPT. Run a CodStats action to complete authorization."
-                  )
                 }}
                 rel="noopener noreferrer"
                 target="_blank"
