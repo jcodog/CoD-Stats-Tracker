@@ -63,36 +63,67 @@ const dailySrChartConfig = {
   },
 } satisfies ChartConfig
 
-function getSrAxisDomain(points: Array<{ sr: number }>) {
-  if (points.length === 0) {
-    return [0, 100] as const
+function getExactAxisDomain(values: number[], fallback: readonly [number, number]) {
+  if (values.length === 0) {
+    return fallback
   }
 
-  const values = points.map((point) => point.sr)
+  return [Math.min(...values), Math.max(...values)] as const
+}
+
+function getExactAxisTicks(args: {
+  includeZero?: boolean
+  maxTickCount?: number
+  values: number[]
+}) {
+  const values = args.values.filter((value) => Number.isFinite(value))
+
+  if (values.length === 0) {
+    return [] as number[]
+  }
+
   const minValue = Math.min(...values)
   const maxValue = Math.max(...values)
-  const lowerBound = Math.max(0, Math.floor((minValue - 1) / 100) * 100)
-  const upperBound = Math.ceil((maxValue + 1) / 100) * 100
 
-  return [lowerBound, upperBound] as const
+  if (minValue === maxValue) {
+    return [minValue]
+  }
+
+  const ticks = new Set<number>([minValue, maxValue])
+
+  if (args.includeZero && minValue < 0 && maxValue > 0) {
+    ticks.add(0)
+  }
+
+  const remainingSlots = Math.max((args.maxTickCount ?? 4) - ticks.size, 0)
+
+  if (remainingSlots > 0) {
+    const step = (maxValue - minValue) / (remainingSlots + 1)
+
+    for (let index = 1; index <= remainingSlots; index += 1) {
+      const nextTick = Math.round(minValue + step * index)
+
+      if (nextTick > minValue && nextTick < maxValue) {
+        ticks.add(nextTick)
+      }
+    }
+  }
+
+  return Array.from(ticks).sort((left, right) => left - right)
+}
+
+function getSrAxisDomain(points: Array<{ sr: number }>) {
+  return getExactAxisDomain(
+    points.map((point) => point.sr),
+    [0, 100]
+  )
 }
 
 function getDailySrAxisDomain(points: Array<{ netSr: number }>) {
-  if (points.length === 0) {
-    return [-100, 100] as const
-  }
-
-  const values = points.map((point) => point.netSr)
-  const minValue = Math.min(0, ...values)
-  const maxValue = Math.max(0, ...values)
-  const lowerBound = Math.floor(minValue / 100) * 100
-  const upperBound = Math.ceil(maxValue / 100) * 100
-
-  if (lowerBound === upperBound) {
-    return [-100, 100] as const
-  }
-
-  return [lowerBound, upperBound] as const
+  return getExactAxisDomain(
+    points.map((point) => point.netSr),
+    [-100, 100]
+  )
 }
 
 function ChartPanel({
@@ -199,6 +230,10 @@ export const DashboardStatsCharts = memo(function DashboardStatsCharts({
     () => getSrAxisDomain(filteredTimeline),
     [filteredTimeline]
   )
+  const srAxisTicks = useMemo(
+    () => getExactAxisTicks({ values: filteredTimeline.map((point) => point.sr) }),
+    [filteredTimeline]
+  )
   const filteredDaily = useMemo(
     () =>
       dailyPoints.filter((day) => {
@@ -231,6 +266,14 @@ export const DashboardStatsCharts = memo(function DashboardStatsCharts({
   )
   const dailySrAxisDomain = useMemo(
     () => getDailySrAxisDomain(dailySrData),
+    [dailySrData]
+  )
+  const dailySrAxisTicks = useMemo(
+    () =>
+      getExactAxisTicks({
+        includeZero: true,
+        values: dailySrData.map((day) => day.netSr),
+      }),
     [dailySrData]
   )
   const srSegments = useMemo(
@@ -315,10 +358,12 @@ export const DashboardStatsCharts = memo(function DashboardStatsCharts({
                   tickMargin={8}
                 />
                 <YAxis
+                  allowDataOverflow
                   axisLine={false}
                   domain={srAxisDomain}
                   tickLine={false}
                   tickMargin={8}
+                  ticks={srAxisTicks}
                   width={56}
                 />
                 <ChartTooltip
@@ -514,10 +559,12 @@ export const DashboardStatsCharts = memo(function DashboardStatsCharts({
                   tickMargin={8}
                 />
                 <YAxis
+                  allowDataOverflow
                   axisLine={false}
                   domain={dailySrAxisDomain}
                   tickLine={false}
                   tickMargin={8}
+                  ticks={dailySrAxisTicks}
                   width={44}
                 />
                 <ChartTooltip content={<ChartTooltipContent />} />

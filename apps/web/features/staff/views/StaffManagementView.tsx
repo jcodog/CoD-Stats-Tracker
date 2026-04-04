@@ -3,11 +3,14 @@
 import { useState, type ReactNode } from "react"
 import { IconAlertTriangle, IconDotsVertical, IconHammer } from "@tabler/icons-react"
 import {
-  getAssignableRolesForActorRole,
   isAdminCapableRole,
   type AssignableUserRole,
-  type UserRole,
 } from "@workspace/backend/convex/lib/staffRoles"
+import {
+  canActorBanManagementUser,
+  getAllowedRoleOptionsForManagementUser,
+  getBanRestrictionMessageForManagementUser,
+} from "@workspace/backend/convex/lib/staffManagementPermissions"
 import type {
   StaffManagementDashboard,
   StaffManagementUserRecord,
@@ -130,79 +133,6 @@ function buildRoleOptionLabel(role: AssignableUserRole) {
   }
 }
 
-function hasAdminCapableRole(user: StaffManagementUserRecord) {
-  return (
-    isAdminCapableRole(user.clerkRole) ||
-    isAdminCapableRole(user.convexRole) ||
-    user.isReservedSuperAdmin
-  )
-}
-
-function getAllowedRoleOptions(args: {
-  actorRole: UserRole
-  user: StaffManagementUserRecord
-}) {
-  if (args.user.isCurrentUser || args.user.isReservedSuperAdmin || !args.user.hasConvexUser) {
-    return [] as readonly AssignableUserRole[]
-  }
-
-  if (args.actorRole === "super_admin") {
-    return getAssignableRolesForActorRole(args.actorRole)
-  }
-
-  if (args.actorRole === "admin" && !hasAdminCapableRole(args.user)) {
-    return getAssignableRolesForActorRole(args.actorRole)
-  }
-
-  return [] as readonly AssignableUserRole[]
-}
-
-function hasElevatedManagementRole(user: StaffManagementUserRecord) {
-  return (
-    user.clerkRole === "staff" ||
-    user.clerkRole === "admin" ||
-    user.clerkRole === "super_admin" ||
-    user.convexRole === "staff" ||
-    user.convexRole === "admin" ||
-    user.convexRole === "super_admin" ||
-    user.isReservedSuperAdmin
-  )
-}
-
-function canBanUser(args: {
-  actorRole: UserRole
-  user: StaffManagementUserRecord
-}) {
-  if (args.user.isCurrentUser || args.user.isReservedSuperAdmin) {
-    return false
-  }
-
-  if (args.actorRole === "super_admin") {
-    return true
-  }
-
-  return !hasElevatedManagementRole(args.user)
-}
-
-function getBanWarningMessage(args: {
-  actorRole: UserRole
-  user: StaffManagementUserRecord
-}) {
-  if (args.user.isCurrentUser) {
-    return "You cannot ban your own account from the staff dashboard."
-  }
-
-  if (args.user.isReservedSuperAdmin) {
-    return "Reserved super-admin accounts must be managed in configuration, not from this dashboard."
-  }
-
-  if (args.actorRole !== "super_admin" && hasElevatedManagementRole(args.user)) {
-    return "Only super-admins can ban staff, admin, or super-admin accounts."
-  }
-
-  return "This account cannot be banned from your current operator role."
-}
-
 export function StaffManagementView({
   initialData,
 }: {
@@ -279,11 +209,11 @@ export function StaffManagementView({
     {
       id: "actions",
       cell: ({ row }: { row: { original: StaffManagementUserRecord } }) => {
-        const allowedRoleOptions = getAllowedRoleOptions({
+        const allowedRoleOptions = getAllowedRoleOptionsForManagementUser({
           actorRole: data.currentActorRole,
           user: row.original,
         })
-        const canBanTargetUser = canBanUser({
+        const canBanTargetUser = canActorBanManagementUser({
           actorRole: data.currentActorRole,
           user: row.original,
         })
@@ -395,7 +325,7 @@ export function StaffManagementView({
   return (
     <div className="flex flex-1 flex-col gap-8">
       <StaffPageIntro
-        description="Staff can review the directory and remove harmful user accounts. Admins can also manage user and staff access for non-admin accounts, while super-admins can grant admin and handle elevated bans."
+        description="Staff can ban standard user accounts. Admins can manage non-admin roles and may ban user or staff accounts. Super-admins can grant admin access and ban any non-super-admin account except themselves."
         title="Staff Management"
       />
 
@@ -618,7 +548,7 @@ export function StaffManagementView({
                 </Field>
               ) : null}
 
-              {!canBanUser({
+              {!canActorBanManagementUser({
                 actorRole: data.currentActorRole,
                 user: pendingBanUser,
               }) ? (
@@ -626,7 +556,7 @@ export function StaffManagementView({
                   <IconAlertTriangle aria-hidden="true" />
                   <AlertTitle>Ban blocked</AlertTitle>
                   <AlertDescription>
-                    {getBanWarningMessage({
+                    {getBanRestrictionMessageForManagementUser({
                       actorRole: data.currentActorRole,
                       user: pendingBanUser,
                     })}
@@ -649,7 +579,7 @@ export function StaffManagementView({
               disabled={
                 mutation.isPending ||
                 !pendingBanUser ||
-                !canBanUser({
+                !canActorBanManagementUser({
                   actorRole: data.currentActorRole,
                   user: pendingBanUser,
                 })

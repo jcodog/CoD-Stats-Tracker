@@ -10,12 +10,16 @@ import { getClerkBackendClient } from "../../lib/clerk"
 import { requireAuthorizedStaffAction } from "../../lib/staffActionAuth"
 import { isConfiguredSuperAdminDiscordId } from "../../lib/staffRoleConfig"
 import {
-  getAssignableRolesForActorRole,
   isAdminCapableRole,
   parseUserRole,
   type AssignableUserRole,
   type UserRole,
 } from "../../lib/staffRoles"
+import {
+  canActorBanManagementUser,
+  getAllowedRoleOptionsForManagementUser,
+  getBanRestrictionMessageForManagementUser,
+} from "../../lib/staffManagementPermissions"
 import type {
   StaffAuditLogEntry,
   StaffManagementDashboard,
@@ -211,79 +215,6 @@ function countAlignedAdmins(users: StaffManagementUserRecord[]) {
     (user) =>
       user.roleStatus === "matched" && isAdminCapableRole(user.convexRole)
   ).length
-}
-
-function hasAdminCapableRole(user: StaffManagementUserRecord) {
-  return (
-    isAdminCapableRole(user.clerkRole) ||
-    isAdminCapableRole(user.convexRole) ||
-    user.isReservedSuperAdmin
-  )
-}
-
-function hasElevatedManagementRole(user: StaffManagementUserRecord) {
-  return (
-    user.clerkRole === "staff" ||
-    user.clerkRole === "admin" ||
-    user.clerkRole === "super_admin" ||
-    user.convexRole === "staff" ||
-    user.convexRole === "admin" ||
-    user.convexRole === "super_admin" ||
-    user.isReservedSuperAdmin
-  )
-}
-
-function getAllowedNextRoles(args: {
-  actorRole: UserRole
-  targetUser: StaffManagementUserRecord
-}) {
-  if (args.targetUser.isCurrentUser || args.targetUser.isReservedSuperAdmin) {
-    return [] as const
-  }
-
-  if (args.actorRole === "super_admin") {
-    return getAssignableRolesForActorRole(args.actorRole)
-  }
-
-  if (args.actorRole === "admin" && !hasAdminCapableRole(args.targetUser)) {
-    return getAssignableRolesForActorRole(args.actorRole)
-  }
-
-  return [] as const
-}
-
-function canActorBanTargetUser(args: {
-  actorRole: UserRole
-  targetUser: StaffManagementUserRecord
-}) {
-  if (args.targetUser.isCurrentUser || args.targetUser.isReservedSuperAdmin) {
-    return false
-  }
-
-  if (args.actorRole === "super_admin") {
-    return true
-  }
-
-  return !hasElevatedManagementRole(args.targetUser)
-}
-
-function getBanRestrictionMessage(args: {
-  actorRole: UserRole
-  targetUser: StaffManagementUserRecord
-}) {
-  if (args.targetUser.isCurrentUser) {
-    return "You cannot ban your own account from the staff dashboard."
-  }
-
-  if (args.targetUser.isReservedSuperAdmin) {
-    return "This account is a reserved super-admin from configuration and cannot be banned here."
-  }
-
-  if (args.actorRole !== "super_admin" && hasElevatedManagementRole(args.targetUser)) {
-    return "Only super-admins can ban staff, admin, or super-admin accounts."
-  }
-
-  return "You do not have permission to ban this user."
 }
 
 function getMetadataStripeCustomerId(value: unknown) {
@@ -526,9 +457,9 @@ export const updateUserRole = action({
       )
     }
 
-    const allowedNextRoles = getAllowedNextRoles({
+    const allowedNextRoles = getAllowedRoleOptionsForManagementUser({
       actorRole: operator.actorRole,
-      targetUser,
+      user: targetUser,
     })
 
     if (!allowedNextRoles.includes(args.nextRole)) {
@@ -687,11 +618,16 @@ export const banUser = action({
       throw new Error(`Unable to find Clerk user ${args.targetClerkUserId}`)
     }
 
-    if (!canActorBanTargetUser({ actorRole: operator.actorRole, targetUser })) {
+    if (
+      !canActorBanManagementUser({
+        actorRole: operator.actorRole,
+        user: targetUser,
+      })
+    ) {
       throw new Error(
-        getBanRestrictionMessage({
+        getBanRestrictionMessageForManagementUser({
           actorRole: operator.actorRole,
-          targetUser,
+          user: targetUser,
         })
       )
     }
