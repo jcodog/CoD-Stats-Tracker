@@ -162,7 +162,7 @@ function StepProgress({
 
   return (
     <ol
-      className="grid items-start gap-x-2 gap-y-2 px-4 py-3 sm:flex sm:gap-3 sm:overflow-x-auto sm:px-7 sm:py-3.5"
+      className="grid items-start gap-x-2 gap-y-2 px-4 py-3 sm:flex sm:justify-center sm:gap-3 sm:overflow-x-auto sm:px-7 sm:py-3.5"
       style={{ gridTemplateColumns: `repeat(${steps.length}, minmax(0, 1fr))` }}
     >
       {steps.map((step, index) => {
