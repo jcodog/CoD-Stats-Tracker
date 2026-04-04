@@ -1,14 +1,14 @@
 "use client"
 
-import Link from "next/link"
-import { IconMenu2 } from "@tabler/icons-react"
+import { IconMenu } from "@tabler/icons-react"
 
 import { AppUserButton } from "@/components/app-shell/AppUserButton"
+import { ProtectedNavLinks } from "@/components/app-shell/ProtectedNavLinks"
+import type { ProtectedNavItem } from "@/components/app-shell/protected-nav"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Button } from "@workspace/ui/components/button"
 import {
   Drawer,
-  DrawerClose,
   DrawerContent,
   DrawerDescription,
   DrawerHeader,
@@ -16,11 +16,6 @@ import {
   DrawerTrigger,
 } from "@workspace/ui/components/drawer"
 import { Separator } from "@workspace/ui/components/separator"
-
-type ProtectedNavItem = {
-  href: string
-  label: string
-}
 
 type MobileProtectedSidebarProps = {
   navItems: ProtectedNavItem[]
@@ -38,15 +33,13 @@ export function MobileProtectedSidebar({
           aria-label="Open navigation"
           className="md:hidden"
           size="icon-sm"
-          variant="outline"
+          variant="ghost"
         >
-          <IconMenu2 aria-hidden="true" />
+          <IconMenu aria-hidden="true" />
         </Button>
       </DrawerTrigger>
 
-      <DrawerContent
-        className="data-[vaul-drawer-direction=right]:w-[min(22rem,calc(100vw-1rem))] data-[vaul-drawer-direction=right]:max-w-none"
-      >
+      <DrawerContent className="data-[vaul-drawer-direction=right]:w-[min(22rem,calc(100vw-1rem))] data-[vaul-drawer-direction=right]:max-w-none">
         <DrawerHeader className="items-start border-b border-border/60 px-4 py-4 text-left">
           <DrawerTitle>Navigation</DrawerTitle>
           <DrawerDescription>
@@ -63,17 +56,11 @@ export function MobileProtectedSidebar({
           <Separator className="my-4" />
 
           <nav aria-label="Protected mobile" className="flex flex-col gap-2">
-            {navItems.map((item) => (
-              <DrawerClose asChild key={item.href}>
-                <Button
-                  asChild
-                  className="h-11 justify-start rounded-lg px-3 text-sm font-medium"
-                  variant="ghost"
-                >
-                  <Link href={item.href}>{item.label}</Link>
-                </Button>
-              </DrawerClose>
-            ))}
+            <ProtectedNavLinks
+              closeOnNavigate
+              items={navItems}
+              layout="mobile"
+            />
           </nav>
         </div>
       </DrawerContent>

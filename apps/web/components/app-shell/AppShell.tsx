@@ -11,11 +11,12 @@ import {
   AvatarFallback,
   AvatarImage,
 } from "@workspace/ui/components/avatar"
-import { Button } from "@workspace/ui/components/button"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { isFlagEnabled } from "@/lib/flags"
 import { AppUserButton } from "@/components/app-shell/AppUserButton"
 import { MobileProtectedSidebar } from "@/components/app-shell/MobileProtectedSidebar"
+import { ProtectedNavLinks } from "@/components/app-shell/ProtectedNavLinks"
+import type { ProtectedNavItem } from "@/components/app-shell/protected-nav"
 
 type AppShellProps = {
   children: React.ReactNode
@@ -33,18 +34,25 @@ export async function AppShell({ children }: AppShellProps) {
     getParsedUserRoleState(clerkUser?.publicMetadata?.role).role ?? "user",
     "staff"
   )
-  const protectedNavItems = [
-    { href: "/dashboard", label: "Dashboard" },
+  const protectedNavItems: ProtectedNavItem[] = [
+    { href: "/dashboard", label: "Home", matchPaths: ["/dashboard"] },
     ...(creatorToolsAccess.hasCreatorAccess
       ? [
           {
             href: "/creator-tools/play-with-viewers",
             label: "Play With Viewers",
+            matchPaths: ["/creator-tools"],
           },
         ]
       : []),
     ...(checkoutEnabled
-      ? [{ href: "/settings/billing", label: "Billing" }]
+      ? [
+          {
+            href: "/settings/billing",
+            label: "Billing",
+            matchPaths: ["/settings/billing", "/checkout"],
+          },
+        ]
       : []),
   ]
 
@@ -72,11 +80,7 @@ export async function AppShell({ children }: AppShellProps) {
               aria-label="Protected"
               className="hidden items-center gap-2 md:flex"
             >
-              {protectedNavItems.map((item) => (
-                <Button asChild key={item.href} size="sm" variant="ghost">
-                  <Link href={item.href}>{item.label}</Link>
-                </Button>
-              ))}
+              <ProtectedNavLinks items={protectedNavItems} layout="desktop" />
             </nav>
           </div>
 
