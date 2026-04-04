@@ -86,7 +86,9 @@ export function InvoiceHistoryTable(args: {
                       <TableHead>Related to</TableHead>
                       <TableHead>Payment method</TableHead>
                       <TableHead>Amount</TableHead>
-                      <TableHead className="pr-6 text-right">Documents</TableHead>
+                      <TableHead className="pr-6 text-right">
+                        Documents
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -97,7 +99,7 @@ export function InvoiceHistoryTable(args: {
                             <div className="font-medium">
                               {invoice.invoiceNumber ?? invoice.stripeInvoiceId}
                             </div>
-                            <div className="max-w-[28rem] text-sm text-muted-foreground">
+                            <div className="max-w-md text-sm text-muted-foreground">
                               {invoice.description}
                             </div>
                           </div>
@@ -108,7 +110,9 @@ export function InvoiceHistoryTable(args: {
                         <TableCell className="align-top">
                           <Badge
                             variant={
-                              invoice.status === "paid" ? "secondary" : "outline"
+                              invoice.status === "paid"
+                                ? "secondary"
+                                : "outline"
                             }
                           >
                             {formatBillingStatusLabel(invoice.status)}
@@ -132,7 +136,7 @@ export function InvoiceHistoryTable(args: {
                             invoice.currency
                           )}
                         </TableCell>
-                        <TableCell className="pr-6 align-top text-right">
+                        <TableCell className="pr-6 text-right align-top">
                           <InvoiceDocumentLinks invoice={invoice} />
                         </TableCell>
                       </TableRow>
@@ -158,7 +162,9 @@ export function InvoiceHistoryTable(args: {
                       </div>
                     </div>
                     <Badge
-                      variant={invoice.status === "paid" ? "secondary" : "outline"}
+                      variant={
+                        invoice.status === "paid" ? "secondary" : "outline"
+                      }
                     >
                       {formatBillingStatusLabel(invoice.status)}
                     </Badge>
@@ -179,10 +185,14 @@ export function InvoiceHistoryTable(args: {
                     </div>
                     <div className="flex flex-col gap-1">
                       <span className="text-muted-foreground">Related to</span>
-                      <span>{invoice.relatedProductName ?? "Subscription"}</span>
+                      <span>
+                        {invoice.relatedProductName ?? "Subscription"}
+                      </span>
                     </div>
                     <div className="flex flex-col gap-1">
-                      <span className="text-muted-foreground">Payment method</span>
+                      <span className="text-muted-foreground">
+                        Payment method
+                      </span>
                       <span>
                         {invoice.paymentMethodLast4
                           ? `${formatCardBrandLabel(invoice.paymentMethodBrand)} •••• ${invoice.paymentMethodLast4}`

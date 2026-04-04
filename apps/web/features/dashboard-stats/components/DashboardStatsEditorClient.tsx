@@ -55,15 +55,15 @@ const DashboardStatsCharts = dynamic(
       (module) => module.DashboardStatsCharts
     ),
   {
-    loading: () => <Skeleton className="h-[540px] rounded-xl" />,
+    loading: () => <Skeleton className="h-135 rounded-xl" />,
   }
 )
 
 const DashboardStatsCreateSessionDialog = dynamic(
   () =>
-    import(
-      "@/features/dashboard-stats/components/DashboardStatsCreateSessionDialog"
-    ).then((module) => module.DashboardStatsCreateSessionDialog),
+    import("@/features/dashboard-stats/components/DashboardStatsCreateSessionDialog").then(
+      (module) => module.DashboardStatsCreateSessionDialog
+    ),
   {
     loading: () => null,
   }
@@ -104,8 +104,8 @@ function SurfaceSkeleton() {
     <div className="grid gap-5 px-6 py-6">
       <Skeleton className="h-28 rounded-lg" />
       <Skeleton className="h-24 rounded-lg" />
-      <Skeleton className="h-[440px] rounded-lg" />
-      <Skeleton className="h-[280px] rounded-lg" />
+      <Skeleton className="h-110 rounded-lg" />
+      <Skeleton className="h-70 rounded-lg" />
     </div>
   )
 }
@@ -237,10 +237,11 @@ function DashboardStatsEditorLoaded({
     selectedSessionId &&
     activeSessions.some((session) => session.id === selectedSessionId)
       ? selectedSessionId
-      : activeSessions[0]?.id ?? null
+      : (activeSessions[0]?.id ?? null)
   const selectedSession =
-    activeSessions.find((session) => session.id === effectiveSelectedSessionId) ??
-    null
+    activeSessions.find(
+      (session) => session.id === effectiveSelectedSessionId
+    ) ?? null
   const setupMessage = getSetupMessage(dashboardState)
   const activeTitleLabel =
     dashboardState.currentConfig?.activeTitleLabel ??
@@ -438,16 +439,18 @@ function DashboardStatsEditorLoaded({
             </div>
           </div>
 
-            <div
-              className={
-                isMobileView
-                  ? "grid gap-2 sm:grid-cols-2"
-                  : "flex flex-wrap items-center gap-2"
-              }
-            >
+          <div
+            className={
+              isMobileView
+                ? "grid gap-2 sm:grid-cols-2"
+                : "flex flex-wrap items-center gap-2"
+            }
+          >
             {showCreateSessionButton ? (
               <Button
-                className={isMobileView ? "h-11 w-full justify-center" : undefined}
+                className={
+                  isMobileView ? "h-11 w-full justify-center" : undefined
+                }
                 disabled={!canCreateSession}
                 onClick={handleOpenCreateSessionDialog}
                 variant="outline"
@@ -456,7 +459,9 @@ function DashboardStatsEditorLoaded({
               </Button>
             ) : null}
             <Button
-              className={isMobileView ? "h-11 w-full justify-center" : undefined}
+              className={
+                isMobileView ? "h-11 w-full justify-center" : undefined
+              }
               disabled={!canLogMatches}
               onClick={handleOpenLogMatchSheet}
             >
@@ -488,19 +493,17 @@ function DashboardStatsEditorLoaded({
             }
           >
             <div
+              className={
+                isMobileView
+                  ? "grid gap-5"
+                  : "grid gap-0 xl:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]"
+              }
+            >
+              <div
                 className={
-                  isMobileView
-                    ? "grid gap-5"
-                    : "grid gap-0 xl:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]"
+                  isMobileView ? "border-y border-border/60 py-5" : "px-6 py-6"
                 }
               >
-                <div
-                  className={
-                    isMobileView
-                      ? "border-y border-border/60 py-5"
-                      : "px-6 py-6"
-                  }
-                >
                 <Empty className="border-none bg-transparent p-0">
                   <EmptyHeader className="items-start text-left">
                     <EmptyTitle>No active session yet</EmptyTitle>
@@ -516,17 +519,21 @@ function DashboardStatsEditorLoaded({
                   </EmptyHeader>
                 </Empty>
               </div>
-                <div
-                  className={
-                    isMobileView
-                      ? "border-y border-border/60 py-5"
-                      : "border-t border-border/60 px-6 py-6 xl:border-t-0 xl:border-l"
-                  }
-                >
-                  <div className="grid gap-3 text-sm text-muted-foreground">
-                    {isMobileView ? <h2 className="text-base font-semibold tracking-tight text-foreground">Session capacity</h2> : null}
-                    <p>
-                      Free users can keep one active session for the current title
+              <div
+                className={
+                  isMobileView
+                    ? "border-y border-border/60 py-5"
+                    : "border-t border-border/60 px-6 py-6 xl:border-t-0 xl:border-l"
+                }
+              >
+                <div className="grid gap-3 text-sm text-muted-foreground">
+                  {isMobileView ? (
+                    <h2 className="text-base font-semibold tracking-tight text-foreground">
+                      Session capacity
+                    </h2>
+                  ) : null}
+                  <p>
+                    Free users can keep one active session for the current title
                     and season.
                   </p>
                   <p>
@@ -536,7 +543,11 @@ function DashboardStatsEditorLoaded({
                   {showCreateSessionButton ? (
                     <div className="pt-2">
                       <Button
-                        className={isMobileView ? "h-11 w-full justify-center" : undefined}
+                        className={
+                          isMobileView
+                            ? "h-11 w-full justify-center"
+                            : undefined
+                        }
                         disabled={!canCreateSession}
                         onClick={handleOpenCreateSessionDialog}
                       >
@@ -599,7 +610,11 @@ function DashboardStatsEditorLoaded({
                         <ToolbarGroup label="Session">
                           <AppSelect
                             className="w-full min-w-0"
-                            id={isMobileView ? "dashboard-session-mobile" : "dashboard-session"}
+                            id={
+                              isMobileView
+                                ? "dashboard-session-mobile"
+                                : "dashboard-session"
+                            }
                             onValueChange={(value) =>
                               startTransition(() => setSelectedSessionId(value))
                             }
@@ -633,7 +648,9 @@ function DashboardStatsEditorLoaded({
                                 value === "14d" ||
                                 value === "30d"
                               ) {
-                                startTransition(() => setSelectedTimeRange(value))
+                                startTransition(() =>
+                                  setSelectedTimeRange(value)
+                                )
                               }
                             }}
                             size="sm"
@@ -641,16 +658,28 @@ function DashboardStatsEditorLoaded({
                             value={selectedTimeRange}
                             variant="outline"
                           >
-                            <ToggleGroupItem className={isMobileView ? "w-full" : undefined} value="7d">
+                            <ToggleGroupItem
+                              className={isMobileView ? "w-full" : undefined}
+                              value="7d"
+                            >
                               7d
                             </ToggleGroupItem>
-                            <ToggleGroupItem className={isMobileView ? "w-full" : undefined} value="14d">
+                            <ToggleGroupItem
+                              className={isMobileView ? "w-full" : undefined}
+                              value="14d"
+                            >
                               14d
                             </ToggleGroupItem>
-                            <ToggleGroupItem className={isMobileView ? "w-full" : undefined} value="30d">
+                            <ToggleGroupItem
+                              className={isMobileView ? "w-full" : undefined}
+                              value="30d"
+                            >
                               30d
                             </ToggleGroupItem>
-                            <ToggleGroupItem className={isMobileView ? "w-full" : undefined} value="all">
+                            <ToggleGroupItem
+                              className={isMobileView ? "w-full" : undefined}
+                              value="all"
+                            >
                               All
                             </ToggleGroupItem>
                           </ToggleGroup>

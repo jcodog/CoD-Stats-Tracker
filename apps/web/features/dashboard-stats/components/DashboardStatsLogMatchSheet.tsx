@@ -174,7 +174,10 @@ function StepProgress({
               : "upcoming"
 
         return (
-          <li className="relative min-w-0 sm:flex sm:min-w-max sm:items-center sm:gap-3" key={step}>
+          <li
+            className="relative min-w-0 sm:flex sm:min-w-max sm:items-center sm:gap-3"
+            key={step}
+          >
             <button
               aria-current={status === "current" ? "step" : undefined}
               className={cn(
@@ -198,14 +201,17 @@ function StepProgress({
                 )}
               >
                 {status === "complete" ? (
-                  <IconCheck aria-hidden="true" className="size-3 sm:size-3.5" />
+                  <IconCheck
+                    aria-hidden="true"
+                    className="size-3 sm:size-3.5"
+                  />
                 ) : (
                   index + 1
                 )}
               </span>
               <span
                 className={cn(
-                  "max-w-full text-center text-[11px] leading-tight font-medium text-balance sm:text-sm sm:whitespace-nowrap sm:text-left",
+                  "max-w-full text-center text-[11px] leading-tight font-medium text-balance sm:text-left sm:text-sm sm:whitespace-nowrap",
                   status === "upcoming" && "text-muted-foreground"
                 )}
               >
@@ -217,7 +223,7 @@ function StepProgress({
                 <span
                   aria-hidden="true"
                   className={cn(
-                    "absolute top-[0.875rem] left-[calc(50%+0.95rem)] right-[calc(-50%+0.95rem)] h-px bg-border/70 sm:hidden",
+                    "absolute top-3.5 right-[calc(-50%+0.95rem)] left-[calc(50%+0.95rem)] h-px bg-border/70 sm:hidden",
                     status === "complete" && "bg-foreground/35"
                   )}
                 />
@@ -284,7 +290,7 @@ function MapCombobox({
           <IconChevronDown aria-hidden="true" data-icon="inline-end" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-[22rem] p-0">
+      <PopoverContent align="start" className="w-88 p-0">
         <Command>
           <CommandInput placeholder="Search maps…" />
           <CommandList>

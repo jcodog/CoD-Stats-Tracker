@@ -266,10 +266,13 @@ export function StaffRankedStatsView({
           setModeFormState(buildDefaultModeForm(nextCatalogTitleKey))
           setMapFormState(buildDefaultMapForm(nextCatalogTitleKey))
         }
+        return true
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Invalid title details.")
     }
+
+    return false
   }
 
   async function handleModeSubmit() {
@@ -294,10 +297,13 @@ export function StaffRankedStatsView({
 
       if (succeeded) {
         setModeFormState(buildDefaultModeForm(modeForm.titleKey))
+        return true
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Invalid mode details.")
     }
+
+    return false
   }
 
   async function handleMapSubmit() {
@@ -322,10 +328,13 @@ export function StaffRankedStatsView({
 
       if (succeeded) {
         setMapFormState(buildDefaultMapForm(mapForm.titleKey))
+        return true
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Invalid map details.")
     }
+
+    return false
   }
 
   function handleCatalogTitleChange(nextTitleKey: string) {
@@ -399,15 +408,9 @@ export function StaffRankedStatsView({
           onResetMap={() => setMapFormState(buildDefaultMapForm(catalogTitleKey))}
           onResetMode={() => setModeFormState(buildDefaultModeForm(catalogTitleKey))}
           onResetTitle={() => setTitleForm(buildDefaultTitleForm())}
-          onSaveMap={() => {
-            void handleMapSubmit()
-          }}
-          onSaveMode={() => {
-            void handleModeSubmit()
-          }}
-          onSaveTitle={() => {
-            void handleTitleSubmit()
-          }}
+          onSaveMap={handleMapSubmit}
+          onSaveMode={handleModeSubmit}
+          onSaveTitle={handleTitleSubmit}
           pending={rankedMutation.isPending}
           setMapForm={setMapForm}
           setModeForm={setModeForm}

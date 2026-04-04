@@ -363,9 +363,7 @@ function getPrimarySubscriptionActionLabel(kind: SubscriptionSelectionKind) {
   }
 }
 
-function createManagementFreePlan(
-  sortOrder: number
-): PricingCatalogPlan {
+function createManagementFreePlan(sortOrder: number): PricingCatalogPlan {
   return {
     active: true,
     description:
@@ -476,7 +474,9 @@ function shouldAttemptBackgroundStripeResync(billingCenter: BillingCenterData) {
   )
 }
 
-function hasActiveCreatorPlanGrant(state: BillingResolvedState | null | undefined) {
+function hasActiveCreatorPlanGrant(
+  state: BillingResolvedState | null | undefined
+) {
   return (
     (state?.accessSource === "creator_grant" ||
       state?.accessSource === "managed_grant_subscription") &&
@@ -509,11 +509,11 @@ function BillingValue(args: {
   valueClassName?: string
 }) {
   return (
-    <div className="min-w-0 flex flex-col gap-1">
+    <div className="flex min-w-0 flex-col gap-1">
       <span className="text-sm text-muted-foreground">{args.label}</span>
       <div
         className={cn(
-          "min-w-0 break-words text-sm font-medium",
+          "min-w-0 text-sm font-medium wrap-break-word",
           args.valueClassName
         )}
       >
@@ -764,7 +764,8 @@ function SubscriptionsCard(args: {
                   <Badge variant="secondary">Complimentary</Badge>
                 </div>
                 <div className="text-sm text-muted-foreground">
-                  Creator access is active and Stripe subscription sync is still catching up.
+                  Creator access is active and Stripe subscription sync is still
+                  catching up.
                 </div>
               </div>
               <span className="text-sm font-medium text-muted-foreground">
@@ -816,7 +817,9 @@ function SubscriptionsCard(args: {
                         <Badge variant="secondary">Complimentary</Badge>
                       ) : null}
                       <Badge
-                        variant={getSubscriptionBadgeVariant(subscription.status)}
+                        variant={getSubscriptionBadgeVariant(
+                          subscription.status
+                        )}
                       >
                         {formatBillingStatusLabel(subscription.status)}
                       </Badge>
@@ -918,12 +921,12 @@ function SubscriptionsCard(args: {
                 <IconFileInvoice />
               </EmptyMedia>
               <EmptyTitle>No subscriptions yet</EmptyTitle>
-                <EmptyDescription>
-                  {args.creatorGrantActive
-                    ? "Creator complimentary access is currently active. Checkout and plan changes stay unavailable while that access remains active."
-                    : args.checkoutEnabled
-                      ? "Start checkout to create the first managed Stripe subscription for this account."
-                      : "Checkout is currently disabled for this account."}
+              <EmptyDescription>
+                {args.creatorGrantActive
+                  ? "Creator complimentary access is currently active. Checkout and plan changes stay unavailable while that access remains active."
+                  : args.checkoutEnabled
+                    ? "Start checkout to create the first managed Stripe subscription for this account."
+                    : "Checkout is currently disabled for this account."}
               </EmptyDescription>
             </EmptyHeader>
           </Empty>
@@ -1210,8 +1213,9 @@ function SubscriptionManagementDialog(args: {
   subscription: BillingCenterSubscription
 }) {
   const currentPlan =
-    args.pricingPlans.find((plan) => plan.planKey === args.subscription.planKey) ??
-    null
+    args.pricingPlans.find(
+      (plan) => plan.planKey === args.subscription.planKey
+    ) ?? null
   const selectedPrice =
     args.selectedPlan?.planType === "paid"
       ? getCatalogPlanPrice(args.selectedPlan, args.state.interval)
@@ -1395,7 +1399,8 @@ function SubscriptionManagementDialog(args: {
                         : "Resume renewal"}
                     </Button>
                   ) : null}
-                  {!primaryActionLabel && !args.subscription.cancelAtPeriodEnd ? (
+                  {!primaryActionLabel &&
+                  !args.subscription.cancelAtPeriodEnd ? (
                     <div className="text-sm text-muted-foreground">
                       Select a different plan to continue.
                     </div>
@@ -1495,10 +1500,9 @@ function SubscriptionChangeConfirmationDialog(args: {
   const isDowngrade =
     args.preview.mode === "cancel_at_period_end" ||
     args.preview.mode === "scheduled_change"
-  const title =
-    isSamePlanIntervalUpdate
-      ? `Confirm ${formatBillingInterval(args.preview.interval)} billing update`
-      : args.preview.mode === "cancel_at_period_end"
+  const title = isSamePlanIntervalUpdate
+    ? `Confirm ${formatBillingInterval(args.preview.interval)} billing update`
+    : args.preview.mode === "cancel_at_period_end"
       ? "Confirm downgrade to free"
       : isDowngrade
         ? `Confirm downgrade to ${args.targetPlan?.name ?? "the selected plan"}`
@@ -1518,10 +1522,10 @@ function SubscriptionChangeConfirmationDialog(args: {
             {isSamePlanIntervalUpdate
               ? "The plan stays the same, but the billing interval changes immediately after confirmation. Stripe recalculates the remaining paid time and applies any resulting adjustment to the change invoice."
               : args.preview.mode === "immediate_change"
-              ? "The new plan starts immediately. Stripe calculates the unused-time credit from the current plan and applies it to the change invoice today."
-              : args.preview.mode === "cancel_at_period_end"
-                ? "The subscription stays active until the end of the current billing period, then the account returns to the free plan. Stripe does not issue a refund for unused paid time."
-                : "The current paid plan stays active until the end of the billing period. The downgrade only affects the next renewal and Stripe does not issue a refund for unused paid time."}
+                ? "The new plan starts immediately. Stripe calculates the unused-time credit from the current plan and applies it to the change invoice today."
+                : args.preview.mode === "cancel_at_period_end"
+                  ? "The subscription stays active until the end of the current billing period, then the account returns to the free plan. Stripe does not issue a refund for unused paid time."
+                  : "The current paid plan stays active until the end of the billing period. The downgrade only affects the next renewal and Stripe does not issue a refund for unused paid time."}
           </AlertDialogDescription>
         </AlertDialogHeader>
 
@@ -1573,7 +1577,10 @@ function SubscriptionChangeConfirmationDialog(args: {
                     label="Due now"
                     value={
                       currency
-                        ? formatCurrencyAmount(args.preview.amountDueNow, currency)
+                        ? formatCurrencyAmount(
+                            args.preview.amountDueNow,
+                            currency
+                          )
                         : "Not available"
                     }
                   />
@@ -1678,8 +1685,9 @@ export function BillingSettingsView({
   const billingState = billingStateQuery.data
   const creatorGrantActive = hasActiveCreatorPlanGrant(billingState)
   const primaryManageableSubscription =
-    billingCenter?.subscriptions.find((subscription) => subscription.isManageable) ??
-    null
+    billingCenter?.subscriptions.find(
+      (subscription) => subscription.isManageable
+    ) ?? null
   const baseManagementPricingPlans = ensureManagementPlanOptions(
     pricingCatalogQuery.data?.plans.filter((plan) => plan.active) ?? []
   )
@@ -1709,29 +1717,26 @@ export function BillingSettingsView({
         : plan
     ),
   })
-  const effectiveSubscriptionDialogState =
-    subscriptionDialogState
-      ? {
-          ...subscriptionDialogState,
-          planKey:
-            managementPricingPlans.some(
-              (plan) => plan.planKey === subscriptionDialogState.planKey
-            )
-              ? subscriptionDialogState.planKey
-              : (managementPricingPlans[0]?.planKey ??
-                subscriptionDialogState.planKey),
-        }
-      : null
+  const effectiveSubscriptionDialogState = subscriptionDialogState
+    ? {
+        ...subscriptionDialogState,
+        planKey: managementPricingPlans.some(
+          (plan) => plan.planKey === subscriptionDialogState.planKey
+        )
+          ? subscriptionDialogState.planKey
+          : (managementPricingPlans[0]?.planKey ??
+            subscriptionDialogState.planKey),
+      }
+    : null
   const selectedSubscriptionPlan =
     managementPricingPlans.find(
       (plan) => plan.planKey === effectiveSubscriptionDialogState?.planKey
     ) ?? null
-  const currentSubscriptionPlan =
-    selectedSubscription
-      ? (baseManagementPricingPlans.find(
-          (plan) => plan.planKey === selectedSubscription.planKey
-        ) ?? null)
-      : null
+  const currentSubscriptionPlan = selectedSubscription
+    ? (baseManagementPricingPlans.find(
+        (plan) => plan.planKey === selectedSubscription.planKey
+      ) ?? null)
+    : null
 
   useEffect(() => {
     if (
@@ -1856,8 +1861,9 @@ export function BillingSettingsView({
 
   function openSubscriptionDialog(subscription: BillingCenterSubscription) {
     const initialPlanKey =
-      managementPricingPlans.find((plan) => plan.planKey === subscription.planKey)
-        ?.planKey ??
+      managementPricingPlans.find(
+        (plan) => plan.planKey === subscription.planKey
+      )?.planKey ??
       managementPricingPlans[0]?.planKey ??
       subscription.planKey
 
@@ -1981,7 +1987,9 @@ export function BillingSettingsView({
 
   if (billingCenterQuery.isPending || billingStateQuery.isPending) {
     return (
-      <div className={isMobileView ? "flex flex-col gap-5" : "flex flex-col gap-6"}>
+      <div
+        className={isMobileView ? "flex flex-col gap-5" : "flex flex-col gap-6"}
+      >
         <div className="flex flex-col gap-2">
           <Skeleton className="h-8 w-40 rounded-lg" />
           <Skeleton className="h-5 w-96 max-w-full rounded-lg" />
@@ -2020,8 +2028,16 @@ export function BillingSettingsView({
   }
 
   return (
-    <div className={isMobileView ? "flex flex-col gap-5" : "flex flex-col gap-6"}>
-      <div className={isMobileView ? "grid gap-3" : "flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between"}>
+    <div
+      className={isMobileView ? "flex flex-col gap-5" : "flex flex-col gap-6"}
+    >
+      <div
+        className={
+          isMobileView
+            ? "grid gap-3"
+            : "flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between"
+        }
+      >
         <div className="flex flex-col gap-2">
           {isMobileView ? (
             <p className="text-[0.72rem] font-semibold tracking-[0.24em] text-primary uppercase">
@@ -2034,7 +2050,13 @@ export function BillingSettingsView({
             and invoices without leaving the app.
           </p>
         </div>
-        <div className={isMobileView ? "grid gap-2" : "flex flex-col items-start gap-2 lg:items-end"}>
+        <div
+          className={
+            isMobileView
+              ? "grid gap-2"
+              : "flex flex-col items-start gap-2 lg:items-end"
+          }
+        >
           <div className="text-sm text-muted-foreground">
             Last synced {formatDateTimeLabel(billingCenter.lastSyncedAt)}
           </div>
@@ -2070,7 +2092,9 @@ export function BillingSettingsView({
 
       <SubscriptionsCard
         checkoutEnabled={checkoutEnabled}
-        creatorGrant={creatorGrantActive ? (billingState?.creatorGrant ?? null) : null}
+        creatorGrant={
+          creatorGrantActive ? (billingState?.creatorGrant ?? null) : null
+        }
         creatorGrantActive={creatorGrantActive}
         onOpenSubscription={openSubscriptionDialog}
         portalMode={billingCenter.portalMode}

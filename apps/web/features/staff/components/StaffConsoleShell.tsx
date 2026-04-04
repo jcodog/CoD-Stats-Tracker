@@ -32,7 +32,7 @@ export function StaffConsoleShell({
             id="staff-console-content"
             tabIndex={-1}
           >
-            <div className="mx-auto flex min-h-full w-full max-w-[1400px] flex-col">
+            <div className="mx-auto flex min-h-full w-full max-w-350 flex-col">
               {children}
             </div>
           </main>

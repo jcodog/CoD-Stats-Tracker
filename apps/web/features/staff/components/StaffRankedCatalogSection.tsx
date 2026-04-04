@@ -1,6 +1,6 @@
 "use client"
 
-import type { Dispatch, SetStateAction } from "react"
+import { useState, type Dispatch, type SetStateAction } from "react"
 import { IconSettings } from "@tabler/icons-react"
 import type {
   StaffRankedMapRecord,
@@ -17,6 +17,14 @@ import {
 } from "@workspace/ui/components/field"
 import { Input } from "@workspace/ui/components/input"
 import { ScrollArea } from "@workspace/ui/components/scroll-area"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@workspace/ui/components/dialog"
 import {
   Select,
   SelectContent,
@@ -119,7 +127,7 @@ function DataTableShell({
       </Table>
       <ScrollArea
         className={cn(
-          "w-full [&>[data-slot=scroll-area-scrollbar]]:hidden",
+          "w-full *:data-[slot=scroll-area-scrollbar]:hidden",
           bodyHeightClass
         )}
       >
@@ -133,15 +141,15 @@ function DataTableShell({
 }
 
 function CatalogManagementRow({
+  controls,
   description,
-  form,
   table,
   tableDescription,
   tableTitle,
   title,
 }: {
+  controls: React.ReactNode
   description: string
-  form: React.ReactNode
   table: React.ReactNode
   tableDescription: string
   tableTitle: string
@@ -156,7 +164,7 @@ function CatalogManagementRow({
             {description}
           </p>
         </div>
-        {form}
+        {controls}
       </div>
 
       <div className="grid content-start gap-4">
@@ -169,6 +177,95 @@ function CatalogManagementRow({
         {table}
       </div>
     </div>
+  )
+}
+
+function CatalogActionPanel({
+  actionLabel,
+  actionDisabled = false,
+  description,
+  onAction,
+}: {
+  actionDisabled?: boolean
+  actionLabel: string
+  description: string
+  onAction: () => void
+}) {
+  return (
+    <div className="grid gap-4 rounded-xl border border-border/60 bg-muted/10 p-5">
+      <p className="max-w-md text-sm text-muted-foreground">{description}</p>
+      <div className="flex flex-wrap items-center gap-3">
+        <Button disabled={actionDisabled} onClick={onAction}>
+          {actionLabel}
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+function CatalogEditorDialog({
+  children,
+  description,
+  onOpenChange,
+  onReset,
+  onSave,
+  open,
+  pending,
+  resetLabel = "Reset",
+  saveDisabled = false,
+  saveLabel,
+  title,
+}: {
+  children: React.ReactNode
+  description: string
+  onOpenChange: (open: boolean) => void
+  onReset: () => void
+  onSave: () => Promise<boolean>
+  open: boolean
+  pending: boolean
+  resetLabel?: string
+  saveDisabled?: boolean
+  saveLabel: string
+  title: string
+}) {
+  async function handleSave() {
+    const succeeded = await onSave()
+
+    if (succeeded) {
+      onOpenChange(false)
+    }
+  }
+
+  return (
+    <Dialog onOpenChange={onOpenChange} open={open}>
+      <DialogContent className="flex max-h-[min(88vh,54rem)] flex-col overflow-hidden p-0 sm:max-w-[min(92vw,42rem)]">
+        <DialogHeader className="border-b border-border/60 px-6 py-5">
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
+        </DialogHeader>
+
+        <ScrollArea className="min-h-0 flex-1 overscroll-contain">
+          <div className="px-6 py-6">{children}</div>
+        </ScrollArea>
+
+        <DialogFooter className="border-t border-border/60 px-6 py-4">
+          <Button onClick={() => onOpenChange(false)} variant="outline">
+            Cancel
+          </Button>
+          <Button disabled={pending} onClick={onReset} variant="ghost">
+            {resetLabel}
+          </Button>
+          <Button
+            disabled={pending || saveDisabled}
+            onClick={() => {
+              void handleSave()
+            }}
+          >
+            {pending ? "Saving..." : saveLabel}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -200,204 +297,178 @@ function ActiveStatusSelect({
 }
 
 function TitleCatalogForm({
-  onResetTitle,
-  onSaveTitle,
-  pending,
+  disabled = false,
   setTitleForm,
   titleForm,
 }: {
-  onResetTitle: () => void
-  onSaveTitle: () => void
-  pending: boolean
+  disabled?: boolean
   setTitleForm: Dispatch<SetStateAction<TitleFormState>>
   titleForm: TitleFormState
 }) {
   return (
-    <>
-      <FieldGroup>
-        <div className="grid gap-4 md:grid-cols-2">
-          <Field>
-            <FieldLabel htmlFor="ranked-title-key">Key</FieldLabel>
-            <Input
-              autoComplete="off"
-              id="ranked-title-key"
-              name="ranked-title-key"
-              onChange={(event) =>
-                setTitleForm((current) => ({
-                  ...current,
-                  key: event.target.value,
-                }))
-              }
-              placeholder="bo7"
-              value={titleForm.key}
-            />
-            <FieldDescription>
-              Stable lowercase key used by config, modes, maps, and sessions.
-            </FieldDescription>
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="ranked-title-label">Label</FieldLabel>
-            <Input
-              autoComplete="off"
-              id="ranked-title-label"
-              name="ranked-title-label"
-              onChange={(event) =>
-                setTitleForm((current) => ({
-                  ...current,
-                  label: event.target.value,
-                }))
-              }
-              placeholder="Black Ops 7"
-              value={titleForm.label}
-            />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="ranked-title-sort">Sort order</FieldLabel>
-            <Input
-              autoComplete="off"
-              id="ranked-title-sort"
-              inputMode="numeric"
-              name="ranked-title-sort"
-              onChange={(event) =>
-                setTitleForm((current) => ({
-                  ...current,
-                  sortOrder: event.target.value,
-                }))
-              }
-              value={titleForm.sortOrder}
-            />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="ranked-title-status">Status</FieldLabel>
-            <ActiveStatusSelect
-              id="ranked-title-status"
-              onValueChange={(value) =>
-                setTitleForm((current) => ({
-                  ...current,
-                  isActive: value === "active",
-                }))
-              }
-              value={titleForm.isActive ? "active" : "archived"}
-            />
-          </Field>
-        </div>
-      </FieldGroup>
-
-      <div className="flex flex-wrap items-center gap-3">
-        <Button disabled={pending} onClick={onSaveTitle}>
-          {pending ? "Saving..." : "Save title"}
-        </Button>
-        <Button disabled={pending} onClick={onResetTitle} variant="outline">
-          Reset
-        </Button>
+    <FieldGroup>
+      <div className="grid gap-4 md:grid-cols-2">
+        <Field>
+          <FieldLabel htmlFor="ranked-title-key">Key</FieldLabel>
+          <Input
+            autoComplete="off"
+            disabled={disabled}
+            id="ranked-title-key"
+            name="ranked-title-key"
+            onChange={(event) =>
+              setTitleForm((current) => ({
+                ...current,
+                key: event.target.value,
+              }))
+            }
+            placeholder="bo7"
+            value={titleForm.key}
+          />
+          <FieldDescription>
+            Stable lowercase key used by config, modes, maps, and sessions.
+          </FieldDescription>
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="ranked-title-label">Label</FieldLabel>
+          <Input
+            autoComplete="off"
+            disabled={disabled}
+            id="ranked-title-label"
+            name="ranked-title-label"
+            onChange={(event) =>
+              setTitleForm((current) => ({
+                ...current,
+                label: event.target.value,
+              }))
+            }
+            placeholder="Black Ops 7"
+            value={titleForm.label}
+          />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="ranked-title-sort">Sort order</FieldLabel>
+          <Input
+            autoComplete="off"
+            disabled={disabled}
+            id="ranked-title-sort"
+            inputMode="numeric"
+            name="ranked-title-sort"
+            onChange={(event) =>
+              setTitleForm((current) => ({
+                ...current,
+                sortOrder: event.target.value,
+              }))
+            }
+            value={titleForm.sortOrder}
+          />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="ranked-title-status">Status</FieldLabel>
+          <ActiveStatusSelect
+            id="ranked-title-status"
+            onValueChange={(value) =>
+              setTitleForm((current) => ({
+                ...current,
+                isActive: value === "active",
+              }))
+            }
+            value={titleForm.isActive ? "active" : "archived"}
+          />
+        </Field>
       </div>
-    </>
+    </FieldGroup>
   )
 }
 
 function ModeCatalogForm({
+  disabled = false,
   modeForm,
-  onResetMode,
-  onSaveMode,
-  pending,
   setModeForm,
 }: {
+  disabled?: boolean
   modeForm: ModeFormState
-  onResetMode: () => void
-  onSaveMode: () => void
-  pending: boolean
   setModeForm: Dispatch<SetStateAction<ModeFormState>>
 }) {
   return (
-    <>
-      <FieldGroup>
-        <div className="grid gap-4 md:grid-cols-2">
-          <Field>
-            <FieldLabel htmlFor="ranked-mode-key">Mode key</FieldLabel>
-            <Input
-              autoComplete="off"
-              id="ranked-mode-key"
-              name="ranked-mode-key"
-              onChange={(event) =>
-                setModeForm((current) => ({
-                  ...current,
-                  key: event.target.value,
-                }))
-              }
-              placeholder="hardpoint"
-              value={modeForm.key}
-            />
-            <FieldDescription>
-              Use a stable key so mode-specific stat fields stay predictable.
-            </FieldDescription>
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="ranked-mode-label">Label</FieldLabel>
-            <Input
-              autoComplete="off"
-              id="ranked-mode-label"
-              name="ranked-mode-label"
-              onChange={(event) =>
-                setModeForm((current) => ({
-                  ...current,
-                  label: event.target.value,
-                }))
-              }
-              placeholder="Hardpoint"
-              value={modeForm.label}
-            />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="ranked-mode-sort">Sort order</FieldLabel>
-            <Input
-              autoComplete="off"
-              id="ranked-mode-sort"
-              inputMode="numeric"
-              name="ranked-mode-sort"
-              onChange={(event) =>
-                setModeForm((current) => ({
-                  ...current,
-                  sortOrder: event.target.value,
-                }))
-              }
-              value={modeForm.sortOrder}
-            />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="ranked-mode-status">Status</FieldLabel>
-            <ActiveStatusSelect
-              id="ranked-mode-status"
-              onValueChange={(value) =>
-                setModeForm((current) => ({
-                  ...current,
-                  isActive: value === "active",
-                }))
-              }
-              value={modeForm.isActive ? "active" : "archived"}
-            />
-          </Field>
-        </div>
-      </FieldGroup>
-
-      <div className="flex flex-wrap items-center gap-3">
-        <Button disabled={pending} onClick={onSaveMode}>
-          {pending ? "Saving..." : "Save mode"}
-        </Button>
-        <Button disabled={pending} onClick={onResetMode} variant="outline">
-          Reset
-        </Button>
+    <FieldGroup>
+      <div className="grid gap-4 md:grid-cols-2">
+        <Field>
+          <FieldLabel htmlFor="ranked-mode-key">Mode key</FieldLabel>
+          <Input
+            autoComplete="off"
+            disabled={disabled}
+            id="ranked-mode-key"
+            name="ranked-mode-key"
+            onChange={(event) =>
+              setModeForm((current) => ({
+                ...current,
+                key: event.target.value,
+              }))
+            }
+            placeholder="hardpoint"
+            value={modeForm.key}
+          />
+          <FieldDescription>
+            Use a stable key so mode-specific stat fields stay predictable.
+          </FieldDescription>
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="ranked-mode-label">Label</FieldLabel>
+          <Input
+            autoComplete="off"
+            disabled={disabled}
+            id="ranked-mode-label"
+            name="ranked-mode-label"
+            onChange={(event) =>
+              setModeForm((current) => ({
+                ...current,
+                label: event.target.value,
+              }))
+            }
+            placeholder="Hardpoint"
+            value={modeForm.label}
+          />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="ranked-mode-sort">Sort order</FieldLabel>
+          <Input
+            autoComplete="off"
+            disabled={disabled}
+            id="ranked-mode-sort"
+            inputMode="numeric"
+            name="ranked-mode-sort"
+            onChange={(event) =>
+              setModeForm((current) => ({
+                ...current,
+                sortOrder: event.target.value,
+              }))
+            }
+            value={modeForm.sortOrder}
+          />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="ranked-mode-status">Status</FieldLabel>
+          <ActiveStatusSelect
+            id="ranked-mode-status"
+            onValueChange={(value) =>
+              setModeForm((current) => ({
+                ...current,
+                isActive: value === "active",
+              }))
+            }
+            value={modeForm.isActive ? "active" : "archived"}
+          />
+        </Field>
       </div>
-    </>
+    </FieldGroup>
   )
 }
 
 function MapCatalogForm({
   activeTitleModes,
   availableModeOptions,
+  disabled = false,
   mapForm,
-  onResetMap,
-  onSaveMap,
-  pending,
   setMapForm,
 }: {
   activeTitleModes: StaffRankedModeRecord[]
@@ -406,103 +477,89 @@ function MapCatalogForm({
     label: string
     value: string
   }>
+  disabled?: boolean
   mapForm: MapFormState
-  onResetMap: () => void
-  onSaveMap: () => void
-  pending: boolean
   setMapForm: Dispatch<SetStateAction<MapFormState>>
 }) {
   return (
-    <>
-      <FieldGroup>
-        <div className="grid gap-4 md:grid-cols-2">
-          <Field>
-            <FieldLabel htmlFor="ranked-map-name">Map name</FieldLabel>
-            <Input
-              autoComplete="off"
-              id="ranked-map-name"
-              name="ranked-map-name"
-              onChange={(event) =>
-                setMapForm((current) => ({
-                  ...current,
-                  name: event.target.value,
-                }))
-              }
-              placeholder="Vault"
-              value={mapForm.name}
-            />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="ranked-map-sort">Sort order</FieldLabel>
-            <Input
-              autoComplete="off"
-              id="ranked-map-sort"
-              inputMode="numeric"
-              name="ranked-map-sort"
-              onChange={(event) =>
-                setMapForm((current) => ({
-                  ...current,
-                  sortOrder: event.target.value,
-                }))
-              }
-              value={mapForm.sortOrder}
-            />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="ranked-map-status">Status</FieldLabel>
-            <ActiveStatusSelect
-              id="ranked-map-status"
-              onValueChange={(value) =>
-                setMapForm((current) => ({
-                  ...current,
-                  isActive: value === "active",
-                }))
-              }
-              value={mapForm.isActive ? "active" : "archived"}
-            />
-          </Field>
-          <Field className="md:col-span-2">
-            <FieldLabel htmlFor="ranked-map-modes">Supported modes</FieldLabel>
-            <StaffRankedModeMultiSelect
-              emptyLabel={
-                activeTitleModes.length === 0
-                  ? "Add active modes for this title first."
-                  : "No matching modes."
-              }
-              onChange={(values) =>
-                setMapForm((current) => ({
-                  ...current,
-                  supportedModeIds: values,
-                }))
-              }
-              options={availableModeOptions}
-              placeholder={
-                activeTitleModes.length === 0
-                  ? "No active modes"
-                  : "Select one or more modes"
-              }
-              value={mapForm.supportedModeIds}
-            />
-            <FieldDescription>
-              At least one mode is required. The match logger only shows this
-              map after one of these modes is selected.
-            </FieldDescription>
-          </Field>
-        </div>
-      </FieldGroup>
-
-      <div className="flex flex-wrap items-center gap-3">
-        <Button
-          disabled={pending || activeTitleModes.length === 0}
-          onClick={onSaveMap}
-        >
-          {pending ? "Saving..." : "Save map"}
-        </Button>
-        <Button disabled={pending} onClick={onResetMap} variant="outline">
-          Reset
-        </Button>
+    <FieldGroup>
+      <div className="grid gap-4 md:grid-cols-2">
+        <Field>
+          <FieldLabel htmlFor="ranked-map-name">Map name</FieldLabel>
+          <Input
+            autoComplete="off"
+            disabled={disabled}
+            id="ranked-map-name"
+            name="ranked-map-name"
+            onChange={(event) =>
+              setMapForm((current) => ({
+                ...current,
+                name: event.target.value,
+              }))
+            }
+            placeholder="Vault"
+            value={mapForm.name}
+          />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="ranked-map-sort">Sort order</FieldLabel>
+          <Input
+            autoComplete="off"
+            disabled={disabled}
+            id="ranked-map-sort"
+            inputMode="numeric"
+            name="ranked-map-sort"
+            onChange={(event) =>
+              setMapForm((current) => ({
+                ...current,
+                sortOrder: event.target.value,
+              }))
+            }
+            value={mapForm.sortOrder}
+          />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="ranked-map-status">Status</FieldLabel>
+          <ActiveStatusSelect
+            id="ranked-map-status"
+            onValueChange={(value) =>
+              setMapForm((current) => ({
+                ...current,
+                isActive: value === "active",
+              }))
+            }
+            value={mapForm.isActive ? "active" : "archived"}
+          />
+        </Field>
+        <Field className="md:col-span-2">
+          <FieldLabel htmlFor="ranked-map-modes">Supported modes</FieldLabel>
+          <StaffRankedModeMultiSelect
+            emptyLabel={
+              activeTitleModes.length === 0
+                ? "Add active modes for this title first."
+                : "No matching modes."
+            }
+            onChange={(values) =>
+              setMapForm((current) => ({
+                ...current,
+                supportedModeIds: values,
+              }))
+            }
+            options={availableModeOptions}
+            placeholder={
+              activeTitleModes.length === 0
+                ? "No active modes"
+                : "Select one or more modes"
+            }
+            value={mapForm.supportedModeIds}
+          />
+          <FieldDescription>
+            At least one mode is required. The match logger only shows this map
+            after one of these modes is selected.
+          </FieldDescription>
+        </Field>
       </div>
-    </>
+    </FieldGroup>
   )
 }
 
@@ -525,7 +582,7 @@ function TitleCatalogTable({
   return (
     <DataTableShell
       body={
-        <TableBody className="[&_tr]:h-[68px]">
+        <TableBody className="[&_tr]:h-17">
           {titles.map((title) => (
             <TableRow key={title.key}>
               <TableCell>
@@ -578,7 +635,7 @@ function TitleCatalogTable({
             <TableHead>Modes</TableHead>
             <TableHead>Maps</TableHead>
             <TableHead>Sort</TableHead>
-            <TableHead className="w-[96px] text-right">Action</TableHead>
+            <TableHead className="w-24 text-right">Action</TableHead>
           </TableRow>
         </TableHeader>
       }
@@ -605,7 +662,7 @@ function ModeCatalogTable({
   return (
     <DataTableShell
       body={
-        <TableBody className="[&_tr]:h-[68px]">
+        <TableBody className="[&_tr]:h-17">
           {modes.map((mode) => (
             <TableRow key={mode.id}>
               <TableCell>
@@ -653,7 +710,7 @@ function ModeCatalogTable({
             <TableHead>Status</TableHead>
             <TableHead>Sort</TableHead>
             <TableHead>Updated</TableHead>
-            <TableHead className="w-[96px] text-right">Action</TableHead>
+            <TableHead className="w-24 text-right">Action</TableHead>
           </TableRow>
         </TableHeader>
       }
@@ -680,7 +737,7 @@ function MapCatalogTable({
   return (
     <DataTableShell
       body={
-        <TableBody className="[&_tr]:h-[72px]">
+        <TableBody className="[&_tr]:h-18">
           {maps.map((map) => (
             <TableRow key={map.id}>
               <TableCell>
@@ -691,7 +748,7 @@ function MapCatalogTable({
                   </div>
                 </div>
               </TableCell>
-              <TableCell className="max-w-[260px]">
+              <TableCell className="max-w-65">
                 <div className="flex max-h-12 flex-wrap gap-2 overflow-hidden">
                   {map.supportedModeLabels.map((label) => (
                     <Badge key={`${map.id}-${label}`} variant="outline">
@@ -730,7 +787,7 @@ function MapCatalogTable({
             <TableHead>Supported modes</TableHead>
             <TableHead>Status</TableHead>
             <TableHead>Sort</TableHead>
-            <TableHead className="w-[120px] text-right">Action</TableHead>
+            <TableHead className="w-30 text-right">Action</TableHead>
           </TableRow>
         </TableHeader>
       }
@@ -767,9 +824,9 @@ export function StaffRankedCatalogSection({
   onResetMap: () => void
   onResetMode: () => void
   onResetTitle: () => void
-  onSaveMap: () => void
-  onSaveMode: () => void
-  onSaveTitle: () => void
+  onSaveMap: () => Promise<boolean>
+  onSaveMode: () => Promise<boolean>
+  onSaveTitle: () => Promise<boolean>
   pending: boolean
   setMapForm: Dispatch<SetStateAction<MapFormState>>
   setModeForm: Dispatch<SetStateAction<ModeFormState>>
@@ -777,6 +834,10 @@ export function StaffRankedCatalogSection({
   titleForm: TitleFormState
   titles: StaffRankedTitleRecord[]
 }) {
+  const [editorState, setEditorState] = useState<{
+    kind: "map" | "mode" | "title"
+    mode: "create" | "edit"
+  } | null>(null)
   const selectedTitle =
     titles.find((title) => title.key === catalogTitleKey) ?? null
   const titleModes = modes.filter((mode) => mode.titleKey === catalogTitleKey)
@@ -788,228 +849,320 @@ export function StaffRankedCatalogSection({
     label: mode.label,
     value: mode.id,
   }))
+  const titleDialogOpen = editorState?.kind === "title"
+  const modeDialogOpen = editorState?.kind === "mode"
+  const mapDialogOpen = editorState?.kind === "map"
+
+  function handleEditorOpenChange(
+    kind: "map" | "mode" | "title",
+    open: boolean
+  ) {
+    setEditorState((current) => {
+      if (open) {
+        return current ?? { kind, mode: "create" }
+      }
+
+      return current?.kind === kind ? null : current
+    })
+  }
+
+  function openTitleCreate() {
+    onResetTitle()
+    setEditorState({ kind: "title", mode: "create" })
+  }
+
+  function openTitleEdit(title: StaffRankedTitleRecord) {
+    setTitleForm({
+      isActive: title.isActive,
+      key: title.key,
+      label: title.label,
+      sortOrder: String(title.sortOrder),
+    })
+    setEditorState({ kind: "title", mode: "edit" })
+  }
+
+  function openModeCreate() {
+    onResetMode()
+    setEditorState({ kind: "mode", mode: "create" })
+  }
+
+  function openModeEdit(mode: StaffRankedModeRecord) {
+    setModeForm({
+      isActive: mode.isActive,
+      key: mode.key,
+      label: mode.label,
+      modeId: mode.id,
+      sortOrder: String(mode.sortOrder),
+      titleKey: mode.titleKey,
+    })
+    setEditorState({ kind: "mode", mode: "edit" })
+  }
+
+  function openMapCreate() {
+    onResetMap()
+    setEditorState({ kind: "map", mode: "create" })
+  }
+
+  function openMapEdit(map: StaffRankedMapRecord) {
+    setMapForm({
+      isActive: map.isActive,
+      mapId: map.id,
+      name: map.name,
+      sortOrder: String(map.sortOrder),
+      supportedModeIds: map.supportedModeIds.filter((modeId) =>
+        activeTitleModes.some((mode) => mode.id === modeId)
+      ),
+      titleKey: map.titleKey,
+    })
+    setEditorState({ kind: "map", mode: "edit" })
+  }
 
   return (
-    <section className="overflow-hidden rounded-xl border border-border/60 bg-background">
-      <div className="border-b border-border/60 px-8 py-7">
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_300px] xl:items-end">
-          <div className="grid gap-2">
-            <h2 className="text-lg font-semibold tracking-tight">
-              Ranked catalog
-            </h2>
-            <p className="max-w-3xl text-sm text-muted-foreground">
-              Keep the rollout catalog lean. Titles are admin-managed, modes
-              stay title-scoped, and each map must support one or more active
-              modes before the flagged dashboard can log against it.
-            </p>
-          </div>
+    <>
+      <section className="overflow-hidden rounded-xl border border-border/60 bg-background">
+        <div className="border-b border-border/60 px-8 py-7">
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_300px] xl:items-end">
+            <div className="grid gap-2">
+              <h2 className="text-lg font-semibold tracking-tight">
+                Ranked catalog
+              </h2>
+              <p className="max-w-3xl text-sm text-muted-foreground">
+                Keep the rollout catalog lean. Titles are admin-managed, modes
+                stay title-scoped, and each map must support one or more active
+                modes before the flagged dashboard can log against it.
+              </p>
+            </div>
 
-          <Field className="grid gap-2 xl:justify-self-end">
-            <FieldLabel htmlFor="ranked-catalog-title">
-              Catalog title
-            </FieldLabel>
-            <Select
-              disabled={titles.length === 0}
-              onValueChange={onCatalogTitleChange}
-              value={catalogTitleKey || undefined}
-            >
-              <SelectTrigger
-                className="w-full min-w-[280px]"
-                id="ranked-catalog-title"
+            <Field className="grid gap-2 xl:justify-self-end">
+              <FieldLabel htmlFor="ranked-catalog-title">
+                Catalog title
+              </FieldLabel>
+              <Select
+                disabled={titles.length === 0}
+                onValueChange={onCatalogTitleChange}
+                value={catalogTitleKey || undefined}
               >
-                <SelectValue placeholder="Select a title" />
-              </SelectTrigger>
-              <SelectContent>
-                {titles.map((title) => (
-                  <SelectItem key={title.key} value={title.key}>
-                    {title.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
+                <SelectTrigger
+                  className="w-full min-w-70"
+                  id="ranked-catalog-title"
+                >
+                  <SelectValue placeholder="Select a title" />
+                </SelectTrigger>
+                <SelectContent>
+                  {titles.map((title) => (
+                    <SelectItem key={title.key} value={title.key}>
+                      {title.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+          </div>
+
+          <div className="mt-5 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <span>Selected title</span>
+              <span className="font-medium text-foreground">
+                {selectedTitle?.label ?? "No title selected"}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <span>Active modes</span>
+              <span className="font-medium text-foreground">
+                {activeTitleModes.length}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <span>Active maps</span>
+              <span className="font-medium text-foreground">
+                {activeTitleMapCount}
+              </span>
+            </div>
+          </div>
         </div>
 
-        <div className="mt-5 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <span>Selected title</span>
-            <span className="font-medium text-foreground">
-              {selectedTitle?.label ?? "No title selected"}
-            </span>
-          </div>
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <span>Active modes</span>
-            <span className="font-medium text-foreground">
-              {activeTitleModes.length}
-            </span>
-          </div>
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <span>Active maps</span>
-            <span className="font-medium text-foreground">
-              {activeTitleMapCount}
-            </span>
-          </div>
+        <div className="divide-y divide-border/60">
+          <CatalogManagementRow
+            controls={
+              <CatalogActionPanel
+                actionLabel="Create title"
+                description="Open the title editor in a focused flow. Use Edit in the table to revise an existing title without leaving the catalog."
+                onAction={openTitleCreate}
+              />
+            }
+            description="Create and maintain the ranked titles staff can activate. Keep the key stable because config, modes, maps, and sessions all reference it."
+            table={<TitleCatalogTable onEdit={openTitleEdit} titles={titles} />}
+            tableDescription="Titles staff can point the current ranked config at, with their current mode and map counts."
+            tableTitle="Saved titles"
+            title="Game titles"
+          />
+
+          <CatalogManagementRow
+            controls={
+              <CatalogActionPanel
+                actionDisabled={!selectedTitle}
+                actionLabel="Create mode"
+                description={
+                  selectedTitle
+                    ? `Open the ${selectedTitle.label} mode editor in a focused flow. Existing modes reopen in the same editor from the table.`
+                    : "Choose a catalog title above before opening the ranked mode editor."
+                }
+                onAction={openModeCreate}
+              />
+            }
+            description={
+              selectedTitle
+                ? `Create and order the ranked modes ${selectedTitle.label} supports. The match logger only offers active modes from this title.`
+                : "Choose a catalog title above before creating or editing ranked modes."
+            }
+            table={
+              selectedTitle ? (
+                <ModeCatalogTable modes={titleModes} onEdit={openModeEdit} />
+              ) : (
+                <EmptyWorkspace
+                  description="Choose a title above to load the ranked modes attached to it."
+                  title="No title selected"
+                />
+              )
+            }
+            tableDescription={
+              selectedTitle
+                ? `Active and archived ranked modes for ${selectedTitle.label}.`
+                : "Choose a title to load its ranked mode list."
+            }
+            tableTitle={
+              selectedTitle ? `${selectedTitle.label} modes` : "Mode list"
+            }
+            title="Ranked modes"
+          />
+
+          <CatalogManagementRow
+            controls={
+              <CatalogActionPanel
+                actionDisabled={!selectedTitle}
+                actionLabel="Create map"
+                description={
+                  selectedTitle
+                    ? `Open the ${selectedTitle.label} map editor in a focused flow. Existing maps reopen in the same editor from the table.`
+                    : "Choose a catalog title above before opening the map editor."
+                }
+                onAction={openMapCreate}
+              />
+            }
+            description={
+              selectedTitle
+                ? `Maps for ${selectedTitle.label} must support one or more active modes. The match logger filters maps after the user picks a mode.`
+                : "Choose a catalog title above before creating or editing maps."
+            }
+            table={
+              selectedTitle ? (
+                <MapCatalogTable maps={titleMaps} onEdit={openMapEdit} />
+              ) : (
+                <EmptyWorkspace
+                  description="Choose a title above to load the maps attached to it."
+                  title="No title selected"
+                />
+              )
+            }
+            tableDescription={
+              selectedTitle
+                ? `Saved maps for ${selectedTitle.label}, including the modes each map supports.`
+                : "Choose a title to load its map list."
+            }
+            tableTitle={
+              selectedTitle ? `${selectedTitle.label} maps` : "Map list"
+            }
+            title="Maps"
+          />
         </div>
-      </div>
 
-      <div className="divide-y divide-border/60">
-        <CatalogManagementRow
-          description="Create and maintain the ranked titles staff can activate. Keep the key stable because config, modes, maps, and sessions all reference it."
-          form={
-            <TitleCatalogForm
-              onResetTitle={onResetTitle}
-              onSaveTitle={onSaveTitle}
-              pending={pending}
-              setTitleForm={setTitleForm}
-              titleForm={titleForm}
-            />
-          }
-          table={
-            <TitleCatalogTable
-              onEdit={(title) =>
-                setTitleForm({
-                  isActive: title.isActive,
-                  key: title.key,
-                  label: title.label,
-                  sortOrder: String(title.sortOrder),
-                })
-              }
-              titles={titles}
-            />
-          }
-          tableDescription="Titles staff can point the current ranked config at, with their current mode and map counts."
-          tableTitle="Saved titles"
-          title="Game titles"
+        <div className="border-t border-border/60 px-8 py-4 text-sm text-muted-foreground">
+          Modes remain title-specific in v1. Maps can support multiple modes but
+          must keep at least one supported mode.
+        </div>
+      </section>
+
+      <CatalogEditorDialog
+        description={
+          editorState?.kind === "title" && editorState.mode === "edit"
+            ? "Update the selected ranked title without leaving the catalog page."
+            : "Create a ranked title staff can activate in the current config."
+        }
+        onOpenChange={(open) => handleEditorOpenChange("title", open)}
+        onReset={onResetTitle}
+        onSave={onSaveTitle}
+        open={titleDialogOpen}
+        pending={pending}
+        saveLabel="Save title"
+        title={
+          editorState?.kind === "title" && editorState.mode === "edit"
+            ? "Edit title"
+            : "Create title"
+        }
+      >
+        <TitleCatalogForm
+          disabled={pending}
+          setTitleForm={setTitleForm}
+          titleForm={titleForm}
         />
+      </CatalogEditorDialog>
 
-        <CatalogManagementRow
-          description={
-            selectedTitle
-              ? `Create and order the ranked modes ${selectedTitle.label} supports. The match logger only offers active modes from this title.`
-              : "Choose a catalog title above before creating or editing ranked modes."
-          }
-          form={
-            selectedTitle ? (
-              <ModeCatalogForm
-                modeForm={modeForm}
-                onResetMode={onResetMode}
-                onSaveMode={onSaveMode}
-                pending={pending}
-                setModeForm={setModeForm}
-              />
-            ) : (
-              <div className="grid gap-2 pt-1 text-sm text-muted-foreground">
-                <p>
-                  Pick a title first. Modes remain scoped to a single title in
-                  v1.
-                </p>
-                <p>
-                  Once a title is selected, you can define the valid ranked
-                  modes and keep their ordering stable for logging.
-                </p>
-              </div>
-            )
-          }
-          table={
-            selectedTitle ? (
-              <ModeCatalogTable
-                modes={titleModes}
-                onEdit={(mode) =>
-                  setModeForm({
-                    isActive: mode.isActive,
-                    key: mode.key,
-                    label: mode.label,
-                    modeId: mode.id,
-                    sortOrder: String(mode.sortOrder),
-                    titleKey: mode.titleKey,
-                  })
-                }
-              />
-            ) : (
-              <EmptyWorkspace
-                description="Choose a title above to load the ranked modes attached to it."
-                title="No title selected"
-              />
-            )
-          }
-          tableDescription={
-            selectedTitle
-              ? `Active and archived ranked modes for ${selectedTitle.label}.`
-              : "Choose a title to load its ranked mode list."
-          }
-          tableTitle={
-            selectedTitle ? `${selectedTitle.label} modes` : "Mode list"
-          }
-          title="Ranked modes"
+      <CatalogEditorDialog
+        description={
+          selectedTitle
+            ? editorState?.kind === "mode" && editorState.mode === "edit"
+              ? `Update a ranked mode for ${selectedTitle.label}.`
+              : `Create a ranked mode for ${selectedTitle.label}.`
+            : "Choose a catalog title before editing ranked modes."
+        }
+        onOpenChange={(open) => handleEditorOpenChange("mode", open)}
+        onReset={onResetMode}
+        onSave={onSaveMode}
+        open={modeDialogOpen}
+        pending={pending}
+        saveLabel="Save mode"
+        title={
+          editorState?.kind === "mode" && editorState.mode === "edit"
+            ? "Edit mode"
+            : "Create mode"
+        }
+      >
+        <ModeCatalogForm
+          disabled={pending}
+          modeForm={modeForm}
+          setModeForm={setModeForm}
         />
+      </CatalogEditorDialog>
 
-        <CatalogManagementRow
-          description={
-            selectedTitle
-              ? `Maps for ${selectedTitle.label} must support one or more active modes. The match logger filters maps after the user picks a mode.`
-              : "Choose a catalog title above before creating or editing maps."
-          }
-          form={
-            selectedTitle ? (
-              <MapCatalogForm
-                activeTitleModes={activeTitleModes}
-                availableModeOptions={availableModeOptions}
-                mapForm={mapForm}
-                onResetMap={onResetMap}
-                onSaveMap={onSaveMap}
-                pending={pending}
-                setMapForm={setMapForm}
-              />
-            ) : (
-              <div className="grid gap-2 pt-1 text-sm text-muted-foreground">
-                <p>Pick a title before managing its maps.</p>
-                <p>
-                  Maps are filtered by title and must keep at least one active
-                  mode so the logger only shows valid map choices.
-                </p>
-              </div>
-            )
-          }
-          table={
-            selectedTitle ? (
-              <MapCatalogTable
-                maps={titleMaps}
-                onEdit={(map) =>
-                  setMapForm({
-                    isActive: map.isActive,
-                    mapId: map.id,
-                    name: map.name,
-                    sortOrder: String(map.sortOrder),
-                    supportedModeIds: map.supportedModeIds.filter((modeId) =>
-                      activeTitleModes.some((mode) => mode.id === modeId)
-                    ),
-                    titleKey: map.titleKey,
-                  })
-                }
-              />
-            ) : (
-              <EmptyWorkspace
-                description="Choose a title above to load the maps attached to it."
-                title="No title selected"
-              />
-            )
-          }
-          tableDescription={
-            selectedTitle
-              ? `Saved maps for ${selectedTitle.label}, including the modes each map supports.`
-              : "Choose a title to load its map list."
-          }
-          tableTitle={
-            selectedTitle ? `${selectedTitle.label} maps` : "Map list"
-          }
-          title="Maps"
+      <CatalogEditorDialog
+        description={
+          selectedTitle
+            ? editorState?.kind === "map" && editorState.mode === "edit"
+              ? `Update a supported map for ${selectedTitle.label}.`
+              : `Create a supported map for ${selectedTitle.label}.`
+            : "Choose a catalog title before editing maps."
+        }
+        onOpenChange={(open) => handleEditorOpenChange("map", open)}
+        onReset={onResetMap}
+        onSave={onSaveMap}
+        open={mapDialogOpen}
+        pending={pending}
+        saveDisabled={activeTitleModes.length === 0}
+        saveLabel="Save map"
+        title={
+          editorState?.kind === "map" && editorState.mode === "edit"
+            ? "Edit map"
+            : "Create map"
+        }
+      >
+        <MapCatalogForm
+          activeTitleModes={activeTitleModes}
+          availableModeOptions={availableModeOptions}
+          disabled={pending}
+          mapForm={mapForm}
+          setMapForm={setMapForm}
         />
-      </div>
-
-      <div className="border-t border-border/60 px-8 py-4 text-sm text-muted-foreground">
-        Modes remain title-specific in v1. Maps can support multiple modes but
-        must keep at least one supported mode.
-      </div>
-    </section>
+      </CatalogEditorDialog>
+    </>
   )
 }

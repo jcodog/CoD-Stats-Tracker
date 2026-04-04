@@ -112,9 +112,12 @@ export function CheckoutView({
       billingState.creatorGrant?.endsAt
 
     return endsAt
-      ? `This account already has Creator complimentary access until ${new Intl.DateTimeFormat(undefined, {
-          dateStyle: "medium",
-        }).format(endsAt)}.`
+      ? `This account already has Creator complimentary access until ${new Intl.DateTimeFormat(
+          undefined,
+          {
+            dateStyle: "medium",
+          }
+        ).format(endsAt)}.`
       : "This account already has Creator complimentary access with no expiry."
   }
 
@@ -214,8 +217,8 @@ export function CheckoutView({
   ) {
     return (
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_23rem]">
-        <Skeleton className="min-h-[28rem] rounded-3xl" />
-        <Skeleton className="min-h-[28rem] rounded-3xl" />
+        <Skeleton className="min-h-112 rounded-3xl" />
+        <Skeleton className="min-h-112 rounded-3xl" />
       </div>
     )
   }
@@ -297,7 +300,13 @@ export function CheckoutView({
             Billing
           </p>
         ) : null}
-        <h1 className={isMobileView ? "text-3xl font-semibold tracking-tight" : "text-4xl font-semibold tracking-tight"}>
+        <h1
+          className={
+            isMobileView
+              ? "text-3xl font-semibold tracking-tight"
+              : "text-4xl font-semibold tracking-tight"
+          }
+        >
           Secure checkout
         </h1>
         <p className="max-w-3xl text-base text-muted-foreground">
@@ -387,7 +396,7 @@ export function CheckoutView({
       >
         <DialogContent className="max-w-[calc(100%-2rem)] border border-border/70 bg-card p-0 shadow-[0_18px_50px_-24px_rgba(0,0,0,0.72)] sm:max-w-2xl">
           <div className="rounded-[22px] bg-background/70 p-1">
-            <div className="flex max-h-[calc(100vh-3rem)] flex-col overflow-hidden rounded-[20px] bg-card">
+            <div className="flex max-h-[calc(100vh-3rem)] flex-col overflow-hidden rounded-4xl bg-card">
               <DialogHeader className="border-b border-border/70 px-6 py-5">
                 <DialogTitle>Secure payment</DialogTitle>
                 <DialogDescription>

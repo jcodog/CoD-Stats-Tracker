@@ -92,8 +92,8 @@ export function LandingHeader({ viewport }: { viewport: LandingViewport }) {
       <div
         className={
           isMobileView
-            ? "mx-auto flex min-w-0 w-full max-w-6xl items-center justify-between gap-2 px-4 py-3 sm:px-6"
-            : "mx-auto flex min-w-0 w-full max-w-6xl items-center justify-between gap-6 px-4 py-3 sm:px-6 lg:px-8"
+            ? "mx-auto flex w-full max-w-6xl min-w-0 items-center justify-between gap-2 px-4 py-3 sm:px-6"
+            : "mx-auto flex w-full max-w-6xl min-w-0 items-center justify-between gap-6 px-4 py-3 sm:px-6 lg:px-8"
         }
       >
         <Link
@@ -119,7 +119,11 @@ export function LandingHeader({ viewport }: { viewport: LandingViewport }) {
   )
 }
 
-export function LandingHeroSection({ viewport }: { viewport: LandingViewport }) {
+export function LandingHeroSection({
+  viewport,
+}: {
+  viewport: LandingViewport
+}) {
   const isMobileView = viewport === "mobile"
 
   return (
@@ -141,8 +145,8 @@ export function LandingHeroSection({ viewport }: { viewport: LandingViewport }) 
           Track Every Match. Learn Faster. Win More.
         </h1>
         <p className="max-w-xl text-base leading-relaxed text-pretty text-muted-foreground sm:text-lg">
-          CodStats turns ranked sessions into a clear performance view so you can
-          spot patterns and improve faster.
+          CodStats turns ranked sessions into a clear performance view so you
+          can spot patterns and improve faster.
         </p>
       </div>
 
@@ -190,7 +194,11 @@ export function LandingSnapshotSection({
   )
 }
 
-export function LandingFeatureList({ viewport }: { viewport: LandingViewport }) {
+export function LandingFeatureList({
+  viewport,
+}: {
+  viewport: LandingViewport
+}) {
   const isMobileView = viewport === "mobile"
 
   return (
@@ -225,7 +233,7 @@ export function LandingFeatureList({ viewport }: { viewport: LandingViewport }) 
               <h3 className="text-lg font-semibold tracking-tight">
                 {feature.title}
               </h3>
-              <p className="text-sm leading-relaxed break-words text-muted-foreground">
+              <p className="text-sm leading-relaxed wrap-break-word text-muted-foreground">
                 {feature.description}
               </p>
             </div>
@@ -275,7 +283,7 @@ export function LandingPlatformList({
               <h3 className="text-lg font-semibold tracking-tight">
                 {item.title}
               </h3>
-              <p className="text-sm leading-relaxed break-words text-muted-foreground">
+              <p className="text-sm leading-relaxed wrap-break-word text-muted-foreground">
                 {item.detail}
               </p>
             </div>
@@ -326,7 +334,7 @@ export function LandingCreatorToolsSection({
               <h3 className="text-lg font-semibold tracking-tight">
                 {item.title}
               </h3>
-              <p className="text-sm leading-relaxed break-words text-muted-foreground">
+              <p className="text-sm leading-relaxed wrap-break-word text-muted-foreground">
                 {item.detail}
               </p>
             </div>

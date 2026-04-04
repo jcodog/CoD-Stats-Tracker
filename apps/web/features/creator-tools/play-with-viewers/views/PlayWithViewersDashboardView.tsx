@@ -150,14 +150,12 @@ type SelectionDialogState =
     }
   | null
 
-type SelectionResultState =
-  | {
-      createdAt: number
-      inviteMode: InviteMode
-      selectionKind: "batch" | "entry"
-      selectedUsers: QueueRoundUser[]
-    }
-  | null
+type SelectionResultState = {
+  createdAt: number
+  inviteMode: InviteMode
+  selectionKind: "batch" | "entry"
+  selectedUsers: QueueRoundUser[]
+} | null
 
 const rankOptions: Array<{ label: string; value: RankValue }> = [
   { label: "Bronze", value: "bronze" },
@@ -179,12 +177,17 @@ const inviteCodeTypeOptions: Array<{ label: string; value: InviteCodeType }> = [
   { label: "Private match code", value: "private_match_code" },
 ]
 
-const playersPerBatchOptions = Array.from({ length: 30 }, (_, index) => index + 1)
+const playersPerBatchOptions = Array.from(
+  { length: 30 },
+  (_, index) => index + 1
+)
 const matchesPerViewerOptions = Array.from(
   { length: 10 },
   (_, index) => index + 1
 )
-const rankOrder = new Map(rankOptions.map((option, index) => [option.value, index]))
+const rankOrder = new Map(
+  rankOptions.map((option, index) => [option.value, index])
+)
 const relativeTimeFormatter = new Intl.RelativeTimeFormat(undefined, {
   numeric: "auto",
 })
@@ -366,7 +369,7 @@ function ToolbarGroup({
 }: Readonly<{ children: React.ReactNode; label: string }>) {
   return (
     <div className="flex shrink-0 items-center gap-3">
-      <span className="whitespace-nowrap text-sm font-medium text-muted-foreground">
+      <span className="text-sm font-medium whitespace-nowrap text-muted-foreground">
         {label}
       </span>
       <div className="flex flex-wrap items-center gap-2">{children}</div>
@@ -425,7 +428,9 @@ function LockedState({ queueTitle }: Readonly<{ queueTitle: string }>) {
             <IconLock />
           </div>
           <div className="flex flex-col gap-1">
-            <h2 className="text-base font-medium">Twitch connection required</h2>
+            <h2 className="text-base font-medium">
+              Twitch connection required
+            </h2>
             <p className="max-w-2xl text-sm text-muted-foreground">
               {queueTitle} stays locked until this creator account has a Twitch
               profile linked. Once linked, the queue controls, waiting list, and
@@ -484,8 +489,8 @@ function SelectionResultSummary({
             <IconAlertTriangle />
             <AlertTitle>Manual follow-up needed</AlertTitle>
             <AlertDescription>
-              {failedDmCount} viewer{failedDmCount === 1 ? "" : "s"} could not be
-              reached by Discord DM. Ask them to enable DMs or contact them
+              {failedDmCount} viewer{failedDmCount === 1 ? "" : "s"} could not
+              be reached by Discord DM. Ask them to enable DMs or contact them
               manually.
             </AlertDescription>
           </Alert>
@@ -505,7 +510,7 @@ function SelectionResultSummary({
         </div>
       ) : null}
 
-      <div className="flex max-h-[420px] flex-col divide-y divide-border/70 overflow-y-auto">
+      <div className="flex max-h-105 flex-col divide-y divide-border/70 overflow-y-auto">
         {selectionResult.selectedUsers.map((user) => (
           <div
             key={`${selectionResult.createdAt}-${user.discordUserId}`}
@@ -515,7 +520,9 @@ function SelectionResultSummary({
               <div className="flex min-w-0 items-center gap-3">
                 <Avatar className="size-9">
                   <AvatarImage alt={user.displayName} src={user.avatarUrl} />
-                  <AvatarFallback>{getInitials(user.displayName)}</AvatarFallback>
+                  <AvatarFallback>
+                    {getInitials(user.displayName)}
+                  </AvatarFallback>
                 </Avatar>
                 <div className="min-w-0">
                   <div className="truncate font-medium text-foreground">
@@ -542,7 +549,9 @@ function SelectionResultSummary({
             </div>
 
             {user.dmFailureReason ? (
-              <p className="text-sm text-muted-foreground">{user.dmFailureReason}</p>
+              <p className="text-sm text-muted-foreground">
+                {user.dmFailureReason}
+              </p>
             ) : null}
           </div>
         ))}
@@ -566,7 +575,8 @@ export function PlayWithViewersDashboardView({
     currentUser ? {} : "skip"
   ) as ViewerQueue | null | undefined
   const queueEntries = useQuery(
-    api.queries.creatorTools.playingWithViewers.queue.getCurrentCreatorQueueEntries,
+    api.queries.creatorTools.playingWithViewers.queue
+      .getCurrentCreatorQueueEntries,
     queue?._id ? { queueId: queue._id } : "skip"
   ) as ViewerQueueEntry[] | undefined
 
@@ -606,21 +616,21 @@ export function PlayWithViewersDashboardView({
   const [isSyncingDiscordContext, setIsSyncingDiscordContext] = useState(false)
   const [isFixingChannelPermissions, setIsFixingChannelPermissions] =
     useState(false)
-  const [isLoadingAvailableGuilds, setIsLoadingAvailableGuilds] = useState(false)
+  const [isLoadingAvailableGuilds, setIsLoadingAvailableGuilds] =
+    useState(false)
   const [toolbarFieldPending, setToolbarFieldPending] = useState<string | null>(
     null
   )
-  const [availableGuilds, setAvailableGuilds] = useState<AvailableDiscordGuild[]>(
-    []
-  )
-  const [availableGuildsError, setAvailableGuildsError] = useState<string | null>(
-    null
-  )
+  const [availableGuilds, setAvailableGuilds] = useState<
+    AvailableDiscordGuild[]
+  >([])
+  const [availableGuildsError, setAvailableGuildsError] = useState<
+    string | null
+  >(null)
   const [removingEntryId, setRemovingEntryId] =
     useState<Id<"viewerQueueEntries"> | null>(null)
-  const [auditedQueueId, setAuditedQueueId] = useState<Id<"viewerQueues"> | null>(
-    null
-  )
+  const [auditedQueueId, setAuditedQueueId] =
+    useState<Id<"viewerQueues"> | null>(null)
   const [auditedChannelPermsCorrect, setAuditedChannelPermsCorrect] = useState<
     boolean | null
   >(null)
@@ -637,8 +647,9 @@ export function PlayWithViewersDashboardView({
     [preferredCreatorDisplayName]
   )
   const createFormState = createFormDraft ?? defaultCreateFormState
-  const settingsFormState =
-    queue ? settingsFormDraft ?? toQueueFormState(queue) : defaultCreateFormState
+  const settingsFormState = queue
+    ? (settingsFormDraft ?? toQueueFormState(queue))
+    : defaultCreateFormState
   const setCreateFormState: Dispatch<SetStateAction<QueueFormState>> = (
     updater
   ) => {
@@ -668,8 +679,8 @@ export function PlayWithViewersDashboardView({
     queue?.channelPermsCorrect === true
       ? true
       : hasAuditedQueuePermissions && auditedChannelPermsCorrect !== null
-      ? auditedChannelPermsCorrect
-      : (queue?.channelPermsCorrect ?? null)
+        ? auditedChannelPermsCorrect
+        : (queue?.channelPermsCorrect ?? null)
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -695,7 +706,8 @@ export function PlayWithViewersDashboardView({
       setAvailableGuildsError(null)
 
       try {
-        const guilds: AvailableDiscordGuild[] = await listAvailableDiscordGuilds({})
+        const guilds: AvailableDiscordGuild[] =
+          await listAvailableDiscordGuilds({})
 
         if (cancelled) {
           return
@@ -837,7 +849,10 @@ export function PlayWithViewersDashboardView({
     setAuditedChannelPermsCorrect(result.channelPermsCorrect)
     setQueueBotPermissionStatus(result.botPermissionStatus)
 
-    if (result.botPermissionStatus?.needsReinvite || result.channelPermsCorrect !== true) {
+    if (
+      result.botPermissionStatus?.needsReinvite ||
+      result.channelPermsCorrect !== true
+    ) {
       setPermissionsDialogOpen(true)
       setPermissionsDialogQueueId(queueId)
       return
@@ -930,7 +945,9 @@ export function PlayWithViewersDashboardView({
     }
 
     await handleCopyToClipboard(
-      selectionResultState.selectedUsers.map((user) => user.username).join("\n"),
+      selectionResultState.selectedUsers
+        .map((user) => user.username)
+        .join("\n"),
       "Usernames copied."
     )
   }
@@ -1026,7 +1043,11 @@ export function PlayWithViewersDashboardView({
     patch: Partial<
       Pick<
         ViewerQueue,
-        "inviteMode" | "matchesPerViewer" | "maxRank" | "minRank" | "playersPerBatch"
+        | "inviteMode"
+        | "matchesPerViewer"
+        | "maxRank"
+        | "minRank"
+        | "playersPerBatch"
       >
     >
   ) {
@@ -1093,7 +1114,9 @@ export function PlayWithViewersDashboardView({
     setIsPublishing(true)
 
     try {
-      const canPublishQueueMessage = await ensureQueueReadyForDiscordSync(queue._id)
+      const canPublishQueueMessage = await ensureQueueReadyForDiscordSync(
+        queue._id
+      )
 
       if (!canPublishQueueMessage) {
         return
@@ -1116,7 +1139,9 @@ export function PlayWithViewersDashboardView({
     setIsRefreshing(true)
 
     try {
-      const canRefreshQueueMessage = await ensureQueueReadyForDiscordSync(queue._id)
+      const canRefreshQueueMessage = await ensureQueueReadyForDiscordSync(
+        queue._id
+      )
 
       if (!canRefreshQueueMessage) {
         return
@@ -1321,15 +1346,15 @@ export function PlayWithViewersDashboardView({
 
   if (currentUser === null) {
     return (
-      <Empty className="min-h-[420px] rounded-lg border border-border/70">
+      <Empty className="min-h-105nded-lg border border-border/70">
         <EmptyHeader>
           <EmptyMedia variant="icon">
             <IconLock />
           </EmptyMedia>
           <EmptyTitle>Sign in to manage creator tools</EmptyTitle>
           <EmptyDescription>
-            This workspace needs an authenticated creator account before the queue
-            dashboard can load.
+            This workspace needs an authenticated creator account before the
+            queue dashboard can load.
           </EmptyDescription>
         </EmptyHeader>
       </Empty>
@@ -1339,20 +1364,21 @@ export function PlayWithViewersDashboardView({
   const pageTitle = queue?.title ?? "Play With Viewers"
   const hasDiscordSyncError = Boolean(queue?.lastMessageSyncError)
   const hasPublishedMessage = Boolean(queue?.messageId)
-  const isRetryingDiscordSync = hasPublishedMessage ? isRefreshing : isPublishing
+  const isRetryingDiscordSync = hasPublishedMessage
+    ? isRefreshing
+    : isPublishing
   const discordContextLabel = formatDiscordContext(
     queue ?? null,
     isSyncingDiscordContext
   )
   const needsChannelPermissionRepair = Boolean(
-    queue &&
-      hasAuditedQueuePermissions &&
-      resolvedChannelPermsCorrect !== true
+    queue && hasAuditedQueuePermissions && resolvedChannelPermsCorrect !== true
   )
   const permissionsDialogNeedsReinvite = Boolean(
     needsChannelPermissionRepair && queueBotPermissionStatus?.needsReinvite
   )
-  const missingBotPermissionLabels = queueBotPermissionStatus?.missingPermissionLabels ?? []
+  const missingBotPermissionLabels =
+    queueBotPermissionStatus?.missingPermissionLabels ?? []
   const retryDiscordSyncLabel = hasPublishedMessage
     ? isRefreshing
       ? "Retrying..."
@@ -1379,7 +1405,9 @@ export function PlayWithViewersDashboardView({
       <header className="flex flex-col gap-3 border-b border-border/70 pb-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div className="flex min-w-0 flex-col gap-2">
-            <h1 className="text-2xl font-semibold tracking-tight">{pageTitle}</h1>
+            <h1 className="text-2xl font-semibold tracking-tight">
+              {pageTitle}
+            </h1>
             <div className="flex flex-wrap items-center gap-2">
               {queue ? (
                 <Badge variant={queue.isActive ? "default" : "outline"}>
@@ -1471,7 +1499,9 @@ export function PlayWithViewersDashboardView({
               variant="outline"
             >
               <IconSettings data-icon="inline-start" />
-              {permissionsDialogNeedsReinvite ? "Reinvite bot" : "Fix permissions"}
+              {permissionsDialogNeedsReinvite
+                ? "Reinvite bot"
+                : "Fix permissions"}
             </Button>
           </AlertDescription>
         </Alert>
@@ -1481,7 +1511,7 @@ export function PlayWithViewersDashboardView({
         <LockedState queueTitle={pageTitle} />
       ) : queue === null ? (
         <Panel className="border-dashed bg-muted/20">
-          <Empty className="min-h-[420px] rounded-none border-0 p-6">
+          <Empty className="min-h-105 rounded-none border-0 p-6">
             <EmptyHeader>
               <EmptyMedia variant="icon">
                 <IconUsers />
@@ -1512,7 +1542,9 @@ export function PlayWithViewersDashboardView({
                   <span
                     className={cn(
                       "text-sm font-medium",
-                      queue.isActive ? "text-foreground" : "text-muted-foreground"
+                      queue.isActive
+                        ? "text-foreground"
+                        : "text-muted-foreground"
                     )}
                   >
                     {queue.isActive ? "Open" : "Closed"}
@@ -1529,7 +1561,7 @@ export function PlayWithViewersDashboardView({
 
                 <ToolbarGroup label="Ranks">
                   <AppSelect
-                    className="w-[144px] max-w-full"
+                    className="w-36 max-w-full"
                     disabled={toolbarFieldPending !== null}
                     onValueChange={(value) =>
                       handleToolbarSettingsChange("minRank", {
@@ -1544,7 +1576,7 @@ export function PlayWithViewersDashboardView({
                     value={queue.minRank}
                   />
                   <AppSelect
-                    className="w-[144px] max-w-full"
+                    className="w-36w-full"
                     disabled={toolbarFieldPending !== null}
                     onValueChange={(value) =>
                       handleToolbarSettingsChange("maxRank", {
@@ -1564,7 +1596,7 @@ export function PlayWithViewersDashboardView({
 
                 <ToolbarGroup label="Batch">
                   <AppSelect
-                    className="w-[148px] max-w-full"
+                    className="w-37 max-w-full"
                     disabled={toolbarFieldPending !== null}
                     onValueChange={(value) =>
                       handleToolbarSettingsChange("playersPerBatch", {
@@ -1579,7 +1611,7 @@ export function PlayWithViewersDashboardView({
                     value={String(queue.playersPerBatch)}
                   />
                   <AppSelect
-                    className="w-[124px] max-w-full"
+                    className="w-31 max-w-full"
                     disabled={toolbarFieldPending !== null}
                     onValueChange={(value) =>
                       handleToolbarSettingsChange("matchesPerViewer", {
@@ -1599,7 +1631,7 @@ export function PlayWithViewersDashboardView({
               <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-border/50 pt-4">
                 <ToolbarGroup label="Invite mode">
                   <AppSelect
-                    className="w-[168px] max-w-full"
+                    className="w-42 max-w-full"
                     disabled={toolbarFieldPending !== null}
                     onValueChange={(value) =>
                       handleToolbarSettingsChange("inviteMode", {
@@ -1661,9 +1693,12 @@ export function PlayWithViewersDashboardView({
                     </AlertDialogTrigger>
                     <AlertDialogContent size="sm">
                       <AlertDialogHeader>
-                        <AlertDialogTitle>Clear the active queue?</AlertDialogTitle>
+                        <AlertDialogTitle>
+                          Clear the active queue?
+                        </AlertDialogTitle>
                         <AlertDialogDescription>
-                          This removes every waiting viewer from the active list.
+                          This removes every waiting viewer from the active
+                          list.
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
@@ -1704,7 +1739,7 @@ export function PlayWithViewersDashboardView({
             </div>
 
             {entries.length === 0 ? (
-              <Empty className="min-h-[360px] rounded-none border-0 p-6">
+              <Empty className="min-h-90 rounded-none border-0 p-6">
                 <EmptyHeader>
                   <EmptyMedia variant="icon">
                     <IconUsers />
@@ -1717,16 +1752,18 @@ export function PlayWithViewersDashboardView({
                 </EmptyHeader>
               </Empty>
             ) : (
-              <ScrollArea className="max-h-[700px]">
-                <Table className="min-w-[980px]">
+              <ScrollArea className="max-h-175">
+                <Table className="min-w-245">
                   <TableHeader>
                     <TableRow>
                       <TableHead className="w-20 px-4">Position</TableHead>
-                      <TableHead className="min-w-[320px] px-4">Viewer</TableHead>
+                      <TableHead className="min-w-[320px] px-4">
+                        Viewer
+                      </TableHead>
                       <TableHead className="w-36 px-4">Rank</TableHead>
                       <TableHead className="w-48 px-4">Joined</TableHead>
                       <TableHead className="w-32 px-4">Waiting</TableHead>
-                      <TableHead className="w-[220px] px-4 text-right">
+                      <TableHead className="w-55 px-4 text-right">
                         Actions
                       </TableHead>
                     </TableRow>
@@ -1808,7 +1845,7 @@ export function PlayWithViewersDashboardView({
       ) : null}
 
       <Sheet onOpenChange={handleSettingsOpenChange} open={settingsOpen}>
-        <SheetContent className="w-full overflow-hidden p-0 data-[vaul-drawer-direction=bottom]:h-[min(88vh,52rem)] data-[vaul-drawer-direction=bottom]:max-h-[min(88vh,52rem)] sm:max-w-2xl lg:max-w-[54rem]">
+        <SheetContent className="w-full overflow-hidden p-0 data-[vaul-drawer-direction=bottom]:h-[min(88vh,52rem)] data-[vaul-drawer-direction=bottom]:max-h-[min(88vh,52rem)] sm:max-w-2xl lg:max-w-216">
           <SheetHeader className="shrink-0 border-b border-border/60 px-6 py-5 text-left">
             <SheetTitle>
               {queue ? "Queue settings" : "Create Play With Viewers queue"}
@@ -1820,313 +1857,339 @@ export function PlayWithViewersDashboardView({
             </SheetDescription>
           </SheetHeader>
 
-          <ScrollArea className="min-h-0 h-full flex-1 overscroll-contain">
+          <ScrollArea className="h-full min-h-0 flex-1 overscroll-contain">
             <div className="px-6 py-6 pb-10">
               <FieldGroup>
                 <div className="grid gap-6">
-                {!queue ? (
-                  <>
-                    <Field>
-                      <FieldLabel htmlFor="pwv-guild-id">Discord server</FieldLabel>
-                      <AppSelect
-                        disabled={
-                          isLoadingAvailableGuilds ||
-                          Boolean(availableGuildsError) ||
-                          availableGuilds.length === 0
-                        }
-                        id="pwv-guild-id"
-                        onValueChange={(value) =>
-                          setCreateFormState((current) => ({
-                            ...current,
-                            guildId: value,
-                          }))
-                        }
-                        options={availableGuilds.map((guild) => ({
-                          label: guild.name,
-                          value: guild.id,
-                        }))}
-                        placeholder="Select a Discord server"
-                        value={createFormState.guildId}
-                      />
-                      <FieldDescription>
-                        {isLoadingAvailableGuilds
-                          ? "Checking the Discord servers you own where the bot is already installed."
-                          : availableGuildsError
-                            ? availableGuildsError
-                            : availableGuilds.length === 0
-                              ? "No eligible servers are available yet."
-                              : "The app will reuse #play-with-viewers if it already exists. Otherwise it creates the channel and publishes the queue immediately."}
-                      </FieldDescription>
-                    </Field>
+                  {!queue ? (
+                    <>
+                      <Field>
+                        <FieldLabel htmlFor="pwv-guild-id">
+                          Discord server
+                        </FieldLabel>
+                        <AppSelect
+                          disabled={
+                            isLoadingAvailableGuilds ||
+                            Boolean(availableGuildsError) ||
+                            availableGuilds.length === 0
+                          }
+                          id="pwv-guild-id"
+                          onValueChange={(value) =>
+                            setCreateFormState((current) => ({
+                              ...current,
+                              guildId: value,
+                            }))
+                          }
+                          options={availableGuilds.map((guild) => ({
+                            label: guild.name,
+                            value: guild.id,
+                          }))}
+                          placeholder="Select a Discord server"
+                          value={createFormState.guildId}
+                        />
+                        <FieldDescription>
+                          {isLoadingAvailableGuilds
+                            ? "Checking the Discord servers you own where the bot is already installed."
+                            : availableGuildsError
+                              ? availableGuildsError
+                              : availableGuilds.length === 0
+                                ? "No eligible servers are available yet."
+                                : "The app will reuse #play-with-viewers if it already exists. Otherwise it creates the channel and publishes the queue immediately."}
+                        </FieldDescription>
+                      </Field>
 
-                    {availableGuilds.length === 0 &&
-                    !isLoadingAvailableGuilds &&
-                    !availableGuildsError ? (
-                      <Alert>
-                        <IconBrandDiscord />
-                        <AlertTitle>No eligible Discord servers</AlertTitle>
-                        <AlertDescription className="flex flex-col gap-3">
-                          <p>
-                            Play With Viewers only lists servers you own where
-                            the bot is already present.
-                          </p>
-                          <div className="flex flex-wrap gap-2">
-                            <Button asChild size="sm" variant="outline">
-                              <a
-                                href={DISCORD_BOT_REINVITE_URL}
-                                rel="noreferrer"
-                                target="_blank"
-                              >
-                                <IconExternalLink data-icon="inline-start" />
-                                Add bot to a server
-                              </a>
-                            </Button>
-                          </div>
-                        </AlertDescription>
-                      </Alert>
-                    ) : null}
-                  </>
-                ) : null}
+                      {availableGuilds.length === 0 &&
+                      !isLoadingAvailableGuilds &&
+                      !availableGuildsError ? (
+                        <Alert>
+                          <IconBrandDiscord />
+                          <AlertTitle>No eligible Discord servers</AlertTitle>
+                          <AlertDescription className="flex flex-col gap-3">
+                            <p>
+                              Play With Viewers only lists servers you own where
+                              the bot is already present.
+                            </p>
+                            <div className="flex flex-wrap gap-2">
+                              <Button asChild size="sm" variant="outline">
+                                <a
+                                  href={DISCORD_BOT_REINVITE_URL}
+                                  rel="noreferrer"
+                                  target="_blank"
+                                >
+                                  <IconExternalLink data-icon="inline-start" />
+                                  Add bot to a server
+                                </a>
+                              </Button>
+                            </div>
+                          </AlertDescription>
+                        </Alert>
+                      ) : null}
+                    </>
+                  ) : null}
 
-                <Field>
-                  <FieldLabel htmlFor="pwv-title">Queue title</FieldLabel>
-                  <Input
-                    id="pwv-title"
-                    onChange={(event) =>
-                      queue
-                        ? setSettingsFormState((current) => ({
-                            ...current,
-                            title: event.target.value,
-                          }))
-                        : setCreateFormState((current) => ({
-                            ...current,
-                            title: event.target.value,
-                          }))
-                    }
-                    value={queue ? settingsFormState.title : createFormState.title}
-                  />
-                </Field>
+                  <Field>
+                    <FieldLabel htmlFor="pwv-title">Queue title</FieldLabel>
+                    <Input
+                      id="pwv-title"
+                      onChange={(event) =>
+                        queue
+                          ? setSettingsFormState((current) => ({
+                              ...current,
+                              title: event.target.value,
+                            }))
+                          : setCreateFormState((current) => ({
+                              ...current,
+                              title: event.target.value,
+                            }))
+                      }
+                      value={
+                        queue ? settingsFormState.title : createFormState.title
+                      }
+                    />
+                  </Field>
 
-                <Field>
-                  <FieldLabel htmlFor="pwv-creator-name">
-                    Creator display name
-                  </FieldLabel>
-                  <Input
-                    id="pwv-creator-name"
-                    onChange={(event) =>
-                      queue
-                        ? setSettingsFormState((current) => ({
-                            ...current,
-                            creatorDisplayName: event.target.value,
-                          }))
-                        : setCreateFormState((current) => ({
-                            ...current,
-                            creatorDisplayName: event.target.value,
-                          }))
-                    }
-                    value={
-                      queue
-                        ? settingsFormState.creatorDisplayName
-                        : createFormState.creatorDisplayName
-                    }
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="pwv-game-label">Game label</FieldLabel>
-                  <Input
-                    id="pwv-game-label"
-                    onChange={(event) =>
-                      queue
-                        ? setSettingsFormState((current) => ({
-                            ...current,
-                            gameLabel: event.target.value,
-                          }))
-                        : setCreateFormState((current) => ({
-                            ...current,
-                            gameLabel: event.target.value,
-                          }))
-                    }
-                    value={queue ? settingsFormState.gameLabel : createFormState.gameLabel}
-                  />
-                </Field>
+                  <Field>
+                    <FieldLabel htmlFor="pwv-creator-name">
+                      Creator display name
+                    </FieldLabel>
+                    <Input
+                      id="pwv-creator-name"
+                      onChange={(event) =>
+                        queue
+                          ? setSettingsFormState((current) => ({
+                              ...current,
+                              creatorDisplayName: event.target.value,
+                            }))
+                          : setCreateFormState((current) => ({
+                              ...current,
+                              creatorDisplayName: event.target.value,
+                            }))
+                      }
+                      value={
+                        queue
+                          ? settingsFormState.creatorDisplayName
+                          : createFormState.creatorDisplayName
+                      }
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="pwv-game-label">Game label</FieldLabel>
+                    <Input
+                      id="pwv-game-label"
+                      onChange={(event) =>
+                        queue
+                          ? setSettingsFormState((current) => ({
+                              ...current,
+                              gameLabel: event.target.value,
+                            }))
+                          : setCreateFormState((current) => ({
+                              ...current,
+                              gameLabel: event.target.value,
+                            }))
+                      }
+                      value={
+                        queue
+                          ? settingsFormState.gameLabel
+                          : createFormState.gameLabel
+                      }
+                    />
+                  </Field>
 
-                <Field>
-                  <FieldLabel htmlFor="pwv-creator-message">
-                    Creator message
-                  </FieldLabel>
-                  <Textarea
-                    className="min-h-[120px] resize-y"
-                    id="pwv-creator-message"
-                    onChange={(event) =>
-                      queue
-                        ? setSettingsFormState((current) => ({
-                            ...current,
-                            creatorMessage: event.target.value,
-                          }))
-                        : setCreateFormState((current) => ({
-                            ...current,
-                            creatorMessage: event.target.value,
-                          }))
-                    }
-                    value={
-                      queue
-                        ? settingsFormState.creatorMessage
-                        : createFormState.creatorMessage
-                    }
-                  />
-                </Field>
+                  <Field>
+                    <FieldLabel htmlFor="pwv-creator-message">
+                      Creator message
+                    </FieldLabel>
+                    <Textarea
+                      className="min-h-30 resize-y"
+                      id="pwv-creator-message"
+                      onChange={(event) =>
+                        queue
+                          ? setSettingsFormState((current) => ({
+                              ...current,
+                              creatorMessage: event.target.value,
+                            }))
+                          : setCreateFormState((current) => ({
+                              ...current,
+                              creatorMessage: event.target.value,
+                            }))
+                      }
+                      value={
+                        queue
+                          ? settingsFormState.creatorMessage
+                          : createFormState.creatorMessage
+                      }
+                    />
+                  </Field>
 
-                <Field>
-                  <FieldLabel htmlFor="pwv-rules">Rules text</FieldLabel>
-                  <Textarea
-                    className="min-h-[140px] resize-y"
-                    id="pwv-rules"
-                    onChange={(event) =>
-                      queue
-                        ? setSettingsFormState((current) => ({
-                            ...current,
-                            rulesText: event.target.value,
-                          }))
-                        : setCreateFormState((current) => ({
-                            ...current,
-                            rulesText: event.target.value,
-                          }))
-                    }
-                    value={queue ? settingsFormState.rulesText : createFormState.rulesText}
-                  />
-                </Field>
+                  <Field>
+                    <FieldLabel htmlFor="pwv-rules">Rules text</FieldLabel>
+                    <Textarea
+                      className="min-h-35 resize-y"
+                      id="pwv-rules"
+                      onChange={(event) =>
+                        queue
+                          ? setSettingsFormState((current) => ({
+                              ...current,
+                              rulesText: event.target.value,
+                            }))
+                          : setCreateFormState((current) => ({
+                              ...current,
+                              rulesText: event.target.value,
+                            }))
+                      }
+                      value={
+                        queue
+                          ? settingsFormState.rulesText
+                          : createFormState.rulesText
+                      }
+                    />
+                  </Field>
 
-                <Field>
-                  <FieldLabel htmlFor="pwv-players-per-batch">
-                    Players per batch
-                  </FieldLabel>
-                  <AppSelect
-                    id="pwv-players-per-batch"
-                    onValueChange={(value) =>
-                      queue
-                        ? setSettingsFormState((current) => ({
-                            ...current,
-                            playersPerBatch: value,
-                          }))
-                        : setCreateFormState((current) => ({
-                            ...current,
-                            playersPerBatch: value,
-                          }))
-                    }
-                    options={playersPerBatchOptions.map((value) => ({
-                      label: String(value),
-                      value: String(value),
-                    }))}
-                    value={
-                      queue
-                        ? settingsFormState.playersPerBatch
-                        : createFormState.playersPerBatch
-                    }
-                  />
-                </Field>
+                  <Field>
+                    <FieldLabel htmlFor="pwv-players-per-batch">
+                      Players per batch
+                    </FieldLabel>
+                    <AppSelect
+                      id="pwv-players-per-batch"
+                      onValueChange={(value) =>
+                        queue
+                          ? setSettingsFormState((current) => ({
+                              ...current,
+                              playersPerBatch: value,
+                            }))
+                          : setCreateFormState((current) => ({
+                              ...current,
+                              playersPerBatch: value,
+                            }))
+                      }
+                      options={playersPerBatchOptions.map((value) => ({
+                        label: String(value),
+                        value: String(value),
+                      }))}
+                      value={
+                        queue
+                          ? settingsFormState.playersPerBatch
+                          : createFormState.playersPerBatch
+                      }
+                    />
+                  </Field>
 
-                <Field>
-                  <FieldLabel htmlFor="pwv-matches-per-viewer">
-                    Matches per viewer
-                  </FieldLabel>
-                  <AppSelect
-                    id="pwv-matches-per-viewer"
-                    onValueChange={(value) =>
-                      queue
-                        ? setSettingsFormState((current) => ({
-                            ...current,
-                            matchesPerViewer: value,
-                          }))
-                        : setCreateFormState((current) => ({
-                            ...current,
-                            matchesPerViewer: value,
-                          }))
-                    }
-                    options={matchesPerViewerOptions.map((value) => ({
-                      label: String(value),
-                      value: String(value),
-                    }))}
-                    value={
-                      queue
-                        ? settingsFormState.matchesPerViewer
-                        : createFormState.matchesPerViewer
-                    }
-                  />
-                </Field>
+                  <Field>
+                    <FieldLabel htmlFor="pwv-matches-per-viewer">
+                      Matches per viewer
+                    </FieldLabel>
+                    <AppSelect
+                      id="pwv-matches-per-viewer"
+                      onValueChange={(value) =>
+                        queue
+                          ? setSettingsFormState((current) => ({
+                              ...current,
+                              matchesPerViewer: value,
+                            }))
+                          : setCreateFormState((current) => ({
+                              ...current,
+                              matchesPerViewer: value,
+                            }))
+                      }
+                      options={matchesPerViewerOptions.map((value) => ({
+                        label: String(value),
+                        value: String(value),
+                      }))}
+                      value={
+                        queue
+                          ? settingsFormState.matchesPerViewer
+                          : createFormState.matchesPerViewer
+                      }
+                    />
+                  </Field>
 
-                <Field>
-                  <FieldLabel htmlFor="pwv-min-rank">Minimum rank</FieldLabel>
-                  <AppSelect
-                    id="pwv-min-rank"
-                    onValueChange={(value) =>
-                      queue
-                        ? setSettingsFormState((current) => ({
-                            ...current,
-                            minRank: value as RankValue,
-                          }))
-                        : setCreateFormState((current) => ({
-                            ...current,
-                            minRank: value as RankValue,
-                          }))
-                    }
-                    options={rankOptions.map((option) => ({
-                      label: option.label,
-                      value: option.value,
-                    }))}
-                    value={queue ? settingsFormState.minRank : createFormState.minRank}
-                  />
-                </Field>
+                  <Field>
+                    <FieldLabel htmlFor="pwv-min-rank">Minimum rank</FieldLabel>
+                    <AppSelect
+                      id="pwv-min-rank"
+                      onValueChange={(value) =>
+                        queue
+                          ? setSettingsFormState((current) => ({
+                              ...current,
+                              minRank: value as RankValue,
+                            }))
+                          : setCreateFormState((current) => ({
+                              ...current,
+                              minRank: value as RankValue,
+                            }))
+                      }
+                      options={rankOptions.map((option) => ({
+                        label: option.label,
+                        value: option.value,
+                      }))}
+                      value={
+                        queue
+                          ? settingsFormState.minRank
+                          : createFormState.minRank
+                      }
+                    />
+                  </Field>
 
-                <Field>
-                  <FieldLabel htmlFor="pwv-max-rank">Maximum rank</FieldLabel>
-                  <AppSelect
-                    id="pwv-max-rank"
-                    onValueChange={(value) =>
-                      queue
-                        ? setSettingsFormState((current) => ({
-                            ...current,
-                            maxRank: value as RankValue,
-                          }))
-                        : setCreateFormState((current) => ({
-                            ...current,
-                            maxRank: value as RankValue,
-                          }))
-                    }
-                    options={rankOptions.map((option) => ({
-                      label: option.label,
-                      value: option.value,
-                    }))}
-                    value={queue ? settingsFormState.maxRank : createFormState.maxRank}
-                  />
-                </Field>
+                  <Field>
+                    <FieldLabel htmlFor="pwv-max-rank">Maximum rank</FieldLabel>
+                    <AppSelect
+                      id="pwv-max-rank"
+                      onValueChange={(value) =>
+                        queue
+                          ? setSettingsFormState((current) => ({
+                              ...current,
+                              maxRank: value as RankValue,
+                            }))
+                          : setCreateFormState((current) => ({
+                              ...current,
+                              maxRank: value as RankValue,
+                            }))
+                      }
+                      options={rankOptions.map((option) => ({
+                        label: option.label,
+                        value: option.value,
+                      }))}
+                      value={
+                        queue
+                          ? settingsFormState.maxRank
+                          : createFormState.maxRank
+                      }
+                    />
+                  </Field>
 
-                <Field>
-                  <FieldLabel htmlFor="pwv-invite-mode">Invite mode</FieldLabel>
-                  <AppSelect
-                    id="pwv-invite-mode"
-                    onValueChange={(value) =>
-                      queue
-                        ? setSettingsFormState((current) => ({
-                            ...current,
-                            inviteMode: value as InviteMode,
-                          }))
-                        : setCreateFormState((current) => ({
-                            ...current,
-                            inviteMode: value as InviteMode,
-                          }))
-                    }
-                    options={inviteModeOptions.map((option) => ({
-                      label: option.label,
-                      value: option.value,
-                    }))}
-                    value={queue ? settingsFormState.inviteMode : createFormState.inviteMode}
-                  />
-                  <FieldDescription>
-                    {queue
-                      ? `Discord target stays fixed on ${discordContextLabel}.`
-                      : "Discord DM mode requires a lobby code when selecting viewers."}
-                  </FieldDescription>
-                </Field>
+                  <Field>
+                    <FieldLabel htmlFor="pwv-invite-mode">
+                      Invite mode
+                    </FieldLabel>
+                    <AppSelect
+                      id="pwv-invite-mode"
+                      onValueChange={(value) =>
+                        queue
+                          ? setSettingsFormState((current) => ({
+                              ...current,
+                              inviteMode: value as InviteMode,
+                            }))
+                          : setCreateFormState((current) => ({
+                              ...current,
+                              inviteMode: value as InviteMode,
+                            }))
+                      }
+                      options={inviteModeOptions.map((option) => ({
+                        label: option.label,
+                        value: option.value,
+                      }))}
+                      value={
+                        queue
+                          ? settingsFormState.inviteMode
+                          : createFormState.inviteMode
+                      }
+                    />
+                    <FieldDescription>
+                      {queue
+                        ? `Discord target stays fixed on ${discordContextLabel}.`
+                        : "Discord DM mode requires a lobby code when selecting viewers."}
+                    </FieldDescription>
+                  </Field>
                 </div>
               </FieldGroup>
             </div>
@@ -2141,7 +2204,11 @@ export function PlayWithViewersDashboardView({
               Cancel
             </Button>
             {queue ? (
-              <Button disabled={isSavingSettings} onClick={handleSaveSettings} size="sm">
+              <Button
+                disabled={isSavingSettings}
+                onClick={handleSaveSettings}
+                size="sm"
+              >
                 {isSavingSettings ? "Saving..." : "Save settings"}
               </Button>
             ) : (
@@ -2221,13 +2288,20 @@ export function PlayWithViewersDashboardView({
           )}
 
           <DialogFooter>
-            <Button onClick={() => setPermissionsDialogOpen(false)} variant="outline">
+            <Button
+              onClick={() => setPermissionsDialogOpen(false)}
+              variant="outline"
+            >
               Not now
             </Button>
             {permissionsDialogNeedsReinvite ? (
               <>
                 <Button asChild variant="outline">
-                  <a href={DISCORD_BOT_REINVITE_URL} rel="noreferrer" target="_blank">
+                  <a
+                    href={DISCORD_BOT_REINVITE_URL}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
                     <IconExternalLink data-icon="inline-start" />
                     Reinvite bot
                   </a>
@@ -2279,7 +2353,9 @@ export function PlayWithViewersDashboardView({
             {queue?.inviteMode === "discord_dm" ? (
               <>
                 <Field>
-                  <FieldLabel htmlFor="pwv-invite-code-type">Invite code type</FieldLabel>
+                  <FieldLabel htmlFor="pwv-invite-code-type">
+                    Invite code type
+                  </FieldLabel>
                   <AppSelect
                     id="pwv-invite-code-type"
                     onValueChange={(value) =>
@@ -2296,12 +2372,15 @@ export function PlayWithViewersDashboardView({
                   <FieldLabel htmlFor="pwv-invite-code">Invite code</FieldLabel>
                   <Input
                     id="pwv-invite-code"
-                    onChange={(event) => setSelectionInviteCode(event.target.value)}
+                    onChange={(event) =>
+                      setSelectionInviteCode(event.target.value)
+                    }
                     placeholder={`Enter the ${getInviteCodeTypeLabel(selectionInviteCodeType).toLowerCase()} to DM`}
                     value={selectionInviteCode}
                   />
                   <FieldDescription>
-                    Discord DM mode requires a code type and invite code before the round can be created.
+                    Discord DM mode requires a code type and invite code before
+                    the round can be created.
                   </FieldDescription>
                 </Field>
               </>
@@ -2309,18 +2388,24 @@ export function PlayWithViewersDashboardView({
               <Field>
                 <FieldLabel>Manual contact mode</FieldLabel>
                 <FieldDescription>
-                  The selected viewers will open in a follow-up dialog with
-                  copy helpers for mentions and usernames.
+                  The selected viewers will open in a follow-up dialog with copy
+                  helpers for mentions and usernames.
                 </FieldDescription>
               </Field>
             )}
           </FieldGroup>
 
           <DialogFooter>
-            <Button onClick={() => setSelectionDialogState(null)} variant="outline">
+            <Button
+              onClick={() => setSelectionDialogState(null)}
+              variant="outline"
+            >
               Cancel
             </Button>
-            <Button disabled={isSelectingBatch} onClick={handleConfirmSelection}>
+            <Button
+              disabled={isSelectingBatch}
+              onClick={handleConfirmSelection}
+            >
               {isSelectingBatch
                 ? "Running..."
                 : selectionDialogState?.kind === "entry"
@@ -2352,7 +2437,10 @@ export function PlayWithViewersDashboardView({
           />
 
           <DialogFooter>
-            <Button onClick={() => setSelectionResultState(null)} variant="outline">
+            <Button
+              onClick={() => setSelectionResultState(null)}
+              variant="outline"
+            >
               Close
             </Button>
           </DialogFooter>

@@ -85,6 +85,7 @@ export async function AppShell({ children }: AppShellProps) {
 
           <div className="flex items-center gap-2 md:hidden">
             <MobileProtectedSidebar
+              checkoutEnabled={checkoutEnabled}
               navItems={protectedNavItems}
               showStaffConsoleLink={showStaffConsoleLink}
             />

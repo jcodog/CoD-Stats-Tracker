@@ -137,13 +137,15 @@ function ChartEmptyState({
 }) {
   return (
     <div
-        className={cn(
-          "flex flex-col items-center justify-center border border-dashed border-border/50 bg-background px-6 text-center",
-          viewport === "mobile" ? "min-h-[220px]" : "min-h-[260px]"
-        )}
-      >
+      className={cn(
+        "flex flex-col items-center justify-center border border-dashed border-border/50 bg-background px-6 text-center",
+        viewport === "mobile" ? "min-h-55" : "min-h-65"
+      )}
+    >
       <div className="font-medium">{title}</div>
-      <p className="mt-2 max-w-sm text-sm text-muted-foreground">{description}</p>
+      <p className="mt-2 max-w-sm text-sm text-muted-foreground">
+        {description}
+      </p>
     </div>
   )
 }
@@ -283,7 +285,9 @@ export const DashboardStatsCharts = memo(function DashboardStatsCharts({
 
       <div
         className={cn(
-          isMobileView ? "grid gap-4" : "grid gap-px bg-border/40 xl:grid-cols-2"
+          isMobileView
+            ? "grid gap-4"
+            : "grid gap-px bg-border/40 xl:grid-cols-2"
         )}
       >
         <ChartPanel
@@ -299,12 +303,9 @@ export const DashboardStatsCharts = memo(function DashboardStatsCharts({
             />
           ) : (
             <ChartContainer
-              className={cn(
-                  "w-full min-w-0",
-                  isMobileView ? "h-[210px]" : "h-[260px]"
-                )}
-                config={srChartConfig}
-              >
+              className={cn("w-full min-w-0", isMobileView ? "h-52.5" : "h-65")}
+              config={srChartConfig}
+            >
               <LineChart data={filteredTimeline}>
                 <CartesianGrid vertical={false} />
                 <XAxis
@@ -392,7 +393,7 @@ export const DashboardStatsCharts = memo(function DashboardStatsCharts({
               <ChartContainer
                 className={cn(
                   "w-full min-w-0",
-                  isMobileView ? "h-[210px]" : "h-[260px]"
+                  isMobileView ? "h-52.5" : "h-65"
                 )}
                 config={winLossChartConfig}
               >
@@ -425,7 +426,9 @@ export const DashboardStatsCharts = memo(function DashboardStatsCharts({
                       className="size-2.5 rounded-full"
                       style={{ backgroundColor: item.color }}
                     />
-                    <span className="text-sm text-muted-foreground">{item.label}</span>
+                    <span className="text-sm text-muted-foreground">
+                      {item.label}
+                    </span>
                     <span
                       className="font-mono text-sm font-medium tabular-nums"
                       style={{ color: item.color }}
@@ -452,12 +455,9 @@ export const DashboardStatsCharts = memo(function DashboardStatsCharts({
             />
           ) : (
             <ChartContainer
-              className={cn(
-                  "w-full min-w-0",
-                  isMobileView ? "h-[210px]" : "h-[260px]"
-                )}
-                config={winLossChartConfig}
-              >
+              className={cn("w-full min-w-0", isMobileView ? "h-52.5" : "h-65")}
+              config={winLossChartConfig}
+            >
               <BarChart data={dailyWinLossData}>
                 <CartesianGrid vertical={false} />
                 <XAxis
@@ -466,10 +466,19 @@ export const DashboardStatsCharts = memo(function DashboardStatsCharts({
                   tickLine={false}
                   tickMargin={8}
                 />
-                <YAxis axisLine={false} tickLine={false} tickMargin={8} width={44} />
+                <YAxis
+                  axisLine={false}
+                  tickLine={false}
+                  tickMargin={8}
+                  width={44}
+                />
                 <ChartTooltip content={<ChartTooltipContent />} />
                 <ChartLegend content={<ChartLegendContent />} />
-                <Bar dataKey="wins" fill="var(--color-wins)" radius={[4, 4, 0, 0]} />
+                <Bar
+                  dataKey="wins"
+                  fill="var(--color-wins)"
+                  radius={[4, 4, 0, 0]}
+                />
                 <Bar
                   dataKey="losses"
                   fill="var(--color-losses)"
@@ -493,12 +502,9 @@ export const DashboardStatsCharts = memo(function DashboardStatsCharts({
             />
           ) : (
             <ChartContainer
-              className={cn(
-                  "w-full min-w-0",
-                  isMobileView ? "h-[210px]" : "h-[260px]"
-                )}
-                config={dailySrChartConfig}
-              >
+              className={cn("w-full min-w-0", isMobileView ? "h-52.5" : "h-65")}
+              config={dailySrChartConfig}
+            >
               <BarChart data={dailySrData}>
                 <CartesianGrid vertical={false} />
                 <XAxis

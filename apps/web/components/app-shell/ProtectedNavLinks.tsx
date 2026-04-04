@@ -24,8 +24,8 @@ function ActiveIndicator({ layout }: { layout: "desktop" | "mobile" }) {
       className={cn(
         "rounded-full bg-primary shadow-[0_0_0.9rem_hsl(var(--primary)/0.32),0_0_0.18rem_hsl(var(--primary)/0.7)] transition-opacity duration-150",
         layout === "desktop"
-          ? "absolute inset-x-2 -bottom-1 h-[2px]"
-          : "absolute top-2 bottom-2 left-0 w-[2px]"
+          ? "absolute inset-x-2 -bottom-1 h-0.5"
+          : "absolute top-2 bottom-2 left-0 w-0.5"
       )}
     />
   )
@@ -56,10 +56,7 @@ export function ProtectedNavLinks({
             size={layout === "desktop" ? "sm" : "default"}
             variant="ghost"
           >
-            <Link
-              aria-current={isActive ? "page" : undefined}
-              href={item.href}
-            >
+            <Link aria-current={isActive ? "page" : undefined} href={item.href}>
               {isActive ? <ActiveIndicator layout={layout} /> : null}
               <span className="inline-flex items-center gap-2">
                 {item.label}
