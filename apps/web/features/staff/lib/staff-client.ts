@@ -138,6 +138,11 @@ async function callManagementAction<T>(
 
   try {
     switch (action.action) {
+      case "banUser":
+        return (await convex.action(
+          api.actions.staff.management.banUser,
+          action.input
+        )) as T
       case "updateUserRole":
         return (await convex.action(
           api.actions.staff.management.updateUserRole,

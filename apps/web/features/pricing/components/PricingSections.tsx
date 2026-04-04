@@ -10,6 +10,9 @@ type PricingFeatureRow = {
   name: string
 }
 
+const CREATOR_FEATURE_GROUP = "Creator tools"
+const STANDARD_FEATURE_GROUP = "Features"
+
 function getPlanPriceLabel(args: {
   amount: number
   currency: string
@@ -28,7 +31,10 @@ function buildPricingFeatureRows(plans: PricingCatalogPlan[]) {
       }
 
       rowsByKey.set(feature.featureKey, {
-        category: feature.category?.trim() || "Included features",
+        category:
+          feature.category?.trim().toLowerCase() === "creator-tools"
+            ? CREATOR_FEATURE_GROUP
+            : STANDARD_FEATURE_GROUP,
         description: feature.description,
         featureKey: feature.featureKey,
         name: feature.name,
@@ -49,7 +55,17 @@ function buildPricingFeatureRows(plans: PricingCatalogPlan[]) {
       category,
       rows: rows.sort((left, right) => left.name.localeCompare(right.name)),
     }))
-    .sort((left, right) => left.category.localeCompare(right.category))
+    .sort((left, right) => {
+      if (left.category === STANDARD_FEATURE_GROUP) {
+        return -1
+      }
+
+      if (right.category === STANDARD_FEATURE_GROUP) {
+        return 1
+      }
+
+      return left.category.localeCompare(right.category)
+    })
 }
 
 function getPlanFeatureGridClassName(featureCount: number, isMobileView: boolean) {
@@ -70,7 +86,7 @@ function getPlanFeatureGridClassName(featureCount: number, isMobileView: boolean
 
 export function PricingIntro() {
   return (
-    <section className="grid gap-3 border-b border-border/70 pb-8">
+    <section className="grid gap-3 border-b border-border/70 pb-6">
       <h1 className="max-w-[44rem] text-4xl leading-[0.96] font-semibold tracking-tight text-balance sm:text-5xl">
         Pricing
       </h1>
@@ -187,12 +203,12 @@ export function PricingComparisonDesktop({
   const gridTemplateColumns = `minmax(0, 22rem) repeat(${catalog.plans.length}, minmax(10rem, 1fr))`
 
   return (
-    <section className="grid gap-8 lg:grid-cols-[minmax(0,18rem)_minmax(0,1fr)] lg:items-start">
+    <section className="grid gap-5">
       <div className="grid gap-2">
         <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
           Feature comparison
         </h2>
-        <p className="max-w-[22rem] text-sm leading-7 text-foreground/80 sm:max-w-[24rem] sm:text-base">
+        <p className="text-sm leading-7 text-foreground/80 sm:text-base lg:whitespace-nowrap">
           A direct plan-by-plan view of what is currently included.
         </p>
       </div>
@@ -204,7 +220,7 @@ export function PricingComparisonDesktop({
             style={{ gridTemplateColumns }}
           >
             <div className="pr-6 text-sm font-medium text-foreground/74">
-              Included feature
+              Feature
             </div>
             {catalog.plans.map((plan) => (
               <div className="px-4 text-left" key={plan.planKey}>
@@ -281,7 +297,9 @@ export function PricingComparisonMobile({
   return (
     <section className="grid gap-4">
       <div className="grid gap-2">
-        <h2 className="text-2xl font-semibold tracking-tight">Feature comparison</h2>
+        <h2 className="text-2xl font-semibold tracking-tight">
+          Feature comparison
+        </h2>
         <p className="text-sm leading-7 text-foreground/80">
           A stacked mobile view of what each plan includes.
         </p>

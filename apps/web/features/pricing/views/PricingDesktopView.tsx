@@ -11,7 +11,7 @@ export function PricingDesktopView({
   catalog: PricingCatalogResponse
 }) {
   return (
-    <div className="grid gap-18">
+    <div className="grid gap-10 lg:gap-12">
       <PricingIntro />
       <PricingPlanList catalog={catalog} viewport="desktop" />
       <PricingComparisonDesktop catalog={catalog} />

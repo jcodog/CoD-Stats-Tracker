@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, type ReactNode } from "react"
-import { IconAlertTriangle, IconDotsVertical } from "@tabler/icons-react"
+import { IconAlertTriangle, IconDotsVertical, IconHammer } from "@tabler/icons-react"
 import {
   getAssignableRolesForActorRole,
   isAdminCapableRole,
@@ -13,6 +13,11 @@ import type {
   StaffManagementUserRecord,
   StaffMutationResponse,
 } from "@workspace/backend/convex/lib/staffTypes"
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+} from "@workspace/ui/components/alert"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import {
@@ -28,6 +33,7 @@ import {
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@workspace/ui/components/dropdown-menu"
 import {
@@ -151,6 +157,52 @@ function getAllowedRoleOptions(args: {
   return [] as readonly AssignableUserRole[]
 }
 
+function hasElevatedManagementRole(user: StaffManagementUserRecord) {
+  return (
+    user.clerkRole === "staff" ||
+    user.clerkRole === "admin" ||
+    user.clerkRole === "super_admin" ||
+    user.convexRole === "staff" ||
+    user.convexRole === "admin" ||
+    user.convexRole === "super_admin" ||
+    user.isReservedSuperAdmin
+  )
+}
+
+function canBanUser(args: {
+  actorRole: UserRole
+  user: StaffManagementUserRecord
+}) {
+  if (args.user.isCurrentUser || args.user.isReservedSuperAdmin) {
+    return false
+  }
+
+  if (args.actorRole === "super_admin") {
+    return true
+  }
+
+  return !hasElevatedManagementRole(args.user)
+}
+
+function getBanWarningMessage(args: {
+  actorRole: UserRole
+  user: StaffManagementUserRecord
+}) {
+  if (args.user.isCurrentUser) {
+    return "You cannot ban your own account from the staff dashboard."
+  }
+
+  if (args.user.isReservedSuperAdmin) {
+    return "Reserved super-admin accounts must be managed in configuration, not from this dashboard."
+  }
+
+  if (args.actorRole !== "super_admin" && hasElevatedManagementRole(args.user)) {
+    return "Only super-admins can ban staff, admin, or super-admin accounts."
+  }
+
+  return "This account cannot be banned from your current operator role."
+}
+
 export function StaffManagementView({
   initialData,
 }: {
@@ -162,6 +214,8 @@ export function StaffManagementView({
     nextRole: AssignableUserRole
     user: StaffManagementUserRecord
   } | null>(null)
+  const [pendingBanUser, setPendingBanUser] =
+    useState<StaffManagementUserRecord | null>(null)
   const alignedAdminCount = data.users.filter(
     (user) => user.roleStatus === "matched" && isAdminCapableRole(user.convexRole)
   ).length
@@ -169,7 +223,7 @@ export function StaffManagementView({
     ManagementActionRequest,
     StaffMutationResponse
   >({
-    invalidate: ["management"],
+    invalidate: ["billing", "management"],
     mutationFn: (request) =>
       managementClient.runAction<StaffMutationResponse>(request),
   })
@@ -229,13 +283,18 @@ export function StaffManagementView({
           actorRole: data.currentActorRole,
           user: row.original,
         })
+        const canBanTargetUser = canBanUser({
+          actorRole: data.currentActorRole,
+          user: row.original,
+        })
+        const hasActions = allowedRoleOptions.length > 0 || canBanTargetUser
 
         return (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
                 aria-label={`Manage ${row.original.displayName}`}
-                disabled={mutation.isPending || allowedRoleOptions.length === 0}
+                disabled={mutation.isPending || !hasActions}
                 size="icon"
                 variant="ghost"
               >
@@ -258,9 +317,23 @@ export function StaffManagementView({
                     {buildRoleOptionLabel(role)}
                   </DropdownMenuItem>
                 ))}
-                {allowedRoleOptions.length === 0 ? (
+                {allowedRoleOptions.length > 0 && canBanTargetUser ? (
+                  <DropdownMenuSeparator />
+                ) : null}
+                {canBanTargetUser ? (
+                  <DropdownMenuItem
+                    onClick={() => {
+                      setPendingBanUser(row.original)
+                    }}
+                    variant="destructive"
+                  >
+                    <IconHammer aria-hidden="true" />
+                    Ban user
+                  </DropdownMenuItem>
+                ) : null}
+                {!hasActions ? (
                   <DropdownMenuItem disabled>
-                    No permitted role changes
+                    No permitted actions
                   </DropdownMenuItem>
                 ) : null}
               </DropdownMenuGroup>
@@ -297,10 +370,32 @@ export function StaffManagementView({
     }
   }
 
+  async function confirmBanUser() {
+    if (!pendingBanUser) {
+      return
+    }
+
+    try {
+      const result = await mutation.mutateAsync({
+        action: "banUser",
+        input: {
+          targetClerkUserId: pendingBanUser.clerkUserId,
+        },
+      })
+
+      toast.success(result.summary)
+      setPendingBanUser(null)
+    } catch (error) {
+      toast.error(
+        error instanceof StaffClientError ? error.message : "Ban flow failed."
+      )
+    }
+  }
+
   return (
     <div className="flex flex-1 flex-col gap-8">
       <StaffPageIntro
-        description="Admins can manage user and staff access for non-admin accounts. Super-admins can also grant and revoke admin. Reserved super-admin accounts stay config-controlled and cannot be edited here."
+        description="Staff can review the directory and remove harmful user accounts. Admins can also manage user and staff access for non-admin accounts, while super-admins can grant admin and handle elevated bans."
         title="Staff Management"
       />
 
@@ -473,6 +568,99 @@ export function StaffManagementView({
               }}
             >
               {mutation.isPending ? "Saving..." : "Apply role"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        onOpenChange={(open) => {
+          if (!open) {
+            setPendingBanUser(null)
+          }
+        }}
+        open={Boolean(pendingBanUser)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Ban user</DialogTitle>
+            <DialogDescription>
+              This is a destructive moderation action. The user account will be
+              blocked and their local data will be removed.
+            </DialogDescription>
+          </DialogHeader>
+
+          {pendingBanUser ? (
+            <FieldGroup>
+              <Field>
+                <FieldLabel>Target user</FieldLabel>
+                <div className="rounded-lg border border-border/70 bg-muted/30 px-3 py-2 text-sm">
+                  {pendingBanUser.displayName}
+                </div>
+              </Field>
+
+              <Alert variant="destructive">
+                <IconAlertTriangle aria-hidden="true" />
+                <AlertTitle>Ban hammer action</AlertTitle>
+                <AlertDescription>
+                  This will ban the Clerk account, cancel any Stripe
+                  subscriptions without a refund, delete the Stripe customer,
+                  and remove the user&apos;s CodStats data.
+                </AlertDescription>
+              </Alert>
+
+              {pendingBanUser.status === "disabled" ? (
+                <Field>
+                  <FieldDescription>
+                    This user is already disabled locally. The ban flow will
+                    still remove any remaining data and billing records.
+                  </FieldDescription>
+                </Field>
+              ) : null}
+
+              {!canBanUser({
+                actorRole: data.currentActorRole,
+                user: pendingBanUser,
+              }) ? (
+                <Alert variant="destructive">
+                  <IconAlertTriangle aria-hidden="true" />
+                  <AlertTitle>Ban blocked</AlertTitle>
+                  <AlertDescription>
+                    {getBanWarningMessage({
+                      actorRole: data.currentActorRole,
+                      user: pendingBanUser,
+                    })}
+                  </AlertDescription>
+                </Alert>
+              ) : null}
+            </FieldGroup>
+          ) : null}
+
+          <DialogFooter>
+            <Button
+              onClick={() => {
+                setPendingBanUser(null)
+              }}
+              variant="outline"
+            >
+              Cancel
+            </Button>
+            <Button
+              disabled={
+                mutation.isPending ||
+                !pendingBanUser ||
+                !canBanUser({
+                  actorRole: data.currentActorRole,
+                  user: pendingBanUser,
+                })
+              }
+              onClick={() => {
+                void confirmBanUser()
+              }}
+              variant="destructive"
+            >
+              <IconHammer aria-hidden="true" />
+              {mutation.isPending ? "Banning..." : "Ban user"}
             </Button>
           </DialogFooter>
         </DialogContent>

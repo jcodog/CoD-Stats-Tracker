@@ -11,7 +11,7 @@ export function PricingMobileView({
   catalog: PricingCatalogResponse
 }) {
   return (
-    <div className="grid gap-12">
+    <div className="grid gap-8">
       <PricingIntro />
       <PricingPlanList catalog={catalog} viewport="mobile" />
       <PricingComparisonMobile catalog={catalog} />
