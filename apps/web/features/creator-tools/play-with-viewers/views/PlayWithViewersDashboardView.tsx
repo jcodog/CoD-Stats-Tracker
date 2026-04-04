@@ -1808,7 +1808,7 @@ export function PlayWithViewersDashboardView({
       ) : null}
 
       <Sheet onOpenChange={handleSettingsOpenChange} open={settingsOpen}>
-        <SheetContent className="w-full p-0 sm:max-w-2xl lg:max-w-[54rem]">
+        <SheetContent className="w-full overflow-hidden p-0 sm:max-w-2xl lg:max-w-[54rem]">
           <SheetHeader className="shrink-0 border-b border-border/60 px-6 py-5 text-left">
             <SheetTitle>
               {queue ? "Queue settings" : "Create Play With Viewers queue"}
@@ -1820,8 +1820,8 @@ export function PlayWithViewersDashboardView({
             </SheetDescription>
           </SheetHeader>
 
-          <ScrollArea className="min-h-0 flex-1">
-            <div className="px-6 py-6">
+          <ScrollArea className="min-h-0 flex-1 overscroll-contain">
+            <div className="px-6 py-6 pb-10">
               <FieldGroup>
                 <div className="grid gap-6">
                 {!queue ? (
@@ -2132,7 +2132,7 @@ export function PlayWithViewersDashboardView({
             </div>
           </ScrollArea>
 
-          <SheetFooter className="shrink-0 border-t border-border/60 px-6 py-4">
+          <SheetFooter className="shrink-0 border-t border-border/60 bg-background/95 px-6 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
             <Button
               onClick={() => handleSettingsOpenChange(false)}
               size="sm"

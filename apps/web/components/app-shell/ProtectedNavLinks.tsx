@@ -22,10 +22,10 @@ function ActiveIndicator({ layout }: { layout: "desktop" | "mobile" }) {
     <span
       aria-hidden="true"
       className={cn(
-        "rounded-full bg-primary shadow-[0_0_0.75rem_hsl(var(--primary)/0.35)] transition-opacity duration-150",
+        "rounded-full bg-primary shadow-[0_0_0.9rem_hsl(var(--primary)/0.32),0_0_0.18rem_hsl(var(--primary)/0.7)] transition-opacity duration-150",
         layout === "desktop"
-          ? "absolute inset-x-2 -bottom-1 h-px"
-          : "absolute top-2 bottom-2 left-0 w-px"
+          ? "absolute inset-x-2 -bottom-1 h-[2px]"
+          : "absolute top-2 bottom-2 left-0 w-[2px]"
       )}
     />
   )

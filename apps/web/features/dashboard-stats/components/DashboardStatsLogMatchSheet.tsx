@@ -161,7 +161,7 @@ function StepProgress({
   const currentStepIndex = steps.indexOf(currentStep)
 
   return (
-    <ol className="no-scrollbar flex items-center gap-3 overflow-x-auto px-7 py-3.5">
+    <ol className="flex items-start gap-1.5 overflow-hidden px-4 py-3 sm:gap-3 sm:overflow-x-auto sm:px-7 sm:py-3.5">
       {steps.map((step, index) => {
         const status =
           index < currentStepIndex
@@ -171,11 +171,11 @@ function StepProgress({
               : "upcoming"
 
         return (
-          <li className="flex min-w-max items-center gap-3" key={step}>
+          <li className="flex min-w-0 flex-1 items-start gap-1.5 sm:min-w-max sm:flex-none sm:items-center sm:gap-3" key={step}>
             <button
               aria-current={status === "current" ? "step" : undefined}
               className={cn(
-                "flex items-center gap-3 rounded-md px-1 py-1 text-left transition-colors focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                "flex min-w-0 flex-1 flex-col items-center gap-1.5 rounded-md px-1 py-1 text-center transition-colors focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:flex-row sm:gap-3 sm:text-left",
                 status === "upcoming"
                   ? "cursor-default text-muted-foreground"
                   : "text-foreground hover:text-foreground"
@@ -186,7 +186,7 @@ function StepProgress({
             >
               <span
                 className={cn(
-                  "flex size-6 items-center justify-center rounded-full border text-xs font-medium tabular-nums",
+                  "flex size-5 shrink-0 items-center justify-center rounded-full border text-[10px] font-medium tabular-nums sm:size-6 sm:text-xs",
                   status === "complete" &&
                     "border-foreground bg-foreground text-background",
                   status === "current" &&
@@ -195,14 +195,14 @@ function StepProgress({
                 )}
               >
                 {status === "complete" ? (
-                  <IconCheck aria-hidden="true" className="size-3.5" />
+                  <IconCheck aria-hidden="true" className="size-3 sm:size-3.5" />
                 ) : (
                   index + 1
                 )}
               </span>
               <span
                 className={cn(
-                  "text-sm font-medium whitespace-nowrap",
+                  "max-w-full text-center text-[11px] leading-tight font-medium text-balance sm:text-sm sm:whitespace-nowrap sm:text-left",
                   status === "upcoming" && "text-muted-foreground"
                 )}
               >
@@ -213,7 +213,7 @@ function StepProgress({
               <span
                 aria-hidden="true"
                 className={cn(
-                  "h-px w-7 bg-border/70",
+                  "mt-2 h-px flex-1 bg-border/70 sm:mt-0 sm:w-7 sm:flex-none",
                   status === "complete" && "bg-foreground/35"
                 )}
               />

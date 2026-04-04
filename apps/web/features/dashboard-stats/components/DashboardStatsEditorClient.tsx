@@ -623,7 +623,7 @@ function DashboardStatsEditorLoaded({
                           <ToggleGroup
                             className={
                               isMobileView
-                                ? "grid w-full grid-cols-4 gap-2"
+                                ? "grid w-full grid-cols-4"
                                 : "justify-start"
                             }
                             onValueChange={(value) => {
@@ -669,7 +669,7 @@ function DashboardStatsEditorLoaded({
                             aria-label="Match logging mode"
                             className={
                               isMobileView
-                                ? "grid w-full grid-cols-2 gap-2"
+                                ? "grid w-full grid-cols-2"
                                 : "justify-start"
                             }
                             onValueChange={handleLoggingModeChange}

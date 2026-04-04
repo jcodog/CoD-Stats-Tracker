@@ -1,6 +1,6 @@
 "use client"
 
-import { IconMenu } from "@tabler/icons-react"
+import { IconMenu2 } from "@tabler/icons-react"
 
 import { AppUserButton } from "@/components/app-shell/AppUserButton"
 import { ProtectedNavLinks } from "@/components/app-shell/ProtectedNavLinks"
@@ -10,12 +10,11 @@ import { Button } from "@workspace/ui/components/button"
 import {
   Drawer,
   DrawerContent,
-  DrawerDescription,
+  DrawerFooter,
   DrawerHeader,
   DrawerTitle,
   DrawerTrigger,
 } from "@workspace/ui/components/drawer"
-import { Separator } from "@workspace/ui/components/separator"
 
 type MobileProtectedSidebarProps = {
   navItems: ProtectedNavItem[]
@@ -35,26 +34,15 @@ export function MobileProtectedSidebar({
           size="icon-sm"
           variant="ghost"
         >
-          <IconMenu aria-hidden="true" />
+          <IconMenu2 aria-hidden="true" />
         </Button>
       </DrawerTrigger>
 
       <DrawerContent className="data-[vaul-drawer-direction=right]:w-[min(22rem,calc(100vw-1rem))] data-[vaul-drawer-direction=right]:max-w-none">
-        <DrawerHeader className="items-start border-b border-border/60 px-4 py-4 text-left">
-          <DrawerTitle>Navigation</DrawerTitle>
-          <DrawerDescription>
-            Open protected sections and account controls.
-          </DrawerDescription>
+        <DrawerHeader className="sr-only">
+          <DrawerTitle>Menu</DrawerTitle>
         </DrawerHeader>
-
         <div className="flex flex-1 flex-col overflow-y-auto px-4 py-4">
-          <div className="flex items-center justify-between gap-3">
-            <AppUserButton showStaffConsoleLink={showStaffConsoleLink} />
-            <ThemeToggle />
-          </div>
-
-          <Separator className="my-4" />
-
           <nav aria-label="Protected mobile" className="flex flex-col gap-2">
             <ProtectedNavLinks
               closeOnNavigate
@@ -63,6 +51,10 @@ export function MobileProtectedSidebar({
             />
           </nav>
         </div>
+        <DrawerFooter className="flex-row justify-between gap-3 border-t">
+          <AppUserButton showStaffConsoleLink={showStaffConsoleLink} />
+          <ThemeToggle />
+        </DrawerFooter>
       </DrawerContent>
     </Drawer>
   )
