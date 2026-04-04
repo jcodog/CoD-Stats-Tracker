@@ -120,10 +120,27 @@ function getSrAxisDomain(points: Array<{ sr: number }>) {
 }
 
 function getDailySrAxisDomain(points: Array<{ netSr: number }>) {
-  return getExactAxisDomain(
-    points.map((point) => point.netSr),
-    [-100, 100]
-  )
+  if (points.length === 0) {
+    return [-100, 100] as const
+  }
+
+  const values = points.map((point) => point.netSr)
+  const minValue = Math.min(...values)
+  const maxValue = Math.max(...values)
+
+  if (minValue === 0 && maxValue === 0) {
+    return [-1, 1] as const
+  }
+
+  if (minValue >= 0) {
+    return [0, maxValue] as const
+  }
+
+  if (maxValue <= 0) {
+    return [minValue, 0] as const
+  }
+
+  return [minValue, maxValue] as const
 }
 
 function ChartPanel({
@@ -272,7 +289,7 @@ export const DashboardStatsCharts = memo(function DashboardStatsCharts({
     () =>
       getExactAxisTicks({
         includeZero: true,
-        values: dailySrData.map((day) => day.netSr),
+        values: [...dailySrData.map((day) => day.netSr), 0],
       }),
     [dailySrData]
   )
