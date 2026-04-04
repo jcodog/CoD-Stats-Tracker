@@ -4,6 +4,7 @@ import {
   LandingBackground,
   LandingFooter,
   LandingHeader,
+  MARKETING_SHELL_MAX_WIDTH,
 } from "@/features/landing/components/LandingSections"
 import { resolveLandingMetricsInitialState } from "@/features/landing/lib/landing-server"
 import { resolveRequestViewport } from "@/lib/server/request-viewport"
@@ -28,7 +29,7 @@ export async function LandingView() {
 
       <main
         id="main-content"
-        className="mx-auto flex w-full max-w-6xl flex-1 flex-col overflow-x-clip px-4 pt-20 pb-20 sm:px-6 sm:pt-24 lg:px-8"
+        className={`mx-auto flex w-full ${MARKETING_SHELL_MAX_WIDTH} flex-1 flex-col overflow-x-clip px-4 pt-20 pb-20 sm:px-6 sm:pt-24 lg:px-8`}
       >
         {viewport === "mobile" ? (
           <LandingMobileView initialMetrics={initialMetrics} />

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, type Dispatch, type SetStateAction } from "react"
-import { IconSettings } from "@tabler/icons-react"
+import { IconPlus, IconSettings } from "@tabler/icons-react"
 import type {
   StaffRankedMapRecord,
   StaffRankedModeRecord,
@@ -96,8 +96,8 @@ function EmptyWorkspace({
   title: string
 }) {
   return (
-    <div className="flex flex-col gap-3 rounded-xl border border-dashed border-border/60 bg-muted/10 px-5 py-5">
-      <div className="flex size-10 items-center justify-center rounded-lg border border-border/60 bg-background">
+    <div className="flex flex-col gap-3 border border-dashed border-border/60 bg-muted/10 px-5 py-5">
+      <div className="flex size-10 items-center justify-center border border-border/60 bg-background">
         <IconSettings className="size-5 text-muted-foreground" />
       </div>
       <div className="grid gap-1">
@@ -120,7 +120,7 @@ function DataTableShell({
   header: React.ReactNode
 }) {
   return (
-    <div className="overflow-hidden rounded-xl border border-border/60 bg-background">
+    <div className="overflow-hidden border border-border/60 bg-background">
       <Table className="table-fixed">
         {colGroup}
         {header}
@@ -141,63 +141,55 @@ function DataTableShell({
 }
 
 function CatalogManagementRow({
-  controls,
+  actionDisabled = false,
+  actionLabel,
   description,
+  onAction,
   table,
   tableDescription,
   tableTitle,
   title,
 }: {
-  controls: React.ReactNode
+  actionDisabled?: boolean
+  actionLabel: string
   description: string
+  onAction: () => void
   table: React.ReactNode
   tableDescription: string
   tableTitle: string
   title: string
 }) {
   return (
-    <div className="grid gap-10 px-8 py-8 xl:grid-cols-[minmax(360px,0.9fr)_minmax(0,1.1fr)]">
-      <div className="grid content-start gap-5">
-        <div className="grid gap-1">
-          <h3 className="text-base font-semibold">{title}</h3>
-          <p className="max-w-lg text-sm text-muted-foreground">
-            {description}
-          </p>
-        </div>
-        {controls}
+    <div className="grid gap-6 px-8 py-8">
+      <div className="grid gap-1">
+        <h3 className="text-base font-semibold">{title}</h3>
+        <p className="max-w-3xl text-sm text-muted-foreground">
+          {description}
+        </p>
       </div>
 
-      <div className="grid content-start gap-4">
-        <div className="grid gap-1">
-          <h4 className="text-sm font-medium text-foreground">{tableTitle}</h4>
-          <p className="max-w-2xl text-sm text-muted-foreground">
-            {tableDescription}
-          </p>
+      <div className="grid gap-4">
+        <div className="flex flex-wrap items-start gap-3">
+          <div className="grid min-w-0 flex-1 gap-1">
+            <h4 className="text-sm font-medium text-foreground">
+              {tableTitle}
+            </h4>
+            <p className="max-w-2xl text-sm text-muted-foreground">
+              {tableDescription}
+            </p>
+          </div>
+          <Button
+            className="ml-auto gap-2 self-start"
+            disabled={actionDisabled}
+            onClick={onAction}
+            size="sm"
+            variant="ghost"
+          >
+            <IconPlus aria-hidden="true" className="size-4" />
+            {actionLabel}
+          </Button>
         </div>
-        {table}
-      </div>
-    </div>
-  )
-}
-
-function CatalogActionPanel({
-  actionLabel,
-  actionDisabled = false,
-  description,
-  onAction,
-}: {
-  actionDisabled?: boolean
-  actionLabel: string
-  description: string
-  onAction: () => void
-}) {
-  return (
-    <div className="grid gap-4 rounded-xl border border-border/60 bg-muted/10 p-5">
-      <p className="max-w-md text-sm text-muted-foreground">{description}</p>
-      <div className="flex flex-wrap items-center gap-3">
-        <Button disabled={actionDisabled} onClick={onAction}>
-          {actionLabel}
-        </Button>
+        <div className="w-full">{table}</div>
       </div>
     </div>
   )
@@ -248,7 +240,7 @@ function CatalogEditorDialog({
           <div className="px-6 py-6">{children}</div>
         </ScrollArea>
 
-        <DialogFooter className="border-t border-border/60 px-6 py-4">
+        <DialogFooter className="border-t border-border/60 px-6 py-5 sm:items-center sm:justify-end">
           <Button onClick={() => onOpenChange(false)} variant="outline">
             Cancel
           </Button>
@@ -919,7 +911,7 @@ export function StaffRankedCatalogSection({
 
   return (
     <>
-      <section className="overflow-hidden rounded-xl border border-border/60 bg-background">
+      <section className="overflow-hidden border border-border/60 bg-background">
         <div className="border-b border-border/60 px-8 py-7">
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_300px] xl:items-end">
             <div className="grid gap-2">
@@ -983,14 +975,9 @@ export function StaffRankedCatalogSection({
 
         <div className="divide-y divide-border/60">
           <CatalogManagementRow
-            controls={
-              <CatalogActionPanel
-                actionLabel="Create title"
-                description="Open the title editor in a focused flow. Use Edit in the table to revise an existing title without leaving the catalog."
-                onAction={openTitleCreate}
-              />
-            }
+            actionLabel="Create title"
             description="Create and maintain the ranked titles staff can activate. Keep the key stable because config, modes, maps, and sessions all reference it."
+            onAction={openTitleCreate}
             table={<TitleCatalogTable onEdit={openTitleEdit} titles={titles} />}
             tableDescription="Titles staff can point the current ranked config at, with their current mode and map counts."
             tableTitle="Saved titles"
@@ -998,23 +985,14 @@ export function StaffRankedCatalogSection({
           />
 
           <CatalogManagementRow
-            controls={
-              <CatalogActionPanel
-                actionDisabled={!selectedTitle}
-                actionLabel="Create mode"
-                description={
-                  selectedTitle
-                    ? `Open the ${selectedTitle.label} mode editor in a focused flow. Existing modes reopen in the same editor from the table.`
-                    : "Choose a catalog title above before opening the ranked mode editor."
-                }
-                onAction={openModeCreate}
-              />
-            }
+            actionDisabled={!selectedTitle}
+            actionLabel="Create mode"
             description={
               selectedTitle
                 ? `Create and order the ranked modes ${selectedTitle.label} supports. The match logger only offers active modes from this title.`
                 : "Choose a catalog title above before creating or editing ranked modes."
             }
+            onAction={openModeCreate}
             table={
               selectedTitle ? (
                 <ModeCatalogTable modes={titleModes} onEdit={openModeEdit} />
@@ -1037,23 +1015,14 @@ export function StaffRankedCatalogSection({
           />
 
           <CatalogManagementRow
-            controls={
-              <CatalogActionPanel
-                actionDisabled={!selectedTitle}
-                actionLabel="Create map"
-                description={
-                  selectedTitle
-                    ? `Open the ${selectedTitle.label} map editor in a focused flow. Existing maps reopen in the same editor from the table.`
-                    : "Choose a catalog title above before opening the map editor."
-                }
-                onAction={openMapCreate}
-              />
-            }
+            actionDisabled={!selectedTitle}
+            actionLabel="Create map"
             description={
               selectedTitle
                 ? `Maps for ${selectedTitle.label} must support one or more active modes. The match logger filters maps after the user picks a mode.`
                 : "Choose a catalog title above before creating or editing maps."
             }
+            onAction={openMapCreate}
             table={
               selectedTitle ? (
                 <MapCatalogTable maps={titleMaps} onEdit={openMapEdit} />

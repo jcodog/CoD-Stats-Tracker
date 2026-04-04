@@ -42,9 +42,7 @@ function ChartContainer({
   ...props
 }: React.ComponentProps<"div"> & {
   config: ChartConfig
-  children: React.ComponentProps<
-    typeof RechartsPrimitive.ResponsiveContainer
-  >["children"]
+  children: React.ReactElement<{ height?: number; width?: number }>
 }) {
   const uniqueId = React.useId()
   const chartId = `chart-${id || uniqueId.replace(/:/g, "")}`
@@ -54,6 +52,10 @@ function ChartContainer({
     width: 0,
   })
   const isChartReady = containerSize.width > 0 && containerSize.height > 0
+  const chartWidth = isChartReady ? Math.max(1, Math.floor(containerSize.width)) : 0
+  const chartHeight = isChartReady
+    ? Math.max(1, Math.floor(containerSize.height))
+    : 0
 
   React.useEffect(() => {
     const node = containerRef.current
@@ -101,17 +103,12 @@ function ChartContainer({
         {...props}
       >
         <ChartStyle id={chartId} config={config} />
-        {isChartReady ? (
-          <RechartsPrimitive.ResponsiveContainer
-            debounce={16}
-            height="100%"
-            minHeight={0}
-            minWidth={0}
-            width="100%"
-          >
-            {children}
-          </RechartsPrimitive.ResponsiveContainer>
-        ) : null}
+        {isChartReady
+          ? React.cloneElement(children, {
+              height: chartHeight,
+              width: chartWidth,
+            })
+          : null}
       </div>
     </ChartContext.Provider>
   )

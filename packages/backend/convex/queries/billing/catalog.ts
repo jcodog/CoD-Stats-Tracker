@@ -13,6 +13,34 @@ export type BillingCatalogPlan = BillingPlanRecord & {
   inactiveFeatureKeys: string[]
 }
 
+type PricingCatalogEntry = {
+  active: boolean
+  description: string
+  features: Array<{
+    category: string | undefined
+    description: string
+    featureKey: string
+    name: string
+  }>
+  name: string
+  planKey: string
+  planType: "free" | "paid"
+  pricing: {
+    month: {
+      amount: number
+      currency: string
+      interval: "month"
+    } | null
+    year: {
+      amount: number
+      currency: string
+      interval: "year"
+    } | null
+  }
+  relationship: "checkout" | "current" | "downgrade" | "switch" | "upgrade"
+  sortOrder: number
+}
+
 function getPlanRelationship(args: {
   currentPlan: BillingPlanRecord | null
   currentSubscriptionInterval?: "month" | "year"
@@ -104,6 +132,69 @@ function collectPlanFeatures(args: {
   }
 }
 
+function buildPricingCatalog(args: {
+  currentPlan: BillingPlanRecord | null
+  currentSubscriptionInterval?: "month" | "year"
+  features: BillingFeatureRecord[]
+  planFeatures: BillingPlanFeatureRecord[]
+  plans: BillingPlanRecord[]
+}) {
+  const featuresByKey = new Map(
+    args.features.map((feature) => [feature.key, feature])
+  )
+
+  return args.plans
+    .filter((plan) => plan.active && plan.archivedAt === undefined)
+    .map((plan): PricingCatalogEntry => {
+      const mappings = args.planFeatures.filter(
+        (planFeature) => planFeature.planKey === plan.key
+      )
+      const { features } = collectPlanFeatures({
+        planKey: plan.key,
+        mappings,
+        featuresByKey,
+      })
+
+      return {
+        active: plan.active,
+        description: plan.description,
+        features: features.map((feature) => ({
+          category: feature.category,
+          description: feature.description,
+          featureKey: feature.key,
+          name: feature.name,
+        })),
+        name: plan.name,
+        planKey: plan.key,
+        planType: plan.planType,
+        pricing: {
+          month:
+            plan.planType === "paid" && plan.monthlyPriceAmount > 0
+              ? {
+                  amount: plan.monthlyPriceAmount,
+                  currency: plan.currency,
+                  interval: "month" as const,
+                }
+              : null,
+          year:
+            plan.planType === "paid" && plan.yearlyPriceAmount > 0
+              ? {
+                  amount: plan.yearlyPriceAmount,
+                  currency: plan.currency,
+                  interval: "year" as const,
+                }
+              : null,
+        },
+        relationship: getPlanRelationship({
+          currentPlan: args.currentPlan,
+          currentSubscriptionInterval: args.currentSubscriptionInterval,
+          plan,
+        }),
+        sortOrder: plan.sortOrder,
+      }
+    })
+}
+
 export const getBillingPlans = internalQuery({
   args: {},
   handler: async (ctx) => {
@@ -183,7 +274,6 @@ export const getCustomerPricingCatalog = query({
       listBillingFeatures(ctx),
       ctx.auth.getUserIdentity(),
     ])
-    const featuresByKey = new Map(features.map((feature) => [feature.key, feature]))
     const user = identity
       ? await ctx.db
           .query("users")
@@ -199,56 +289,35 @@ export const getCustomerPricingCatalog = query({
     return {
       currentInterval,
       currentPlanKey: resolvedState?.effectivePlanKey ?? null,
-      plans: plans
-        .filter((plan) => plan.active && plan.archivedAt === undefined)
-        .map((plan) => {
-          const mappings = planFeatures.filter(
-            (planFeature) => planFeature.planKey === plan.key
-          )
-          const { features } = collectPlanFeatures({
-            planKey: plan.key,
-            mappings,
-            featuresByKey,
-          })
+      plans: buildPricingCatalog({
+        currentPlan,
+        currentSubscriptionInterval: currentInterval,
+        features,
+        planFeatures,
+        plans,
+      }),
+    }
+  },
+})
 
-          return {
-            active: plan.active,
-            description: plan.description,
-            features: features.map((feature) => ({
-              category: feature.category,
-              description: feature.description,
-              featureKey: feature.key,
-              name: feature.name,
-            })),
-            name: plan.name,
-            planKey: plan.key,
-            planType: plan.planType,
-            pricing: {
-              month:
-                plan.planType === "paid" && plan.monthlyPriceAmount > 0
-                  ? {
-                      amount: plan.monthlyPriceAmount,
-                      currency: plan.currency,
-                      interval: "month" as const,
-                    }
-                  : null,
-              year:
-                plan.planType === "paid" && plan.yearlyPriceAmount > 0
-                  ? {
-                      amount: plan.yearlyPriceAmount,
-                      currency: plan.currency,
-                      interval: "year" as const,
-                    }
-                  : null,
-            },
-            relationship: getPlanRelationship({
-              currentPlan,
-              currentSubscriptionInterval: currentInterval,
-              plan,
-            }),
-            sortOrder: plan.sortOrder,
-          }
-        }),
+export const getPublicPricingCatalog = query({
+  args: {},
+  handler: async (ctx) => {
+    const [plans, planFeatures, features] = await Promise.all([
+      listBillingPlans(ctx),
+      ctx.db.query("billingPlanFeatures").collect(),
+      listBillingFeatures(ctx),
+    ])
+
+    return {
+      currentInterval: null,
+      currentPlanKey: null,
+      plans: buildPricingCatalog({
+        currentPlan: null,
+        features,
+        planFeatures,
+        plans,
+      }),
     }
   },
 })

@@ -12,11 +12,11 @@ const nextConfig = {
     root: path.resolve(__dirname, "../.."),
   },
   // Use this when developing the app
-  // devIndicators: {
-  //   position: "bottom-right",
-  // },
+  devIndicators: {
+    position: "bottom-right",
+  },
   // Use this one when getting marketting images/screenshots
-  devIndicators: false,
+  // devIndicators: false,
   async rewrites() {
     if (process.env.VERCEL_ENV !== "preview") {
       return []

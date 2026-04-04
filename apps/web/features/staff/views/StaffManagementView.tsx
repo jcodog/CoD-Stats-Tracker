@@ -16,13 +16,6 @@ import type {
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@workspace/ui/components/card"
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -54,6 +47,11 @@ import {
 import { cn } from "@workspace/ui/lib/utils"
 import { toast } from "sonner"
 
+import {
+  StaffMetricStrip,
+  StaffPageIntro,
+  StaffSection,
+} from "@/features/staff/components/StaffConsolePrimitives"
 import {
   StaffClientError,
   useStaffManagementClient,
@@ -153,25 +151,6 @@ function getAllowedRoleOptions(args: {
   return [] as readonly AssignableUserRole[]
 }
 
-function MetricCard({
-  label,
-  value,
-}: {
-  label: string
-  value: number
-}) {
-  return (
-    <Card className="border-border/70">
-      <CardHeader className="pb-2">
-        <CardDescription>{label}</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-semibold tracking-tight">{value}</div>
-      </CardContent>
-    </Card>
-  )
-}
-
 export function StaffManagementView({
   initialData,
 }: {
@@ -255,11 +234,12 @@ export function StaffManagementView({
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
+                aria-label={`Manage ${row.original.displayName}`}
                 disabled={mutation.isPending || allowedRoleOptions.length === 0}
                 size="icon"
                 variant="ghost"
               >
-                <IconDotsVertical />
+                <IconDotsVertical aria-hidden="true" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
@@ -319,33 +299,24 @@ export function StaffManagementView({
 
   return (
     <div className="flex flex-1 flex-col gap-8">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-semibold tracking-tight">
-          Staff management
-        </h1>
-        <p className="max-w-3xl text-sm text-muted-foreground">
-          Admins can manage user and staff access for non-admin accounts.
-          Super-admins can also grant and revoke admin. Reserved super-admin
-          accounts stay config-controlled and cannot be edited here.
-        </p>
-      </div>
+      <StaffPageIntro
+        description="Admins can manage user and staff access for non-admin accounts. Super-admins can also grant and revoke admin. Reserved super-admin accounts stay config-controlled and cannot be edited here."
+        title="Staff Management"
+      />
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="Aligned operators" value={alignedAdminCount} />
-        <MetricCard label="Admins" value={data.adminCount} />
-        <MetricCard label="Super-admins" value={data.superAdminCount} />
-        <MetricCard label="Elevated users" value={data.staffCount} />
-      </div>
+      <StaffMetricStrip
+        items={[
+          { label: "Aligned operators", value: alignedAdminCount },
+          { label: "Admins", value: data.adminCount },
+          { label: "Super-admins", value: data.superAdminCount },
+          { label: "Elevated users", value: data.staffCount },
+        ]}
+      />
 
-      <Card className="border-border/70">
-        <CardHeader>
-          <CardTitle>Directory</CardTitle>
-          <CardDescription>
-            Search by name, email, or Clerk ID. The menu only shows role
-            transitions that your current operator role is allowed to apply.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+      <StaffSection
+        description="Search by name, email, or Clerk ID. The menu only shows role transitions that your current operator role is allowed to apply."
+        title="Directory"
+      >
           <StaffDataTable
             columns={columns}
             data={data.users}
@@ -354,17 +325,13 @@ export function StaffManagementView({
             getRowId={(row) => row.clerkUserId}
             searchPlaceholder="Search users, emails, or Clerk IDs"
           />
-        </CardContent>
-      </Card>
+      </StaffSection>
 
-      <Card className="border-border/70">
-        <CardHeader>
-          <CardTitle>Role audit log</CardTitle>
-          <CardDescription>
-            Recent role changes and failures captured for internal review.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="rounded-lg border border-border/70 p-0">
+      <StaffSection
+        contentClassName="overflow-x-auto p-0 pr-3 pb-3"
+        description="Recent role changes and failures captured for internal review."
+        title="Role Audit Log"
+      >
           <Table>
             <TableHeader>
               <TableRow>
@@ -405,8 +372,7 @@ export function StaffManagementView({
               ))}
             </TableBody>
           </Table>
-        </CardContent>
-      </Card>
+      </StaffSection>
 
       <Dialog
         onOpenChange={(open) => {

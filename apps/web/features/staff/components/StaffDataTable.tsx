@@ -27,6 +27,7 @@ import {
   TableHeader,
   TableRow,
 } from "@workspace/ui/components/table"
+import { ScrollArea } from "@workspace/ui/components/scroll-area"
 import { cn } from "@workspace/ui/lib/utils"
 
 type StaffDataTableProps<TData> = {
@@ -82,70 +83,74 @@ export function StaffDataTable<TData>({
         {toolbar}
       </div>
 
-      <div className="rounded-lg border border-border/70">
-        <Table>
-          <TableHeader>
-            {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map((header) => (
-                  <TableHead key={header.id} colSpan={header.colSpan}>
-                    {header.isPlaceholder ? null : (
-                      <button
-                        className={cn(
-                          "inline-flex items-center gap-1 rounded-md text-left font-medium",
-                          header.column.getCanSort()
-                            ? "cursor-pointer text-foreground hover:text-primary"
-                            : "text-muted-foreground"
+      <div className="overflow-hidden border border-border/60 bg-background">
+        <ScrollArea className="w-full">
+          <div className="min-w-max pr-3 pb-3">
+            <Table>
+              <TableHeader>
+                {table.getHeaderGroups().map((headerGroup) => (
+                  <TableRow key={headerGroup.id}>
+                    {headerGroup.headers.map((header) => (
+                      <TableHead key={header.id} colSpan={header.colSpan}>
+                        {header.isPlaceholder ? null : (
+                          <button
+                            className={cn(
+                              "inline-flex items-center gap-1 rounded-md text-left font-medium",
+                              header.column.getCanSort()
+                                ? "cursor-pointer text-foreground hover:text-primary"
+                                : "text-muted-foreground"
+                            )}
+                            onClick={header.column.getToggleSortingHandler()}
+                            type="button"
+                          >
+                            {flexRender(
+                              header.column.columnDef.header,
+                              header.getContext()
+                            )}
+                            {header.column.getCanSort() ? (
+                              <IconArrowsSort className="text-muted-foreground" />
+                            ) : null}
+                          </button>
                         )}
-                        onClick={header.column.getToggleSortingHandler()}
-                        type="button"
-                      >
-                        {flexRender(
-                          header.column.columnDef.header,
-                          header.getContext()
-                        )}
-                        {header.column.getCanSort() ? (
-                          <IconArrowsSort className="text-muted-foreground" />
-                        ) : null}
-                      </button>
-                    )}
-                  </TableHead>
+                      </TableHead>
+                    ))}
+                  </TableRow>
                 ))}
-              </TableRow>
-            ))}
-          </TableHeader>
+              </TableHeader>
 
-          <TableBody>
-            {hasRows ? (
-              table.getRowModel().rows.map((row) => (
-                <TableRow key={row.id}>
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell
-                      key={cell.id}
-                      className="max-w-[18rem] align-top whitespace-normal"
-                    >
-                      {flexRender(
-                        cell.column.columnDef.cell,
-                        cell.getContext()
-                      )}
+              <TableBody>
+                {hasRows ? (
+                  table.getRowModel().rows.map((row) => (
+                    <TableRow key={row.id}>
+                      {row.getVisibleCells().map((cell) => (
+                        <TableCell
+                          key={cell.id}
+                          className="max-w-72 align-top whitespace-normal"
+                        >
+                          {flexRender(
+                            cell.column.columnDef.cell,
+                            cell.getContext()
+                          )}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell className="p-0" colSpan={columns.length}>
+                      <Empty className="rounded-none border-0">
+                        <EmptyHeader>
+                          <EmptyTitle>{emptyTitle}</EmptyTitle>
+                          <EmptyDescription>{emptyDescription}</EmptyDescription>
+                        </EmptyHeader>
+                      </Empty>
                     </TableCell>
-                  ))}
-                </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell className="p-0" colSpan={columns.length}>
-                  <Empty className="rounded-none border-0">
-                    <EmptyHeader>
-                      <EmptyTitle>{emptyTitle}</EmptyTitle>
-                      <EmptyDescription>{emptyDescription}</EmptyDescription>
-                    </EmptyHeader>
-                  </Empty>
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </ScrollArea>
       </div>
     </div>
   )

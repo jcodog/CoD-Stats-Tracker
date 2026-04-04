@@ -15,7 +15,7 @@ export function LandingDesktopView({
 }) {
   return (
     <>
-      <section className="grid items-start gap-16 lg:grid-cols-[minmax(0,1.15fr)_minmax(24rem,0.85fr)]">
+      <section className="grid items-start gap-16 lg:grid-cols-[minmax(0,1.1fr)_minmax(26rem,0.9fr)] lg:gap-20">
         <LandingHeroSection viewport="desktop" />
         <LandingSnapshotSection
           initialMetrics={initialMetrics}

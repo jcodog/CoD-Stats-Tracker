@@ -686,6 +686,7 @@ export declare const api: {
           {},
           any
         >;
+        getPublicPricingCatalog: FunctionReference<"query", "public", {}, any>;
       };
       center: {
         getCurrentUserBillingCenter: FunctionReference<

@@ -9,8 +9,12 @@ import {
   AvatarFallback,
   AvatarImage,
 } from "@workspace/ui/components/avatar"
+import { cn } from "@workspace/ui/lib/utils"
 
 export type LandingViewport = "desktop" | "mobile"
+export const MARKETING_SHELL_MAX_WIDTH = "max-w-[90rem]"
+
+const MARKETING_FRAME_CLASSNAME = `mx-auto w-full ${MARKETING_SHELL_MAX_WIDTH} px-4 sm:px-6 lg:px-8`
 
 const dashboardReviewItems = [
   {
@@ -77,9 +81,12 @@ export function LandingBackground() {
       aria-hidden="true"
       className="pointer-events-none fixed inset-0 -z-10 overflow-hidden"
     >
-      <div className="absolute -top-32 left-1/2 h-96 w-96 -translate-x-[130%] rounded-full bg-sky-200/45 blur-3xl" />
-      <div className="absolute -top-16 left-1/2 h-112 w-md -translate-x-[10%] rounded-full bg-emerald-200/35 blur-3xl" />
-      <div className="absolute top-64 -right-40 h-80 w-80 rounded-full bg-blue-100/55 blur-3xl" />
+      <div className="absolute inset-0 bg-background/84" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,hsl(var(--background)/0.12),transparent_42%)]" />
+      <div className="absolute -top-32 left-1/2 h-96 w-96 -translate-x-[130%] rounded-full bg-sky-200/34 blur-3xl" />
+      <div className="absolute -top-16 left-1/2 h-112 w-md -translate-x-[10%] rounded-full bg-emerald-200/26 blur-3xl" />
+      <div className="absolute top-64 -right-40 h-80 w-80 rounded-full bg-blue-100/38 blur-3xl" />
+      <div className="absolute inset-x-0 bottom-0 h-64 bg-linear-to-t from-background via-background/92 to-transparent" />
     </div>
   )
 }
@@ -90,11 +97,11 @@ export function LandingHeader({ viewport }: { viewport: LandingViewport }) {
   return (
     <header className="fixed inset-x-0 top-0 z-50 overflow-x-clip border-b border-border/60 bg-background/85 backdrop-blur supports-backdrop-filter:bg-background/70">
       <div
-        className={
-          isMobileView
-            ? "mx-auto flex w-full max-w-6xl min-w-0 items-center justify-between gap-2 px-4 py-3 sm:px-6"
-            : "mx-auto flex w-full max-w-6xl min-w-0 items-center justify-between gap-6 px-4 py-3 sm:px-6 lg:px-8"
-        }
+        className={cn(
+          "flex min-w-0 items-center justify-between py-3",
+          MARKETING_FRAME_CLASSNAME,
+          isMobileView ? "gap-2" : "gap-6"
+        )}
       >
         <Link
           href="/"
@@ -113,7 +120,18 @@ export function LandingHeader({ viewport }: { viewport: LandingViewport }) {
           <span className="truncate">CodStats</span>
         </Link>
 
-        <NavbarAuthActions compact={isMobileView} />
+        <div className="flex min-w-0 shrink-0 items-center gap-2 sm:gap-3">
+          <Link
+            href="/pricing"
+            className={cn(
+              "rounded-md px-2 py-1 text-sm font-medium text-foreground/74 transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+              isMobileView && "px-1.5 text-[0.8125rem]"
+            )}
+          >
+            Pricing
+          </Link>
+          <NavbarAuthActions compact={isMobileView} />
+        </div>
       </div>
     </header>
   )
@@ -138,13 +156,13 @@ export function LandingHeroSection({
         <h1
           className={
             isMobileView
-              ? "max-w-2xl text-[2.55rem] leading-[0.95] font-semibold tracking-tight text-balance"
-              : "max-w-3xl text-5xl leading-[0.94] font-semibold tracking-tight text-balance lg:text-6xl"
+              ? "max-w-[18rem] text-[2.55rem] leading-[0.95] font-semibold tracking-tight text-balance"
+              : "max-w-[44rem] text-5xl leading-[0.94] font-semibold tracking-tight text-balance lg:text-6xl"
           }
         >
           Track Every Match. Learn Faster. Win More.
         </h1>
-        <p className="max-w-xl text-base leading-relaxed text-pretty text-muted-foreground sm:text-lg">
+        <p className="max-w-[34rem] text-base leading-8 text-pretty text-foreground/78 sm:text-lg">
           CodStats turns ranked sessions into a clear performance view so you
           can spot patterns and improve faster.
         </p>
@@ -181,7 +199,7 @@ export function LandingSnapshotSection({
         <h2 className="text-lg font-semibold tracking-tight sm:text-xl">
           Live ranked activity
         </h2>
-        <p className="text-sm leading-relaxed text-muted-foreground">
+        <p className="max-w-[30rem] text-sm leading-7 text-foreground/72">
           CodStats keeps ranked match totals current and account-linked, then
           expands that same data into the full dashboard once you sign in.
         </p>
@@ -213,7 +231,7 @@ export function LandingFeatureList({
         <h2 className="text-2xl font-semibold tracking-tight text-balance sm:text-3xl">
           What You Can Review Inside the Dashboard
         </h2>
-        <p className="max-w-2xl text-sm leading-relaxed text-pretty text-muted-foreground sm:text-base">
+        <p className="max-w-[21rem] text-sm leading-7 text-pretty text-foreground/72 sm:max-w-[23rem] sm:text-base">
           CodStats is built around ranked-session review, with the core panels
           focused on the data you actually need after a run.
         </p>
@@ -233,7 +251,7 @@ export function LandingFeatureList({
               <h3 className="text-lg font-semibold tracking-tight">
                 {feature.title}
               </h3>
-              <p className="text-sm leading-relaxed wrap-break-word text-muted-foreground">
+              <p className="max-w-[44rem] text-sm leading-7 wrap-break-word text-foreground/72">
                 {feature.description}
               </p>
             </div>
@@ -263,7 +281,7 @@ export function LandingPlatformList({
         <h2 className="text-2xl font-semibold tracking-tight text-balance sm:text-3xl">
           What CodStats Keeps in Sync
         </h2>
-        <p className="max-w-2xl text-sm leading-relaxed text-pretty text-muted-foreground sm:text-base">
+        <p className="max-w-[21rem] text-sm leading-7 text-pretty text-foreground/72 sm:max-w-[23rem] sm:text-base">
           The landing page and dashboard are reading from the same product
           system, with account-specific tracking layered in after sign in.
         </p>
@@ -283,7 +301,7 @@ export function LandingPlatformList({
               <h3 className="text-lg font-semibold tracking-tight">
                 {item.title}
               </h3>
-              <p className="text-sm leading-relaxed wrap-break-word text-muted-foreground">
+              <p className="max-w-[44rem] text-sm leading-7 wrap-break-word text-foreground/72">
                 {item.detail}
               </p>
             </div>
@@ -313,7 +331,7 @@ export function LandingCreatorToolsSection({
         <h2 className="text-2xl font-semibold tracking-tight text-balance sm:text-3xl">
           Creator Tools Available Now
         </h2>
-        <p className="max-w-2xl text-sm leading-relaxed text-pretty text-muted-foreground sm:text-base">
+        <p className="max-w-[21rem] text-sm leading-7 text-pretty text-foreground/72 sm:max-w-[23rem] sm:text-base">
           CodStats already supports ranked creators directly, because community
           queues and creator-led lobbies are a real part of how this scene
           plays.
@@ -334,7 +352,7 @@ export function LandingCreatorToolsSection({
               <h3 className="text-lg font-semibold tracking-tight">
                 {item.title}
               </h3>
-              <p className="text-sm leading-relaxed wrap-break-word text-muted-foreground">
+              <p className="max-w-[44rem] text-sm leading-7 wrap-break-word text-foreground/72">
                 {item.detail}
               </p>
             </div>
@@ -348,8 +366,13 @@ export function LandingCreatorToolsSection({
 export function LandingFooter() {
   return (
     <footer className="border-t border-border/70 bg-background/80">
-      <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-5 sm:px-6 lg:px-8">
-        <p className="text-xs text-muted-foreground">
+      <div
+        className={cn(
+          "flex flex-wrap items-center justify-between gap-3 py-5",
+          MARKETING_FRAME_CLASSNAME
+        )}
+      >
+        <p className="text-xs text-foreground/62">
           CodStats - &copy;{" "}
           <Link
             href="https://cleoai.cloud"
@@ -362,7 +385,7 @@ export function LandingFooter() {
         <nav aria-label="Legal" className="flex flex-wrap items-center gap-4">
           <Link
             href={PUBLIC_SITE_ANALYTICS_URL}
-            className="text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            className="text-xs text-foreground/62 transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
             rel="noreferrer"
             target="_blank"
           >
@@ -370,15 +393,39 @@ export function LandingFooter() {
           </Link>
           <Link
             href="/policies/tos"
-            className="text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            className="text-xs text-foreground/62 transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           >
             Terms
           </Link>
           <Link
             href="/policies/privacy"
-            className="text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            className="text-xs text-foreground/62 transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           >
             Privacy
+          </Link>
+          <Link
+            href="/policies/cookies"
+            className="text-xs text-foreground/62 transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          >
+            Cookies
+          </Link>
+          <Link
+            href="/policies/refunds"
+            className="text-xs text-foreground/62 transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          >
+            Refunds
+          </Link>
+          <Link
+            href="/policies/disputes"
+            className="text-xs text-foreground/62 transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          >
+            Disputes
+          </Link>
+          <Link
+            href="/policies/gdpr"
+            className="text-xs text-foreground/62 transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          >
+            GDPR
           </Link>
         </nav>
       </div>

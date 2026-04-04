@@ -20,12 +20,20 @@ import { IconX } from "@tabler/icons-react"
 
 const SheetViewportContext = React.createContext(false)
 
-function Sheet({ ...props }: React.ComponentProps<typeof SheetPrimitive.Root>) {
+type SheetRootProps = React.ComponentProps<typeof SheetPrimitive.Root> & {
+  mobileVariant?: "drawer" | "sheet"
+}
+
+function Sheet({
+  mobileVariant = "drawer",
+  ...props
+}: SheetRootProps) {
   const isMobile = useIsMobile()
+  const useDrawer = isMobile && mobileVariant === "drawer"
 
   return (
-    <SheetViewportContext.Provider value={isMobile}>
-      {isMobile ? (
+    <SheetViewportContext.Provider value={useDrawer}>
+      {useDrawer ? (
         <Drawer
           data-slot="sheet"
           {...(props as React.ComponentProps<typeof Drawer>)}

@@ -14,7 +14,7 @@ export function LandingMobileView({
   initialMetrics: LandingMetricsResponse | null
 }) {
   return (
-    <div className="grid gap-8">
+    <div className="grid gap-10">
       <LandingHeroSection viewport="mobile" />
       <LandingSnapshotSection initialMetrics={initialMetrics} viewport="mobile" />
       <LandingFeatureList viewport="mobile" />

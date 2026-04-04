@@ -86,7 +86,7 @@ function DrawerFooter({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="drawer-footer"
       className={cn(
-        "relative z-10 mt-auto flex flex-col gap-2 bg-background/95 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] supports-backdrop-filter:backdrop-blur-xs",
+        "relative z-10 mt-auto flex flex-wrap items-center justify-end gap-2 bg-background/95 px-4 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))] supports-backdrop-filter:backdrop-blur-xs",
         className
       )}
       {...props}

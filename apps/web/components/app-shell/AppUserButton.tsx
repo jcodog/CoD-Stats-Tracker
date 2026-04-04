@@ -25,19 +25,8 @@ export function AppUserButton({
       }}
     >
       <UserButton.MenuItems>
-        {showStaffConsoleLink ? (
-          <UserButton.Link
-            href="/staff"
-            label="Staff console"
-            labelIcon={
-              <IconShieldLock
-                aria-hidden="true"
-                data-icon="inline-start"
-                className="size-4"
-              />
-            }
-          />
-        ) : null}
+        <UserButton.Action label="manageAccount" />
+
         {checkoutEnabled ? (
           <UserButton.Link
             href="/settings/billing"
@@ -51,6 +40,22 @@ export function AppUserButton({
             }
           />
         ) : null}
+
+        {showStaffConsoleLink ? (
+          <UserButton.Link
+            href="/staff"
+            label="Staff console"
+            labelIcon={
+              <IconShieldLock
+                aria-hidden="true"
+                data-icon="inline-start"
+                className="size-4"
+              />
+            }
+          />
+        ) : null}
+
+        <UserButton.Action label="signOut" />
       </UserButton.MenuItems>
     </UserButton>
   )
