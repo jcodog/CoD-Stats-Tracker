@@ -365,14 +365,21 @@ function Panel({
 
 function ToolbarGroup({
   children,
+  childrenClassName,
   label,
-}: Readonly<{ children: React.ReactNode; label: string }>) {
+}: Readonly<{
+  children: React.ReactNode
+  childrenClassName?: string
+  label: string
+}>) {
   return (
     <div className="flex shrink-0 items-center gap-3">
       <span className="text-sm font-medium whitespace-nowrap text-muted-foreground">
         {label}
       </span>
-      <div className="flex flex-wrap items-center gap-2">{children}</div>
+      <div className={cn("flex flex-wrap items-center gap-2", childrenClassName)}>
+        {children}
+      </div>
     </div>
   )
 }
@@ -1559,9 +1566,12 @@ export function PlayWithViewersDashboardView({
 
                 <ToolbarDivider />
 
-                <ToolbarGroup label="Ranks">
+                <ToolbarGroup
+                  childrenClassName="flex-col items-stretch md:flex-row md:items-center"
+                  label="Ranks"
+                >
                   <AppSelect
-                    className="w-36 max-w-full"
+                    className="w-40 shrink-0"
                     disabled={toolbarFieldPending !== null}
                     onValueChange={(value) =>
                       handleToolbarSettingsChange("minRank", {
@@ -1576,7 +1586,7 @@ export function PlayWithViewersDashboardView({
                     value={queue.minRank}
                   />
                   <AppSelect
-                    className="w-36w-full"
+                    className="w-40 shrink-0"
                     disabled={toolbarFieldPending !== null}
                     onValueChange={(value) =>
                       handleToolbarSettingsChange("maxRank", {
