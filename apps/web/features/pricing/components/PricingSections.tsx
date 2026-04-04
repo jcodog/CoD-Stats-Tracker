@@ -92,10 +92,7 @@ export function PricingPlanList({
 
   if (catalog.plans.length === 0) {
     return (
-      <section className="grid gap-4 border-y border-border/70 py-8">
-        <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-          Plans in the current catalog
-        </h2>
+      <section className="border-b border-border/70 py-8">
         <p className="max-w-[40rem] text-sm leading-7 text-foreground/80 sm:text-base">
           No public plans are active right now. Pricing will appear here as soon
           as the current billing catalog has an active public plan.
@@ -105,17 +102,8 @@ export function PricingPlanList({
   }
 
   return (
-    <section className="grid gap-5">
-      <div className="grid gap-2">
-        <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-          Plans in the current catalog
-        </h2>
-        <p className="max-w-[42rem] text-sm leading-7 text-foreground/80 sm:text-base">
-          Current public plans, pricing, and included features for CodStats.
-        </p>
-      </div>
-
-      <div className="border-y border-border/70">
+    <section>
+      <div className="border-b border-border/70">
         {catalog.plans.map((plan) => (
           <article
             className="border-b border-border/70 py-5 last:border-b-0 sm:py-6"
