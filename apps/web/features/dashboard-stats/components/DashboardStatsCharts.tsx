@@ -63,6 +63,10 @@ const dailySrChartConfig = {
   },
 } satisfies ChartConfig
 
+const WIN_LOSS_RING_INNER_RADIUS = 72
+const WIN_LOSS_LOSSES_OUTER_RADIUS = 96
+const WIN_LOSS_WINS_OUTER_RADIUS = 104
+
 function getExactAxisDomain(values: number[], fallback: readonly [number, number]) {
   if (values.length === 0) {
     return fallback
@@ -464,13 +468,17 @@ export const DashboardStatsCharts = memo(function DashboardStatsCharts({
                   <Pie
                     data={winLossItems}
                     dataKey="value"
-                    innerRadius={72}
+                    innerRadius={WIN_LOSS_RING_INNER_RADIUS}
                     nameKey="key"
-                    outerRadius={96}
+                    outerRadius={(entry: { key?: string }) =>
+                      entry.key === "wins"
+                        ? WIN_LOSS_WINS_OUTER_RADIUS
+                        : WIN_LOSS_LOSSES_OUTER_RADIUS
+                    }
                     paddingAngle={3}
                   >
                     {winLossItems.map((item) => (
-                      <Cell key={item.key} fill={`var(--color-${item.key})`} />
+                      <Cell fill={`var(--color-${item.key})`} key={item.key} />
                     ))}
                   </Pie>
                 </PieChart>

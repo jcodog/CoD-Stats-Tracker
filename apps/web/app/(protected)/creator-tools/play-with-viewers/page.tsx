@@ -2,6 +2,7 @@ import { currentUser } from "@clerk/nextjs/server"
 import { notFound } from "next/navigation"
 
 import { PlayWithViewersDashboardView } from "@/features/creator-tools/play-with-viewers/views/PlayWithViewersDashboardView"
+import { createPageMetadata } from "@/lib/metadata/page"
 import { getCreatorToolsAccessState } from "@/lib/server/creator-tools-access"
 
 type ExternalAccountLike = {
@@ -79,6 +80,8 @@ function resolveCreatorDisplayName(user: CreatorIdentityLike) {
     getFallbackCreatorDisplayName(user)
   )
 }
+
+export const metadata = createPageMetadata("Play with Viewers")
 
 export default async function PlayWithViewersPage() {
   const [creatorToolsAccess, clerkUser] = await Promise.all([

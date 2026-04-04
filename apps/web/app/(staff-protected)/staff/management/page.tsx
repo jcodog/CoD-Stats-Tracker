@@ -3,7 +3,10 @@ import { fetchAction } from "convex/nextjs"
 import { api } from "@workspace/backend/convex/_generated/api"
 import { StaffAccessState } from "@/features/staff/components/StaffAccessState"
 import { StaffManagementView } from "@/features/staff/views/StaffManagementView"
+import { createPageMetadata } from "@/lib/metadata/page"
 import { requireStaffAccess } from "@/lib/server/staff-auth"
+
+export const metadata = createPageMetadata("Management")
 
 export default async function StaffManagementPage() {
   const access = await requireStaffAccess()

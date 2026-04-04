@@ -1,4 +1,6 @@
 import Link from "next/link"
+
+import { createPageMetadata } from "@/lib/metadata/page"
 import { Button } from "@workspace/ui/components/button"
 import {
   Card,
@@ -7,6 +9,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@workspace/ui/components/card"
+
+export const metadata = createPageMetadata("Checkout Cancelled")
 
 export default function CheckoutCancelPage() {
   return (

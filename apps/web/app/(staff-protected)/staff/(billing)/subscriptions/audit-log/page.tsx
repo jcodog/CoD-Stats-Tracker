@@ -4,7 +4,10 @@ import { api } from "@workspace/backend/convex/_generated/api"
 
 import { StaffAccessState } from "@/features/staff/components/StaffAccessState"
 import { StaffWebhookEventsView } from "@/features/staff/views/StaffWebhookEventsView"
+import { createPageMetadata } from "@/lib/metadata/page"
 import { requireAdminAccess } from "@/lib/server/staff-auth"
+
+export const metadata = createPageMetadata("Subscription Audit Log")
 
 export default async function StaffSubscriptionsAuditLogPage() {
   const access = await requireAdminAccess()
