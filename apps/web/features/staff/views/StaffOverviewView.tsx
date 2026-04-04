@@ -53,17 +53,6 @@ function formatDateTime(value: number | null | undefined) {
   }).format(value)
 }
 
-function formatDayLabel(value: number) {
-  if (!Number.isFinite(value)) {
-    return "Unknown"
-  }
-
-  return new Intl.DateTimeFormat("en-GB", {
-    day: "numeric",
-    month: "short",
-  }).format(value)
-}
-
 function getSyncBadge(args: StaffOverviewDashboard["lastSync"]) {
   if (!args) {
     return <Badge variant="outline">Not run yet</Badge>
@@ -102,18 +91,13 @@ export function StaffOverviewView({
     (sum, item) => sum + item.count,
     0
   )
-  const activityBreakdown = overview.activityTimeline.map(
-    ({ count, dayStart }) => ({
-      count,
-      label: formatDayLabel(dayStart),
-    })
-  )
-  const maxSubscriptionCount = Math.max(
-    ...subscriptionBreakdown.map((item) => item.count),
+  const recentActivityVolume = overview.activityTimeline.reduce(
+    (sum, item) => sum + item.count,
     0
   )
-  const maxActivityCount = Math.max(
-    ...activityBreakdown.map((item) => item.count),
+  const latestActivityAt = overview.recentActivity[0]?.createdAt
+  const maxSubscriptionCount = Math.max(
+    ...subscriptionBreakdown.map((item) => item.count),
     0
   )
 
@@ -182,7 +166,7 @@ export function StaffOverviewView({
         </StaffSection>
 
         <StaffSection
-          description="Current catalog coverage, sync state, and recent operator volume."
+          description="Current catalog coverage, billing sync state, and recent staff activity at a glance."
           title="Operational Snapshot"
         >
           <StaffKeyValueGrid
@@ -213,38 +197,16 @@ export function StaffOverviewView({
                 label: "Warnings",
                 value: overview.lastSync?.warningCount ?? 0,
               },
+              {
+                label: "7d staff events",
+                value: recentActivityVolume,
+              },
+              {
+                label: "Latest event",
+                value: formatDateTime(latestActivityAt),
+              },
             ]}
           />
-
-          <div className="mt-5 grid gap-3">
-            <div className="text-sm font-medium">Recent Activity Volume</div>
-            {maxActivityCount > 0 ? (
-              <div className="grid gap-4">
-                {activityBreakdown.map((item) => (
-                  <div className="grid gap-2" key={item.label}>
-                    <div className="flex items-center justify-between gap-4 text-sm">
-                      <div className="font-medium">{item.label}</div>
-                      <div className="text-muted-foreground tabular-nums">
-                        {item.count}
-                      </div>
-                    </div>
-                    <div className="h-2 bg-muted">
-                      <div
-                        className="h-full bg-foreground/70"
-                        style={{
-                          width: getBarWidth(item.count, maxActivityCount),
-                        }}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="flex min-h-40 items-center text-sm text-muted-foreground">
-                No recent staff events were recorded in the last 7 days.
-              </div>
-            )}
-          </div>
         </StaffSection>
       </div>
 
