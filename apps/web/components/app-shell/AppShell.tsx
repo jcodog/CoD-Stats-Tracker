@@ -15,6 +15,7 @@ import { Button } from "@workspace/ui/components/button"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { isFlagEnabled } from "@/lib/flags"
 import { AppUserButton } from "@/components/app-shell/AppUserButton"
+import { MobileProtectedSidebar } from "@/components/app-shell/MobileProtectedSidebar"
 
 type AppShellProps = {
   children: React.ReactNode
@@ -32,12 +33,26 @@ export async function AppShell({ children }: AppShellProps) {
     getParsedUserRoleState(clerkUser?.publicMetadata?.role).role ?? "user",
     "staff"
   )
+  const protectedNavItems = [
+    { href: "/dashboard", label: "Dashboard" },
+    ...(creatorToolsAccess.hasCreatorAccess
+      ? [
+          {
+            href: "/creator-tools/play-with-viewers",
+            label: "Play With Viewers",
+          },
+        ]
+      : []),
+    ...(checkoutEnabled
+      ? [{ href: "/settings/billing", label: "Billing" }]
+      : []),
+  ]
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <header className="sticky top-0 z-40 border-b border-border/70 bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/80">
         <div
-          className={`mx-auto flex w-full ${protectedShellWidthClass} flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8`}
+          className={`mx-auto flex w-full ${protectedShellWidthClass} items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8`}
         >
           <div className="flex items-center gap-3">
             <Link
@@ -57,27 +72,24 @@ export async function AppShell({ children }: AppShellProps) {
               aria-label="Protected"
               className="hidden items-center gap-2 md:flex"
             >
-              <Button asChild size="sm" variant="ghost">
-                <Link href="/dashboard">Dashboard</Link>
-              </Button>
-              {creatorToolsAccess.hasCreatorAccess ? (
-                <Button asChild size="sm" variant="ghost">
-                  <Link href="/creator-tools/play-with-viewers">
-                    Play With Viewers
-                  </Link>
+              {protectedNavItems.map((item) => (
+                <Button asChild key={item.href} size="sm" variant="ghost">
+                  <Link href={item.href}>{item.label}</Link>
                 </Button>
-              ) : null}
-              {checkoutEnabled ? (
-                <Button asChild size="sm" variant="ghost">
-                  <Link href="/settings/billing">Billing</Link>
-                </Button>
-              ) : null}
+              ))}
             </nav>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="hidden items-center gap-2 md:flex">
             <AppUserButton showStaffConsoleLink={showStaffConsoleLink} />
             <ThemeToggle />
+          </div>
+
+          <div className="flex items-center gap-2 md:hidden">
+            <MobileProtectedSidebar
+              navItems={protectedNavItems}
+              showStaffConsoleLink={showStaffConsoleLink}
+            />
           </div>
         </div>
       </header>
