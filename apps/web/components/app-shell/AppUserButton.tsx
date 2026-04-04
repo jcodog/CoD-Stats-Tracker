@@ -54,8 +54,6 @@ export function AppUserButton({
             }
           />
         ) : null}
-
-        <UserButton.Action label="signOut" />
       </UserButton.MenuItems>
     </UserButton>
   )
