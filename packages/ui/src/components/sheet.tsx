@@ -5,21 +5,77 @@ import { Dialog as SheetPrimitive } from "radix-ui"
 
 import { cn } from "@workspace/ui/lib/utils"
 import { Button } from "@workspace/ui/components/button"
+import {
+  Drawer,
+  DrawerClose,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerTrigger,
+} from "@workspace/ui/components/drawer"
+import { useIsMobile } from "@workspace/ui/hooks/use-mobile"
 import { IconX } from "@tabler/icons-react"
 
-function Sheet({ ...props }: React.ComponentProps<typeof SheetPrimitive.Root>) {
-  return <SheetPrimitive.Root data-slot="sheet" {...props} />
+const SheetViewportContext = React.createContext(false)
+
+type SheetRootProps = React.ComponentProps<typeof SheetPrimitive.Root> & {
+  mobileVariant?: "drawer" | "sheet"
+}
+
+function Sheet({
+  mobileVariant = "drawer",
+  ...props
+}: SheetRootProps) {
+  const isMobile = useIsMobile()
+  const useDrawer = isMobile && mobileVariant === "drawer"
+
+  return (
+    <SheetViewportContext.Provider value={useDrawer}>
+      {useDrawer ? (
+        <Drawer
+          data-slot="sheet"
+          {...(props as React.ComponentProps<typeof Drawer>)}
+        />
+      ) : (
+        <SheetPrimitive.Root data-slot="sheet" {...props} />
+      )}
+    </SheetViewportContext.Provider>
+  )
 }
 
 function SheetTrigger({
   ...props
 }: React.ComponentProps<typeof SheetPrimitive.Trigger>) {
+  const isMobile = React.useContext(SheetViewportContext)
+
+  if (isMobile) {
+    return (
+      <DrawerTrigger
+        data-slot="sheet-trigger"
+        {...(props as React.ComponentProps<typeof DrawerTrigger>)}
+      />
+    )
+  }
+
   return <SheetPrimitive.Trigger data-slot="sheet-trigger" {...props} />
 }
 
 function SheetClose({
   ...props
 }: React.ComponentProps<typeof SheetPrimitive.Close>) {
+  const isMobile = React.useContext(SheetViewportContext)
+
+  if (isMobile) {
+    return (
+      <DrawerClose
+        data-slot="sheet-close"
+        {...(props as React.ComponentProps<typeof DrawerClose>)}
+      />
+    )
+  }
+
   return <SheetPrimitive.Close data-slot="sheet-close" {...props} />
 }
 
@@ -55,6 +111,32 @@ function SheetContent({
   side?: "top" | "right" | "bottom" | "left"
   showCloseButton?: boolean
 }) {
+  const isMobile = React.useContext(SheetViewportContext)
+
+  if (isMobile) {
+    return (
+      <DrawerContent
+        data-slot="sheet-content"
+        className={cn("gap-4", className)}
+        {...(props as React.ComponentProps<typeof DrawerContent>)}
+      >
+        {children}
+        {showCloseButton ? (
+          <DrawerClose asChild>
+            <Button
+              variant="ghost"
+              className="absolute top-3 right-3"
+              size="icon-sm"
+            >
+              <IconX />
+              <span className="sr-only">Close</span>
+            </Button>
+          </DrawerClose>
+        ) : null}
+      </DrawerContent>
+    )
+  }
+
   return (
     <SheetPortal>
       <SheetOverlay />
@@ -87,6 +169,18 @@ function SheetContent({
 }
 
 function SheetHeader({ className, ...props }: React.ComponentProps<"div">) {
+  const isMobile = React.useContext(SheetViewportContext)
+
+  if (isMobile) {
+    return (
+      <DrawerHeader
+        data-slot="sheet-header"
+        className={className}
+        {...props}
+      />
+    )
+  }
+
   return (
     <div
       data-slot="sheet-header"
@@ -97,6 +191,18 @@ function SheetHeader({ className, ...props }: React.ComponentProps<"div">) {
 }
 
 function SheetFooter({ className, ...props }: React.ComponentProps<"div">) {
+  const isMobile = React.useContext(SheetViewportContext)
+
+  if (isMobile) {
+    return (
+      <DrawerFooter
+        data-slot="sheet-footer"
+        className={className}
+        {...props}
+      />
+    )
+  }
+
   return (
     <div
       data-slot="sheet-footer"
@@ -110,6 +216,18 @@ function SheetTitle({
   className,
   ...props
 }: React.ComponentProps<typeof SheetPrimitive.Title>) {
+  const isMobile = React.useContext(SheetViewportContext)
+
+  if (isMobile) {
+    return (
+      <DrawerTitle
+        data-slot="sheet-title"
+        className={className}
+        {...(props as React.ComponentProps<typeof DrawerTitle>)}
+      />
+    )
+  }
+
   return (
     <SheetPrimitive.Title
       data-slot="sheet-title"
@@ -123,6 +241,18 @@ function SheetDescription({
   className,
   ...props
 }: React.ComponentProps<typeof SheetPrimitive.Description>) {
+  const isMobile = React.useContext(SheetViewportContext)
+
+  if (isMobile) {
+    return (
+      <DrawerDescription
+        data-slot="sheet-description"
+        className={className}
+        {...(props as React.ComponentProps<typeof DrawerDescription>)}
+      />
+    )
+  }
+
   return (
     <SheetPrimitive.Description
       data-slot="sheet-description"

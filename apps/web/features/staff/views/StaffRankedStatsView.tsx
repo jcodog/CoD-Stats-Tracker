@@ -1,6 +1,7 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import type { Dispatch, SetStateAction } from "react"
+import { useState } from "react"
 import type { UserRole } from "@workspace/backend/convex/lib/staffRoles"
 import type {
   StaffMutationResponse,
@@ -103,6 +104,47 @@ function buildDefaultMapForm(titleKey = ""): MapFormState {
   }
 }
 
+function resolveCatalogTitleKey(
+  data: StaffRankedDashboard,
+  preferredTitleKey: string
+) {
+  if (preferredTitleKey && data.titles.some((title) => title.key === preferredTitleKey)) {
+    return preferredTitleKey
+  }
+
+  return data.currentConfig?.activeTitleKey ?? data.titles[0]?.key ?? ""
+}
+
+function normalizeModeForm(
+  form: ModeFormState,
+  data: StaffRankedDashboard,
+  fallbackTitleKey: string
+) {
+  if (form.titleKey && data.titles.some((title) => title.key === form.titleKey)) {
+    return form
+  }
+
+  return {
+    ...form,
+    titleKey: fallbackTitleKey,
+  }
+}
+
+function normalizeMapForm(
+  form: MapFormState,
+  data: StaffRankedDashboard,
+  fallbackTitleKey: string
+) {
+  if (form.titleKey && data.titles.some((title) => title.key === form.titleKey)) {
+    return form
+  }
+
+  return {
+    ...form,
+    titleKey: fallbackTitleKey,
+  }
+}
+
 export function StaffRankedStatsView({
   initialData,
 }: {
@@ -110,15 +152,19 @@ export function StaffRankedStatsView({
 }) {
   const { data } = useStaffRankedDashboard(initialData)
   const rankedClient = useStaffRankedClient()
-  const initialCatalogTitleKey =
+  const initialCatalogTitleKey = resolveCatalogTitleKey(
+    initialData,
     initialData.currentConfig?.activeTitleKey ?? initialData.titles[0]?.key ?? ""
-  const [catalogTitleKey, setCatalogTitleKey] = useState(initialCatalogTitleKey)
-  const [configForm, setConfigForm] = useState(() => buildDefaultConfigForm(initialData))
+  )
+  const [catalogTitleKeyDraft, setCatalogTitleKeyDraft] =
+    useState(initialCatalogTitleKey)
+  const [configFormDraft, setConfigFormDraft] =
+    useState<ConfigFormState | null>(null)
   const [titleForm, setTitleForm] = useState<TitleFormState>(buildDefaultTitleForm)
-  const [modeForm, setModeForm] = useState<ModeFormState>(() =>
+  const [modeFormState, setModeFormState] = useState<ModeFormState>(() =>
     buildDefaultModeForm(initialCatalogTitleKey)
   )
-  const [mapForm, setMapForm] = useState<MapFormState>(() =>
+  const [mapFormState, setMapFormState] = useState<MapFormState>(() =>
     buildDefaultMapForm(initialCatalogTitleKey)
   )
   const rankedMutation = useStaffMutation<RankedActionRequest, StaffMutationResponse>({
@@ -127,30 +173,36 @@ export function StaffRankedStatsView({
   })
   const adminEnabled = isAdminRole(data.actorRole)
   const activeTitleOptions = data.titles.filter((title) => title.isActive)
+  const catalogTitleKey = resolveCatalogTitleKey(data, catalogTitleKeyDraft)
+  const configForm = configFormDraft ?? buildDefaultConfigForm(data)
+  const modeForm = normalizeModeForm(modeFormState, data, catalogTitleKey)
+  const mapForm = normalizeMapForm(mapFormState, data, catalogTitleKey)
 
-  useEffect(() => {
-    setConfigForm(buildDefaultConfigForm(data))
-  }, [
-    data.currentConfig?.activeSeason,
-    data.currentConfig?.activeTitleKey,
-    data.titles,
-  ])
+  const setModeForm: Dispatch<SetStateAction<ModeFormState>> = (updater) => {
+    setModeFormState((current) => {
+      const normalizedCurrent = normalizeModeForm(current, data, catalogTitleKey)
+      return typeof updater === "function"
+        ? (updater as (current: ModeFormState) => ModeFormState)(
+            normalizedCurrent
+          )
+        : updater
+    })
+  }
 
-  useEffect(() => {
-    if (
-      catalogTitleKey &&
-      data.titles.some((title) => title.key === catalogTitleKey)
-    ) {
-      return
-    }
+  const setMapForm: Dispatch<SetStateAction<MapFormState>> = (updater) => {
+    setMapFormState((current) => {
+      const normalizedCurrent = normalizeMapForm(current, data, catalogTitleKey)
+      return typeof updater === "function"
+        ? (updater as (current: MapFormState) => MapFormState)(
+            normalizedCurrent
+          )
+        : updater
+    })
+  }
 
-    const fallbackTitleKey =
-      data.currentConfig?.activeTitleKey ?? data.titles[0]?.key ?? ""
-
-    setCatalogTitleKey(fallbackTitleKey)
-    setModeForm(buildDefaultModeForm(fallbackTitleKey))
-    setMapForm(buildDefaultMapForm(fallbackTitleKey))
-  }, [catalogTitleKey, data.currentConfig?.activeTitleKey, data.titles])
+  function updateConfigForm(updater: (current: ConfigFormState) => ConfigFormState) {
+    setConfigFormDraft((current) => updater(current ?? buildDefaultConfigForm(data)))
+  }
 
   async function runRankedAction(request: RankedActionRequest) {
     try {
@@ -175,7 +227,7 @@ export function StaffRankedStatsView({
         throw new Error("Select an active title before saving the ranked config.")
       }
 
-      await runRankedAction({
+      const succeeded = await runRankedAction({
         action: "setCurrentRankedConfig",
         input: {
           activeSeason,
@@ -183,6 +235,10 @@ export function StaffRankedStatsView({
           sessionWritesEnabled: configForm.sessionWritesEnabled,
         },
       })
+
+      if (succeeded) {
+        setConfigFormDraft(null)
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Invalid ranked config.")
     }
@@ -206,14 +262,17 @@ export function StaffRankedStatsView({
         const nextCatalogTitleKey = titleForm.key || catalogTitleKey
         setTitleForm(buildDefaultTitleForm())
         if (nextCatalogTitleKey) {
-          setCatalogTitleKey(nextCatalogTitleKey)
-          setModeForm(buildDefaultModeForm(nextCatalogTitleKey))
-          setMapForm(buildDefaultMapForm(nextCatalogTitleKey))
+          setCatalogTitleKeyDraft(nextCatalogTitleKey)
+          setModeFormState(buildDefaultModeForm(nextCatalogTitleKey))
+          setMapFormState(buildDefaultMapForm(nextCatalogTitleKey))
         }
+        return true
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Invalid title details.")
     }
+
+    return false
   }
 
   async function handleModeSubmit() {
@@ -237,11 +296,14 @@ export function StaffRankedStatsView({
       })
 
       if (succeeded) {
-        setModeForm(buildDefaultModeForm(modeForm.titleKey))
+        setModeFormState(buildDefaultModeForm(modeForm.titleKey))
+        return true
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Invalid mode details.")
     }
+
+    return false
   }
 
   async function handleMapSubmit() {
@@ -265,17 +327,20 @@ export function StaffRankedStatsView({
       })
 
       if (succeeded) {
-        setMapForm(buildDefaultMapForm(mapForm.titleKey))
+        setMapFormState(buildDefaultMapForm(mapForm.titleKey))
+        return true
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Invalid map details.")
     }
+
+    return false
   }
 
   function handleCatalogTitleChange(nextTitleKey: string) {
-    setCatalogTitleKey(nextTitleKey)
-    setModeForm(buildDefaultModeForm(nextTitleKey))
-    setMapForm(buildDefaultMapForm(nextTitleKey))
+    setCatalogTitleKeyDraft(nextTitleKey)
+    setModeFormState(buildDefaultModeForm(nextTitleKey))
+    setMapFormState(buildDefaultMapForm(nextTitleKey))
   }
 
   return (
@@ -308,13 +373,13 @@ export function StaffRankedStatsView({
             : null
         }
         onActiveSeasonChange={(value) =>
-          setConfigForm((current) => ({
+          updateConfigForm((current) => ({
             ...current,
             activeSeason: value,
           }))
         }
         onActiveTitleChange={(value) =>
-          setConfigForm((current) => ({
+          updateConfigForm((current) => ({
             ...current,
             activeTitleKey: value,
           }))
@@ -323,7 +388,7 @@ export function StaffRankedStatsView({
           void handleConfigSubmit()
         }}
         onSessionWritesEnabledChange={(value) =>
-          setConfigForm((current) => ({
+          updateConfigForm((current) => ({
             ...current,
             sessionWritesEnabled: value,
           }))
@@ -340,18 +405,12 @@ export function StaffRankedStatsView({
           modeForm={modeForm}
           modes={data.modes}
           onCatalogTitleChange={handleCatalogTitleChange}
-          onResetMap={() => setMapForm(buildDefaultMapForm(catalogTitleKey))}
-          onResetMode={() => setModeForm(buildDefaultModeForm(catalogTitleKey))}
+          onResetMap={() => setMapFormState(buildDefaultMapForm(catalogTitleKey))}
+          onResetMode={() => setModeFormState(buildDefaultModeForm(catalogTitleKey))}
           onResetTitle={() => setTitleForm(buildDefaultTitleForm())}
-          onSaveMap={() => {
-            void handleMapSubmit()
-          }}
-          onSaveMode={() => {
-            void handleModeSubmit()
-          }}
-          onSaveTitle={() => {
-            void handleTitleSubmit()
-          }}
+          onSaveMap={handleMapSubmit}
+          onSaveMode={handleModeSubmit}
+          onSaveTitle={handleTitleSubmit}
           pending={rankedMutation.isPending}
           setMapForm={setMapForm}
           setModeForm={setModeForm}

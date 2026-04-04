@@ -42,7 +42,7 @@ export function BillingSummary(args: {
                 </CardDescription>
               </div>
               <div className="flex items-start justify-between gap-4">
-                <div className="min-h-[5.75rem] min-w-0 space-y-1">
+                <div className="min-h-23 min-w-0 space-y-1">
                   <div className="text-lg font-semibold">{args.plan.name}</div>
                   <div className="line-clamp-3 text-sm text-muted-foreground">
                     {args.plan.description}

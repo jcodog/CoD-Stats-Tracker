@@ -1,15 +1,6 @@
-import type { ReactNode } from "react"
-
 import type { AuditLogResult } from "@workspace/backend/convex/lib/staffRoles"
 import type { StaffOverviewDashboard } from "@workspace/backend/convex/lib/staffTypes"
 import { Badge } from "@workspace/ui/components/badge"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@workspace/ui/components/card"
 import {
   Table,
   TableBody,
@@ -19,6 +10,12 @@ import {
   TableRow,
 } from "@workspace/ui/components/table"
 
+import {
+  StaffKeyValueGrid,
+  StaffMetricStrip,
+  StaffPageIntro,
+  StaffSection,
+} from "@/features/staff/components/StaffConsolePrimitives"
 import { STAFF_CONSOLE_TITLE } from "@/features/staff/lib/staff-navigation"
 
 function getAuditResultVariant(result: AuditLogResult) {
@@ -83,43 +80,6 @@ function getSyncBadge(args: StaffOverviewDashboard["lastSync"]) {
   return <Badge variant="outline">Warnings</Badge>
 }
 
-function SummaryPanel({
-  description,
-  rows,
-  title,
-}: {
-  description: string
-  rows: Array<{
-    label: string
-    value: ReactNode
-  }>
-  title: string
-}) {
-  return (
-    <Card className="border-border/70">
-      <CardHeader className="pb-3">
-        <CardTitle>{title}</CardTitle>
-        <CardDescription>{description}</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <dl className="grid gap-3">
-          {rows.map((row) => (
-            <div
-              className="flex min-w-0 items-baseline justify-between gap-4"
-              key={row.label}
-            >
-              <dt className="text-sm text-muted-foreground">{row.label}</dt>
-              <dd className="text-right text-sm font-semibold tabular-nums">
-                {row.value}
-              </dd>
-            </div>
-          ))}
-        </dl>
-      </CardContent>
-    </Card>
-  )
-}
-
 export function StaffOverviewView({
   overview,
 }: {
@@ -159,152 +119,105 @@ export function StaffOverviewView({
 
   return (
     <div className="flex flex-1 flex-col gap-8">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-semibold tracking-tight text-balance">
-          Overview
-        </h1>
-        <p className="max-w-3xl text-sm text-muted-foreground">
-          Monitor user coverage, billing health, and recent privileged activity
-          from the {` ${STAFF_CONSOLE_TITLE.toLowerCase()}`}.
-        </p>
-      </div>
+      <StaffPageIntro
+        description={
+          <>
+            Monitor user coverage, billing health, and recent privileged
+            activity from the {STAFF_CONSOLE_TITLE.toLowerCase()}.
+          </>
+        }
+        title="Overview"
+      />
 
-      <div className="grid gap-4 xl:grid-cols-4">
-        <SummaryPanel
-          description="Role counts derived from tracked Convex user records."
-          rows={[
-            {
-              label: "Tracked users",
-              value: overview.counts.trackedUsers,
-            },
-            {
-              label: "Staff",
-              value: overview.counts.staffUsers,
-            },
-            {
-              label: "Admins",
-              value: overview.counts.adminUsers,
-            },
-            {
-              label: "Super-admins",
-              value: overview.counts.superAdminUsers,
-            },
-          ]}
-          title="People"
-        />
-        <SummaryPanel
-          description="Current catalog coverage and sync gaps that still need cleanup."
-          rows={[
-            {
-              label: "Plans",
-              value: overview.counts.billingPlans,
-            },
-            {
-              label: "Features",
-              value: overview.counts.billingFeatures,
-            },
-            {
-              label: "Need sync attention",
-              value: overview.counts.syncAttentionPlans,
-            },
-          ]}
-          title="Catalog"
-        />
-        <SummaryPanel
-          description="Subscriptions currently in scope for billing and support follow-up."
-          rows={[
-            {
-              label: "Active or trialing",
-              value: overview.counts.activeSubscriptions,
-            },
-            {
-              label: "Need attention",
-              value: overview.counts.attentionSubscriptions,
-            },
-            {
-              label: "Cancel at period end",
-              value: overview.cancelAtPeriodEndCount,
-            },
-          ]}
-          title="Subscriptions"
-        />
-        <SummaryPanel
-          description={
-            overview.lastSync?.summary ??
-            "A Stripe catalog sync has not been recorded yet."
-          }
-          rows={[
-            {
-              label: "Status",
-              value: getSyncBadge(overview.lastSync),
-            },
-            {
-              label: "Warnings",
-              value: overview.lastSync?.warningCount ?? 0,
-            },
-            {
-              label: "Last run",
-              value: formatDateTime(overview.lastSync?.syncedAt),
-            },
-          ]}
-          title="Latest Sync"
-        />
-      </div>
+      <StaffMetricStrip
+        items={[
+          { label: "Tracked users", value: overview.counts.trackedUsers },
+          { label: "Staff", value: overview.counts.staffUsers },
+          { label: "Admins", value: overview.counts.adminUsers },
+          {
+            label: "Super-admins",
+            value: overview.counts.superAdminUsers,
+          },
+        ]}
+      />
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
-        <Card className="border-border/70">
-          <CardHeader className="flex flex-row items-start justify-between gap-3">
-            <div className="flex flex-col gap-1">
-              <CardTitle>Subscription Health</CardTitle>
-              <CardDescription>
-                Current subscription distribution across the statuses staff can
-                act on.
-              </CardDescription>
-            </div>
-            {overview.cancelAtPeriodEndCount > 0 ? (
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
+        <StaffSection
+          action={
+            overview.cancelAtPeriodEndCount > 0 ? (
               <Badge variant="outline">
                 {overview.cancelAtPeriodEndCount} canceling at period end
               </Badge>
-            ) : null}
-          </CardHeader>
-          <CardContent>
-            {totalSubscriptions > 0 ? (
-              <div className="grid gap-4">
-                {subscriptionBreakdown.map((item) => (
-                  <div className="grid gap-2" key={item.label}>
-                    <div className="flex items-center justify-between gap-4 text-sm">
-                      <div className="font-medium">{item.label}</div>
-                      <div className="text-muted-foreground tabular-nums">
-                        {item.count}
-                      </div>
-                    </div>
-                    <div className="h-2 rounded-full bg-muted">
-                      <div
-                        className="h-full rounded-full bg-foreground/80"
-                        style={{
-                          width: getBarWidth(item.count, maxSubscriptionCount),
-                        }}
-                      />
+            ) : null
+          }
+          description="Current subscription distribution across the statuses staff can act on."
+          title="Subscription Health"
+        >
+          {totalSubscriptions > 0 ? (
+            <div className="grid gap-4">
+              {subscriptionBreakdown.map((item) => (
+                <div className="grid gap-2" key={item.label}>
+                  <div className="flex items-center justify-between gap-4 text-sm">
+                    <div className="font-medium">{item.label}</div>
+                    <div className="text-muted-foreground tabular-nums">
+                      {item.count}
                     </div>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <div className="flex h-[220px] items-center justify-center text-sm text-muted-foreground">
-                No in-scope subscription records are currently available.
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                  <div className="h-2 bg-muted">
+                    <div
+                      className="h-full bg-foreground/80"
+                      style={{
+                        width: getBarWidth(item.count, maxSubscriptionCount),
+                      }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="flex min-h-55 items-center text-sm text-muted-foreground">
+              No in-scope subscription records are currently available.
+            </div>
+          )}
+        </StaffSection>
 
-        <Card className="border-border/70">
-          <CardHeader>
-            <CardTitle>Recent Activity Volume</CardTitle>
-            <CardDescription>
-              Staff events captured over the last 7 days.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+        <StaffSection
+          description="Current catalog coverage, sync state, and recent operator volume."
+          title="Operational Snapshot"
+        >
+          <StaffKeyValueGrid
+            rows={[
+              { label: "Plans", value: overview.counts.billingPlans },
+              { label: "Features", value: overview.counts.billingFeatures },
+              {
+                label: "Need sync attention",
+                value: overview.counts.syncAttentionPlans,
+              },
+              {
+                label: "Active or trialing",
+                value: overview.counts.activeSubscriptions,
+              },
+              {
+                label: "Need attention",
+                value: overview.counts.attentionSubscriptions,
+              },
+              {
+                label: "Last sync",
+                value: formatDateTime(overview.lastSync?.syncedAt),
+              },
+              {
+                label: "Sync status",
+                value: getSyncBadge(overview.lastSync),
+              },
+              {
+                label: "Warnings",
+                value: overview.lastSync?.warningCount ?? 0,
+              },
+            ]}
+          />
+
+          <div className="mt-5 grid gap-3">
+            <div className="text-sm font-medium">Recent Activity Volume</div>
             {maxActivityCount > 0 ? (
               <div className="grid gap-4">
                 {activityBreakdown.map((item) => (
@@ -315,9 +228,9 @@ export function StaffOverviewView({
                         {item.count}
                       </div>
                     </div>
-                    <div className="h-2 rounded-full bg-muted">
+                    <div className="h-2 bg-muted">
                       <div
-                        className="h-full rounded-full bg-foreground/70"
+                        className="h-full bg-foreground/70"
                         style={{
                           width: getBarWidth(item.count, maxActivityCount),
                         }}
@@ -327,23 +240,19 @@ export function StaffOverviewView({
                 ))}
               </div>
             ) : (
-              <div className="flex h-[220px] items-center justify-center text-sm text-muted-foreground">
+              <div className="flex min-h-40 items-center text-sm text-muted-foreground">
                 No recent staff events were recorded in the last 7 days.
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </StaffSection>
       </div>
 
-      <Card className="border-border/70">
-        <CardHeader>
-          <CardTitle>Recent Activity</CardTitle>
-          <CardDescription>
-            The latest staff events that are relevant to the current operator
-            role.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="p-0">
+      <StaffSection
+        contentClassName="overflow-x-auto p-0 pr-3 pb-3"
+        description="The latest staff events that are relevant to the current operator role."
+        title="Recent Activity"
+      >
           {overview.recentActivity.length > 0 ? (
             <Table>
               <TableHeader>
@@ -388,8 +297,7 @@ export function StaffOverviewView({
               No recent staff activity is currently available.
             </div>
           )}
-        </CardContent>
-      </Card>
+      </StaffSection>
     </div>
   )
 }

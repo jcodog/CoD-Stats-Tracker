@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import type { ColumnDef } from "@tanstack/react-table"
 import { IconCopy, IconReload } from "@tabler/icons-react"
@@ -14,13 +14,6 @@ import type {
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@workspace/ui/components/card"
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -30,6 +23,12 @@ import {
 import { ScrollArea } from "@workspace/ui/components/scroll-area"
 import { toast } from "sonner"
 
+import {
+  StaffKeyValueGrid,
+  StaffMetricStrip,
+  StaffPageIntro,
+  StaffSection,
+} from "@/features/staff/components/StaffConsolePrimitives"
 import { StaffDataTable } from "@/features/staff/components/StaffDataTable"
 import {
   StaffMultiFilterCombobox,
@@ -54,25 +53,6 @@ function formatDateTime(value: number) {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(value)
-}
-
-function MetricCard({
-  label,
-  value,
-}: {
-  label: string
-  value: string | number
-}) {
-  return (
-    <Card className="border-border/70">
-      <CardHeader className="pb-2">
-        <CardDescription>{label}</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-semibold tracking-tight">{value}</div>
-      </CardContent>
-    </Card>
-  )
 }
 
 function WebhookStatusBadge({
@@ -208,7 +188,7 @@ export function StaffWebhookEventsView({
 }: {
   initialData: StaffWebhookLedgerDashboard
 }) {
-  const { data, refetch } = useStaffWebhookLedgerDashboard(initialData)
+  const { data } = useStaffWebhookLedgerDashboard(initialData)
   const queryClient = useQueryClient()
   const webhookClient = useStaffWebhookClient()
   const [selectedEventId, setSelectedEventId] =
@@ -328,14 +308,6 @@ export function StaffWebhookEventsView({
     return true
   })
 
-  useEffect(() => {
-    if (!detailQuery.data) {
-      return
-    }
-
-    void queryClient.invalidateQueries({ queryKey: staffQueryKeys.webhooks })
-  }, [detailQuery.data?.id, detailQuery.data?.payloadState, queryClient])
-
   const columns: Array<ColumnDef<StaffWebhookLedgerRecord>> = [
     {
       accessorKey: "receivedAt",
@@ -429,7 +401,6 @@ export function StaffWebhookEventsView({
     try {
       const result = await refreshLedgerMutation.mutateAsync()
       toast.success(result.summary)
-      await refetch()
     } catch (error) {
       toast.error(
         error instanceof StaffClientError
@@ -439,50 +410,41 @@ export function StaffWebhookEventsView({
     }
   }
 
+  async function handleRetryPayload() {
+    const result = await detailQuery.refetch()
+
+    if (result.error) {
+      toast.error(
+        result.error instanceof StaffClientError
+          ? result.error.message
+          : "Could not load that webhook payload."
+      )
+      return
+    }
+
+    await queryClient.invalidateQueries({ queryKey: staffQueryKeys.webhooks })
+  }
+
   return (
     <div className="flex w-full flex-1 flex-col gap-8">
-      <div className="space-y-2">
-        <div className="space-y-1">
-          <h1 className="text-3xl font-semibold tracking-tight">
-            Subscription audit log
-          </h1>
-          <p className="max-w-3xl text-sm text-muted-foreground sm:text-base">
-            Review Stripe webhook deliveries tied to subscription billing,
-            payload retention, and the raw event bodies captured for
-            reconciliation.
-          </p>
-        </div>
-        <div className="text-sm text-muted-foreground">
-          Last refreshed {formatDateTime(data.generatedAt)}
-        </div>
-      </div>
+      <StaffPageIntro
+        description="Review Stripe webhook deliveries tied to subscription billing, payload retention, and the raw event bodies captured for reconciliation."
+        meta={<>Last refreshed {formatDateTime(data.generatedAt)}</>}
+        title="Subscription Audit Log"
+      />
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard
-          label="Recorded deliveries"
-          value={data.metrics.totalCount}
-        />
-        <MetricCard
-          label="Failed deliveries"
-          value={data.metrics.failedCount}
-        />
-        <MetricCard label="Pending processing" value={pendingDeliveryCount} />
-        <MetricCard label="Payload gaps" value={payloadGapCount} />
-      </div>
+      <StaffMetricStrip
+        items={[
+          { label: "Recorded deliveries", value: data.metrics.totalCount },
+          { label: "Failed deliveries", value: data.metrics.failedCount },
+          { label: "Pending processing", value: pendingDeliveryCount },
+          { label: "Payload gaps", value: payloadGapCount },
+        ]}
+      />
 
       {payloadGapCount > 0 ? (
-        <Card className="border-border/70">
-          <CardContent className="flex flex-col gap-2 px-5 py-4 text-sm md:flex-row md:items-center md:justify-between">
-            <div className="space-y-1">
-              <div className="font-medium">
-                Historical payload coverage is incomplete.
-              </div>
-              <div className="text-muted-foreground">
-                Missing payloads are backfilled when an event is opened. Some
-                older Stripe events can no longer be retrieved once they fall
-                outside Stripe&apos;s retention window.
-              </div>
-            </div>
+        <StaffSection
+          action={
             <Button
               disabled={refreshLedgerMutation.isPending}
               onClick={() => void handleRefreshLedger()}
@@ -491,121 +453,71 @@ export function StaffWebhookEventsView({
             >
               <IconReload data-icon="inline-start" />
               {refreshLedgerMutation.isPending
-                ? "Refreshing ledger..."
+                ? "Refreshing ledger…"
                 : "Refresh ledger"}
             </Button>
-          </CardContent>
-        </Card>
+          }
+          description="Missing payloads are backfilled when an event is opened. Some older Stripe events can no longer be retrieved once they fall outside Stripe retention."
+          title="Payload Coverage"
+        >
+          <div className="text-sm font-medium">
+            Historical payload coverage is incomplete.
+          </div>
+        </StaffSection>
       ) : null}
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-        <Card className="border-border/70">
-          <CardHeader>
-            <CardTitle>Ledger posture</CardTitle>
-            <CardDescription>
-              Operational status across recorded events and payload retention.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-4">
-            <div className="rounded-lg border border-border/70 bg-muted/20 px-4 py-4">
-              <div className="grid gap-3 text-sm">
-                <div className="flex items-center justify-between gap-4">
-                  <span className="text-muted-foreground">Last received</span>
-                  <span className="font-medium">
-                    {data.metrics.lastReceivedAt
-                      ? formatDateTime(data.metrics.lastReceivedAt)
-                      : "Not yet"}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between gap-4">
-                  <span className="text-muted-foreground">Last processed</span>
-                  <span className="font-medium">
-                    {data.metrics.lastProcessedAt
-                      ? formatDateTime(data.metrics.lastProcessedAt)
-                      : "Not yet"}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between gap-4">
-                  <span className="text-muted-foreground">Received rows</span>
-                  <span className="font-medium">
-                    {data.metrics.receivedCount}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between gap-4">
-                  <span className="text-muted-foreground">Processing rows</span>
-                  <span className="font-medium">
-                    {data.metrics.processingCount}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between gap-4">
-                  <span className="text-muted-foreground">Ignored rows</span>
-                  <span className="font-medium">
-                    {data.metrics.ignoredCount}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between gap-4">
-                  <span className="text-muted-foreground">
-                    Unavailable payloads
-                  </span>
-                  <span className="font-medium">
-                    {data.metrics.unavailablePayloadCount}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <StaffSection
+          description="Operational status across recorded events and payload retention."
+          title="Ledger Posture"
+        >
+          <StaffKeyValueGrid
+            rows={[
+              {
+                label: "Last received",
+                value: data.metrics.lastReceivedAt
+                  ? formatDateTime(data.metrics.lastReceivedAt)
+                  : "Not yet",
+              },
+              {
+                label: "Last processed",
+                value: data.metrics.lastProcessedAt
+                  ? formatDateTime(data.metrics.lastProcessedAt)
+                  : "Not yet",
+              },
+              { label: "Received rows", value: data.metrics.receivedCount },
+              { label: "Processing rows", value: data.metrics.processingCount },
+              { label: "Ignored rows", value: data.metrics.ignoredCount },
+              {
+                label: "Unavailable payloads",
+                value: data.metrics.unavailablePayloadCount,
+              },
+            ]}
+          />
+        </StaffSection>
 
-        <Card className="border-border/70">
-          <CardHeader>
-            <CardTitle>Processing posture</CardTitle>
-            <CardDescription>
-              Current reconciliation state across processed, failed, and
-              retriable payload rows.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-4">
-            <div className="rounded-lg border border-border/70 bg-muted/20 px-4 py-4">
-              <div className="grid gap-3 text-sm">
-                <div className="flex items-center justify-between gap-4">
-                  <span className="text-muted-foreground">Processed rows</span>
-                  <span className="font-medium">
-                    {data.metrics.processedCount}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between gap-4">
-                  <span className="text-muted-foreground">Failed rows</span>
-                  <span className="font-medium">
-                    {data.metrics.failedCount}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between gap-4">
-                  <span className="text-muted-foreground">
-                    Missing payloads
-                  </span>
-                  <span className="font-medium">
-                    {data.metrics.missingPayloadCount}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between gap-4">
-                  <span className="text-muted-foreground">Total events</span>
-                  <span className="font-medium">{data.metrics.totalCount}</span>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <StaffSection
+          description="Current reconciliation state across processed, failed, and retriable payload rows."
+          title="Processing Posture"
+        >
+          <StaffKeyValueGrid
+            rows={[
+              { label: "Processed rows", value: data.metrics.processedCount },
+              { label: "Failed rows", value: data.metrics.failedCount },
+              {
+                label: "Missing payloads",
+                value: data.metrics.missingPayloadCount,
+              },
+              { label: "Total events", value: data.metrics.totalCount },
+            ]}
+          />
+        </StaffSection>
       </div>
 
-      <Card className="border-border/70">
-        <CardHeader>
-          <CardTitle>Stripe webhook ledger</CardTitle>
-          <CardDescription>
-            Every recorded Stripe webhook delivery. Open a row to inspect the
-            raw event body retained by Convex.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+      <StaffSection
+        description="Every recorded Stripe webhook delivery. Open a row to inspect the raw event body retained by Convex."
+        title="Stripe Webhook Ledger"
+      >
           <StaffDataTable
             columns={columns}
             data={filteredEvents}
@@ -633,8 +545,7 @@ export function StaffWebhookEventsView({
               </div>
             }
           />
-        </CardContent>
-      </Card>
+      </StaffSection>
 
       <Dialog
         open={selectedEventId !== null}
@@ -676,7 +587,7 @@ export function StaffWebhookEventsView({
                 <PayloadStateBadge state={detailQuery.data.payloadState} />
                 {detailQuery.data.payloadState !== "available" ? (
                   <Button
-                    onClick={() => void detailQuery.refetch()}
+                    onClick={() => void handleRetryPayload()}
                     size="sm"
                     type="button"
                     variant="outline"

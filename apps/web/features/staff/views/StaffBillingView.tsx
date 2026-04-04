@@ -18,6 +18,18 @@ import { resolveAppPlanKey } from "@workspace/backend/convex/lib/billingAccess"
 import type { UserRole } from "@workspace/backend/convex/lib/staffRoles"
 import { AppSelect } from "@/components/AppSelect"
 import {
+  StaffKeyValueGrid,
+  StaffMetricStrip,
+  StaffPageIntro,
+  StaffSection,
+} from "@/features/staff/components/StaffConsolePrimitives"
+import { StaffDataTable } from "@/features/staff/components/StaffDataTable"
+import {
+  StaffMultiFilterCombobox,
+  type StaffFilterGroup,
+  type StaffFilterSelection,
+} from "@/features/staff/components/StaffMultiFilterCombobox"
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -29,13 +41,6 @@ import {
 } from "@workspace/ui/components/alert-dialog"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@workspace/ui/components/card"
 import {
   Combobox,
   ComboboxChip,
@@ -81,12 +86,6 @@ import {
 import { Textarea } from "@workspace/ui/components/textarea"
 import { toast } from "sonner"
 
-import { StaffDataTable } from "@/features/staff/components/StaffDataTable"
-import {
-  StaffMultiFilterCombobox,
-  type StaffFilterGroup,
-  type StaffFilterSelection,
-} from "@/features/staff/components/StaffMultiFilterCombobox"
 import {
   getStaffBillingSectionConfig,
   type StaffBillingSection,
@@ -288,25 +287,6 @@ function BillingSubscriptionStatusBadge({ status }: { status: string }) {
   }
 
   return <Badge variant="outline">{status}</Badge>
-}
-
-function MetricCard({
-  label,
-  value,
-}: {
-  label: string
-  value: string | number
-}) {
-  return (
-    <Card className="border-border/70">
-      <CardHeader className="pb-2">
-        <CardDescription>{label}</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-semibold tracking-tight">{value}</div>
-      </CardContent>
-    </Card>
-  )
 }
 
 function BillingAttentionBadge({
@@ -825,8 +805,12 @@ export function StaffBillingView({
       cell: ({ row }) => (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button size="icon" variant="ghost">
-              <IconDotsVertical />
+            <Button
+              aria-label={`Manage plan ${row.original.name}`}
+              size="icon"
+              variant="ghost"
+            >
+              <IconDotsVertical aria-hidden="true" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
@@ -944,8 +928,12 @@ export function StaffBillingView({
       cell: ({ row }) => (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button size="icon" variant="ghost">
-              <IconDotsVertical />
+            <Button
+              aria-label={`Manage feature ${row.original.name}`}
+              size="icon"
+              variant="ghost"
+            >
+              <IconDotsVertical aria-hidden="true" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
@@ -1555,130 +1543,103 @@ export function StaffBillingView({
 
   return (
     <div className="flex flex-1 flex-col gap-8">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-semibold tracking-tight">
-          {sectionConfig.title}
-        </h1>
-        <p className="max-w-3xl text-sm text-muted-foreground">
-          {sectionConfig.description}
-        </p>
-      </div>
+      <StaffPageIntro
+        description={sectionConfig.description}
+        meta={
+          data.lastSync ? (
+            <>
+              Last sync {data.lastSync.result} at{" "}
+              {formatDateTime(data.lastSync.syncedAt)}.
+            </>
+          ) : (
+            "No Stripe catalog sync has completed yet."
+          )
+        }
+        title={sectionConfig.title}
+      />
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-        <MetricCard label="Plans" value={data.plans.length} />
-        <MetricCard label="Features" value={data.features.length} />
-        <MetricCard label="Customers" value={data.customers.length} />
-        <MetricCard
-          label="Active subscriptions"
-          value={data.activeSubscriptionCount}
-        />
-        <MetricCard
-          label="Last sync"
-          value={data.lastSync ? data.lastSync.result : "Never"}
-        />
-      </div>
+      <StaffMetricStrip
+        columnsClassName="md:grid-cols-2 xl:grid-cols-5"
+        items={[
+          { label: "Plans", value: data.plans.length },
+          { label: "Features", value: data.features.length },
+          { label: "Customers", value: data.customers.length },
+          { label: "Active subscriptions", value: data.activeSubscriptionCount },
+          {
+            label: "Last sync",
+            value: data.lastSync ? data.lastSync.result : "Never",
+          },
+        ]}
+      />
 
       {section === "catalog-overview" ? (
         <div className="grid gap-6">
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
-            <Card className="border-border/70">
-              <CardHeader>
-                <CardTitle>Catalog posture</CardTitle>
-                <CardDescription>
-                  Current plan and feature coverage, plus the sync issues that
-                  still need follow-up.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="grid gap-4">
-                <div className="flex items-center justify-between gap-4 text-sm">
-                  <span className="text-muted-foreground">Active plans</span>
-                  <span className="font-medium">
-                    {data.plans.length - archivedPlanCount}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between gap-4 text-sm">
-                  <span className="text-muted-foreground">Archived plans</span>
-                  <span className="font-medium">{archivedPlanCount}</span>
-                </div>
-                <div className="flex items-center justify-between gap-4 text-sm">
-                  <span className="text-muted-foreground">Active features</span>
-                  <span className="font-medium">
-                    {data.features.length - archivedFeatureCount}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between gap-4 text-sm">
-                  <span className="text-muted-foreground">
-                    Archived features
-                  </span>
-                  <span className="font-medium">{archivedFeatureCount}</span>
-                </div>
-                <div className="flex items-center justify-between gap-4 text-sm">
-                  <span className="text-muted-foreground">
-                    Plans needing sync attention
-                  </span>
-                  <span className="font-medium">{syncAttentionPlanCount}</span>
-                </div>
-              </CardContent>
-            </Card>
+            <StaffSection
+              description="Current plan and feature coverage, plus the sync issues that still need follow-up."
+              title="Catalog posture"
+            >
+              <StaffKeyValueGrid
+                rows={[
+                  {
+                    label: "Active plans",
+                    value: data.plans.length - archivedPlanCount,
+                  },
+                  { label: "Archived plans", value: archivedPlanCount },
+                  {
+                    label: "Active features",
+                    value: data.features.length - archivedFeatureCount,
+                  },
+                  {
+                    label: "Archived features",
+                    value: archivedFeatureCount,
+                  },
+                  {
+                    label: "Plans needing sync attention",
+                    value: syncAttentionPlanCount,
+                  },
+                ]}
+              />
+            </StaffSection>
 
-            <Card className="border-border/70">
-              <CardHeader>
-                <CardTitle>Sync posture</CardTitle>
-                <CardDescription>
-                  Current Stripe synchronization state and the catalog events
-                  that need follow-up.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="grid gap-4">
-                <div className="flex items-center justify-between gap-4 text-sm">
-                  <span className="text-muted-foreground">
-                    Last sync result
-                  </span>
-                  <span className="font-medium">
-                    {data.lastSync ? data.lastSync.result : "Never"}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between gap-4 text-sm">
-                  <span className="text-muted-foreground">Last synced</span>
-                  <span className="font-medium">
-                    {data.lastSync
+            <StaffSection
+              description="Current Stripe synchronization state and the catalog events that need follow-up."
+              title="Sync posture"
+            >
+              <StaffKeyValueGrid
+                rows={[
+                  {
+                    label: "Last sync result",
+                    value: data.lastSync ? data.lastSync.result : "Never",
+                  },
+                  {
+                    label: "Last synced",
+                    value: data.lastSync
                       ? formatDateTime(data.lastSync.syncedAt)
-                      : "Never"}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between gap-4 text-sm">
-                  <span className="text-muted-foreground">Warnings</span>
-                  <span className="font-medium">
-                    {data.lastSync?.warningCount ?? 0}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between gap-4 text-sm">
-                  <span className="text-muted-foreground">
-                    Recent sync records
-                  </span>
-                  <span className="font-medium">{recentSyncLogs.length}</span>
-                </div>
-                <div className="flex items-center justify-between gap-4 text-sm">
-                  <span className="text-muted-foreground">
-                    Recent billing events
-                  </span>
-                  <span className="font-medium">
-                    {recentBillingActivity.length}
-                  </span>
-                </div>
-              </CardContent>
-            </Card>
+                      : "Never",
+                  },
+                  {
+                    label: "Warnings",
+                    value: data.lastSync?.warningCount ?? 0,
+                  },
+                  {
+                    label: "Recent sync records",
+                    value: recentSyncLogs.length,
+                  },
+                  {
+                    label: "Recent billing events",
+                    value: recentBillingActivity.length,
+                  },
+                ]}
+              />
+            </StaffSection>
           </div>
 
-          <Card className="border-border/70">
-            <CardHeader>
-              <CardTitle>Recent billing activity</CardTitle>
-              <CardDescription>
-                Latest catalog edits, assignment changes, and manual sync events
-                recorded by staff tooling.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="rounded-lg border border-border/70 p-0">
+          <StaffSection
+            contentClassName="overflow-x-auto p-0 pr-3 pb-3"
+            description="Latest catalog edits, assignment changes, and manual sync events recorded by staff tooling."
+            title="Recent billing activity"
+          >
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -1716,113 +1677,82 @@ export function StaffBillingView({
                   )}
                 </TableBody>
               </Table>
-            </CardContent>
-          </Card>
+          </StaffSection>
         </div>
       ) : null}
 
       {section === "subscriptions-overview" ? (
         <div className="grid gap-6">
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <MetricCard
-              label="Active or trialing subscriptions"
-              value={activeOrTrialingSubscriptionCount}
-            />
-            <MetricCard
-              label="Subscriptions needing attention"
-              value={subscriptionAttentionCount}
-            />
-            <MetricCard
-              label="Active creator overrides"
-              value={activeCreatorGrantCount}
-            />
-            <MetricCard
-              label="Scheduled cancellations"
-              value={cancelAtPeriodEndCount}
-            />
-          </div>
+          <StaffMetricStrip
+            items={[
+              {
+                label: "Active or trialing subscriptions",
+                value: activeOrTrialingSubscriptionCount,
+              },
+              {
+                label: "Subscriptions needing attention",
+                value: subscriptionAttentionCount,
+              },
+              {
+                label: "Active creator overrides",
+                value: activeCreatorGrantCount,
+              },
+              {
+                label: "Scheduled cancellations",
+                value: cancelAtPeriodEndCount,
+              },
+            ]}
+          />
 
           <div className="grid gap-6">
-            <Card className="border-border/70">
-              <CardHeader>
-                <CardTitle>Customer footprint</CardTitle>
-                <CardDescription>
-                  Support coverage across billing customers, active
-                  subscriptions, and creator overrides.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="grid gap-4">
-                <div className="flex items-center justify-between gap-4 text-sm">
-                  <span className="text-muted-foreground">
-                    Billing customers
-                  </span>
-                  <span className="font-medium">{data.customers.length}</span>
-                </div>
-                <div className="flex items-center justify-between gap-4 text-sm">
-                  <span className="text-muted-foreground">
-                    Active customers
-                  </span>
-                  <span className="font-medium">{activeCustomerCount}</span>
-                </div>
-                <div className="flex items-center justify-between gap-4 text-sm">
-                  <span className="text-muted-foreground">
-                    Customers with active subscriptions
-                  </span>
-                  <span className="font-medium">
-                    {
-                      data.customers.filter(
-                        (customer) => customer.activeSubscriptionCount > 0
-                      ).length
-                    }
-                  </span>
-                </div>
-                <div className="flex items-center justify-between gap-4 text-sm">
-                  <span className="text-muted-foreground">
-                    Customers with creator access
-                  </span>
-                  <span className="font-medium">
-                    {
-                      data.customers.filter(
-                        (customer) => customer.hasCreatorAccess
-                      ).length
-                    }
-                  </span>
-                </div>
-                <div className="flex items-center justify-between gap-4 text-sm">
-                  <span className="text-muted-foreground">
-                    Tracked plans in use
-                  </span>
-                  <span className="font-medium">
-                    {
-                      new Set(
-                        data.subscriptions.map(
-                          (subscription) => subscription.planKey
-                        )
-                      ).size
-                    }
-                  </span>
-                </div>
-                <div className="flex items-center justify-between gap-4 text-sm">
-                  <span className="text-muted-foreground">
-                    Inactive customer records
-                  </span>
-                  <span className="font-medium">
-                    {data.customers.length - activeCustomerCount}
-                  </span>
-                </div>
-              </CardContent>
-            </Card>
+            <StaffSection
+              description="Support coverage across billing customers, active subscriptions, and creator overrides."
+              title="Customer footprint"
+            >
+              <StaffKeyValueGrid
+                rows={[
+                  {
+                    label: "Billing customers",
+                    value: data.customers.length,
+                  },
+                  {
+                    label: "Active customers",
+                    value: activeCustomerCount,
+                  },
+                  {
+                    label: "Customers with active subscriptions",
+                    value: data.customers.filter(
+                      (customer) => customer.activeSubscriptionCount > 0
+                    ).length,
+                  },
+                  {
+                    label: "Customers with creator access",
+                    value: data.customers.filter(
+                      (customer) => customer.hasCreatorAccess
+                    ).length,
+                  },
+                  {
+                    label: "Tracked plans in use",
+                    value: new Set(
+                      data.subscriptions.map(
+                        (subscription) => subscription.planKey
+                      )
+                    ).size,
+                  },
+                  {
+                    label: "Inactive customer records",
+                    value: data.customers.length - activeCustomerCount,
+                  },
+                ]}
+              />
+            </StaffSection>
           </div>
 
-          <Card className="border-border/70">
-            <CardHeader>
-              <CardTitle>Attention-needed subscriptions</CardTitle>
-              <CardDescription>
-                Payment failures and action-required subscriptions that support
-                staff should watch most closely.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="rounded-lg border border-border/70 p-0">
+          <StaffSection
+            contentClassName="overflow-x-auto p-0 pr-3 pb-3"
+            description="Payment failures and action-required subscriptions that support staff should watch most closely."
+            title="Attention-needed subscriptions"
+          >
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -1877,17 +1807,13 @@ export function StaffBillingView({
                   )}
                 </TableBody>
               </Table>
-            </CardContent>
-          </Card>
+          </StaffSection>
 
-          <Card className="border-border/70">
-            <CardHeader>
-              <CardTitle>Recent subscription rows</CardTitle>
-              <CardDescription>
-                Recent in-scope subscription records for support review.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="rounded-lg border border-border/70 p-0">
+          <StaffSection
+            contentClassName="overflow-x-auto p-0 pr-3 pb-3"
+            description="Recent in-scope subscription records for support review."
+            title="Recent subscription rows"
+          >
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -1945,21 +1871,15 @@ export function StaffBillingView({
                   )}
                 </TableBody>
               </Table>
-            </CardContent>
-          </Card>
+          </StaffSection>
         </div>
       ) : null}
 
       {section === "catalog-plans" ? (
-        <Card className="border-border/70">
-          <CardHeader>
-            <CardTitle>Plans</CardTitle>
-            <CardDescription>
-              Create, edit, archive, and replace managed billing plans and
-              prices.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+        <StaffSection
+          description="Create, edit, archive, and replace managed billing plans and prices."
+          title="Plans"
+        >
             <StaffDataTable
               columns={planColumns}
               data={data.plans}
@@ -1975,20 +1895,14 @@ export function StaffBillingView({
                 </Button>
               }
             />
-          </CardContent>
-        </Card>
+        </StaffSection>
       ) : null}
 
       {section === "catalog-features" ? (
-        <Card className="border-border/70">
-          <CardHeader>
-            <CardTitle>Features</CardTitle>
-            <CardDescription>
-              Distinguish entitlement features from marketing-only copy and keep
-              assignments explicit.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+        <StaffSection
+          description="Distinguish entitlement features from marketing-only copy and keep assignments explicit."
+          title="Features"
+        >
             <StaffDataTable
               columns={featureColumns}
               data={data.features}
@@ -2004,21 +1918,16 @@ export function StaffBillingView({
                 </Button>
               }
             />
-          </CardContent>
-        </Card>
+        </StaffSection>
       ) : null}
 
       {section === "catalog-assignments" ? (
         <div className="grid gap-6">
-          <Card className="border-border/70">
-            <CardHeader>
-              <CardTitle>Assignment editor</CardTitle>
-              <CardDescription>
-                Pick a feature, choose every plan it should belong to, and
-                review the impact before syncing.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-6">
+          <StaffSection
+            contentClassName="grid gap-6"
+            description="Pick a feature, choose every plan it should belong to, and review the impact before syncing."
+            title="Assignment editor"
+          >
               {selectedAssignmentFeature ? (
                 <>
                   <div className="grid gap-4 lg:grid-cols-[minmax(0,16rem)_minmax(0,1fr)]">
@@ -2095,18 +2004,13 @@ export function StaffBillingView({
                   Create an active feature before configuring assignments.
                 </div>
               )}
-            </CardContent>
-          </Card>
+          </StaffSection>
 
-          <Card className="border-border/70">
-            <CardHeader>
-              <CardTitle>Plan-feature matrix</CardTitle>
-              <CardDescription>
-                Review what each plan includes before changing entitlements or
-                marketing copy.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="overflow-x-auto">
+          <StaffSection
+            contentClassName="overflow-x-auto pr-3 pb-3"
+            description="Review what each plan includes before changing entitlements or marketing copy."
+            title="Plan-feature matrix"
+          >
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -2146,22 +2050,17 @@ export function StaffBillingView({
                   ))}
                 </TableBody>
               </Table>
-            </CardContent>
-          </Card>
+          </StaffSection>
         </div>
       ) : null}
 
       {section === "catalog-operations" ? (
         <div className="grid gap-6 xl:grid-cols-[minmax(0,18rem)_minmax(0,1fr)]">
-          <Card className="border-border/70">
-            <CardHeader>
-              <CardTitle>Catalog sync</CardTitle>
-              <CardDescription>
-                Convex remains the editable source of truth. Sync pushes the
-                current managed catalog to Stripe.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-4">
+          <StaffSection
+            contentClassName="flex flex-col gap-4"
+            description="Convex remains the editable source of truth. Sync pushes the current managed catalog to Stripe."
+            title="Catalog sync"
+          >
               <div className="rounded-lg border border-border/70 bg-muted/30 px-3 py-3 text-sm">
                 {data.lastSync
                   ? data.lastSync.summary
@@ -2190,19 +2089,14 @@ export function StaffBillingView({
                 <IconPlugConnected data-icon="inline-start" />
                 Run manual sync
               </Button>
-            </CardContent>
-          </Card>
+          </StaffSection>
 
           <div className="grid gap-6">
-            <Card className="border-border/70">
-              <CardHeader>
-                <CardTitle>Plans needing attention</CardTitle>
-                <CardDescription>
-                  Paid plans without a complete Stripe product or price shape
-                  are listed here for cleanup.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="grid gap-3">
+            <StaffSection
+              contentClassName="grid gap-3"
+              description="Paid plans without a complete Stripe product or price shape are listed here for cleanup."
+              title="Plans needing attention"
+            >
                 {syncAttentionPlanCount > 0 ? (
                   data.plans
                     .filter((plan) => plan.syncStatus === "attention")
@@ -2231,17 +2125,13 @@ export function StaffBillingView({
                     No plans currently require sync remediation.
                   </div>
                 )}
-              </CardContent>
-            </Card>
+            </StaffSection>
 
-            <Card className="border-border/70">
-              <CardHeader>
-                <CardTitle>Recent sync history</CardTitle>
-                <CardDescription>
-                  Most recent manual or automatic Stripe catalog sync results.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="rounded-lg border border-border/70 p-0">
+            <StaffSection
+              contentClassName="overflow-x-auto p-0 pr-3 pb-3"
+              description="Most recent manual or automatic Stripe catalog sync results."
+              title="Recent sync history"
+            >
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -2277,22 +2167,16 @@ export function StaffBillingView({
                     )}
                   </TableBody>
                 </Table>
-              </CardContent>
-            </Card>
+            </StaffSection>
           </div>
         </div>
       ) : null}
 
       {section === "catalog-audit" ? (
-        <Card className="border-border/70">
-          <CardHeader>
-            <CardTitle>Billing audit log</CardTitle>
-            <CardDescription>
-              Catalog changes, sync runs, assignment updates, and destructive
-              operations are captured here.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+        <StaffSection
+          description="Catalog changes, sync runs, assignment updates, and destructive operations are captured here."
+          title="Billing audit log"
+        >
             <StaffDataTable
               columns={catalogAuditColumns}
               data={filteredCatalogAuditLogs}
@@ -2320,21 +2204,15 @@ export function StaffBillingView({
                 </div>
               }
             />
-          </CardContent>
-        </Card>
+        </StaffSection>
       ) : null}
 
       {section === "subscriptions-customers" ? (
         <div className="grid gap-6">
-          <Card className="border-border/70">
-            <CardHeader>
-              <CardTitle>Customers</CardTitle>
-              <CardDescription>
-                Linked billing customers and the live plan coverage currently
-                attached to each account.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
+          <StaffSection
+            description="Linked billing customers and the live plan coverage currently attached to each account."
+            title="Customers"
+          >
               <StaffDataTable
                 columns={customerColumns}
                 data={data.customers}
@@ -2343,24 +2221,16 @@ export function StaffBillingView({
                 getRowId={(row) => row.stripeCustomerId}
                 searchPlaceholder="Search customers"
               />
-            </CardContent>
-          </Card>
+          </StaffSection>
         </div>
       ) : null}
 
       {section === "subscriptions-creator-access" ? (
         <div className="grid gap-6">
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
-            <Card className="border-border/70">
-              <CardHeader className="flex flex-row items-start justify-between gap-3">
-                <div className="flex flex-col gap-1">
-                  <CardTitle>Grant Creator access</CardTitle>
-                  <CardDescription>
-                    Apply the managed Creator override to one or more users with a
-                    required reason and explicit confirmation.
-                  </CardDescription>
-                </div>
-                {canManageCreatorAccess ? (
+            <StaffSection
+              action={
+                canManageCreatorAccess ? (
                   <Button
                     disabled={isBackfillingCreatorGrants}
                     onClick={() =>
@@ -2373,9 +2243,11 @@ export function StaffBillingView({
                       ? "Backfilling..."
                       : "Backfill Stripe state"}
                   </Button>
-                ) : null}
-              </CardHeader>
-              <CardContent>
+                ) : null
+              }
+              description="Apply the managed Creator override to one or more users with a required reason and explicit confirmation."
+              title="Grant Creator access"
+            >
                 {canManageCreatorAccess ? (
                   <FieldGroup>
                     <Field>
@@ -2463,18 +2335,13 @@ export function StaffBillingView({
                     super-admins.
                   </div>
                 )}
-              </CardContent>
-            </Card>
+            </StaffSection>
 
-            <Card className="border-border/70">
-              <CardHeader>
-                <CardTitle>Selected access preview</CardTitle>
-                <CardDescription>
-                  Review the effective state for the selected users before
-                  opening the confirmation dialog.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="grid gap-3">
+            <StaffSection
+              contentClassName="grid gap-3"
+              description="Review the effective state for the selected users before opening the confirmation dialog."
+              title="Selected access preview"
+            >
                 {selectedCreatorUsersWithGrant.length > 0 ? (
                   selectedCreatorUsersWithGrant.map(
                     ({ currentGrant, user }) => (
@@ -2528,19 +2395,14 @@ export function StaffBillingView({
                     state.
                   </div>
                 )}
-              </CardContent>
-            </Card>
+            </StaffSection>
           </div>
 
-          <Card className="border-border/70">
-            <CardHeader>
-              <CardTitle>Creator grant ledger</CardTitle>
-              <CardDescription>
-                Active and historical Creator overrides with audit-friendly
-                reason text and timing.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="rounded-lg border border-border/70 p-0">
+          <StaffSection
+            contentClassName="overflow-x-auto p-0 pr-3 pb-3"
+            description="Active and historical Creator overrides with audit-friendly reason text and timing."
+            title="Creator grant ledger"
+          >
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -2616,21 +2478,16 @@ export function StaffBillingView({
                   )}
                 </TableBody>
               </Table>
-            </CardContent>
-          </Card>
+          </StaffSection>
         </div>
       ) : null}
 
       {section === "subscriptions-active" ? (
-        <Card className="border-border/70">
-          <CardHeader>
-            <CardTitle>Active subscriptions</CardTitle>
-            <CardDescription>
-              The rows below are the subscriptions most likely to be impacted by
-              plan, schedule, and reconciliation operations.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="rounded-lg border border-border/70 p-0">
+        <StaffSection
+          contentClassName="overflow-x-auto p-0 pr-3 pb-3"
+          description="The rows below are the subscriptions most likely to be impacted by plan, schedule, and reconciliation operations."
+          title="Active subscriptions"
+        >
             <Table>
               <TableHeader>
                 <TableRow>
@@ -2713,8 +2570,7 @@ export function StaffBillingView({
                 )}
               </TableBody>
             </Table>
-          </CardContent>
-        </Card>
+        </StaffSection>
       ) : null}
 
       <PlanFormDialog

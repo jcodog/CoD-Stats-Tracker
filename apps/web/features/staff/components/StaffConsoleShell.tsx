@@ -28,11 +28,11 @@ export function StaffConsoleShell({
         <StaffConsoleHeader role={role} />
         <div className="flex min-h-0 flex-1 flex-col px-4 py-6 md:px-6 md:py-8 lg:px-8">
           <main
-            className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-y-auto overscroll-y-contain supports-[scrollbar-gutter:stable]:[scrollbar-gutter:stable]"
+            className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-y-auto overscroll-y-contain pr-1 supports-[scrollbar-gutter:stable]:[scrollbar-gutter:stable_both-edges] md:pr-2"
             id="staff-console-content"
             tabIndex={-1}
           >
-            <div className="mx-auto flex min-h-full w-full max-w-[1400px] flex-col">
+            <div className="mx-auto flex min-h-full w-full max-w-350 flex-col gap-8 [&_[data-slot=card]]:gap-0 [&_[data-slot=card]]:rounded-lg [&_[data-slot=card]]:border [&_[data-slot=card]]:border-border/60 [&_[data-slot=card]]:bg-background [&_[data-slot=card]]:py-0 [&_[data-slot=card]]:ring-0 [&_[data-slot=card-content]]:px-4 [&_[data-slot=card-content]]:py-4 [&_[data-slot=card-footer]]:border-border/60 [&_[data-slot=card-footer]]:bg-transparent [&_[data-slot=card-header]]:rounded-none [&_[data-slot=card-header]]:border-b [&_[data-slot=card-header]]:border-border/60 [&_[data-slot=card-header]]:px-4 [&_[data-slot=card-header]]:py-4 md:[&_[data-slot=card-content]]:px-5 md:[&_[data-slot=card-content]]:py-5 md:[&_[data-slot=card-header]]:px-5 md:[&_[data-slot=card-header]]:py-5">
               {children}
             </div>
           </main>

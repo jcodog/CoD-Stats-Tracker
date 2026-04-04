@@ -2,11 +2,13 @@
 
 import { useUser } from "@clerk/nextjs"
 import { useQuery } from "@tanstack/react-query"
+import { useConvex, useConvexAuth } from "convex/react"
 
 import {
   LANDING_METRICS_REFETCH_MS,
   type LandingMetricsResponse,
 } from "@workspace/backend/landing/metrics"
+import { api } from "@workspace/backend/convex/_generated/api"
 
 function formatCount(value: number) {
   return new Intl.NumberFormat("en-GB").format(value)
@@ -19,65 +21,40 @@ function formatPercentage(value: number) {
   }).format(value)
 }
 
-function formatRelativeTime(timestamp: number | null) {
-  if (!timestamp) {
-    return "No matches yet"
-  }
-
-  const diffMs = Date.now() - timestamp
-  if (diffMs < 45_000) {
-    return "Just now"
-  }
-
-  const minutes = Math.round(diffMs / 60_000)
-  if (minutes < 60) {
-    return `${minutes}m ago`
-  }
-
-  const hours = Math.round(minutes / 60)
-  if (hours < 24) {
-    return `${hours}h ago`
-  }
-
-  const days = Math.round(hours / 24)
-  return `${days}d ago`
-}
-
-async function fetchLandingMetrics(signal?: AbortSignal) {
-  const response = await fetch("/api/landing-metrics", {
-    method: "GET",
-    signal,
-    cache: "no-store",
-  })
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch landing metrics: ${response.status}`)
-  }
-
-  return (await response.json()) as LandingMetricsResponse
-}
-
-export function LandingLiveStats() {
+export function LandingLiveStats({
+  initialData = null,
+}: {
+  initialData?: LandingMetricsResponse | null
+}) {
+  const convex = useConvex()
+  const { isAuthenticated, isLoading: isConvexAuthLoading } = useConvexAuth()
   const { isLoaded, isSignedIn, user } = useUser()
 
   const userId = isSignedIn ? user?.id : undefined
+  const queryEnabled = isSignedIn
+    ? isLoaded && !isConvexAuthLoading && isAuthenticated
+    : true
   const refetchInterval = isSignedIn
-    ? LANDING_METRICS_REFETCH_MS.authenticated
-    : LANDING_METRICS_REFETCH_MS.anonymous
+    ? Math.max(LANDING_METRICS_REFETCH_MS.authenticated * 3, 60_000)
+    : Math.max(LANDING_METRICS_REFETCH_MS.anonymous * 6, 180_000)
+  const staleTime = isSignedIn ? 60_000 : 5 * 60_000
 
   const { data, isPending, isError } = useQuery({
     queryKey: ["landing-live-stats", userId ?? "anonymous"],
-    queryFn: ({ signal }) => fetchLandingMetrics(signal),
-    enabled: isLoaded,
-    staleTime: 0,
-    gcTime: refetchInterval * 6,
+    queryFn: () => convex.query(api.stats.getLandingMetrics, {}),
+    enabled: queryEnabled,
+    initialData: initialData ?? undefined,
+    staleTime,
+    gcTime: 15 * 60_000,
     refetchInterval,
     refetchIntervalInBackground: false,
-    refetchOnMount: "always",
-    refetchOnWindowFocus: "always",
-    refetchOnReconnect: "always",
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
     placeholderData: (previousData) => previousData,
   })
+  const showPendingState =
+    !data && (isPending || (isSignedIn && (!isLoaded || isConvexAuthLoading)))
 
   const scopedStats = data
     ? (data.personal ?? data.global)
@@ -92,7 +69,7 @@ export function LandingLiveStats() {
   const isPersonalized = Boolean(data?.personal)
   const showUnavailable = isError && !data
 
-  const metrics = isPending
+  const metrics = showPendingState
     ? [
         {
           label: "Indexed Matches",
@@ -100,10 +77,6 @@ export function LandingLiveStats() {
         },
         {
           label: "Total Sessions",
-          value: "Loading…",
-        },
-        {
-          label: "Latest Match Sync",
           value: "Loading…",
         },
       ]
@@ -124,31 +97,26 @@ export function LandingLiveStats() {
             ? "Unavailable"
             : formatCount(scopedStats.sessionsTracked),
         },
-        {
-          label: isPersonalized
-            ? "Your Latest Match Sync"
-            : "Platform Match Sync",
-          value: showUnavailable
-            ? "Unavailable"
-            : formatRelativeTime(scopedStats.latestIngestedAt),
-        },
       ]
 
   return (
-    <div className="mt-6 space-y-3">
-      <p className="text-xs leading-relaxed text-muted-foreground">
+    <div className="mt-5 space-y-4">
+      <p className="text-sm leading-7 text-foreground/80">
         {isPersonalized
-          ? `Live for ${user?.firstName ?? "you"}: your match data is ingested by CodStats bots to CodStats servers, then used in both bot features and dashboard analytics.`
-          : "Platform metrics update as CodStats bots ingest match data to CodStats servers. Sign in to view these stats for your account."}
+          ? `Live for ${user?.firstName ?? "you"}: your ranked matches are being indexed against this account and fed straight into the dashboard views you use after each session.`
+          : "This panel shows the public CodStats pulse. Sign in to swap it to your own indexed matches and tracked sessions."}
       </p>
 
-      <div className="grid gap-3" aria-live="polite">
+      <div
+        aria-live="polite"
+        className="divide-y divide-border/70 border-y border-border/70"
+      >
         {metrics.map((item) => (
           <div
             key={item.label}
-            className="flex items-center justify-between rounded-xl border border-border/70 bg-background/80 px-4 py-3"
+            className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 py-3"
           >
-            <span className="text-sm text-muted-foreground">{item.label}</span>
+            <span className="text-sm text-foreground/74">{item.label}</span>
             <span className="text-sm font-semibold text-foreground tabular-nums">
               {item.value}
             </span>
@@ -156,12 +124,12 @@ export function LandingLiveStats() {
         ))}
       </div>
 
-      <p className="text-xs text-muted-foreground">
+      <p className="text-sm leading-7 text-foreground/78">
         {showUnavailable
           ? "Live metrics are temporarily unavailable."
-          : isPending
+          : showPendingState
             ? "Win rate is loading…"
-            : `${isPersonalized ? "Your" : "Platform"} win rate: ${formatPercentage(scopedStats.winRate)}%`}
+            : `${isPersonalized ? "Your" : "Platform"} win rate across indexed matches: ${formatPercentage(scopedStats.winRate)}%`}
       </p>
     </div>
   )

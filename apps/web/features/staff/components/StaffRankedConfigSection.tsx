@@ -71,7 +71,7 @@ export function StaffRankedConfigSection({
   pending: boolean
 }) {
   return (
-    <section className="overflow-hidden rounded-xl border border-border/60 bg-background">
+    <section className="overflow-hidden border border-border/60 bg-background">
       <div className="grid gap-0 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
         <div className="min-w-0">
           <WorkspaceHeading
@@ -89,7 +89,7 @@ export function StaffRankedConfigSection({
             </Alert>
 
             {activeTitleOptions.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-border/60 bg-muted/10 px-5 py-5 text-sm text-muted-foreground">
+              <div className="border border-dashed border-border/60 bg-muted/10 px-5 py-5 text-sm text-muted-foreground">
                 An admin needs to create and activate at least one ranked title
                 before staff can save the current season.
               </div>
@@ -126,7 +126,7 @@ export function StaffRankedConfigSection({
                     </Field>
                   </div>
 
-                  <div className="rounded-xl border border-border/60 bg-muted/10 p-4">
+                  <div className="border border-border/60 bg-muted/10 p-4">
                     <Field className="items-start gap-3" orientation="horizontal">
                       <Switch
                         checked={configForm.sessionWritesEnabled}

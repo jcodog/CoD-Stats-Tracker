@@ -1,8 +1,12 @@
 import { CheckoutView } from "@/features/billing/views/CheckoutView"
 import { isFlagEnabled } from "@/lib/flags"
+import { resolveRequestViewport } from "@/lib/server/request-viewport"
 
 export default async function CheckoutPage() {
-  const checkoutEnabled = await isFlagEnabled("checkout")
+  const [checkoutEnabled, viewport] = await Promise.all([
+    isFlagEnabled("checkout"),
+    resolveRequestViewport(),
+  ])
 
-  return <CheckoutView checkoutEnabled={checkoutEnabled} />
+  return <CheckoutView checkoutEnabled={checkoutEnabled} viewport={viewport} />
 }

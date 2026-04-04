@@ -17,14 +17,15 @@ export const CHATGPT_APP_PUBLIC_ROUTE_PATTERNS = [
   "/ui/codstats/rank.html(.*)",
   "/ui/codstats/settings.html(.*)",
   "/api/app(.*)",
+  "/debug/chatgpt-app-config(.*)",
 ]
 
 export const PUBLIC_ROUTE_PATTERNS = [
   "/",
+  "/policies(.*)",
   "/sign-in(.*)",
   "/sign-up(.*)",
-  "/api/landing-metrics",
-  "/debug/chatgpt-app-config(.*)",
+  "/pricing(.*)",
   "/.well-known/vercel/flags(.*)",
   ...CHATGPT_APP_PUBLIC_ROUTE_PATTERNS,
 ]
@@ -42,8 +43,9 @@ function isCoveragePath(pathname: string) {
 }
 
 export function isPublicRoute(req: PublicRouteRequest) {
-  return matchesPublicRoute(req) || (
-    isPreviewCoverageEnabled() && isCoveragePath(req.nextUrl.pathname)
+  return (
+    matchesPublicRoute(req) ||
+    (isPreviewCoverageEnabled() && isCoveragePath(req.nextUrl.pathname))
   )
 }
 

@@ -401,6 +401,12 @@ export declare const api: {
         >;
       };
       management: {
+        banUser: FunctionReference<
+          "action",
+          "public",
+          { targetClerkUserId: string },
+          any
+        >;
         getDashboard: FunctionReference<"action", "public", {}, any>;
         updateUserRole: FunctionReference<
           "action",
@@ -686,6 +692,7 @@ export declare const api: {
           {},
           any
         >;
+        getPublicPricingCatalog: FunctionReference<"query", "public", {}, any>;
       };
       center: {
         getCurrentUserBillingCenter: FunctionReference<
@@ -1720,6 +1727,19 @@ export declare const internal: {
           "mutation",
           "internal",
           { isActive: boolean; key: string; label: string; sortOrder: number },
+          any
+        >;
+      };
+      management: {
+        purgeBannedUserData: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            targetClerkUserId: string;
+            targetDiscordUserId?: string;
+            targetStatsUserIds: Array<string>;
+            targetUserId?: Id<"users">;
+          },
           any
         >;
       };

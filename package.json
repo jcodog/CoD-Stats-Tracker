@@ -59,6 +59,7 @@
     "packages/*"
   ],
   "dependencies": {
-    "minimatch": "^10.2.5"
+    "minimatch": "^10.2.5",
+    "playwright": "^1.59.1"
   }
 }

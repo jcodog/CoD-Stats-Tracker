@@ -64,6 +64,9 @@ export const staffQueryKeys = {
   webhooks: ["staff", "webhooks"] as const,
 }
 
+const STAFF_DASHBOARD_STALE_TIME = 2 * 60_000
+const STAFF_WEBHOOK_DETAIL_STALE_TIME = 60_000
+
 async function callManagementDashboard(
   convex: ConvexReactClient
 ): Promise<StaffManagementDashboard> {
@@ -135,6 +138,11 @@ async function callManagementAction<T>(
 
   try {
     switch (action.action) {
+      case "banUser":
+        return (await convex.action(
+          api.actions.staff.management.banUser,
+          action.input
+        )) as T
       case "updateUserRole":
         return (await convex.action(
           api.actions.staff.management.updateUserRole,
@@ -295,6 +303,7 @@ export function useStaffManagementDashboard(initialData: StaffManagementDashboar
     initialData,
     queryFn: () => callManagementDashboard(convex),
     queryKey: staffQueryKeys.management,
+    staleTime: STAFF_DASHBOARD_STALE_TIME,
   })
 }
 
@@ -307,6 +316,7 @@ export function useStaffBillingDashboard(initialData: StaffBillingDashboard) {
     initialData,
     queryFn: () => callBillingDashboard(convex),
     queryKey: staffQueryKeys.billing,
+    staleTime: STAFF_DASHBOARD_STALE_TIME,
   })
 }
 
@@ -319,6 +329,7 @@ export function useStaffRankedDashboard(initialData: StaffRankedDashboard) {
     initialData,
     queryFn: () => callRankedDashboard(convex),
     queryKey: staffQueryKeys.ranked,
+    staleTime: STAFF_DASHBOARD_STALE_TIME,
   })
 }
 
@@ -333,6 +344,7 @@ export function useStaffWebhookLedgerDashboard(
     initialData,
     queryFn: () => callWebhookDashboard(convex),
     queryKey: staffQueryKeys.webhooks,
+    staleTime: STAFF_DASHBOARD_STALE_TIME,
   })
 }
 
@@ -352,6 +364,7 @@ export function useStaffWebhookEventDetail(
       return callWebhookEventDetail(convex, eventId)
     },
     queryKey: staffQueryKeys.webhookDetail(eventId ?? "idle"),
+    staleTime: STAFF_WEBHOOK_DETAIL_STALE_TIME,
   })
 }
 

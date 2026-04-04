@@ -11,14 +11,18 @@ import {
   AvatarFallback,
   AvatarImage,
 } from "@workspace/ui/components/avatar"
-import { Button } from "@workspace/ui/components/button"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { isFlagEnabled } from "@/lib/flags"
 import { AppUserButton } from "@/components/app-shell/AppUserButton"
+import { MobileProtectedSidebar } from "@/components/app-shell/MobileProtectedSidebar"
+import { ProtectedNavLinks } from "@/components/app-shell/ProtectedNavLinks"
+import type { ProtectedNavItem } from "@/components/app-shell/protected-nav"
 
 type AppShellProps = {
   children: React.ReactNode
 }
+
+const protectedShellWidthClass = "max-w-[90rem]"
 
 export async function AppShell({ children }: AppShellProps) {
   const [checkoutEnabled, creatorToolsAccess, clerkUser] = await Promise.all([
@@ -30,11 +34,25 @@ export async function AppShell({ children }: AppShellProps) {
     getParsedUserRoleState(clerkUser?.publicMetadata?.role).role ?? "user",
     "staff"
   )
+  const protectedNavItems: ProtectedNavItem[] = [
+    { href: "/dashboard", label: "Home", matchPaths: ["/dashboard"] },
+    ...(creatorToolsAccess.hasCreatorAccess
+      ? [
+          {
+            href: "/creator-tools/play-with-viewers",
+            label: "Play With Viewers",
+            matchPaths: ["/creator-tools"],
+          },
+        ]
+      : []),
+  ]
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <header className="sticky top-0 z-40 border-b border-border/70 bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/80">
-        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
+        <div
+          className={`mx-auto flex w-full ${protectedShellWidthClass} items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8`}
+        >
           <div className="flex items-center gap-3">
             <Link
               href="/dashboard"
@@ -53,32 +71,31 @@ export async function AppShell({ children }: AppShellProps) {
               aria-label="Protected"
               className="hidden items-center gap-2 md:flex"
             >
-              <Button asChild size="sm" variant="ghost">
-                <Link href="/dashboard">Dashboard</Link>
-              </Button>
-              {creatorToolsAccess.hasCreatorAccess ? (
-                <Button asChild size="sm" variant="ghost">
-                  <Link href="/creator-tools/play-with-viewers">
-                    Play With Viewers
-                  </Link>
-                </Button>
-              ) : null}
-              {checkoutEnabled ? (
-                <Button asChild size="sm" variant="ghost">
-                  <Link href="/settings/billing">Billing</Link>
-                </Button>
-              ) : null}
+              <ProtectedNavLinks items={protectedNavItems} layout="desktop" />
             </nav>
           </div>
 
-          <div className="flex items-center gap-2">
-            <AppUserButton showStaffConsoleLink={showStaffConsoleLink} />
+          <div className="hidden items-center gap-2 md:flex">
+            <AppUserButton
+              showStaffConsoleLink={showStaffConsoleLink}
+              checkoutEnabled={checkoutEnabled}
+            />
             <ThemeToggle />
+          </div>
+
+          <div className="flex items-center gap-2 md:hidden">
+            <MobileProtectedSidebar
+              checkoutEnabled={checkoutEnabled}
+              navItems={protectedNavItems}
+              showStaffConsoleLink={showStaffConsoleLink}
+            />
           </div>
         </div>
       </header>
 
-      <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-4 py-8 sm:px-6 lg:px-8">
+      <main
+        className={`mx-auto flex w-full ${protectedShellWidthClass} flex-1 flex-col px-4 py-8 sm:px-6 lg:px-8`}
+      >
         {children}
       </main>
     </div>

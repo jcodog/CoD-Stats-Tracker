@@ -25,7 +25,6 @@ import {
   getLogMatchStepDefinition,
   getSignedSrChange,
   getVisibleLogMatchSteps,
-  hasWholeNumber,
   parseOptionalInteger,
   parseRequiredInteger,
   sanitizeSrChangeInput,
@@ -162,7 +161,10 @@ function StepProgress({
   const currentStepIndex = steps.indexOf(currentStep)
 
   return (
-    <ol className="no-scrollbar flex items-center gap-3 overflow-x-auto px-7 py-3.5">
+    <ol
+      className="grid items-start gap-x-2 gap-y-2 px-4 py-3 sm:flex sm:justify-center sm:gap-3 sm:overflow-x-auto sm:px-7 sm:py-3.5"
+      style={{ gridTemplateColumns: `repeat(${steps.length}, minmax(0, 1fr))` }}
+    >
       {steps.map((step, index) => {
         const status =
           index < currentStepIndex
@@ -172,11 +174,14 @@ function StepProgress({
               : "upcoming"
 
         return (
-          <li className="flex min-w-max items-center gap-3" key={step}>
+          <li
+            className="relative min-w-0 sm:flex sm:min-w-max sm:items-center sm:gap-3"
+            key={step}
+          >
             <button
               aria-current={status === "current" ? "step" : undefined}
               className={cn(
-                "flex items-center gap-3 rounded-md px-1 py-1 text-left transition-colors focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                "flex w-full min-w-0 flex-col items-center gap-2 rounded-md px-1.5 py-1 text-center transition-colors focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:w-auto sm:flex-row sm:gap-3 sm:px-1 sm:text-left",
                 status === "upcoming"
                   ? "cursor-default text-muted-foreground"
                   : "text-foreground hover:text-foreground"
@@ -187,7 +192,7 @@ function StepProgress({
             >
               <span
                 className={cn(
-                  "flex size-6 items-center justify-center rounded-full border text-xs font-medium tabular-nums",
+                  "flex size-5 shrink-0 items-center justify-center rounded-full border text-[10px] font-medium tabular-nums sm:size-6 sm:text-xs",
                   status === "complete" &&
                     "border-foreground bg-foreground text-background",
                   status === "current" &&
@@ -196,14 +201,17 @@ function StepProgress({
                 )}
               >
                 {status === "complete" ? (
-                  <IconCheck aria-hidden="true" className="size-3.5" />
+                  <IconCheck
+                    aria-hidden="true"
+                    className="size-3 sm:size-3.5"
+                  />
                 ) : (
                   index + 1
                 )}
               </span>
               <span
                 className={cn(
-                  "text-sm font-medium whitespace-nowrap",
+                  "max-w-full text-center text-[11px] leading-tight font-medium text-balance sm:text-left sm:text-sm sm:whitespace-nowrap",
                   status === "upcoming" && "text-muted-foreground"
                 )}
               >
@@ -211,13 +219,22 @@ function StepProgress({
               </span>
             </button>
             {index < steps.length - 1 ? (
-              <span
-                aria-hidden="true"
-                className={cn(
-                  "h-px w-7 bg-border/70",
-                  status === "complete" && "bg-foreground/35"
-                )}
-              />
+              <>
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    "absolute top-3.5 right-[calc(-50%+0.95rem)] left-[calc(50%+0.95rem)] h-px bg-border/70 sm:hidden",
+                    status === "complete" && "bg-foreground/35"
+                  )}
+                />
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    "hidden h-px w-7 bg-border/70 sm:block",
+                    status === "complete" && "bg-foreground/35"
+                  )}
+                />
+              </>
             ) : null}
           </li>
         )
@@ -273,7 +290,7 @@ function MapCombobox({
           <IconChevronDown aria-hidden="true" data-icon="inline-end" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-[22rem] p-0">
+      <PopoverContent align="start" className="w-88 p-0">
         <Command>
           <CommandInput placeholder="Search maps…" />
           <CommandList>

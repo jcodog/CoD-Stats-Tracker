@@ -1,17 +1,14 @@
 "use node"
 
+import Stripe from "stripe"
 import { v } from "convex/values"
-import { action } from "../../_generated/server"
+
 import { internal } from "../../_generated/api"
+import { action } from "../../_generated/server"
+import { getStripeScheduleId } from "../../lib/billingStripe"
 import { getClerkBackendClient } from "../../lib/clerk"
 import { requireAuthorizedStaffAction } from "../../lib/staffActionAuth"
 import { isConfiguredSuperAdminDiscordId } from "../../lib/staffRoleConfig"
-import type {
-  StaffAuditLogEntry,
-  StaffManagementDashboard,
-  StaffManagementUserRecord,
-  StaffMutationResponse,
-} from "../../lib/staffTypes"
 import {
   getAssignableRolesForActorRole,
   isAdminCapableRole,
@@ -19,6 +16,13 @@ import {
   type AssignableUserRole,
   type UserRole,
 } from "../../lib/staffRoles"
+import type {
+  StaffAuditLogEntry,
+  StaffManagementDashboard,
+  StaffManagementUserRecord,
+  StaffMutationResponse,
+} from "../../lib/staffTypes"
+import { getStripe } from "../../lib/stripe"
 
 type ClerkListUserRecord = Awaited<
   ReturnType<ReturnType<typeof getClerkBackendClient>["users"]["getUserList"]>
@@ -217,6 +221,18 @@ function hasAdminCapableRole(user: StaffManagementUserRecord) {
   )
 }
 
+function hasElevatedManagementRole(user: StaffManagementUserRecord) {
+  return (
+    user.clerkRole === "staff" ||
+    user.clerkRole === "admin" ||
+    user.clerkRole === "super_admin" ||
+    user.convexRole === "staff" ||
+    user.convexRole === "admin" ||
+    user.convexRole === "super_admin" ||
+    user.isReservedSuperAdmin
+  )
+}
+
 function getAllowedNextRoles(args: {
   actorRole: UserRole
   targetUser: StaffManagementUserRecord
@@ -236,10 +252,215 @@ function getAllowedNextRoles(args: {
   return [] as const
 }
 
+function canActorBanTargetUser(args: {
+  actorRole: UserRole
+  targetUser: StaffManagementUserRecord
+}) {
+  if (args.targetUser.isCurrentUser || args.targetUser.isReservedSuperAdmin) {
+    return false
+  }
+
+  if (args.actorRole === "super_admin") {
+    return true
+  }
+
+  return !hasElevatedManagementRole(args.targetUser)
+}
+
+function getBanRestrictionMessage(args: {
+  actorRole: UserRole
+  targetUser: StaffManagementUserRecord
+}) {
+  if (args.targetUser.isCurrentUser) {
+    return "You cannot ban your own account from the staff dashboard."
+  }
+
+  if (args.targetUser.isReservedSuperAdmin) {
+    return "This account is a reserved super-admin from configuration and cannot be banned here."
+  }
+
+  if (args.actorRole !== "super_admin" && hasElevatedManagementRole(args.targetUser)) {
+    return "Only super-admins can ban staff, admin, or super-admin accounts."
+  }
+
+  return "You do not have permission to ban this user."
+}
+
+function getMetadataStripeCustomerId(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined
+  }
+
+  const metadata = value as Record<string, unknown>
+  const directValue = metadata.stripeCustomerId
+
+  if (
+    typeof directValue === "string" &&
+    directValue.trim().startsWith("cus_")
+  ) {
+    return directValue.trim()
+  }
+
+  const billingValue = metadata.billing
+
+  if (
+    !billingValue ||
+    typeof billingValue !== "object" ||
+    Array.isArray(billingValue)
+  ) {
+    return undefined
+  }
+
+  const nestedValue = (billingValue as Record<string, unknown>).stripeCustomerId
+
+  if (
+    typeof nestedValue === "string" &&
+    nestedValue.trim().startsWith("cus_")
+  ) {
+    return nestedValue.trim()
+  }
+
+  return undefined
+}
+
+function getTargetStatsUserIds(args: {
+  clerkUserId: string
+  discordId?: string
+}) {
+  return Array.from(
+    new Set(
+      [args.clerkUserId, args.discordId]
+        .map((value) => value?.trim())
+        .filter((value): value is string => Boolean(value))
+    )
+  )
+}
+
+function isCancelableStripeSubscriptionStatus(status: Stripe.Subscription.Status) {
+  return status !== "canceled" && status !== "incomplete_expired"
+}
+
+async function releaseStripeScheduleIfPresent(args: {
+  stripe: Stripe
+  stripeScheduleId?: string
+}) {
+  if (!args.stripeScheduleId) {
+    return
+  }
+
+  try {
+    await args.stripe.subscriptionSchedules.release(args.stripeScheduleId)
+  } catch (error) {
+    if (
+      error instanceof Stripe.errors.StripeInvalidRequestError &&
+      error.code === "resource_missing"
+    ) {
+      return
+    }
+
+    throw error
+  }
+}
+
+async function listStripeSubscriptionsForCustomer(args: {
+  stripe: Stripe
+  stripeCustomerId: string
+}) {
+  const subscriptions: Stripe.Subscription[] = []
+
+  for await (const subscription of args.stripe.subscriptions.list({
+    customer: args.stripeCustomerId,
+    limit: 100,
+    status: "all",
+  })) {
+    subscriptions.push(subscription)
+  }
+
+  return subscriptions
+}
+
+async function cancelStripeCustomerSubscriptions(args: {
+  stripe: Stripe
+  stripeCustomerId: string
+}) {
+  const subscriptions = await listStripeSubscriptionsForCustomer(args)
+  const canceledSubscriptionIds: string[] = []
+  const skippedSubscriptionIds: string[] = []
+
+  for (const subscription of subscriptions) {
+    if (!isCancelableStripeSubscriptionStatus(subscription.status)) {
+      skippedSubscriptionIds.push(subscription.id)
+      continue
+    }
+
+    await releaseStripeScheduleIfPresent({
+      stripe: args.stripe,
+      stripeScheduleId: getStripeScheduleId(subscription.schedule),
+    })
+
+    await args.stripe.subscriptions.cancel(subscription.id, {
+      invoice_now: false,
+      prorate: false,
+    })
+    canceledSubscriptionIds.push(subscription.id)
+  }
+
+  return {
+    canceledSubscriptionIds,
+    skippedSubscriptionIds,
+  }
+}
+
+async function deleteStripeCustomerIfPresent(args: {
+  stripe: Stripe
+  stripeCustomerId: string
+}) {
+  try {
+    await args.stripe.customers.del(args.stripeCustomerId)
+    return true
+  } catch (error) {
+    if (
+      error instanceof Stripe.errors.StripeInvalidRequestError &&
+      error.code === "resource_missing"
+    ) {
+      return false
+    }
+
+    throw error
+  }
+}
+
+async function recordAuditLog(args: {
+  action: string
+  actorClerkUserId: string
+  actorName: string
+  actorRole: UserRole
+  ctx: Parameters<typeof requireAuthorizedStaffAction>[0]
+  details?: string
+  entityId: string
+  entityLabel?: string
+  entityType: string
+  result: "error" | "success" | "warning"
+  summary: string
+}) {
+  await args.ctx.runMutation(internal.mutations.staff.internal.insertAuditLog, {
+    action: args.action,
+    actorClerkUserId: args.actorClerkUserId,
+    actorName: args.actorName,
+    actorRole: args.actorRole,
+    details: args.details,
+    entityId: args.entityId,
+    entityLabel: args.entityLabel,
+    entityType: args.entityType,
+    result: args.result,
+    summary: args.summary,
+  })
+}
+
 export const getDashboard = action({
   args: {},
   handler: async (ctx): Promise<StaffManagementDashboard> => {
-    const operator = await requireAuthorizedStaffAction(ctx, "admin")
+    const operator = await requireAuthorizedStaffAction(ctx, "staff")
     const [records, clerkUsers] = await Promise.all([
       ctx.runQuery(internal.queries.staff.internal.getManagementRecords, {}),
       listAllClerkUsers(),
@@ -368,14 +589,18 @@ export const updateUserRole = action({
           publicMetadata: previousPublicMetadata,
         })
       } catch (rollbackError) {
-        await ctx.runMutation(internal.mutations.staff.internal.insertAuditLog, {
+        await recordAuditLog({
           action: "staff.role.rollback_failed",
           actorClerkUserId: operator.actorClerkUserId,
           actorName: operator.actorDisplayName,
           actorRole: operator.actorRole,
+          ctx,
           details: JSON.stringify(
             {
-              message: rollbackError instanceof Error ? rollbackError.message : String(rollbackError),
+              message:
+                rollbackError instanceof Error
+                  ? rollbackError.message
+                  : String(rollbackError),
               targetClerkUserId: args.targetClerkUserId,
             },
             null,
@@ -389,11 +614,12 @@ export const updateUserRole = action({
         })
       }
 
-      await ctx.runMutation(internal.mutations.staff.internal.insertAuditLog, {
+      await recordAuditLog({
         action: "staff.role.update_failed",
         actorClerkUserId: operator.actorClerkUserId,
         actorName: operator.actorDisplayName,
         actorRole: operator.actorRole,
+        ctx,
         details: JSON.stringify(
           {
             message: error instanceof Error ? error.message : String(error),
@@ -414,11 +640,12 @@ export const updateUserRole = action({
       throw error
     }
 
-    await ctx.runMutation(internal.mutations.staff.internal.insertAuditLog, {
+    await recordAuditLog({
       action: "staff.role.updated",
       actorClerkUserId: operator.actorClerkUserId,
       actorName: operator.actorDisplayName,
       actorRole: operator.actorRole,
+      ctx,
       details: buildRoleChangeDetails({
         nextRole: args.nextRole,
         previousClerkRole: targetUser.clerkRole,
@@ -433,6 +660,182 @@ export const updateUserRole = action({
 
     return {
       summary: `Updated ${targetUser.displayName} to ${args.nextRole}.`,
+    }
+  },
+})
+
+export const banUser = action({
+  args: {
+    targetClerkUserId: v.string(),
+  },
+  handler: async (ctx, args): Promise<StaffMutationResponse> => {
+    const operator = await requireAuthorizedStaffAction(ctx, "staff")
+    const [records, clerkUsers] = await Promise.all([
+      ctx.runQuery(internal.queries.staff.internal.getManagementRecords, {}),
+      listAllClerkUsers(),
+    ])
+    const users = buildManagementUsers({
+      clerkUsers,
+      convexUsers: records.users,
+      currentActorClerkUserId: operator.actorClerkUserId,
+    })
+    const targetUser = users.find(
+      (user) => user.clerkUserId === args.targetClerkUserId
+    )
+
+    if (!targetUser) {
+      throw new Error(`Unable to find Clerk user ${args.targetClerkUserId}`)
+    }
+
+    if (!canActorBanTargetUser({ actorRole: operator.actorRole, targetUser })) {
+      throw new Error(
+        getBanRestrictionMessage({
+          actorRole: operator.actorRole,
+          targetUser,
+        })
+      )
+    }
+
+    const clerkUser = clerkUsers.find((user) => user.id === args.targetClerkUserId)
+    const targetDbUser = await ctx.runQuery(
+      internal.queries.staff.internal.getUserByClerkUserId,
+      {
+        clerkUserId: args.targetClerkUserId,
+      }
+    )
+    const localSubscriptions: Array<{
+      stripeCustomerId: string
+    }> = targetDbUser
+      ? await ctx.runQuery(
+          internal.queries.billing.internal.listBillingSubscriptionsByUserId,
+          {
+            userId: targetDbUser._id,
+          }
+        )
+      : []
+    const billingContext = targetDbUser
+      ? await ctx.runQuery(
+          internal.queries.billing.internal.getUserBillingContextByClerkUserId,
+          {
+            clerkUserId: args.targetClerkUserId,
+          }
+        )
+      : null
+    const stripeCustomerIds = Array.from(
+      new Set(
+        [
+          billingContext?.customer?.stripeCustomerId,
+          ...localSubscriptions.map((subscription) => subscription.stripeCustomerId),
+          clerkUser ? getMetadataStripeCustomerId(clerkUser.publicMetadata) : undefined,
+        ].filter((value): value is string => Boolean(value))
+      )
+    )
+    const targetStatsUserIds = getTargetStatsUserIds({
+      clerkUserId: args.targetClerkUserId,
+      discordId: targetDbUser?.discordId,
+    })
+    const stripe = getStripe()
+    const clerkClient = getClerkBackendClient()
+    const stripeCleanup: Array<{
+      canceledSubscriptionIds: string[]
+      customerDeleted: boolean
+      skippedSubscriptionIds: string[]
+      stripeCustomerId: string
+    }> = []
+
+    try {
+      for (const stripeCustomerId of stripeCustomerIds) {
+        const canceledSubscriptions = await cancelStripeCustomerSubscriptions({
+          stripe,
+          stripeCustomerId,
+        })
+        const customerDeleted = await deleteStripeCustomerIfPresent({
+          stripe,
+          stripeCustomerId,
+        })
+
+        stripeCleanup.push({
+          ...canceledSubscriptions,
+          customerDeleted,
+          stripeCustomerId,
+        })
+      }
+
+      if (clerkUser) {
+        await clerkClient.users.banUser(args.targetClerkUserId)
+      }
+
+      const purgeResult = await ctx.runMutation(
+        internal.mutations.staff.management.purgeBannedUserData,
+        {
+          targetClerkUserId: args.targetClerkUserId,
+          targetDiscordUserId: targetDbUser?.discordId,
+          targetStatsUserIds,
+          targetUserId: targetDbUser?._id,
+        }
+      )
+
+      await ctx.runMutation(
+        internal.mutations.stats.landingMetrics.rebuildLandingMetrics,
+        {}
+      )
+
+      await recordAuditLog({
+        action: "staff.user.banned",
+        actorClerkUserId: operator.actorClerkUserId,
+        actorName: operator.actorDisplayName,
+        actorRole: operator.actorRole,
+        ctx,
+        details: JSON.stringify(
+          {
+            clerkAccountBanned: Boolean(clerkUser),
+            deletedCounts: purgeResult.deletedCounts,
+            stripeCleanup,
+            targetClerkUserId: args.targetClerkUserId,
+            targetDiscordUserId: targetDbUser?.discordId,
+            targetStatsUserIds,
+            targetUserDeleted: purgeResult.userDeleted,
+          },
+          null,
+          2
+        ),
+        entityId: args.targetClerkUserId,
+        entityLabel: targetUser.displayName,
+        entityType: "user",
+        result: "success",
+        summary: `Banned ${targetUser.displayName}, canceled billing, and removed their CodStats data.`,
+      })
+
+      return {
+        summary: `Banned ${targetUser.displayName} and removed their CodStats data.`,
+      }
+    } catch (error) {
+      await recordAuditLog({
+        action: "staff.user.ban_failed",
+        actorClerkUserId: operator.actorClerkUserId,
+        actorName: operator.actorDisplayName,
+        actorRole: operator.actorRole,
+        ctx,
+        details: JSON.stringify(
+          {
+            message: error instanceof Error ? error.message : String(error),
+            stripeCleanup,
+            targetClerkUserId: args.targetClerkUserId,
+            targetDiscordUserId: targetDbUser?.discordId,
+            targetStatsUserIds,
+            targetUserId: targetDbUser?._id,
+          },
+          null,
+          2
+        ),
+        entityId: args.targetClerkUserId,
+        entityLabel: targetUser.displayName,
+        entityType: "user",
+        result: "error",
+        summary: `Ban flow for ${targetUser.displayName} failed.`,
+      })
+
+      throw error
     }
   },
 })

@@ -80,6 +80,10 @@ export const dashboardStatsQueryKeys = {
     ] as const,
 }
 
+const DASHBOARD_REFERENCE_STALE_TIME = 10 * 60_000
+const DASHBOARD_SESSION_STALE_TIME = 60_000
+const DASHBOARD_STATE_STALE_TIME = 60_000
+
 function asSessionId(sessionId: string | null) {
   return sessionId as Id<"sessions"> | null
 }
@@ -271,6 +275,7 @@ export function useDashboardStatsState(initialData: DashboardState) {
     initialData,
     queryFn: () => queryCurrentDashboardState(convex),
     queryKey: dashboardStatsQueryKeys.state,
+    staleTime: DASHBOARD_STATE_STALE_TIME,
   })
 }
 
@@ -282,6 +287,7 @@ export function useDashboardAvailableUsernames(enabled = true) {
     enabled: enabled && !isLoading && isAuthenticated,
     queryFn: () => queryAvailableUsernames(convex),
     queryKey: dashboardStatsQueryKeys.usernames,
+    staleTime: DASHBOARD_REFERENCE_STALE_TIME,
   })
 }
 
@@ -293,6 +299,7 @@ export function useDashboardAvailableMaps() {
     enabled: !isLoading && isAuthenticated,
     queryFn: () => queryAvailableMaps(convex),
     queryKey: dashboardStatsQueryKeys.maps,
+    staleTime: DASHBOARD_REFERENCE_STALE_TIME,
   })
 }
 
@@ -304,6 +311,7 @@ export function useDashboardAvailableModes() {
     enabled: !isLoading && isAuthenticated,
     queryFn: () => queryAvailableModes(convex),
     queryKey: dashboardStatsQueryKeys.modes,
+    staleTime: DASHBOARD_REFERENCE_STALE_TIME,
   })
 }
 
@@ -333,6 +341,7 @@ export function useDashboardSessionOverview(
       sessionId,
       includeLossProtected
     ),
+    staleTime: DASHBOARD_SESSION_STALE_TIME,
   })
 }
 
@@ -362,6 +371,7 @@ export function useDashboardSessionSrTimeline(
       sessionId,
       includeLossProtected
     ),
+    staleTime: DASHBOARD_SESSION_STALE_TIME,
   })
 }
 
@@ -391,6 +401,7 @@ export function useDashboardSessionWinLossBreakdown(
       sessionId,
       includeLossProtected
     ),
+    staleTime: DASHBOARD_SESSION_STALE_TIME,
   })
 }
 
@@ -420,6 +431,7 @@ export function useDashboardSessionDailyPerformance(
       sessionId,
       includeLossProtected
     ),
+    staleTime: DASHBOARD_SESSION_STALE_TIME,
   })
 }
 
@@ -449,7 +461,7 @@ export function useDashboardRecentSessionMatches(
       sessionId,
       includeLossProtected
     ),
-    staleTime: 30_000,
+    staleTime: DASHBOARD_SESSION_STALE_TIME,
   })
 }
 

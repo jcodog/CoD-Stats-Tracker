@@ -65,7 +65,7 @@ export function PricingPlanCard(args: {
     >
       <RadioGroupItem
         aria-label={`Select ${args.plan.name}`}
-        className="absolute right-4 top-4 z-10 border-border/60 bg-background/55 shadow-none after:hidden focus-visible:border-primary/45 focus-visible:ring-2 focus-visible:ring-primary/15 dark:bg-background/55 data-checked:border-border/60 data-checked:bg-primary/[0.08] dark:data-checked:bg-primary/[0.08]"
+        className="absolute top-4 right-4 z-10 border-border/60 bg-background/55 shadow-none after:hidden focus-visible:border-primary/45 focus-visible:ring-2 focus-visible:ring-primary/15 dark:bg-background/55 data-checked:border-border/60 data-checked:bg-primary/8 dark:data-checked:bg-primary/8"
         id={args.inputId}
         value={args.plan.planKey}
       />
@@ -73,11 +73,11 @@ export function PricingPlanCard(args: {
       <div
         className={cn(
           "flex h-full min-w-0 flex-col rounded-[14px] bg-background/80 transition-colors",
-          args.selected && "bg-primary/[0.08]"
+          args.selected && "bg-primary/8"
         )}
       >
         <div className="rounded-t-[14px] rounded-b-[11px] bg-card/95 px-5 py-5 shadow-[0_1px_0_rgba(255,255,255,0.03),0_12px_24px_-18px_rgba(0,0,0,0.72)]">
-          <div className="grid min-h-[11.5rem] min-w-0 gap-5">
+          <div className="grid min-h-46 min-w-0 gap-5">
             <div className="space-y-2 pr-8">
               <div className="flex flex-wrap items-center gap-2">
                 <div className="text-base font-semibold">{args.plan.name}</div>
@@ -99,8 +99,7 @@ export function PricingPlanCard(args: {
               <div
                 className={cn(
                   "flex items-end gap-2",
-                  variant === "checkout" &&
-                    "min-w-0 shrink-0 whitespace-nowrap"
+                  variant === "checkout" && "min-w-0 shrink-0 whitespace-nowrap"
                 )}
               >
                 <span
@@ -133,8 +132,8 @@ export function PricingPlanCard(args: {
                 {isFreePlan
                   ? "No renewal charge"
                   : args.interval === "year"
-                  ? "Billed once yearly"
-                  : "Renews monthly"}
+                    ? "Billed once yearly"
+                    : "Renews monthly"}
               </div>
             </div>
           </div>

@@ -11,6 +11,12 @@ const textSchema = z.string().trim().min(1).max(120)
 
 export const managementActionSchema = z.discriminatedUnion("action", [
   z.object({
+    action: z.literal("banUser"),
+    input: z.object({
+      targetClerkUserId: z.string().min(1),
+    }),
+  }),
+  z.object({
     action: z.literal("updateUserRole"),
     input: z.object({
       nextRole: z.enum(["user", "staff", "admin"]),

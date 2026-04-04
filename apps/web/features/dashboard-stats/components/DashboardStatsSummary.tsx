@@ -9,19 +9,48 @@ import { cn } from "@workspace/ui/lib/utils"
 
 function SummaryMetric({
   label,
+  mobileView = false,
   value,
   valueStyle,
 }: {
   embedded?: boolean
   label: string
+  mobileView?: boolean
   value: string
   valueStyle?: CSSProperties
 }) {
+  if (mobileView) {
+    return (
+      <div className="flex items-end justify-between gap-4 py-4">
+        <dt className="text-sm text-muted-foreground">{label}</dt>
+        <dd
+          className="text-3xl font-semibold tracking-tight text-right"
+          style={valueStyle}
+        >
+          {value}
+        </dd>
+      </div>
+    )
+  }
+
   return (
-    <div className="px-6 py-5">
-      <dt className="text-sm text-muted-foreground">{label}</dt>
+    <div
+      className={cn(
+        "px-6 py-5"
+      )}
+    >
+      <dt
+        className={cn(
+          "text-sm text-muted-foreground"
+        )}
+      >
+        {label}
+      </dt>
       <dd
-        className="mt-2 text-3xl font-semibold tracking-tight"
+        className={cn(
+          "mt-2 font-semibold tracking-tight",
+          "text-3xl"
+        )}
         style={valueStyle}
       >
         {value}
@@ -36,6 +65,7 @@ export function DashboardStatsSummary({
   embedded = false,
   overview,
   showHeader = true,
+  viewport = "desktop",
   winRate = overview.winRate,
 }: {
   className?: string
@@ -43,8 +73,11 @@ export function DashboardStatsSummary({
   embedded?: boolean
   overview: DashboardSessionOverview
   showHeader?: boolean
+  viewport?: "desktop" | "mobile"
   winRate?: number | null
 }) {
+  const isMobileView = viewport === "mobile"
+
   return (
     <section
       className={cn(
@@ -60,16 +93,33 @@ export function DashboardStatsSummary({
           <p className="text-sm text-muted-foreground">{description}</p>
         </div>
       ) : null}
-      <dl className="grid border-t border-border/50 md:grid-cols-2 md:divide-x md:divide-border/50 xl:grid-cols-4">
-        <SummaryMetric label="Start SR" value={`${overview.startSr}`} />
-        <SummaryMetric label="Current SR" value={`${overview.currentSr}`} />
+      <dl
+        className={cn(
+          isMobileView
+            ? "divide-y divide-border/60 border-y border-border/60"
+            : "grid border-t border-border/50 md:grid-cols-2 md:divide-x md:divide-border/50 xl:grid-cols-4",
+          isMobileView && !showHeader ? "" : ""
+        )}
+      >
+        <SummaryMetric
+          label="Start SR"
+          mobileView={isMobileView}
+          value={`${overview.startSr}`}
+        />
+        <SummaryMetric
+          label="Current SR"
+          mobileView={isMobileView}
+          value={`${overview.currentSr}`}
+        />
         <SummaryMetric
           label="Net SR"
+          mobileView={isMobileView}
           value={`${overview.netSr > 0 ? "+" : ""}${overview.netSr}`}
           valueStyle={getDashboardMetricTextStyle(overview.netSr)}
         />
         <SummaryMetric
           label="Win rate"
+          mobileView={isMobileView}
           value={winRate === null ? "—" : formatDashboardPercent(winRate)}
         />
       </dl>
