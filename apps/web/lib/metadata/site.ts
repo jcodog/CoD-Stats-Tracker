@@ -5,7 +5,7 @@ export const siteConfig = {
   shortName: "CodStats",
   seoTitle: "CodStats | Ranked Match Intelligence for Call of Duty",
   description:
-    "Track every ranked Call of Duty session, monitor SR movement, and turn match history into clear performance signals with CodStats by CleoAI.",
+    "Track every ranked Call of Duty session, monitor SR movement, and turn match history into clear performance signals with CodStats.",
   locale: "en_US",
   language: "en-US",
   publisherName: "CleoAI",
@@ -57,7 +57,7 @@ export const robotsDisallow = [
   "/ui/",
 ] as const
 
-const DEFAULT_SITE_ORIGIN = "https://stats.cleoai.cloud"
+const DEFAULT_SITE_ORIGIN = "https://codstats.tech"
 const DEFAULT_DEV_ORIGIN = "http://localhost:3000"
 
 function getFallbackSiteOrigin() {

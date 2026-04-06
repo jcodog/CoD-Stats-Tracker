@@ -1,8 +1,9 @@
 import { getServerEnv } from "./env";
 
 const PRODUCTION_APP_HOSTNAMES = new Set([
-  "stats.cleoai.cloud",
-  "stats-dev.cleoai.cloud",
+  "codstats.tech",
+  "www.codstats.tech",
+  "dev.codstats.tech",
 ]);
 
 const CODSTATS_TEMPLATE_PATHS = {
@@ -32,7 +33,7 @@ function parseOriginOrThrow(rawOrigin: string, fieldName: string) {
     parsedOrigin = new URL(rawOrigin);
   } catch {
     throw new Error(
-      `Invalid ${fieldName}: "${rawOrigin}". Use an absolute HTTPS URL like https://stats.cleoai.cloud.`,
+      `Invalid ${fieldName}: "${rawOrigin}". Use an absolute HTTPS URL like https://codstats.tech.`,
     );
   }
 
@@ -44,7 +45,7 @@ function parseOriginOrThrow(rawOrigin: string, fieldName: string) {
 
   if (!parsedOrigin.hostname) {
     throw new Error(
-      `Invalid ${fieldName}: "${rawOrigin}". Include a hostname, for example https://stats.cleoai.cloud.`,
+      `Invalid ${fieldName}: "${rawOrigin}". Include a hostname, for example https://codstats.tech.`,
     );
   }
 

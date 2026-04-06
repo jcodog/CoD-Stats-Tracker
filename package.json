@@ -4,12 +4,12 @@
   "devDependencies": {
     "@t3-oss/env-core": "^0.13.11",
     "@t3-oss/env-nextjs": "^0.13.11",
-    "@typescript/native-preview": "^7.0.0-dev.20260403.1",
+    "@typescript/native-preview": "^7.0.0-dev.20260406.1",
     "@workspace/eslint-config": "workspace:*",
     "@workspace/typescript-config": "workspace:*",
     "prettier": "^3.8.1",
     "prettier-plugin-tailwindcss": "^0.7.2",
-    "turbo": "^2.9.3",
+    "turbo": "^2.9.4",
     "typescript": "6.0.2"
   },
   "engines": {
