@@ -136,8 +136,8 @@ export function getVisibleLogMatchSteps(args: {
 }): LogMatchStep[] {
   const baseSteps: LogMatchStep[] =
     args.loggingMode === "basic"
-      ? ["outcome", "srChange", "mode", "map", "review"]
-      : ["outcome", "srChange", "mode", "map", "stats", "notes", "review"]
+      ? ["outcome", "mode", "map", "srChange", "review"]
+      : ["outcome", "mode", "map", "stats", "notes", "srChange", "review"]
 
   return args.requiresSessionSelection ? ["session", ...baseSteps] : baseSteps
 }
