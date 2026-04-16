@@ -28,14 +28,12 @@ export const getQueueEntries = internalQuery({
       throw new Error("Queue not found")
     }
 
-    const entries = await ctx.db
+    return await ctx.db
       .query("viewerQueueEntries")
       .withIndex("by_queueId_and_joinedAt", (q) =>
         q.eq("queueId", args.queueId)
       )
       .collect()
-
-    return entries
   },
 })
 
@@ -54,13 +52,7 @@ export const getLatestQueueRound = internalQuery({
       return null
     }
 
-    const round = await ctx.db.get(queue.lastSelectedRoundId)
-
-    if (!round) {
-      return null
-    }
-
-    return round
+    return await ctx.db.get(queue.lastSelectedRoundId)
   },
 })
 
@@ -81,14 +73,12 @@ export const getQueueByGuildAndChannel = internalQuery({
       throw new Error("channelId is required")
     }
 
-    const queue = await ctx.db
+    return await ctx.db
       .query("viewerQueues")
       .withIndex("by_guildId_and_channelId", (q) =>
         q.eq("guildId", guildId).eq("channelId", channelId)
       )
       .first()
-
-    return queue
   },
 })
 
@@ -97,63 +87,30 @@ export const getQueueByCreatorUserId = internalQuery({
     creatorUserId: v.id("users"),
   },
   handler: async (ctx, args) => {
-    const queue = await ctx.db
+    return await ctx.db
       .query("viewerQueues")
       .withIndex("by_creatorUserId", (q) =>
         q.eq("creatorUserId", args.creatorUserId)
       )
       .first()
-
-    return queue
   },
 })
 
-export const getQueueEntryById = internalQuery({
+export const getQueueByTwitchBroadcasterId = internalQuery({
   args: {
-    entryId: v.id("viewerQueueEntries"),
+    twitchBroadcasterId: v.string(),
   },
   handler: async (ctx, args) => {
-    return await ctx.db.get(args.entryId)
-  },
-})
+    const twitchBroadcasterId = args.twitchBroadcasterId.trim()
 
-export const getCurrentCreatorQueue = query({
-  args: {},
-  handler: async (ctx) => {
-    try {
-      const { user } = await requireCreatorToolsViewerAccess(ctx)
-
-      return await ctx.db
-        .query("viewerQueues")
-        .withIndex("by_creatorUserId", (query) => query.eq("creatorUserId", user._id))
-        .first()
-    } catch {
-      return null
+    if (!twitchBroadcasterId) {
+      throw new Error("twitchBroadcasterId is required")
     }
-  },
-})
 
-export const getCurrentCreatorQueueEntries = query({
-  args: {
-    queueId: v.id("viewerQueues"),
-  },
-  handler: async (ctx, args) => {
-    try {
-      const { user } = await requireCreatorToolsViewerAccess(ctx)
-      const queue = await ctx.db.get(args.queueId)
-
-      if (!queue || queue.creatorUserId !== user._id) {
-        return []
-      }
-
-      return await ctx.db
-        .query("viewerQueueEntries")
-        .withIndex("by_queueId_and_joinedAt", (query) =>
-          query.eq("queueId", args.queueId)
-        )
-        .collect()
-    } catch {
-      return []
-    }
+    return await ctx.db
+      .query("viewerQueues")
+      .withIndex("by_twitchBroadcasterId", (q) =>
+        q.eq("twitchBroadcasterId", twitchBroadcasterId)
+      )
   },
 })

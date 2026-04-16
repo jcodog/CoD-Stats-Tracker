@@ -1,7 +1,42 @@
+import { v } from "convex/values"
 import type { Doc } from "../_generated/dataModel"
+
+export const rankValidator = v.union(
+  v.literal("bronze"),
+  v.literal("silver"),
+  v.literal("gold"),
+  v.literal("platinum"),
+  v.literal("diamond"),
+  v.literal("crimson"),
+  v.literal("iridescent"),
+  v.literal("top250")
+)
+
+export const inviteModeValidator = v.union(
+  v.literal("bot_dm"),
+  v.literal("manual_creator_contact")
+)
+
+export const inviteCodeTypeValidator = v.union(
+  v.literal("party_code"),
+  v.literal("private_match_code")
+)
+
+export const queuePlatformValidator = v.union(
+  v.literal("discord"),
+  v.literal("twitch")
+)
+
+export const queueNotificationMethodValidator = v.union(
+  v.literal("discord_dm"),
+  v.literal("twitch_whisper"),
+  v.literal("twitch_chat_fallback"),
+  v.literal("manual_creator_contact")
+)
 
 export type RankValue = Doc<"viewerQueueEntries">["rank"]
 export type InviteCodeType = "party_code" | "private_match_code"
+export type QueuePlatform = "discord" | "twitch"
 
 export const RANK_WEIGHTS: Record<RankValue, number> = {
   bronze: 1,
@@ -23,8 +58,6 @@ export const INVITE_CODE_TYPE_LABELS: Record<InviteCodeType, string> = {
 
 const INVITE_CODE_TEMPLATE_TOKEN = "{{inviteCode}}"
 
-// Edit these templates to change the instructions used in Discord DMs and the
-// creator-facing invite preview without touching the calling code.
 const INVITE_CODE_INSTRUCTION_TEMPLATES: Record<InviteCodeType, string> = {
   party_code: [
     "Open Call of Duty and head to the Social menu.",

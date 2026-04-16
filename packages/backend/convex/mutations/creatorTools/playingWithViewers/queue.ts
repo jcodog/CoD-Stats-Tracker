@@ -1,46 +1,57 @@
 import { v } from "convex/values"
+import { internalMutation } from "../../../_generated/server"
+import type { Id } from "../../../_generated/dataModel"
+import type { MutationCtx } from "../../../_generated/server"
 import {
   RANK_WEIGHTS,
+  inviteCodeTypeValidator,
+  inviteModeValidator,
+  queueNotificationMethodValidator,
+  queuePlatformValidator,
+  rankValidator,
+  type QueuePlatform,
   type RankValue,
 } from "../../../lib/playingWithViewers"
-import { internalMutation } from "../../../_generated/server"
 
-const rankValidator = v.union(
-  v.literal("bronze"),
-  v.literal("silver"),
-  v.literal("gold"),
-  v.literal("platinum"),
-  v.literal("diamond"),
-  v.literal("crimson"),
-  v.literal("iridescent"),
-  v.literal("top250")
-)
-
-const inviteModeValidator = v.union(
-  v.literal("discord_dm"),
-  v.literal("manual_creator_contact")
-)
-const inviteCodeTypeValidator = v.union(
-  v.literal("party_code"),
-  v.literal("private_match_code")
-)
 const selectedQueueUserValidator = v.object({
-  discordUserId: v.string(),
+  platform: queuePlatformValidator,
+  platformUserId: v.string(),
+  discordUserId: v.optional(v.string()),
   username: v.string(),
   displayName: v.string(),
   avatarUrl: v.optional(v.string()),
+  linkedUserId: v.optional(v.id("users")),
   rank: rankValidator,
+  notificationMethod: v.optional(queueNotificationMethodValidator),
+  notificationStatus: v.optional(
+    v.union(v.literal("sent"), v.literal("failed"))
+  ),
+  notificationFailureReason: v.optional(v.string()),
   dmStatus: v.optional(v.union(v.literal("sent"), v.literal("failed"))),
   dmFailureReason: v.optional(v.string()),
 })
+
 const MIN_PLAYERS_PER_BATCH = 1
 const MAX_PLAYERS_PER_BATCH = 30
 const MIN_MATCHES_PER_VIEWER = 1
 const MAX_MATCHES_PER_VIEWER = 10
+const JOIN_COOLDOWN_MS = 10 * 60 * 1000
 
-const getRankWeight = (rank: RankValue): number => {
-  return RANK_WEIGHTS[rank]
-}
+type QueueMutationCtx = MutationCtx
+
+type QueueJoinResult =
+  | {
+      entryId: Id<"viewerQueueEntries">
+      status: "enqueued" | "already_joined"
+      cooldownRemainingMs?: never
+    }
+  | {
+      entryId: undefined
+      status: "cooldown"
+      cooldownRemainingMs: number
+    }
+
+const getRankWeight = (rank: RankValue): number => RANK_WEIGHTS[rank]
 
 const isRankRangeValid = (minRank: RankValue, maxRank: RankValue): boolean => {
   return getRankWeight(minRank) <= getRankWeight(maxRank)
@@ -84,9 +95,251 @@ const validateQueueVolumeSettings = (args: {
   }
 
   if (args.matchesPerViewer > MAX_MATCHES_PER_VIEWER) {
-    throw new Error(
-      `matchesPerViewer cannot exceed ${MAX_MATCHES_PER_VIEWER}`
+    throw new Error(`matchesPerViewer cannot exceed ${MAX_MATCHES_PER_VIEWER}`)
+  }
+}
+
+async function getLinkedUserIdForPlatformIdentity(
+  ctx: QueueMutationCtx,
+  args: { platform: QueuePlatform; platformUserId: string }
+): Promise<Id<"users"> | undefined> {
+  const connection = await ctx.db
+    .query("connectedAccounts")
+    .withIndex("by_provider_and_providerUserId", (q) =>
+      q.eq("provider", args.platform).eq("providerUserId", args.platformUserId)
     )
+    .unique()
+
+  return connection?.userId
+}
+
+async function getExistingCooldown(
+  ctx: QueueMutationCtx,
+  args: {
+    queueId: Id<"viewerQueues">
+    platform: QueuePlatform
+    platformUserId: string
+  }
+) {
+  return await ctx.db
+    .query("viewerQueueCooldowns")
+    .withIndex("by_queueId_platformUserId_command", (q) =>
+      q
+        .eq("queueId", args.queueId)
+        .eq("platform", args.platform)
+        .eq("platformUserId", args.platformUserId)
+        .eq("command", "join")
+    )
+    .first()
+}
+
+async function upsertJoinCooldown(
+  ctx: QueueMutationCtx,
+  args: {
+    queueId: Id<"viewerQueues">
+    platform: QueuePlatform
+    platformUserId: string
+    now: number
+  }
+): Promise<void> {
+  const existing = await getExistingCooldown(ctx, args)
+
+  if (!existing) {
+    await ctx.db.insert("viewerQueueCooldowns", {
+      queueId: args.queueId,
+      platform: args.platform,
+      platformUserId: args.platformUserId,
+      command: "join",
+      lastUsedAt: args.now,
+    })
+    return
+  }
+
+  await ctx.db.patch(existing._id, {
+    lastUsedAt: args.now,
+  })
+}
+
+function mapEntryToSelectedUser(entry: {
+  platform: QueuePlatform
+  platformUserId: string
+  discordUserId?: string
+  username: string
+  displayName: string
+  avatarUrl?: string
+  linkedUserId?: Id<"users">
+  rank: RankValue
+}) {
+  return {
+    platform: entry.platform,
+    platformUserId: entry.platformUserId,
+    discordUserId: entry.discordUserId,
+    username: entry.username,
+    displayName: entry.displayName,
+    avatarUrl: entry.avatarUrl,
+    linkedUserId: entry.linkedUserId,
+    rank: entry.rank,
+    notificationMethod: undefined,
+    notificationStatus: undefined,
+    notificationFailureReason: undefined,
+    dmStatus: undefined,
+    dmFailureReason: undefined,
+  }
+}
+
+async function enqueueViewerFromPlatformCore(
+  ctx: QueueMutationCtx,
+  args: {
+    queueId: Id<"viewerQueues">
+    platform: QueuePlatform
+    platformUserId: string
+    username: string
+    displayName: string
+    avatarUrl?: string
+    rank: RankValue
+  }
+): Promise<QueueJoinResult> {
+  const queue = await ctx.db.get(args.queueId)
+
+  if (!queue) {
+    throw new Error("Queue not found")
+  }
+
+  if (!queue.isActive) {
+    throw new Error("Queue is not active")
+  }
+
+  const platformUserId = requireNonEmptyString(
+    args.platformUserId,
+    "platformUserId"
+  )
+  const username = requireNonEmptyString(args.username, "username")
+  const displayName = requireNonEmptyString(args.displayName, "displayName")
+
+  const existingCooldown = await getExistingCooldown(ctx, {
+    queueId: args.queueId,
+    platform: args.platform,
+    platformUserId,
+  })
+
+  const now = Date.now()
+
+  if (
+    existingCooldown &&
+    now - existingCooldown.lastUsedAt < JOIN_COOLDOWN_MS
+  ) {
+    return {
+      entryId: undefined,
+      status: "cooldown",
+      cooldownRemainingMs:
+        JOIN_COOLDOWN_MS - (now - existingCooldown.lastUsedAt),
+    }
+  }
+
+  const linkedUserId = await getLinkedUserIdForPlatformIdentity(ctx, {
+    platform: args.platform,
+    platformUserId,
+  })
+
+  const existingEntry = await ctx.db
+    .query("viewerQueueEntries")
+    .withIndex("by_queueId_and_platformUserId", (q) =>
+      q
+        .eq("queueId", args.queueId)
+        .eq("platform", args.platform)
+        .eq("platformUserId", platformUserId)
+    )
+    .first()
+
+  if (existingEntry) {
+    return {
+      entryId: existingEntry._id,
+      status: "already_joined",
+    }
+  }
+
+  if (linkedUserId) {
+    const linkedEntries = await ctx.db
+      .query("viewerQueueEntries")
+      .withIndex("by_linkedUserId", (q) => q.eq("linkedUserId", linkedUserId))
+      .collect()
+
+    const existingLinkedEntry = linkedEntries.find(
+      (entry) => entry.queueId === args.queueId
+    )
+
+    if (existingLinkedEntry) {
+      return {
+        entryId: existingLinkedEntry._id,
+        status: "already_joined",
+      }
+    }
+  }
+
+  const entryId = await ctx.db.insert("viewerQueueEntries", {
+    queueId: args.queueId,
+    platform: args.platform,
+    platformUserId,
+    discordUserId: args.platform === "discord" ? platformUserId : undefined,
+    username,
+    displayName,
+    avatarUrl: args.avatarUrl?.trim() || undefined,
+    linkedUserId,
+    rank: args.rank,
+    joinedAt: now,
+  })
+
+  await upsertJoinCooldown(ctx, {
+    queueId: args.queueId,
+    platform: args.platform,
+    platformUserId,
+    now,
+  })
+
+  return {
+    entryId,
+    status: "enqueued",
+  }
+}
+
+async function leaveQueueFromPlatformCore(
+  ctx: QueueMutationCtx,
+  args: {
+    queueId: Id<"viewerQueues">
+    platform: QueuePlatform
+    platformUserId: string
+  }
+): Promise<{ removed: true; entryId: Id<"viewerQueueEntries"> }> {
+  const queue = await ctx.db.get(args.queueId)
+
+  if (!queue) {
+    throw new Error("Queue not found")
+  }
+
+  const platformUserId = requireNonEmptyString(
+    args.platformUserId,
+    "platformUserId"
+  )
+
+  const entry = await ctx.db
+    .query("viewerQueueEntries")
+    .withIndex("by_queueId_and_platformUserId", (q) =>
+      q
+        .eq("queueId", args.queueId)
+        .eq("platform", args.platform)
+        .eq("platformUserId", platformUserId)
+    )
+    .first()
+
+  if (!entry) {
+    throw new Error("Viewer is not in the queue")
+  }
+
+  await ctx.db.delete(entry._id)
+
+  return {
+    removed: true,
+    entryId: entry._id,
   }
 }
 
@@ -98,6 +351,10 @@ export const createQueue = internalMutation({
     channelId: v.string(),
     channelName: v.optional(v.string()),
     channelPermsCorrect: v.optional(v.boolean()),
+    twitchBroadcasterId: v.string(),
+    twitchBroadcasterLogin: v.string(),
+    twitchCommandsEnabled: v.optional(v.boolean()),
+    twitchBotAnnouncementsEnabled: v.optional(v.boolean()),
     title: v.string(),
     creatorDisplayName: v.string(),
     gameLabel: v.string(),
@@ -118,6 +375,14 @@ export const createQueue = internalMutation({
 
     const guildId = requireNonEmptyString(args.guildId, "guildId")
     const channelId = requireNonEmptyString(args.channelId, "channelId")
+    const twitchBroadcasterId = requireNonEmptyString(
+      args.twitchBroadcasterId,
+      "twitchBroadcasterId"
+    )
+    const twitchBroadcasterLogin = requireNonEmptyString(
+      args.twitchBroadcasterLogin,
+      "twitchBroadcasterLogin"
+    )
     const guildName = args.guildName?.trim() || undefined
     const channelName = args.channelName?.trim() || undefined
     const channelPermsCorrect = args.channelPermsCorrect
@@ -130,13 +395,13 @@ export const createQueue = internalMutation({
 
     const existing = await ctx.db
       .query("viewerQueues")
-      .withIndex("by_guildId_and_channelId", (q) =>
-        q.eq("guildId", guildId).eq("channelId", channelId)
+      .withIndex("by_creatorUserId", (q) =>
+        q.eq("creatorUserId", args.creatorUserId)
       )
       .first()
 
     if (existing) {
-      throw new Error("A queue already exists for this guild and channel")
+      throw new Error("A queue already exists for this creator")
     }
 
     const now = Date.now()
@@ -148,6 +413,10 @@ export const createQueue = internalMutation({
       channelId,
       channelName,
       channelPermsCorrect,
+      twitchBroadcasterId,
+      twitchBroadcasterLogin,
+      twitchCommandsEnabled: args.twitchCommandsEnabled ?? true,
+      twitchBotAnnouncementsEnabled: args.twitchBotAnnouncementsEnabled ?? true,
       title,
       creatorDisplayName,
       gameLabel,
@@ -177,51 +446,36 @@ export const enqueueViewer = internalMutation({
     rank: rankValidator,
   },
   handler: async (ctx, args) => {
-    const queue = await ctx.db.get(args.queueId)
-
-    if (!queue) {
-      throw new Error("Queue not found")
-    }
-
-    if (!queue.isActive) {
-      throw new Error("Queue is not active")
-    }
-
-    const discordUserId = requireNonEmptyString(
-      args.discordUserId,
-      "discordUserId"
-    )
-    const username = requireNonEmptyString(args.username, "username")
-    const displayName = requireNonEmptyString(args.displayName, "displayName")
-
-    const existingEntry = await ctx.db
-      .query("viewerQueueEntries")
-      .withIndex("by_queueId_and_discordUserId", (q) =>
-        q.eq("queueId", args.queueId).eq("discordUserId", discordUserId)
-      )
-      .first()
-
-    if (existingEntry) {
-      return {
-        entryId: existingEntry._id,
-        status: "already_joined" as const,
-      }
-    }
-
-    const entryId = await ctx.db.insert("viewerQueueEntries", {
+    const result = await enqueueViewerFromPlatformCore(ctx, {
       queueId: args.queueId,
-      discordUserId,
-      username,
-      displayName,
-      avatarUrl: args.avatarUrl?.trim() || undefined,
+      platform: "discord",
+      platformUserId: args.discordUserId,
+      username: args.username,
+      displayName: args.displayName,
+      avatarUrl: args.avatarUrl,
       rank: args.rank,
-      joinedAt: Date.now(),
     })
 
     return {
-      entryId,
-      status: "enqueued" as const,
+      entryId: result.entryId,
+      status: result.status,
+      cooldownRemainingMs: result.cooldownRemainingMs,
     }
+  },
+})
+
+export const enqueueViewerFromPlatform = internalMutation({
+  args: {
+    queueId: v.id("viewerQueues"),
+    platform: queuePlatformValidator,
+    platformUserId: v.string(),
+    username: v.string(),
+    displayName: v.string(),
+    avatarUrl: v.optional(v.string()),
+    rank: rankValidator,
+  },
+  handler: async (ctx, args) => {
+    return await enqueueViewerFromPlatformCore(ctx, args)
   },
 })
 
@@ -240,12 +494,12 @@ export const selectNextBatch = internalMutation({
 
     const inviteCode = args.inviteCode?.trim()
 
-    if (queue.inviteMode === "discord_dm" && !inviteCode) {
-      throw new Error("Invite code is required for discord_dm mode")
+    if (queue.inviteMode === "bot_dm" && !inviteCode) {
+      throw new Error("Invite code is required for bot_dm mode")
     }
 
-    if (queue.inviteMode === "discord_dm" && !args.inviteCodeType) {
-      throw new Error("Invite code type is required for discord_dm mode")
+    if (queue.inviteMode === "bot_dm" && !args.inviteCodeType) {
+      throw new Error("Invite code type is required for bot_dm mode")
     }
 
     const entries = await ctx.db
@@ -265,13 +519,7 @@ export const selectNextBatch = internalMutation({
       throw new Error("No eligible viewers found")
     }
 
-    const selectedUsers = selectedEntries.map((entry) => ({
-      discordUserId: entry.discordUserId,
-      username: entry.username,
-      displayName: entry.displayName,
-      avatarUrl: entry.avatarUrl,
-      rank: entry.rank,
-    }))
+    const selectedUsers = selectedEntries.map(mapEntryToSelectedUser)
 
     for (const entry of selectedEntries) {
       await ctx.db.delete(entry._id)
@@ -322,23 +570,15 @@ export const inviteQueueEntryNow = internalMutation({
 
     const inviteCode = args.inviteCode?.trim()
 
-    if (queue.inviteMode === "discord_dm" && !inviteCode) {
-      throw new Error("Invite code is required for discord_dm mode")
+    if (queue.inviteMode === "bot_dm" && !inviteCode) {
+      throw new Error("Invite code is required for bot_dm mode")
     }
 
-    if (queue.inviteMode === "discord_dm" && !args.inviteCodeType) {
-      throw new Error("Invite code type is required for discord_dm mode")
+    if (queue.inviteMode === "bot_dm" && !args.inviteCodeType) {
+      throw new Error("Invite code type is required for bot_dm mode")
     }
 
-    const selectedUsers = [
-      {
-        discordUserId: entry.discordUserId,
-        username: entry.username,
-        displayName: entry.displayName,
-        avatarUrl: entry.avatarUrl,
-        rank: entry.rank,
-      },
-    ]
+    const selectedUsers = [mapEntryToSelectedUser(entry)]
 
     await ctx.db.delete(entry._id)
 
@@ -397,34 +637,22 @@ export const leaveQueue = internalMutation({
     discordUserId: v.string(),
   },
   handler: async (ctx, args) => {
-    const queue = await ctx.db.get(args.queueId)
+    return await leaveQueueFromPlatformCore(ctx, {
+      queueId: args.queueId,
+      platform: "discord",
+      platformUserId: args.discordUserId,
+    })
+  },
+})
 
-    if (!queue) {
-      throw new Error("Queue not found")
-    }
-
-    const discordUserId = requireNonEmptyString(
-      args.discordUserId,
-      "discordUserId"
-    )
-
-    const entry = await ctx.db
-      .query("viewerQueueEntries")
-      .withIndex("by_queueId_and_discordUserId", (q) =>
-        q.eq("queueId", args.queueId).eq("discordUserId", discordUserId)
-      )
-      .first()
-
-    if (!entry) {
-      throw new Error("Viewer is not in the queue")
-    }
-
-    await ctx.db.delete(entry._id)
-
-    return {
-      removed: true,
-      entryId: entry._id,
-    }
+export const leaveQueueFromPlatform = internalMutation({
+  args: {
+    queueId: v.id("viewerQueues"),
+    platform: queuePlatformValidator,
+    platformUserId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    return await leaveQueueFromPlatformCore(ctx, args)
   },
 })
 
@@ -493,6 +721,10 @@ export const updateQueueSettings = internalMutation({
     minRank: rankValidator,
     maxRank: rankValidator,
     inviteMode: inviteModeValidator,
+    twitchBroadcasterId: v.optional(v.string()),
+    twitchBroadcasterLogin: v.optional(v.string()),
+    twitchCommandsEnabled: v.optional(v.boolean()),
+    twitchBotAnnouncementsEnabled: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const queue = await ctx.db.get(args.queueId)
@@ -525,6 +757,25 @@ export const updateQueueSettings = internalMutation({
       minRank: args.minRank,
       maxRank: args.maxRank,
       inviteMode: args.inviteMode,
+      twitchBroadcasterId:
+        args.twitchBroadcasterId !== undefined
+          ? requireNonEmptyString(
+              args.twitchBroadcasterId,
+              "twitchBroadcasterId"
+            )
+          : queue.twitchBroadcasterId,
+      twitchBroadcasterLogin:
+        args.twitchBroadcasterLogin !== undefined
+          ? requireNonEmptyString(
+              args.twitchBroadcasterLogin,
+              "twitchBroadcasterLogin"
+            )
+          : queue.twitchBroadcasterLogin,
+      twitchCommandsEnabled:
+        args.twitchCommandsEnabled ?? queue.twitchCommandsEnabled,
+      twitchBotAnnouncementsEnabled:
+        args.twitchBotAnnouncementsEnabled ??
+        queue.twitchBotAnnouncementsEnabled,
       updatedAt: Date.now(),
     })
 
@@ -654,6 +905,42 @@ export const setQueueDiscordContext = internalMutation({
   },
 })
 
+export const setQueueTwitchContext = internalMutation({
+  args: {
+    queueId: v.id("viewerQueues"),
+    twitchBroadcasterId: v.string(),
+    twitchBroadcasterLogin: v.string(),
+    twitchCommandsEnabled: v.optional(v.boolean()),
+    twitchBotAnnouncementsEnabled: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    const queue = await ctx.db.get(args.queueId)
+
+    if (!queue) {
+      throw new Error("Queue not found")
+    }
+
+    await ctx.db.patch(args.queueId, {
+      twitchBroadcasterId: requireNonEmptyString(
+        args.twitchBroadcasterId,
+        "twitchBroadcasterId"
+      ),
+      twitchBroadcasterLogin: requireNonEmptyString(
+        args.twitchBroadcasterLogin,
+        "twitchBroadcasterLogin"
+      ),
+      twitchCommandsEnabled:
+        args.twitchCommandsEnabled ?? queue.twitchCommandsEnabled,
+      twitchBotAnnouncementsEnabled:
+        args.twitchBotAnnouncementsEnabled ??
+        queue.twitchBotAnnouncementsEnabled,
+      updatedAt: Date.now(),
+    })
+
+    return { queueId: args.queueId }
+  },
+})
+
 export const setQueueRoundSelectedUsers = internalMutation({
   args: {
     roundId: v.id("viewerQueueRounds"),
@@ -674,6 +961,60 @@ export const setQueueRoundSelectedUsers = internalMutation({
     return {
       roundId: args.roundId,
       selectedCount: args.selectedUsers.length,
+    }
+  },
+})
+
+export const recordRoundNotificationResult = internalMutation({
+  args: {
+    roundId: v.id("viewerQueueRounds"),
+    platform: queuePlatformValidator,
+    platformUserId: v.string(),
+    notificationMethod: queueNotificationMethodValidator,
+    notificationStatus: v.union(v.literal("sent"), v.literal("failed")),
+    notificationFailureReason: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const round = await ctx.db.get(args.roundId)
+
+    if (!round) {
+      throw new Error("Queue round not found")
+    }
+
+    const normalizedPlatformUserId = args.platformUserId.trim()
+
+    const nextSelectedUsers = round.selectedUsers.map((user) => {
+      if (
+        user.platform !== args.platform ||
+        user.platformUserId !== normalizedPlatformUserId
+      ) {
+        return user
+      }
+
+      return {
+        ...user,
+        notificationMethod: args.notificationMethod,
+        notificationStatus: args.notificationStatus,
+        notificationFailureReason:
+          args.notificationFailureReason?.trim() || undefined,
+        dmStatus:
+          args.notificationMethod === "discord_dm"
+            ? args.notificationStatus
+            : user.dmStatus,
+        dmFailureReason:
+          args.notificationMethod === "discord_dm"
+            ? args.notificationFailureReason?.trim() || undefined
+            : user.dmFailureReason,
+      }
+    })
+
+    await ctx.db.patch(args.roundId, {
+      selectedUsers: nextSelectedUsers,
+      selectedCount: nextSelectedUsers.length,
+    })
+
+    return {
+      roundId: args.roundId,
     }
   },
 })

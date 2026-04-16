@@ -805,19 +805,6 @@ export declare const api: {
         any
       >;
     };
-    creatorTools: {
-      playingWithViewers: {
-        queue: {
-          getCurrentCreatorQueue: FunctionReference<"query", "public", {}, any>;
-          getCurrentCreatorQueueEntries: FunctionReference<
-            "query",
-            "public",
-            { queueId: Id<"viewerQueues"> },
-            any
-          >;
-        };
-      };
-    };
     oauth: {
       getClientByClientId: FunctionReference<
         "query",
@@ -1383,7 +1370,7 @@ export declare const internal: {
               gameLabel: string;
               guildId: string;
               guildName?: string;
-              inviteMode: "discord_dm" | "manual_creator_contact";
+              inviteMode: "bot_dm" | "manual_creator_contact";
               matchesPerViewer: number;
               maxRank:
                 | "bronze"
@@ -1406,6 +1393,10 @@ export declare const internal: {
               playersPerBatch: number;
               rulesText?: string;
               title: string;
+              twitchBotAnnouncementsEnabled?: boolean;
+              twitchBroadcasterId: string;
+              twitchBroadcasterLogin: string;
+              twitchCommandsEnabled?: boolean;
             },
             any
           >;
@@ -1416,6 +1407,28 @@ export declare const internal: {
               avatarUrl?: string;
               discordUserId: string;
               displayName: string;
+              queueId: Id<"viewerQueues">;
+              rank:
+                | "bronze"
+                | "silver"
+                | "gold"
+                | "platinum"
+                | "diamond"
+                | "crimson"
+                | "iridescent"
+                | "top250";
+              username: string;
+            },
+            any
+          >;
+          enqueueViewerFromPlatform: FunctionReference<
+            "mutation",
+            "internal",
+            {
+              avatarUrl?: string;
+              displayName: string;
+              platform: "discord" | "twitch";
+              platformUserId: string;
               queueId: Id<"viewerQueues">;
               rank:
                 | "bronze"
@@ -1444,6 +1457,33 @@ export declare const internal: {
             "mutation",
             "internal",
             { discordUserId: string; queueId: Id<"viewerQueues"> },
+            any
+          >;
+          leaveQueueFromPlatform: FunctionReference<
+            "mutation",
+            "internal",
+            {
+              platform: "discord" | "twitch";
+              platformUserId: string;
+              queueId: Id<"viewerQueues">;
+            },
+            any
+          >;
+          recordRoundNotificationResult: FunctionReference<
+            "mutation",
+            "internal",
+            {
+              notificationFailureReason?: string;
+              notificationMethod:
+                | "discord_dm"
+                | "twitch_whisper"
+                | "twitch_chat_fallback"
+                | "manual_creator_contact";
+              notificationStatus: "sent" | "failed";
+              platform: "discord" | "twitch";
+              platformUserId: string;
+              roundId: Id<"viewerQueueRounds">;
+            },
             any
           >;
           removeQueueEntry: FunctionReference<
@@ -1500,10 +1540,20 @@ export declare const internal: {
               roundId: Id<"viewerQueueRounds">;
               selectedUsers: Array<{
                 avatarUrl?: string;
-                discordUserId: string;
+                discordUserId?: string;
                 displayName: string;
                 dmFailureReason?: string;
                 dmStatus?: "sent" | "failed";
+                linkedUserId?: Id<"users">;
+                notificationFailureReason?: string;
+                notificationMethod?:
+                  | "discord_dm"
+                  | "twitch_whisper"
+                  | "twitch_chat_fallback"
+                  | "manual_creator_contact";
+                notificationStatus?: "sent" | "failed";
+                platform: "discord" | "twitch";
+                platformUserId: string;
                 rank:
                   | "bronze"
                   | "silver"
@@ -1518,6 +1568,18 @@ export declare const internal: {
             },
             any
           >;
+          setQueueTwitchContext: FunctionReference<
+            "mutation",
+            "internal",
+            {
+              queueId: Id<"viewerQueues">;
+              twitchBotAnnouncementsEnabled?: boolean;
+              twitchBroadcasterId: string;
+              twitchBroadcasterLogin: string;
+              twitchCommandsEnabled?: boolean;
+            },
+            any
+          >;
           updateQueueSettings: FunctionReference<
             "mutation",
             "internal",
@@ -1525,7 +1587,7 @@ export declare const internal: {
               creatorDisplayName: string;
               creatorMessage?: string;
               gameLabel: string;
-              inviteMode: "discord_dm" | "manual_creator_contact";
+              inviteMode: "bot_dm" | "manual_creator_contact";
               matchesPerViewer: number;
               maxRank:
                 | "bronze"
@@ -1549,6 +1611,10 @@ export declare const internal: {
               queueId: Id<"viewerQueues">;
               rulesText?: string;
               title: string;
+              twitchBotAnnouncementsEnabled?: boolean;
+              twitchBroadcasterId?: string;
+              twitchBroadcasterLogin?: string;
+              twitchCommandsEnabled?: boolean;
             },
             any
           >;
@@ -1874,16 +1940,30 @@ export declare const internal: {
             { queueId: Id<"viewerQueues"> },
             any
           >;
+          getQueueByTwitchBroadcasterId: FunctionReference<
+            "query",
+            "internal",
+            { twitchBroadcasterId: string },
+            any
+          >;
           getQueueEntries: FunctionReference<
             "query",
             "internal",
             { queueId: Id<"viewerQueues"> },
             any
           >;
-          getQueueEntryById: FunctionReference<
+        };
+        twitch: {
+          getEnabledTwitchQueues: FunctionReference<
             "query",
             "internal",
-            { entryId: Id<"viewerQueueEntries"> },
+            {},
+            any
+          >;
+          getQueueSnapshotForTwitch: FunctionReference<
+            "query",
+            "internal",
+            { platformUserId?: string; queueId: Id<"viewerQueues"> },
             any
           >;
         };
