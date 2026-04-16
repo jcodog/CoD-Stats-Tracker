@@ -617,8 +617,7 @@ export function StaffBillingView({
           effectivePlan: plan,
           effectivePlanKey: plan.key,
         }) === "creator"
-    ) ??
-    null
+    ) ?? null
   const creatorGrantRecordsByUserId = new Map<
     string,
     StaffCreatorGrantRecord | null
@@ -1564,7 +1563,10 @@ export function StaffBillingView({
           { label: "Plans", value: data.plans.length },
           { label: "Features", value: data.features.length },
           { label: "Customers", value: data.customers.length },
-          { label: "Active subscriptions", value: data.activeSubscriptionCount },
+          {
+            label: "Active subscriptions",
+            value: data.activeSubscriptionCount,
+          },
           {
             label: "Last sync",
             value: data.lastSync ? data.lastSync.result : "Never",
@@ -1640,43 +1642,43 @@ export function StaffBillingView({
             description="Latest catalog edits, assignment changes, and manual sync events recorded by staff tooling."
             title="Recent billing activity"
           >
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>When</TableHead>
-                    <TableHead>Action</TableHead>
-                    <TableHead>Summary</TableHead>
-                    <TableHead>Result</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {recentBillingActivity.length > 0 ? (
-                    recentBillingActivity.map((log) => (
-                      <TableRow key={log.id}>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {formatDateTime(log.createdAt)}
-                        </TableCell>
-                        <TableCell>{log.action}</TableCell>
-                        <TableCell className="max-w-xl whitespace-normal">
-                          {log.summary}
-                        </TableCell>
-                        <TableCell>
-                          <BillingAuditResultBadge result={log.result} />
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  ) : (
-                    <TableRow>
-                      <TableCell
-                        className="py-8 text-center text-sm text-muted-foreground"
-                        colSpan={4}
-                      >
-                        No billing activity has been recorded yet.
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>When</TableHead>
+                  <TableHead>Action</TableHead>
+                  <TableHead>Summary</TableHead>
+                  <TableHead>Result</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {recentBillingActivity.length > 0 ? (
+                  recentBillingActivity.map((log) => (
+                    <TableRow key={log.id}>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {formatDateTime(log.createdAt)}
+                      </TableCell>
+                      <TableCell>{log.action}</TableCell>
+                      <TableCell className="max-w-xl whitespace-normal">
+                        {log.summary}
+                      </TableCell>
+                      <TableCell>
+                        <BillingAuditResultBadge result={log.result} />
                       </TableCell>
                     </TableRow>
-                  )}
-                </TableBody>
-              </Table>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell
+                      className="py-8 text-center text-sm text-muted-foreground"
+                      colSpan={4}
+                    >
+                      No billing activity has been recorded yet.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
           </StaffSection>
         </div>
       ) : null}
@@ -1753,60 +1755,60 @@ export function StaffBillingView({
             description="Payment failures and action-required subscriptions that support staff should watch most closely."
             title="Attention-needed subscriptions"
           >
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>User</TableHead>
-                    <TableHead>Plan</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Attention</TableHead>
-                    <TableHead>Next date</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {attentionSubscriptions.length > 0 ? (
-                    attentionSubscriptions.map((subscription) => (
-                      <TableRow key={subscription.stripeSubscriptionId}>
-                        <TableCell>
-                          <div className="flex flex-col gap-1">
-                            <span className="font-medium">
-                              {subscription.userName}
-                            </span>
-                            <span className="text-xs text-muted-foreground">
-                              {subscription.email ?? subscription.clerkUserId}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell>{subscription.planKey}</TableCell>
-                        <TableCell>
-                          <BillingSubscriptionStatusBadge
-                            status={subscription.status}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <BillingAttentionBadge
-                            status={subscription.attentionStatus ?? "none"}
-                          />
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {subscription.currentPeriodEnd
-                            ? formatDateTime(subscription.currentPeriodEnd)
-                            : "Not set"}
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  ) : (
-                    <TableRow>
-                      <TableCell
-                        className="py-8 text-center text-sm text-muted-foreground"
-                        colSpan={5}
-                      >
-                        No subscriptions currently require support attention.
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>User</TableHead>
+                  <TableHead>Plan</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Attention</TableHead>
+                  <TableHead>Next date</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {attentionSubscriptions.length > 0 ? (
+                  attentionSubscriptions.map((subscription) => (
+                    <TableRow key={subscription.stripeSubscriptionId}>
+                      <TableCell>
+                        <div className="flex flex-col gap-1">
+                          <span className="font-medium">
+                            {subscription.userName}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            {subscription.email ?? subscription.clerkUserId}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell>{subscription.planKey}</TableCell>
+                      <TableCell>
+                        <BillingSubscriptionStatusBadge
+                          status={subscription.status}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <BillingAttentionBadge
+                          status={subscription.attentionStatus ?? "none"}
+                        />
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {subscription.currentPeriodEnd
+                          ? formatDateTime(subscription.currentPeriodEnd)
+                          : "Not set"}
                       </TableCell>
                     </TableRow>
-                  )}
-                </TableBody>
-              </Table>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell
+                      className="py-8 text-center text-sm text-muted-foreground"
+                      colSpan={5}
+                    >
+                      No subscriptions currently require support attention.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
           </StaffSection>
 
           <StaffSection
@@ -1814,63 +1816,63 @@ export function StaffBillingView({
             description="Recent in-scope subscription records for support review."
             title="Recent subscription rows"
           >
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>User</TableHead>
-                    <TableHead>Plan</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Schedule</TableHead>
-                    <TableHead>Current period end</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {recentSubscriptionRows.length > 0 ? (
-                    recentSubscriptionRows.map((subscription) => (
-                      <TableRow key={subscription.stripeSubscriptionId}>
-                        <TableCell>
-                          <div className="flex flex-col gap-1">
-                            <span className="font-medium">
-                              {subscription.userName}
-                            </span>
-                            <span className="text-xs text-muted-foreground">
-                              {subscription.email ?? subscription.clerkUserId}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell>{subscription.planKey}</TableCell>
-                        <TableCell className="space-y-2">
-                          <BillingSubscriptionStatusBadge
-                            status={subscription.status}
-                          />
-                          <BillingAttentionBadge
-                            status={subscription.attentionStatus ?? "none"}
-                          />
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {subscription.scheduledChangeType
-                            ? `${subscription.scheduledChangeType.replaceAll("_", " ")} on ${subscription.scheduledChangeAt ? formatDateTime(subscription.scheduledChangeAt) : "next cycle"}`
-                            : "None"}
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {subscription.currentPeriodEnd
-                            ? formatDateTime(subscription.currentPeriodEnd)
-                            : "Not set"}
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  ) : (
-                    <TableRow>
-                      <TableCell
-                        className="py-8 text-center text-sm text-muted-foreground"
-                        colSpan={5}
-                      >
-                        No in-scope subscription rows are available yet.
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>User</TableHead>
+                  <TableHead>Plan</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Schedule</TableHead>
+                  <TableHead>Current period end</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {recentSubscriptionRows.length > 0 ? (
+                  recentSubscriptionRows.map((subscription) => (
+                    <TableRow key={subscription.stripeSubscriptionId}>
+                      <TableCell>
+                        <div className="flex flex-col gap-1">
+                          <span className="font-medium">
+                            {subscription.userName}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            {subscription.email ?? subscription.clerkUserId}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell>{subscription.planKey}</TableCell>
+                      <TableCell className="space-y-2">
+                        <BillingSubscriptionStatusBadge
+                          status={subscription.status}
+                        />
+                        <BillingAttentionBadge
+                          status={subscription.attentionStatus ?? "none"}
+                        />
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {subscription.scheduledChangeType
+                          ? `${subscription.scheduledChangeType.replaceAll("_", " ")} on ${subscription.scheduledChangeAt ? formatDateTime(subscription.scheduledChangeAt) : "next cycle"}`
+                          : "None"}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {subscription.currentPeriodEnd
+                          ? formatDateTime(subscription.currentPeriodEnd)
+                          : "Not set"}
                       </TableCell>
                     </TableRow>
-                  )}
-                </TableBody>
-              </Table>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell
+                      className="py-8 text-center text-sm text-muted-foreground"
+                      colSpan={5}
+                    >
+                      No in-scope subscription rows are available yet.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
           </StaffSection>
         </div>
       ) : null}
@@ -1880,21 +1882,19 @@ export function StaffBillingView({
           description="Create, edit, archive, and replace managed billing plans and prices."
           title="Plans"
         >
-            <StaffDataTable
-              columns={planColumns}
-              data={data.plans}
-              emptyDescription="Create the first billing plan to start syncing catalog data."
-              emptyTitle="No plans yet"
-              getRowId={(row) => row.key}
-              searchPlaceholder="Search plans"
-              toolbar={
-                <Button
-                  onClick={() => setPlanForm(makePlanFormState("create"))}
-                >
-                  New plan
-                </Button>
-              }
-            />
+          <StaffDataTable
+            columns={planColumns}
+            data={data.plans}
+            emptyDescription="Create the first billing plan to start syncing catalog data."
+            emptyTitle="No plans yet"
+            getRowId={(row) => row.key}
+            searchPlaceholder="Search plans"
+            toolbar={
+              <Button onClick={() => setPlanForm(makePlanFormState("create"))}>
+                New plan
+              </Button>
+            }
+          />
         </StaffSection>
       ) : null}
 
@@ -1903,21 +1903,21 @@ export function StaffBillingView({
           description="Distinguish entitlement features from marketing-only copy and keep assignments explicit."
           title="Features"
         >
-            <StaffDataTable
-              columns={featureColumns}
-              data={data.features}
-              emptyDescription="Create the first feature to start mapping plans to entitlements."
-              emptyTitle="No features yet"
-              getRowId={(row) => row.key}
-              searchPlaceholder="Search features"
-              toolbar={
-                <Button
-                  onClick={() => setFeatureForm(makeFeatureFormState("create"))}
-                >
-                  New feature
-                </Button>
-              }
-            />
+          <StaffDataTable
+            columns={featureColumns}
+            data={data.features}
+            emptyDescription="Create the first feature to start mapping plans to entitlements."
+            emptyTitle="No features yet"
+            getRowId={(row) => row.key}
+            searchPlaceholder="Search features"
+            toolbar={
+              <Button
+                onClick={() => setFeatureForm(makeFeatureFormState("create"))}
+              >
+                New feature
+              </Button>
+            }
+          />
         </StaffSection>
       ) : null}
 
@@ -1928,82 +1928,81 @@ export function StaffBillingView({
             description="Pick a feature, choose every plan it should belong to, and review the impact before syncing."
             title="Assignment editor"
           >
-              {selectedAssignmentFeature ? (
-                <>
-                  <div className="grid gap-4 lg:grid-cols-[minmax(0,16rem)_minmax(0,1fr)]">
-                    <Field>
-                      <FieldLabel>Feature</FieldLabel>
-                      <AppSelect
-                        onValueChange={(value) => {
-                          const nextFeature = data.features.find(
-                            (feature) => feature.key === value
-                          )
+            {selectedAssignmentFeature ? (
+              <>
+                <div className="grid gap-4 lg:grid-cols-[minmax(0,16rem)_minmax(0,1fr)]">
+                  <Field>
+                    <FieldLabel>Feature</FieldLabel>
+                    <AppSelect
+                      onValueChange={(value) => {
+                        const nextFeature = data.features.find(
+                          (feature) => feature.key === value
+                        )
 
-                          setAssignmentEditor({
-                            featureKey: value,
-                            planKeys: nextFeature?.linkedPlanKeys ?? [],
-                          })
-                        }}
-                        options={data.features
-                          .filter((feature) => feature.active)
-                          .map((feature) => ({
-                            label: feature.name,
-                            value: feature.key,
-                          }))}
-                        value={selectedAssignmentFeature.key}
-                      />
-                      <FieldDescription>
-                        Archived features cannot be assigned to plans.
-                      </FieldDescription>
-                    </Field>
+                        setAssignmentEditor({
+                          featureKey: value,
+                          planKeys: nextFeature?.linkedPlanKeys ?? [],
+                        })
+                      }}
+                      options={data.features
+                        .filter((feature) => feature.active)
+                        .map((feature) => ({
+                          label: feature.name,
+                          value: feature.key,
+                        }))}
+                      value={selectedAssignmentFeature.key}
+                    />
+                    <FieldDescription>
+                      Archived features cannot be assigned to plans.
+                    </FieldDescription>
+                  </Field>
 
-                    <Field>
-                      <FieldLabel>Assigned plans</FieldLabel>
-                      <MultiSelectCombobox
-                        emptyLabel="No plans match this search."
-                        onChange={(values) =>
-                          setAssignmentEditor((current) => ({
-                            ...current,
-                            featureKey: selectedAssignmentFeature.key,
-                            planKeys: values,
-                          }))
-                        }
-                        options={planOptions}
-                        placeholder="Search plans"
-                        value={assignmentPlanKeys}
-                      />
-                      <FieldDescription>
-                        Removing a plan here detaches the feature on the next
-                        sync. Saving uses the exact set shown above.
-                      </FieldDescription>
-                    </Field>
-                  </div>
-
-                  <div className="flex flex-col gap-3 rounded-lg border border-border/70 bg-muted/20 px-4 py-4 md:flex-row md:items-center md:justify-between">
-                    <div className="space-y-1 text-sm">
-                      <div className="font-medium">
-                        {selectedAssignmentFeature.name} is currently linked to{" "}
-                        {selectedAssignmentFeature.linkedPlanKeys.length}{" "}
-                        plan(s).
-                      </div>
-                      <div className="text-muted-foreground">
-                        Review the impact before changing entitlement or
-                        marketing coverage.
-                      </div>
-                    </div>
-                    <Button
-                      disabled={!assignmentChanged || billingMutation.isPending}
-                      onClick={() => void reviewFeatureAssignments()}
-                    >
-                      Review assignment impact
-                    </Button>
-                  </div>
-                </>
-              ) : (
-                <div className="rounded-lg border border-border/70 bg-muted/20 px-4 py-4 text-sm text-muted-foreground">
-                  Create an active feature before configuring assignments.
+                  <Field>
+                    <FieldLabel>Assigned plans</FieldLabel>
+                    <MultiSelectCombobox
+                      emptyLabel="No plans match this search."
+                      onChange={(values) =>
+                        setAssignmentEditor((current) => ({
+                          ...current,
+                          featureKey: selectedAssignmentFeature.key,
+                          planKeys: values,
+                        }))
+                      }
+                      options={planOptions}
+                      placeholder="Search plans"
+                      value={assignmentPlanKeys}
+                    />
+                    <FieldDescription>
+                      Removing a plan here detaches the feature on the next
+                      sync. Saving uses the exact set shown above.
+                    </FieldDescription>
+                  </Field>
                 </div>
-              )}
+
+                <div className="flex flex-col gap-3 rounded-lg border border-border/70 bg-muted/20 px-4 py-4 md:flex-row md:items-center md:justify-between">
+                  <div className="space-y-1 text-sm">
+                    <div className="font-medium">
+                      {selectedAssignmentFeature.name} is currently linked to{" "}
+                      {selectedAssignmentFeature.linkedPlanKeys.length} plan(s).
+                    </div>
+                    <div className="text-muted-foreground">
+                      Review the impact before changing entitlement or marketing
+                      coverage.
+                    </div>
+                  </div>
+                  <Button
+                    disabled={!assignmentChanged || billingMutation.isPending}
+                    onClick={() => void reviewFeatureAssignments()}
+                  >
+                    Review assignment impact
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <div className="rounded-lg border border-border/70 bg-muted/20 px-4 py-4 text-sm text-muted-foreground">
+                Create an active feature before configuring assignments.
+              </div>
+            )}
           </StaffSection>
 
           <StaffSection
@@ -2011,45 +2010,45 @@ export function StaffBillingView({
             description="Review what each plan includes before changing entitlements or marketing copy."
             title="Plan-feature matrix"
           >
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Feature</TableHead>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Feature</TableHead>
+                  {data.plans.map((plan) => (
+                    <TableHead key={plan.key}>{plan.name}</TableHead>
+                  ))}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.features.map((feature) => (
+                  <TableRow key={feature.key}>
+                    <TableCell>
+                      <div className="flex flex-col gap-1">
+                        <span className="font-medium">{feature.name}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {feature.appliesTo}
+                        </span>
+                      </div>
+                    </TableCell>
                     {data.plans.map((plan) => (
-                      <TableHead key={plan.key}>{plan.name}</TableHead>
+                      <TableCell key={`${plan.key}:${feature.key}`}>
+                        <Badge
+                          variant={
+                            plan.includedFeatureKeys.includes(feature.key)
+                              ? "secondary"
+                              : "outline"
+                          }
+                        >
+                          {plan.includedFeatureKeys.includes(feature.key)
+                            ? "Included"
+                            : "Not included"}
+                        </Badge>
+                      </TableCell>
                     ))}
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {data.features.map((feature) => (
-                    <TableRow key={feature.key}>
-                      <TableCell>
-                        <div className="flex flex-col gap-1">
-                          <span className="font-medium">{feature.name}</span>
-                          <span className="text-xs text-muted-foreground">
-                            {feature.appliesTo}
-                          </span>
-                        </div>
-                      </TableCell>
-                      {data.plans.map((plan) => (
-                        <TableCell key={`${plan.key}:${feature.key}`}>
-                          <Badge
-                            variant={
-                              plan.includedFeatureKeys.includes(feature.key)
-                                ? "secondary"
-                                : "outline"
-                            }
-                          >
-                            {plan.includedFeatureKeys.includes(feature.key)
-                              ? "Included"
-                              : "Not included"}
-                          </Badge>
-                        </TableCell>
-                      ))}
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                ))}
+              </TableBody>
+            </Table>
           </StaffSection>
         </div>
       ) : null}
@@ -2061,34 +2060,34 @@ export function StaffBillingView({
             description="Convex remains the editable source of truth. Sync pushes the current managed catalog to Stripe."
             title="Catalog sync"
           >
-              <div className="rounded-lg border border-border/70 bg-muted/30 px-3 py-3 text-sm">
-                {data.lastSync
-                  ? data.lastSync.summary
-                  : "No sync has completed yet."}
+            <div className="rounded-lg border border-border/70 bg-muted/30 px-3 py-3 text-sm">
+              {data.lastSync
+                ? data.lastSync.summary
+                : "No sync has completed yet."}
+            </div>
+            <div className="grid gap-3 text-sm">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-muted-foreground">Last sync</span>
+                <span className="font-medium">
+                  {data.lastSync
+                    ? formatDateTime(data.lastSync.syncedAt)
+                    : "Never"}
+                </span>
               </div>
-              <div className="grid gap-3 text-sm">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-muted-foreground">Last sync</span>
-                  <span className="font-medium">
-                    {data.lastSync
-                      ? formatDateTime(data.lastSync.syncedAt)
-                      : "Never"}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-muted-foreground">Warnings</span>
-                  <span className="font-medium">
-                    {data.lastSync?.warningCount ?? 0}
-                  </span>
-                </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-muted-foreground">Warnings</span>
+                <span className="font-medium">
+                  {data.lastSync?.warningCount ?? 0}
+                </span>
               </div>
-              <Button
-                disabled={billingMutation.isPending}
-                onClick={() => void runManualSync()}
-              >
-                <IconPlugConnected data-icon="inline-start" />
-                Run manual sync
-              </Button>
+            </div>
+            <Button
+              disabled={billingMutation.isPending}
+              onClick={() => void runManualSync()}
+            >
+              <IconPlugConnected data-icon="inline-start" />
+              Run manual sync
+            </Button>
           </StaffSection>
 
           <div className="grid gap-6">
@@ -2097,34 +2096,33 @@ export function StaffBillingView({
               description="Paid plans without a complete Stripe product or price shape are listed here for cleanup."
               title="Plans needing attention"
             >
-                {syncAttentionPlanCount > 0 ? (
-                  data.plans
-                    .filter((plan) => plan.syncStatus === "attention")
-                    .map((plan) => (
-                      <div
-                        className="flex items-center justify-between gap-4 rounded-lg border border-border/70 px-4 py-3"
-                        key={plan.key}
-                      >
-                        <div className="flex flex-col gap-1">
-                          <span className="font-medium">{plan.name}</span>
-                          <span className="text-xs text-muted-foreground">
-                            {plan.key}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <span className="text-sm text-muted-foreground">
-                            {plan.activeSubscriptionCount} active
-                            subscription(s)
-                          </span>
-                          <SyncStatusBadge status={plan.syncStatus} />
-                        </div>
+              {syncAttentionPlanCount > 0 ? (
+                data.plans
+                  .filter((plan) => plan.syncStatus === "attention")
+                  .map((plan) => (
+                    <div
+                      className="flex items-center justify-between gap-4 rounded-lg border border-border/70 px-4 py-3"
+                      key={plan.key}
+                    >
+                      <div className="flex flex-col gap-1">
+                        <span className="font-medium">{plan.name}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {plan.key}
+                        </span>
                       </div>
-                    ))
-                ) : (
-                  <div className="rounded-lg border border-border/70 bg-muted/20 px-4 py-4 text-sm text-muted-foreground">
-                    No plans currently require sync remediation.
-                  </div>
-                )}
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm text-muted-foreground">
+                          {plan.activeSubscriptionCount} active subscription(s)
+                        </span>
+                        <SyncStatusBadge status={plan.syncStatus} />
+                      </div>
+                    </div>
+                  ))
+              ) : (
+                <div className="rounded-lg border border-border/70 bg-muted/20 px-4 py-4 text-sm text-muted-foreground">
+                  No plans currently require sync remediation.
+                </div>
+              )}
             </StaffSection>
 
             <StaffSection
@@ -2132,41 +2130,41 @@ export function StaffBillingView({
               description="Most recent manual or automatic Stripe catalog sync results."
               title="Recent sync history"
             >
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>When</TableHead>
-                      <TableHead>Summary</TableHead>
-                      <TableHead>Result</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {recentSyncLogs.length > 0 ? (
-                      recentSyncLogs.map((log) => (
-                        <TableRow key={log.id}>
-                          <TableCell className="text-sm text-muted-foreground">
-                            {formatDateTime(log.createdAt)}
-                          </TableCell>
-                          <TableCell className="max-w-2xl whitespace-normal">
-                            {log.summary}
-                          </TableCell>
-                          <TableCell>
-                            <BillingAuditResultBadge result={log.result} />
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    ) : (
-                      <TableRow>
-                        <TableCell
-                          className="py-8 text-center text-sm text-muted-foreground"
-                          colSpan={3}
-                        >
-                          No sync records have been captured yet.
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>When</TableHead>
+                    <TableHead>Summary</TableHead>
+                    <TableHead>Result</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {recentSyncLogs.length > 0 ? (
+                    recentSyncLogs.map((log) => (
+                      <TableRow key={log.id}>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {formatDateTime(log.createdAt)}
+                        </TableCell>
+                        <TableCell className="max-w-2xl whitespace-normal">
+                          {log.summary}
+                        </TableCell>
+                        <TableCell>
+                          <BillingAuditResultBadge result={log.result} />
                         </TableCell>
                       </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell
+                        className="py-8 text-center text-sm text-muted-foreground"
+                        colSpan={3}
+                      >
+                        No sync records have been captured yet.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
             </StaffSection>
           </div>
         </div>
@@ -2177,33 +2175,33 @@ export function StaffBillingView({
           description="Catalog changes, sync runs, assignment updates, and destructive operations are captured here."
           title="Billing audit log"
         >
-            <StaffDataTable
-              columns={catalogAuditColumns}
-              data={filteredCatalogAuditLogs}
-              emptyDescription={
-                data.auditLogs.length > 0
-                  ? "Try adjusting the search or filters."
-                  : "Catalog billing actions will appear here once staff changes are recorded."
-              }
-              emptyTitle={
-                data.auditLogs.length > 0
-                  ? "No audit entries match"
-                  : "No audit entries yet"
-              }
-              getRowId={(row) => row.id}
-              searchPlaceholder="Search actions or summaries"
-              toolbar={
-                <div className="w-full xl:w-[38rem]">
-                  <StaffMultiFilterCombobox
-                    emptyLabel="No audit filters match this search."
-                    groups={catalogAuditFilterGroups}
-                    onChange={setCatalogAuditFilters}
-                    placeholder="Filter select"
-                    value={catalogAuditFilters}
-                  />
-                </div>
-              }
-            />
+          <StaffDataTable
+            columns={catalogAuditColumns}
+            data={filteredCatalogAuditLogs}
+            emptyDescription={
+              data.auditLogs.length > 0
+                ? "Try adjusting the search or filters."
+                : "Catalog billing actions will appear here once staff changes are recorded."
+            }
+            emptyTitle={
+              data.auditLogs.length > 0
+                ? "No audit entries match"
+                : "No audit entries yet"
+            }
+            getRowId={(row) => row.id}
+            searchPlaceholder="Search actions or summaries"
+            toolbar={
+              <div className="w-full xl:w-[38rem]">
+                <StaffMultiFilterCombobox
+                  emptyLabel="No audit filters match this search."
+                  groups={catalogAuditFilterGroups}
+                  onChange={setCatalogAuditFilters}
+                  placeholder="Filter select"
+                  value={catalogAuditFilters}
+                />
+              </div>
+            }
+          />
         </StaffSection>
       ) : null}
 
@@ -2213,14 +2211,14 @@ export function StaffBillingView({
             description="Linked billing customers and the live plan coverage currently attached to each account."
             title="Customers"
           >
-              <StaffDataTable
-                columns={customerColumns}
-                data={data.customers}
-                emptyDescription="Billing customer records will appear here once subscriptions or customer sync records are created."
-                emptyTitle="No customers yet"
-                getRowId={(row) => row.stripeCustomerId}
-                searchPlaceholder="Search customers"
-              />
+            <StaffDataTable
+              columns={customerColumns}
+              data={data.customers}
+              emptyDescription="Billing customer records will appear here once subscriptions or customer sync records are created."
+              emptyTitle="No customers yet"
+              getRowId={(row) => row.stripeCustomerId}
+              searchPlaceholder="Search customers"
+            />
           </StaffSection>
         </div>
       ) : null}
@@ -2248,93 +2246,93 @@ export function StaffBillingView({
               description="Apply the managed Creator override to one or more users with a required reason and explicit confirmation."
               title="Grant Creator access"
             >
-                {canManageCreatorAccess ? (
-                  <FieldGroup>
-                    <Field>
-                      <FieldLabel>Managed plan</FieldLabel>
-                      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/70 bg-muted/20 px-3 py-2">
-                        <Badge
-                          variant={creatorAccessPlan ? "secondary" : "outline"}
-                        >
-                          {creatorAccessPlan?.name ?? "Creator plan missing"}
-                        </Badge>
-                        <span className="text-sm text-muted-foreground">
-                          This flow only grants the dedicated Creator override
-                          plan.
-                        </span>
-                      </div>
-                    </Field>
-                    <Field>
-                      <FieldLabel>Users</FieldLabel>
-                      <MultiSelectCombobox
-                        emptyLabel="No matching users found."
-                        onChange={(targetUserIds) =>
-                          setCreatorGrantForm((current) => ({
-                            ...current,
-                            targetUserIds,
-                          }))
-                        }
-                        options={creatorGrantUserOptions}
-                        placeholder="Select users"
-                        value={creatorGrantForm.targetUserIds}
-                      />
-                      <FieldDescription>
-                        Users with an active Creator override are excluded from
-                        the selection list.
-                      </FieldDescription>
-                    </Field>
-                    <Field>
-                      <FieldLabel>Reason</FieldLabel>
-                      <Textarea
-                        onChange={(event) =>
-                          setCreatorGrantForm((current) => ({
-                            ...current,
-                            reason: event.target.value,
-                          }))
-                        }
-                        placeholder="Document why these users should receive Creator access."
-                        value={creatorGrantForm.reason}
-                      />
-                      <FieldDescription>
-                        Billing audit history requires clear reasoning for every
-                        manual entitlement grant.
-                      </FieldDescription>
-                    </Field>
-                    <Field>
-                      <FieldLabel>Expiry (optional)</FieldLabel>
-                      <Input
-                        onChange={(event) =>
-                          setCreatorGrantForm((current) => ({
-                            ...current,
-                            endsAt: event.target.value,
-                          }))
-                        }
-                        type="datetime-local"
-                        value={creatorGrantForm.endsAt}
-                      />
-                      <FieldDescription>
-                        Leave blank to keep the Creator override open ended.
-                      </FieldDescription>
-                    </Field>
-                    <div className="flex justify-end">
-                      <Button
-                        disabled={
-                          !creatorAccessPlan ||
-                          creatorGrantForm.targetUserIds.length === 0 ||
-                          creatorGrantForm.reason.trim().length < 8
-                        }
-                        onClick={openGrantCreatorAccessDialog}
+              {canManageCreatorAccess ? (
+                <FieldGroup>
+                  <Field>
+                    <FieldLabel>Managed plan</FieldLabel>
+                    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/70 bg-muted/20 px-3 py-2">
+                      <Badge
+                        variant={creatorAccessPlan ? "secondary" : "outline"}
                       >
-                        Review grant
-                      </Button>
+                        {creatorAccessPlan?.name ?? "Creator plan missing"}
+                      </Badge>
+                      <span className="text-sm text-muted-foreground">
+                        This flow only grants the dedicated Creator override
+                        plan.
+                      </span>
                     </div>
-                  </FieldGroup>
-                ) : (
-                  <div className="rounded-lg border border-border/70 bg-muted/20 px-4 py-6 text-sm text-muted-foreground">
-                    Creator access grants are restricted to admins and
-                    super-admins.
+                  </Field>
+                  <Field>
+                    <FieldLabel>Users</FieldLabel>
+                    <MultiSelectCombobox
+                      emptyLabel="No matching users found."
+                      onChange={(targetUserIds) =>
+                        setCreatorGrantForm((current) => ({
+                          ...current,
+                          targetUserIds,
+                        }))
+                      }
+                      options={creatorGrantUserOptions}
+                      placeholder="Select users"
+                      value={creatorGrantForm.targetUserIds}
+                    />
+                    <FieldDescription>
+                      Users with an active Creator override are excluded from
+                      the selection list.
+                    </FieldDescription>
+                  </Field>
+                  <Field>
+                    <FieldLabel>Reason</FieldLabel>
+                    <Textarea
+                      onChange={(event) =>
+                        setCreatorGrantForm((current) => ({
+                          ...current,
+                          reason: event.target.value,
+                        }))
+                      }
+                      placeholder="Document why these users should receive Creator access."
+                      value={creatorGrantForm.reason}
+                    />
+                    <FieldDescription>
+                      Billing audit history requires clear reasoning for every
+                      manual entitlement grant.
+                    </FieldDescription>
+                  </Field>
+                  <Field>
+                    <FieldLabel>Expiry (optional)</FieldLabel>
+                    <Input
+                      onChange={(event) =>
+                        setCreatorGrantForm((current) => ({
+                          ...current,
+                          endsAt: event.target.value,
+                        }))
+                      }
+                      type="datetime-local"
+                      value={creatorGrantForm.endsAt}
+                    />
+                    <FieldDescription>
+                      Leave blank to keep the Creator override open ended.
+                    </FieldDescription>
+                  </Field>
+                  <div className="flex justify-end">
+                    <Button
+                      disabled={
+                        !creatorAccessPlan ||
+                        creatorGrantForm.targetUserIds.length === 0 ||
+                        creatorGrantForm.reason.trim().length < 8
+                      }
+                      onClick={openGrantCreatorAccessDialog}
+                    >
+                      Review grant
+                    </Button>
                   </div>
-                )}
+                </FieldGroup>
+              ) : (
+                <div className="rounded-lg border border-border/70 bg-muted/20 px-4 py-6 text-sm text-muted-foreground">
+                  Creator access grants are restricted to admins and
+                  super-admins.
+                </div>
+              )}
             </StaffSection>
 
             <StaffSection
@@ -2342,59 +2340,55 @@ export function StaffBillingView({
               description="Review the effective state for the selected users before opening the confirmation dialog."
               title="Selected access preview"
             >
-                {selectedCreatorUsersWithGrant.length > 0 ? (
-                  selectedCreatorUsersWithGrant.map(
-                    ({ currentGrant, user }) => (
-                      <div
-                        className="rounded-lg border border-border/70 bg-muted/20 px-4 py-4"
-                        key={user.userId}
-                      >
-                        <div className="flex flex-wrap items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <div className="font-medium">{user.userName}</div>
-                            <div className="truncate text-sm text-muted-foreground">
-                              {user.email ?? user.clerkUserId}
-                            </div>
-                          </div>
-                          <BillingAccessSourceBadge
-                            source={user.accessSource}
-                          />
-                        </div>
-                        <div className="mt-3 grid gap-2 text-sm">
-                          <div className="flex items-center justify-between gap-4">
-                            <span className="text-muted-foreground">
-                              Effective plan
-                            </span>
-                            <span className="font-medium">
-                              {user.currentPlanKey ?? "none"}
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between gap-4">
-                            <span className="text-muted-foreground">
-                              Creator override
-                            </span>
-                            <span className="font-medium">
-                              {currentGrant ? "Active" : "Not active"}
-                            </span>
-                          </div>
-                          {currentGrant ? (
-                            <div className="text-xs text-muted-foreground">
-                              Existing override: {currentGrant.planKey}
-                              {currentGrant.endsAt
-                                ? ` until ${formatDateTime(currentGrant.endsAt)}`
-                                : " with no expiry"}
-                            </div>
-                          ) : null}
+              {selectedCreatorUsersWithGrant.length > 0 ? (
+                selectedCreatorUsersWithGrant.map(({ currentGrant, user }) => (
+                  <div
+                    className="rounded-lg border border-border/70 bg-muted/20 px-4 py-4"
+                    key={user.userId}
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="font-medium">{user.userName}</div>
+                        <div className="truncate text-sm text-muted-foreground">
+                          {user.email ?? user.clerkUserId}
                         </div>
                       </div>
-                    )
-                  )
-                ) : (
-                  <div className="rounded-lg border border-border/70 bg-muted/20 px-4 py-6 text-sm text-muted-foreground">
-                    Add one or more users to preview the affected Creator access
-                    state.
+                      <BillingAccessSourceBadge source={user.accessSource} />
+                    </div>
+                    <div className="mt-3 grid gap-2 text-sm">
+                      <div className="flex items-center justify-between gap-4">
+                        <span className="text-muted-foreground">
+                          Effective plan
+                        </span>
+                        <span className="font-medium">
+                          {user.currentPlanKey ?? "none"}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between gap-4">
+                        <span className="text-muted-foreground">
+                          Creator override
+                        </span>
+                        <span className="font-medium">
+                          {currentGrant ? "Active" : "Not active"}
+                        </span>
+                      </div>
+                      {currentGrant ? (
+                        <div className="text-xs text-muted-foreground">
+                          Existing override: {currentGrant.planKey}
+                          {currentGrant.endsAt
+                            ? ` until ${formatDateTime(currentGrant.endsAt)}`
+                            : " with no expiry"}
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
-                )}
+                ))
+              ) : (
+                <div className="rounded-lg border border-border/70 bg-muted/20 px-4 py-6 text-sm text-muted-foreground">
+                  Add one or more users to preview the affected Creator access
+                  state.
+                </div>
+              )}
             </StaffSection>
           </div>
 
@@ -2403,81 +2397,77 @@ export function StaffBillingView({
             description="Active and historical Creator overrides with audit-friendly reason text and timing."
             title="Creator grant ledger"
           >
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>User</TableHead>
-                    <TableHead>Plan</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Window</TableHead>
-                    {canManageCreatorAccess ? (
-                      <TableHead className="text-right">Actions</TableHead>
-                    ) : null}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {data.creatorGrants.length > 0 ? (
-                    data.creatorGrants.map((grant) => (
-                      <TableRow key={grant.id}>
-                        <TableCell>
-                          <div className="flex flex-col gap-1">
-                            <span className="font-medium">
-                              {grant.userName}
-                            </span>
-                            <span className="text-xs text-muted-foreground">
-                              {grant.email ?? grant.clerkUserId}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell>{grant.planKey}</TableCell>
-                        <TableCell>
-                          <Badge
-                            variant={grant.active ? "secondary" : "outline"}
-                          >
-                            {grant.active ? "active" : "inactive"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="max-w-sm text-sm whitespace-normal text-muted-foreground">
-                          {grant.startsAt
-                            ? `From ${formatDateTime(grant.startsAt)}`
-                            : "Start not set"}
-                          {grant.endsAt
-                            ? ` until ${formatDateTime(grant.endsAt)}`
-                            : " with no expiry"}
-                          <span className="mt-1 block">{grant.reason}</span>
-                        </TableCell>
-                        {canManageCreatorAccess ? (
-                          <TableCell className="text-right">
-                            {grant.active ? (
-                              <Button
-                                onClick={() =>
-                                  setCreatorGrantRevocationState({
-                                    grant,
-                                    reason: "",
-                                  })
-                                }
-                                size="sm"
-                                variant="outline"
-                              >
-                                Remove access
-                              </Button>
-                            ) : null}
-                          </TableCell>
-                        ) : null}
-                      </TableRow>
-                    ))
-                  ) : (
-                    <TableRow>
-                      <TableCell
-                        className="py-8 text-center text-sm text-muted-foreground"
-                        colSpan={canManageCreatorAccess ? 5 : 4}
-                      >
-                        No creator access grants are recorded yet.
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>User</TableHead>
+                  <TableHead>Plan</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Window</TableHead>
+                  {canManageCreatorAccess ? (
+                    <TableHead className="text-right">Actions</TableHead>
+                  ) : null}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.creatorGrants.length > 0 ? (
+                  data.creatorGrants.map((grant) => (
+                    <TableRow key={grant.id}>
+                      <TableCell>
+                        <div className="flex flex-col gap-1">
+                          <span className="font-medium">{grant.userName}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {grant.email ?? grant.clerkUserId}
+                          </span>
+                        </div>
                       </TableCell>
+                      <TableCell>{grant.planKey}</TableCell>
+                      <TableCell>
+                        <Badge variant={grant.active ? "secondary" : "outline"}>
+                          {grant.active ? "active" : "inactive"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="max-w-sm text-sm whitespace-normal text-muted-foreground">
+                        {grant.startsAt
+                          ? `From ${formatDateTime(grant.startsAt)}`
+                          : "Start not set"}
+                        {grant.endsAt
+                          ? ` until ${formatDateTime(grant.endsAt)}`
+                          : " with no expiry"}
+                        <span className="mt-1 block">{grant.reason}</span>
+                      </TableCell>
+                      {canManageCreatorAccess ? (
+                        <TableCell className="text-right">
+                          {grant.active ? (
+                            <Button
+                              onClick={() =>
+                                setCreatorGrantRevocationState({
+                                  grant,
+                                  reason: "",
+                                })
+                              }
+                              size="sm"
+                              variant="outline"
+                            >
+                              Remove access
+                            </Button>
+                          ) : null}
+                        </TableCell>
+                      ) : null}
                     </TableRow>
-                  )}
-                </TableBody>
-              </Table>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell
+                      className="py-8 text-center text-sm text-muted-foreground"
+                      colSpan={canManageCreatorAccess ? 5 : 4}
+                    >
+                      No creator access grants are recorded yet.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
           </StaffSection>
         </div>
       ) : null}
@@ -2488,88 +2478,88 @@ export function StaffBillingView({
           description="The rows below are the subscriptions most likely to be impacted by plan, schedule, and reconciliation operations."
           title="Active subscriptions"
         >
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>User</TableHead>
-                  <TableHead>Plan</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Attention</TableHead>
-                  <TableHead>Price</TableHead>
-                  <TableHead>Schedule</TableHead>
-                  <TableHead>Current period end</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data.subscriptions.length > 0 ? (
-                  data.subscriptions.map((subscription) => (
-                    <TableRow key={subscription.stripeSubscriptionId}>
-                      <TableCell>
-                        <div className="flex flex-col gap-1">
-                          <span className="font-medium">
-                            {subscription.userName}
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            {subscription.email ?? subscription.clerkUserId}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell>{subscription.planKey}</TableCell>
-                      <TableCell>
-                        <BillingSubscriptionStatusBadge
-                          status={subscription.status}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <BillingAttentionBadge
-                          status={subscription.attentionStatus ?? "none"}
-                        />
-                      </TableCell>
-                      <TableCell className="max-w-[16rem] text-xs break-all text-muted-foreground">
-                        {subscription.stripePriceId}
-                      </TableCell>
-                      <TableCell className="max-w-[18rem] text-sm whitespace-normal text-muted-foreground">
-                        {subscription.scheduledChangeType ? (
-                          <>
-                            {subscription.scheduledChangeType.replaceAll(
-                              "_",
-                              " "
-                            )}
-                            {subscription.scheduledPlanKey
-                              ? ` -> ${subscription.scheduledPlanKey}`
-                              : ""}
-                            {subscription.scheduledInterval
-                              ? ` (${subscription.scheduledInterval})`
-                              : ""}
-                            {subscription.scheduledChangeAt
-                              ? ` on ${formatDateTime(subscription.scheduledChangeAt)}`
-                              : ""}
-                          </>
-                        ) : subscription.cancelAtPeriodEnd ? (
-                          "cancel at period end"
-                        ) : (
-                          "none"
-                        )}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {subscription.currentPeriodEnd
-                          ? formatDateTime(subscription.currentPeriodEnd)
-                          : "Not set"}
-                      </TableCell>
-                    </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell
-                      className="py-8 text-center text-sm text-muted-foreground"
-                      colSpan={7}
-                    >
-                      No active subscription records are available.
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>User</TableHead>
+                <TableHead>Plan</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Attention</TableHead>
+                <TableHead>Price</TableHead>
+                <TableHead>Schedule</TableHead>
+                <TableHead>Current period end</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.subscriptions.length > 0 ? (
+                data.subscriptions.map((subscription) => (
+                  <TableRow key={subscription.stripeSubscriptionId}>
+                    <TableCell>
+                      <div className="flex flex-col gap-1">
+                        <span className="font-medium">
+                          {subscription.userName}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {subscription.email ?? subscription.clerkUserId}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell>{subscription.planKey}</TableCell>
+                    <TableCell>
+                      <BillingSubscriptionStatusBadge
+                        status={subscription.status}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <BillingAttentionBadge
+                        status={subscription.attentionStatus ?? "none"}
+                      />
+                    </TableCell>
+                    <TableCell className="max-w-[16rem] text-xs break-all text-muted-foreground">
+                      {subscription.stripePriceId}
+                    </TableCell>
+                    <TableCell className="max-w-[18rem] text-sm whitespace-normal text-muted-foreground">
+                      {subscription.scheduledChangeType ? (
+                        <>
+                          {subscription.scheduledChangeType.replaceAll(
+                            "_",
+                            " "
+                          )}
+                          {subscription.scheduledPlanKey
+                            ? ` -> ${subscription.scheduledPlanKey}`
+                            : ""}
+                          {subscription.scheduledInterval
+                            ? ` (${subscription.scheduledInterval})`
+                            : ""}
+                          {subscription.scheduledChangeAt
+                            ? ` on ${formatDateTime(subscription.scheduledChangeAt)}`
+                            : ""}
+                        </>
+                      ) : subscription.cancelAtPeriodEnd ? (
+                        "cancel at period end"
+                      ) : (
+                        "none"
+                      )}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {subscription.currentPeriodEnd
+                        ? formatDateTime(subscription.currentPeriodEnd)
+                        : "Not set"}
                     </TableCell>
                   </TableRow>
-                )}
-              </TableBody>
-            </Table>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell
+                    className="py-8 text-center text-sm text-muted-foreground"
+                    colSpan={7}
+                  >
+                    No active subscription records are available.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
         </StaffSection>
       ) : null}
 
