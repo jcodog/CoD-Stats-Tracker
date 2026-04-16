@@ -1,9 +1,11 @@
 import { ConvexService } from "@/convex/ConvexService"
+import { env } from "@/lib/env"
 import { TwitchCommandHandler } from "@/twitch/TwitchCommandHandler"
 import { TwitchListenerService } from "@/twitch/TwitchListenerService"
 
 type ActiveSubscription = {
   broadcasterId: string
+  queueId: string
   stop: () => void | Promise<void>
 }
 
@@ -17,33 +19,42 @@ export class TwitchSubscriptionManager {
   ) {}
 
   public async sync(): Promise<void> {
-    const creators = await this.convexService.getEnabledCreators()
-    const desiredIds = new Set(creators.map((creator) => creator.twitchUserId))
+    const queues = await this.convexService.getEnabledQueues()
+    const desiredIds = new Set(
+      queues.map(
+        (
+          queue: Awaited<
+            ReturnType<ConvexService["getEnabledQueues"]>
+          >[number]
+        ) => queue.twitchBroadcasterId
+      )
+    )
 
-    for (const creator of creators) {
-      if (this.activeSubscriptions.has(creator.twitchUserId)) {
+    for (const queue of queues) {
+      if (this.activeSubscriptions.has(queue.twitchBroadcasterId)) {
         continue
       }
 
-      const listener = this.listenerService.getListener()
+      const listener = await this.listenerService.getListener()
 
       const subscription = await listener.onChannelChatMessage(
-        creator.twitchUserId,
-        process.env.TWITCH_BOT_USER_ID!,
+        queue.twitchBroadcasterId,
+        env.TWITCH_BOT_USER_ID,
         async (event) => {
           await this.commandHandler.handleChatMessage({
-            creatorId: creator._id,
-            broadcasterId: creator.twitchUserId,
+            broadcasterId: queue.twitchBroadcasterId,
             chatterUserId: event.chatterId,
             chatterLogin: event.chatterName,
             chatterDisplayName: event.chatterDisplayName,
             messageText: event.messageText,
+            queueId: queue.queueId,
           })
         }
       )
 
-      this.activeSubscriptions.set(creator.twitchUserId, {
-        broadcasterId: creator.twitchUserId,
+      this.activeSubscriptions.set(queue.twitchBroadcasterId, {
+        broadcasterId: queue.twitchBroadcasterId,
+        queueId: queue.queueId,
         stop: () => subscription.stop(),
       })
     }

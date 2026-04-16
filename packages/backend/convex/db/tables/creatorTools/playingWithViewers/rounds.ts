@@ -1,11 +1,20 @@
 import { defineTable } from "convex/server"
 import { v } from "convex/values"
-import { rankValidator } from "../../../../lib/rankValidator"
+import {
+  participantRankValidator,
+} from "../../../../lib/rankValidator"
+import {
+  queueNotificationMethodValidator,
+  queueNotificationStatusValidator,
+} from "../../../../lib/playingWithViewers"
 
 export const viewerQueueRounds = defineTable({
   queueId: v.id("viewerQueues"),
   mode: v.union(v.literal("bot_dm"), v.literal("manual_creator_contact")),
   lobbyCode: v.optional(v.string()),
+  inviteCodeType: v.optional(
+    v.union(v.literal("party_code"), v.literal("private_match_code"))
+  ),
   selectedUsers: v.array(
     v.object({
       platform: v.union(v.literal("discord"), v.literal("twitch")),
@@ -18,19 +27,10 @@ export const viewerQueueRounds = defineTable({
       displayName: v.string(),
       avatarUrl: v.optional(v.string()),
       linkedUserId: v.optional(v.id("users")),
-      rank: rankValidator,
+      rank: participantRankValidator,
 
-      notificationMethod: v.optional(
-        v.union(
-          v.literal("discord_dm"),
-          v.literal("twitch_whisper"),
-          v.literal("twitch_chat_fallback"),
-          v.literal("manual_creator_contact")
-        )
-      ),
-      notificationStatus: v.optional(
-        v.union(v.literal("sent"), v.literal("failed"))
-      ),
+      notificationMethod: v.optional(queueNotificationMethodValidator),
+      notificationStatus: v.optional(queueNotificationStatusValidator),
       notificationFailureReason: v.optional(v.string()),
 
       // Compatibility fields for existing Discord DM handling.

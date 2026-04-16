@@ -56,7 +56,7 @@ const basicStepDefinitions: Record<LogMatchStep, LogMatchStepDefinition> = {
   },
   srChange: {
     description:
-      "Use the exact SR delta shown in game. Enter a whole number with the sign if needed.",
+      "Use the exact SR delta shown in game, then confirm whether the match used loss protection before you review.",
     label: "SR",
     title: "Record the SR change",
   },
@@ -109,7 +109,7 @@ const comprehensiveStepDefinitions: Record<
   },
   srChange: {
     description:
-      "Use the exact SR delta shown in game. Enter a whole number with the sign if needed.",
+      "Use the exact SR delta shown in game, then confirm whether the match used loss protection before you review.",
     label: "SR",
     title: "Record the SR change",
   },

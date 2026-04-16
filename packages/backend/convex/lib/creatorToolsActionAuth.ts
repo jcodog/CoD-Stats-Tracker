@@ -5,16 +5,18 @@ import type { Id } from "../_generated/dataModel"
 import type { ActionCtx } from "../_generated/server"
 import { hasCreatorAccessFromState } from "./billingAccess"
 import { getClerkBackendClient } from "./clerk"
+import { getTwitchAccountFromClerkUser } from "./clerkUsers"
 
-function hasLinkedTwitchAccount(
-  externalAccounts: Array<{ provider?: string | null }> | null | undefined
-) {
-  return (
-    externalAccounts?.some((account) => {
-      const provider = account.provider?.toLowerCase()
-      return provider === "oauth_twitch" || provider === "twitch"
-    }) ?? false
-  )
+type CreatorActionActor = Awaited<ReturnType<typeof getCreatorActionActor>>
+type TwitchAccount = NonNullable<ReturnType<typeof getTwitchAccountFromClerkUser>>
+
+type CreatorToolsActionAccess = CreatorActionActor & {
+  hasTwitchLinked: true
+  twitchAccount: TwitchAccount
+}
+
+type CreatorToolsActionAccessWithoutTwitch = CreatorActionActor & {
+  hasTwitchLinked: true
 }
 
 async function getCreatorActionActor(ctx: ActionCtx) {
@@ -56,11 +58,20 @@ async function getCreatorActionActor(ctx: ActionCtx) {
 }
 
 export async function requireCreatorToolsActionAccess(
+  ctx: ActionCtx
+): Promise<CreatorToolsActionAccess>
+export async function requireCreatorToolsActionAccess(
+  ctx: ActionCtx,
+  options: {
+    requireTwitchLinked: false
+  }
+): Promise<CreatorToolsActionAccessWithoutTwitch>
+export async function requireCreatorToolsActionAccess(
   ctx: ActionCtx,
   options?: {
     requireTwitchLinked?: boolean
   }
-) {
+): Promise<CreatorToolsActionAccess | CreatorToolsActionAccessWithoutTwitch> {
   const actor = await getCreatorActionActor(ctx)
   const requireTwitchLinked = options?.requireTwitchLinked ?? true
 
@@ -72,24 +83,16 @@ export async function requireCreatorToolsActionAccess(
   }
 
   const clerkUser = await getClerkBackendClient().users.getUser(actor.clerkUserId)
-  const rawExternalAccounts =
-    (clerkUser as { externalAccounts?: Array<{ provider?: string | null }> | null })
-      .externalAccounts ??
-    (
-      clerkUser as {
-        external_accounts?: Array<{ provider?: string | null }> | null
-      }
-    ).external_accounts ??
-    null
-  const linked = hasLinkedTwitchAccount(rawExternalAccounts)
+  const twitchAccount = getTwitchAccountFromClerkUser(clerkUser)
 
-  if (!linked) {
+  if (!twitchAccount) {
     throw new Error("Link Twitch to use Play With Viewers creator tools.")
   }
 
   return {
     ...actor,
-    hasTwitchLinked: linked,
+    hasTwitchLinked: true,
+    twitchAccount,
   }
 }
 

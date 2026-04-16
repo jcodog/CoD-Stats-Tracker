@@ -33,23 +33,23 @@ afterAll(() => {
 });
 
 describe("getAppPublicOrigin", () => {
-  it("accepts stats.cleoai.cloud in production", () => {
-    setEnv("production", "https://stats.cleoai.cloud");
+  it("accepts codstats.tech in production", () => {
+    setEnv("production", "https://codstats.tech");
 
-    expect(getAppPublicOrigin()).toBe("https://stats.cleoai.cloud");
+    expect(getAppPublicOrigin()).toBe("https://codstats.tech");
   });
 
-  it("accepts stats-dev.cleoai.cloud in production", () => {
-    setEnv("production", "https://stats-dev.cleoai.cloud");
+  it("accepts dev.codstats.tech in production", () => {
+    setEnv("production", "https://dev.codstats.tech");
 
-    expect(getAppPublicOrigin()).toBe("https://stats-dev.cleoai.cloud");
+    expect(getAppPublicOrigin()).toBe("https://dev.codstats.tech");
   });
 
   it("rejects unapproved hostnames in production", () => {
     setEnv("production", "https://preview.example.com");
 
     expect(() => getAppPublicOrigin()).toThrow(
-      /APP_PUBLIC_ORIGIN must use one of stats\.cleoai\.cloud, stats-dev\.cleoai\.cloud in production/,
+      /APP_PUBLIC_ORIGIN must use one of codstats\.tech, www\.codstats\.tech, dev\.codstats\.tech in production/,
     );
   });
 
@@ -57,7 +57,7 @@ describe("getAppPublicOrigin", () => {
     setEnv("test", undefined);
     expect(() => getAppPublicOrigin()).toThrow(/Missing required env var APP_PUBLIC_ORIGIN/);
 
-    setEnv("test", "http://stats-dev.cleoai.cloud");
+    setEnv("test", "http://dev.codstats.tech");
     expect(() => getAppPublicOrigin()).toThrow(/APP_PUBLIC_ORIGIN must use https:\/\//);
 
     setEnv("test", "not-a-url");
@@ -65,16 +65,16 @@ describe("getAppPublicOrigin", () => {
   });
 
   it("normalizes request origins and rejects mismatches in production", () => {
-    setEnv("production", "https://stats-dev.cleoai.cloud");
+    setEnv("production", "https://dev.codstats.tech");
 
     expect(
-      getAppPublicOrigin(new Request("https://stats-dev.cleoai.cloud/dashboard")),
-    ).toBe("https://stats-dev.cleoai.cloud");
+      getAppPublicOrigin(new Request("https://dev.codstats.tech/dashboard")),
+    ).toBe("https://dev.codstats.tech");
     expect(
-      getAppPublicOrigin(new URL("https://stats-dev.cleoai.cloud/dashboard")),
-    ).toBe("https://stats-dev.cleoai.cloud");
-    expect(getAppPublicOrigin("https://stats-dev.cleoai.cloud")).toBe(
-      "https://stats-dev.cleoai.cloud",
+      getAppPublicOrigin(new URL("https://dev.codstats.tech/dashboard")),
+    ).toBe("https://dev.codstats.tech");
+    expect(getAppPublicOrigin("https://dev.codstats.tech")).toBe(
+      "https://dev.codstats.tech",
     );
 
     expect(() =>
@@ -84,21 +84,21 @@ describe("getAppPublicOrigin", () => {
   });
 
   it("builds the hosted codstats template urls and ui resource uris", () => {
-    setEnv("test", "https://stats-dev.cleoai.cloud");
+    setEnv("test", "https://dev.codstats.tech");
 
     expect(getCodstatsTemplateResourceUri("widget")).toBe("ui://codstats/widget.html");
     expect(getCodstatsTemplateUrl("rank")).toBe(
-      "https://stats-dev.cleoai.cloud/ui/codstats/rank.html",
+      "https://dev.codstats.tech/ui/codstats/rank.html",
     );
     expect(getCodstatsWidgetTemplateUrl()).toBe(
-      "https://stats-dev.cleoai.cloud/ui/codstats/widget.html",
+      "https://dev.codstats.tech/ui/codstats/widget.html",
     );
     expect(getCodstatsTemplateUrls()).toEqual({
-      widget: "https://stats-dev.cleoai.cloud/ui/codstats/widget.html",
-      session: "https://stats-dev.cleoai.cloud/ui/codstats/session.html",
-      matches: "https://stats-dev.cleoai.cloud/ui/codstats/matches.html",
-      rank: "https://stats-dev.cleoai.cloud/ui/codstats/rank.html",
-      settings: "https://stats-dev.cleoai.cloud/ui/codstats/settings.html",
+      widget: "https://dev.codstats.tech/ui/codstats/widget.html",
+      session: "https://dev.codstats.tech/ui/codstats/session.html",
+      matches: "https://dev.codstats.tech/ui/codstats/matches.html",
+      rank: "https://dev.codstats.tech/ui/codstats/rank.html",
+      settings: "https://dev.codstats.tech/ui/codstats/settings.html",
     });
   });
 });

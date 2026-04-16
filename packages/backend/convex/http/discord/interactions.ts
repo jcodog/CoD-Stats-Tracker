@@ -6,7 +6,7 @@ import type {
   APIUser,
   RESTPostAPIInteractionCallbackJSONBody,
 } from "discord-api-types/v10"
-import type { Doc, Id } from "../../_generated/dataModel"
+import type { Id } from "../../_generated/dataModel"
 import {
   ApplicationCommandType,
   ComponentType,
@@ -350,10 +350,11 @@ async function handleLeaveInteraction(
 
   try {
     await ctx.runMutation(
-      internal.mutations.creatorTools.playingWithViewers.queue.leaveQueue,
+      internal.mutations.creatorTools.playingWithViewers.queue.leaveQueueFromPlatform,
       {
+        platform: "discord",
+        platformUserId: user.id,
         queueId: queueDocumentId,
-        discordUserId: user.id,
       }
     )
   } catch (error) {
@@ -407,14 +408,14 @@ async function handleStatusInteraction(
     { queueId: queueDocumentId }
   )
 
-  const entries = await ctx.runQuery(
-    internal.queries.creatorTools.playingWithViewers.queue.getQueueEntries,
-    { queueId: queueDocumentId }
-  ) as Doc<"viewerQueueEntries">[]
-
-  const index = entries.findIndex((entry) => entry.discordUserId === user.id)
-  const joined = index !== -1
-  const queuePosition = joined ? index + 1 : null
+  const queueStatus = await ctx.runQuery(
+    internal.queries.creatorTools.playingWithViewers.queue.getQueueStatusForIdentity,
+    {
+      platform: "discord",
+      platformUserId: user.id,
+      queueId: queueDocumentId,
+    }
+  )
 
   return json({
     type: InteractionResponseType.ChannelMessageWithSource,
@@ -426,8 +427,8 @@ async function handleStatusInteraction(
         minRank: queue.minRank,
         maxRank: queue.maxRank,
         isActive: queue.isActive,
-        joined,
-        queuePosition,
+        joined: queueStatus.joined,
+        queuePosition: queueStatus.queuePosition,
       }),
       flags: MessageFlags.Ephemeral,
     },
@@ -454,14 +455,15 @@ async function handleRankSelectInteraction(
 
   try {
     const result = await ctx.runMutation(
-      internal.mutations.creatorTools.playingWithViewers.queue.enqueueViewer,
+      internal.mutations.creatorTools.playingWithViewers.queue.enqueueViewerFromPlatform,
       {
-        queueId: queueDocumentId,
-        discordUserId: user.id,
-        username: user.username,
-        displayName: user.global_name ?? user.username,
         avatarUrl: getDiscordAvatarUrl(interaction),
+        displayName: user.global_name ?? user.username,
+        platform: "discord",
+        platformUserId: user.id,
+        queueId: queueDocumentId,
         rank: selectedRank,
+        username: user.username,
       }
     )
 
@@ -470,6 +472,19 @@ async function handleRankSelectInteraction(
         type: InteractionResponseType.UpdateMessage,
         data: {
           content: "You are already in this queue.",
+          flags: MessageFlags.Ephemeral,
+          components: [],
+        },
+      })
+    }
+
+    if (result.status === "cooldown") {
+      const cooldownMinutes = Math.ceil(result.cooldownRemainingMs / 60000)
+
+      return json({
+        type: InteractionResponseType.UpdateMessage,
+        data: {
+          content: `You can rejoin in about ${cooldownMinutes} minute${cooldownMinutes === 1 ? "" : "s"}.`,
           flags: MessageFlags.Ephemeral,
           components: [],
         },

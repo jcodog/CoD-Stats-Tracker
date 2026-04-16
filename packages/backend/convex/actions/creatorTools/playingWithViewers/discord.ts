@@ -8,13 +8,14 @@ import { getClerkBackendClient } from "../../../lib/clerk"
 import { getConvexEnv } from "../../../env"
 import {
   getInviteCodeTypeLabel,
+  inviteModeValidator,
+  queueConfigRankValidator,
   renderInviteCodeInstructions,
   type InviteCodeType,
 } from "../../../lib/playingWithViewers"
 import {
   requireCreatorToolsActionAccess,
   requireOwnedQueueActionAccess,
-  requireOwnedQueueEntryActionAccess,
 } from "../../../lib/creatorToolsActionAuth"
 import {
   ButtonStyle,
@@ -28,26 +29,6 @@ import {
 
 const DISCORD_API_BASE = "https://discord.com/api/v10"
 const PLAY_WITH_VIEWERS_CHANNEL_NAME = "play-with-viewers"
-
-const rankValidator = v.union(
-  v.literal("bronze"),
-  v.literal("silver"),
-  v.literal("gold"),
-  v.literal("platinum"),
-  v.literal("diamond"),
-  v.literal("crimson"),
-  v.literal("iridescent"),
-  v.literal("top250")
-)
-
-const inviteModeValidator = v.union(
-  v.literal("discord_dm"),
-  v.literal("manual_creator_contact")
-)
-const inviteCodeTypeValidator = v.union(
-  v.literal("party_code"),
-  v.literal("private_match_code")
-)
 
 type DiscordUserGuild = {
   icon: string | null
@@ -105,8 +86,6 @@ type QueueChannelBotPermissionStatus = {
   missingPermissionLabels: string[]
   needsReinvite: boolean
 }
-
-type QueueRoundSelectedUser = Doc<"viewerQueueRounds">["selectedUsers"][number]
 
 const PLAY_WITH_VIEWERS_EVERYONE_PERMISSION_FLAGS = [
   PermissionFlagsBits.ViewChannel,
@@ -1211,78 +1190,117 @@ async function sendDirectMessageToViewer(args: {
   }
 }
 
-async function notifySelectedUsersByDirectMessage(args: {
+async function deliverDiscordRoundNotifications(args: {
   ctx: ActionCtx
-  inviteCode?: string
-  inviteCodeType?: InviteCodeType
-  queueId: Id<"viewerQueues">
   roundId: Id<"viewerQueueRounds">
-  selectedUsers: QueueRoundSelectedUser[]
 }) {
-  const queue = await args.ctx.runQuery(
-    internal.queries.creatorTools.playingWithViewers.queue.getQueueById,
+  const round = await args.ctx.runQuery(
+    internal.queries.creatorTools.playingWithViewers.queue.getRoundById,
     {
-      queueId: args.queueId,
+      roundId: args.roundId,
     }
   )
 
-  if (queue.inviteMode !== "discord_dm") {
-    return args.selectedUsers
+  if (!round) {
+    throw new Error("Queue round not found")
   }
 
-  const inviteCode = args.inviteCode?.trim()
+  const queue = await args.ctx.runQuery(
+    internal.queries.creatorTools.playingWithViewers.queue.getQueueById,
+    {
+      queueId: round.queueId,
+    }
+  )
 
-  if (!inviteCode || !args.inviteCodeType) {
-    throw new Error("Invite code and invite code type are required for Discord DM mode.")
+  if (queue.inviteMode !== "bot_dm") {
+    return {
+      deliveredCount: 0,
+      failedCount: 0,
+      roundId: args.roundId,
+    }
+  }
+
+  const inviteCode = round.lobbyCode?.trim()
+
+  if (!inviteCode || !round.inviteCodeType) {
+    throw new Error("Invite code and invite code type are required for bot_dm mode.")
+  }
+
+  const notifications = await args.ctx.runQuery(
+    internal.queries.creatorTools.playingWithViewers.notifications.getRoundNotifications,
+    {
+      roundId: args.roundId,
+    }
+  )
+  const discordNotifications = notifications.filter(
+    (notification: (typeof notifications)[number]) =>
+      notification.platform === "discord" &&
+      notification.notificationStatus === "pending"
+  )
+
+  if (discordNotifications.length === 0) {
+    return {
+      deliveredCount: 0,
+      failedCount: 0,
+      roundId: args.roundId,
+    }
   }
 
   const messagePayload = renderDirectMessagePayload({
     creatorDisplayName: queue.creatorDisplayName,
     gameLabel: queue.gameLabel,
     inviteCode,
-    inviteCodeType: args.inviteCodeType,
+    inviteCodeType: round.inviteCodeType,
     title: queue.title,
   })
 
-  const notifiedUsers = await Promise.all(
-    args.selectedUsers.map(async (user) => {
-      try {
-        await sendDirectMessageToViewer({
-          discordUserId: user.discordUserId,
-          payload: messagePayload,
-        })
+  let deliveredCount = 0
+  let failedCount = 0
 
-        return {
-          ...user,
-          dmFailureReason: undefined,
-          dmStatus: "sent" as const,
+  for (const notification of discordNotifications) {
+    try {
+      await sendDirectMessageToViewer({
+        discordUserId: notification.platformUserId,
+        payload: messagePayload,
+      })
+
+      await args.ctx.runMutation(
+        internal.mutations.creatorTools.playingWithViewers.notifications.recordNotificationResult,
+        {
+          notificationId: notification._id,
+          notificationMethod: "discord_dm",
+          notificationStatus: "sent",
         }
-      } catch (error) {
-        console.error("Play With Viewers DM send failed", {
-          discordUserId: user.discordUserId,
-          errorMessage: toErrorMessage(error, "Failed to send Discord DM."),
-          queueId: args.queueId,
-          roundId: args.roundId,
-        })
+      )
+      deliveredCount += 1
+    } catch (error) {
+      const failureReason = getCreatorFacingDirectMessageFailureMessage()
 
-        return {
-          ...user,
-          dmFailureReason: getCreatorFacingDirectMessageFailureMessage(),
-          dmStatus: "failed" as const,
+      console.error("Play With Viewers Discord DM send failed", {
+        discordUserId: notification.platformUserId,
+        errorMessage: toErrorMessage(error, "Failed to send Discord DM."),
+        queueId: queue._id,
+        roundId: args.roundId,
+      })
+
+      await args.ctx.runMutation(
+        internal.mutations.creatorTools.playingWithViewers.notifications.recordNotificationResult,
+        {
+          notificationFailureReason: failureReason,
+          notificationId: notification._id,
+          notificationMethod: "discord_dm",
+          notificationStatus: "failed",
         }
-      }
-    })
-  )
-
-  await args.ctx.runMutation(
-    internal.mutations.creatorTools.playingWithViewers.queue.setQueueRoundSelectedUsers,
-    {
-      roundId: args.roundId,
-      selectedUsers: notifiedUsers,
+      )
+      failedCount += 1
     }
-  )
+  }
 
-  return notifiedUsers
+  return {
+    deliveredCount,
+    failedCount,
+    roundId: args.roundId,
+  }
 }
 
 export const listAvailableDiscordGuilds = action({
@@ -1302,14 +1320,15 @@ export const createQueueInOwnedGuild = action({
     guildId: v.string(),
     inviteMode: inviteModeValidator,
     matchesPerViewer: v.number(),
-    maxRank: rankValidator,
-    minRank: rankValidator,
+    maxRank: queueConfigRankValidator,
+    minRank: queueConfigRankValidator,
     playersPerBatch: v.number(),
     rulesText: v.optional(v.string()),
     title: v.string(),
   },
   handler: async (ctx, args) => {
-    const { clerkUserId, user } = await requireCreatorToolsActionAccess(ctx)
+    const { clerkUserId, twitchAccount, user } =
+      await requireCreatorToolsActionAccess(ctx)
     const existingQueue = await ctx.runQuery(
       internal.queries.creatorTools.playingWithViewers.queue.getQueueByCreatorUserId,
       {
@@ -1351,6 +1370,9 @@ export const createQueueInOwnedGuild = action({
         playersPerBatch: args.playersPerBatch,
         rulesText: args.rulesText?.trim() || undefined,
         title: args.title.trim(),
+        twitchBroadcasterId: twitchAccount.providerUserId,
+        twitchBroadcasterLogin:
+          twitchAccount.providerLogin ?? twitchAccount.displayName ?? "",
       }
     )
 
@@ -1375,6 +1397,18 @@ export const createQueueInOwnedGuild = action({
       queueId: queueResult.queueId,
       reusedChannel: channel.reusedChannel,
     }
+  },
+})
+
+export const deliverDiscordNotificationsForRound = internalAction({
+  args: {
+    roundId: v.id("viewerQueueRounds"),
+  },
+  handler: async (ctx, args) => {
+    return await deliverDiscordRoundNotifications({
+      ctx,
+      roundId: args.roundId,
+    })
   },
 })
 
@@ -1487,66 +1521,6 @@ export const fixQueueChannelPermissions = action({
     return {
       ...discordContext,
       permissionsUpdated: true,
-    }
-  },
-})
-
-export const selectNextBatchAndNotify = action({
-  args: {
-    inviteCode: v.optional(v.string()),
-    inviteCodeType: v.optional(inviteCodeTypeValidator),
-    queueId: v.id("viewerQueues"),
-  },
-  handler: async (ctx, args) => {
-    await requireOwnedQueueActionAccess(ctx, args.queueId)
-
-    const result = await ctx.runMutation(
-      internal.mutations.creatorTools.playingWithViewers.queue.selectNextBatch,
-      args
-    )
-    const selectedUsers = await notifySelectedUsersByDirectMessage({
-      ctx,
-      inviteCode: args.inviteCode?.trim() || undefined,
-      inviteCodeType: args.inviteCodeType,
-      queueId: args.queueId,
-      roundId: result.roundId,
-      selectedUsers: result.selectedUsers as QueueRoundSelectedUser[],
-    })
-
-    return {
-      ...result,
-      selectedCount: selectedUsers.length,
-      selectedUsers,
-    }
-  },
-})
-
-export const inviteQueueEntryNowAndNotify = action({
-  args: {
-    entryId: v.id("viewerQueueEntries"),
-    inviteCode: v.optional(v.string()),
-    inviteCodeType: v.optional(inviteCodeTypeValidator),
-  },
-  handler: async (ctx, args) => {
-    await requireOwnedQueueEntryActionAccess(ctx, args.entryId)
-
-    const result = await ctx.runMutation(
-      internal.mutations.creatorTools.playingWithViewers.queue.inviteQueueEntryNow,
-      args
-    )
-    const selectedUsers = await notifySelectedUsersByDirectMessage({
-      ctx,
-      inviteCode: args.inviteCode?.trim() || undefined,
-      inviteCodeType: args.inviteCodeType,
-      queueId: result.queueId,
-      roundId: result.roundId,
-      selectedUsers: result.selectedUsers as QueueRoundSelectedUser[],
-    })
-
-    return {
-      ...result,
-      selectedCount: selectedUsers.length,
-      selectedUsers,
     }
   },
 })

@@ -3,6 +3,7 @@ import { TwitchApiService } from "@/twitch/TwitchApiService"
 import { TwitchAuthService } from "@/twitch/TwitchAuthService"
 import { TwitchCommandHandler } from "@/twitch/TwitchCommandHandler"
 import { TwitchListenerService } from "@/twitch/TwitchListenerService"
+import { TwitchNotificationService } from "@/twitch/TwitchNotificationService"
 import { TwitchSubscriptionManager } from "@/twitch/TwitchSubscriptionManager"
 import { TwitchWorker } from "@/twitch/TwitchWorker"
 
@@ -12,6 +13,10 @@ async function main() {
   const convexService = new ConvexService()
   const commandHandler = new TwitchCommandHandler(convexService, apiService)
   const listenerService = new TwitchListenerService(apiService)
+  const notificationService = new TwitchNotificationService(
+    convexService,
+    apiService
+  )
   const subscriptionManager = new TwitchSubscriptionManager(
     convexService,
     listenerService,
@@ -20,10 +25,23 @@ async function main() {
   const worker = new TwitchWorker(
     authService,
     listenerService,
-    subscriptionManager
+    subscriptionManager,
+    notificationService
   )
 
   await worker.start()
+
+  const shutdown = async () => {
+    await worker.stop()
+    process.exit(0)
+  }
+
+  process.on("SIGINT", () => {
+    void shutdown()
+  })
+  process.on("SIGTERM", () => {
+    void shutdown()
+  })
 }
 
 main().catch((error) => {

@@ -80,6 +80,13 @@ export const getUserById = internalQuery({
   },
 })
 
+export const listUsers = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.db.query("users").collect()
+  },
+})
+
 export const getManagementRecords = internalQuery({
   args: {},
   handler: async (ctx) => {

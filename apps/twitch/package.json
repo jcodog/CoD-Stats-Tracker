@@ -6,8 +6,8 @@
   "scripts": {
     "dev": "bun run --watch src/index.ts",
     "start": "bun run src/index.ts",
-    "link": "eslint .",
-    "typecheck": "tsc -noEmit"
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@t3-oss/env-core": "^0.13.11",
@@ -15,7 +15,7 @@
     "@twurple/auth": "^7.4.0",
     "@twurple/eventsub-ws": "^7.4.0",
     "@workspace/backend": "workspace:*",
-    "convex": "^1.34.1",
+    "convex": "^1.35.1",
     "zod": "^4.3.6"
   },
   "devDependencies": {

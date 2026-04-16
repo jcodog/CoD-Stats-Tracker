@@ -126,16 +126,16 @@ export function useFixQueueChannelPermissionsAction() {
 export function useInviteQueueEntryNowAndNotifyAction() {
   return usePlayWithViewersAction<
     FunctionArgs<
-      typeof api.actions.creatorTools.playingWithViewers.discord.inviteQueueEntryNowAndNotify
+      typeof api.actions.creatorTools.playingWithViewers.queue.inviteQueueEntryNowAndNotify
     >,
     FunctionReturnType<
-      typeof api.actions.creatorTools.playingWithViewers.discord.inviteQueueEntryNowAndNotify
+      typeof api.actions.creatorTools.playingWithViewers.queue.inviteQueueEntryNowAndNotify
     >
   >({
     fallbackMessage: "Unable to invite that viewer right now.",
     mutationFn: (convex, input) =>
       convex.action(
-        api.actions.creatorTools.playingWithViewers.discord.inviteQueueEntryNowAndNotify,
+        api.actions.creatorTools.playingWithViewers.queue.inviteQueueEntryNowAndNotify,
         input
       ),
   })
@@ -195,16 +195,16 @@ export function useRemoveQueueEntryAction() {
 export function useSelectNextBatchAndNotifyAction() {
   return usePlayWithViewersAction<
     FunctionArgs<
-      typeof api.actions.creatorTools.playingWithViewers.discord.selectNextBatchAndNotify
+      typeof api.actions.creatorTools.playingWithViewers.queue.selectNextBatchAndNotify
     >,
     FunctionReturnType<
-      typeof api.actions.creatorTools.playingWithViewers.discord.selectNextBatchAndNotify
+      typeof api.actions.creatorTools.playingWithViewers.queue.selectNextBatchAndNotify
     >
   >({
     fallbackMessage: "Unable to select the next viewer batch.",
     mutationFn: (convex, input) =>
       convex.action(
-        api.actions.creatorTools.playingWithViewers.discord.selectNextBatchAndNotify,
+        api.actions.creatorTools.playingWithViewers.queue.selectNextBatchAndNotify,
         input
       ),
   })

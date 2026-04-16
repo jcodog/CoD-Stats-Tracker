@@ -10,5 +10,6 @@ export const connectedAccounts = defineTable({
   createdAt: v.number(),
   updatedAt: v.number(),
 })
+  .index("by_userId", ["userId"])
   .index("by_userId_and_provider", ["userId", "provider"])
   .index("by_provider_and_providerUserId", ["provider", "providerUserId"])

@@ -17,7 +17,8 @@ export const env = createEnv({
       .default("true")
       .transform((v) => v === "true"),
     TWITCH_CONVEX_URL: z.string().min(1),
-    TWITCH_CONVEX_DEPLOYMENT: z.string().min(1),
+    TWITCH_CONVEX_ADMIN_KEY: z.string().min(1),
+    TWITCH_TOKEN_STORE_PATH: z.string().min(1),
   },
   runtimeEnv: {
     NODE_ENV: process.env.NODE_ENV,
@@ -29,6 +30,7 @@ export const env = createEnv({
     TWITCH_BOT_USER_LOGIN: process.env.TWITCH_BOT_USER_LOGIN,
     TWITCH_EVENTSUB_ENABLED: process.env.TWITCH_EVENTSUB_ENABLED,
     TWITCH_CONVEX_URL: process.env.TWITCH_CONVEX_URL,
-    TWITCH_CONVEX_DEPLOYMENT: process.env.TWITCH_CONVEX_DEPLOYMENT,
+    TWITCH_CONVEX_ADMIN_KEY: process.env.TWITCH_CONVEX_ADMIN_KEY,
+    TWITCH_TOKEN_STORE_PATH: process.env.TWITCH_TOKEN_STORE_PATH,
   },
 })

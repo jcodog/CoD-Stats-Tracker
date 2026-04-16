@@ -6,13 +6,13 @@ export class TwitchListenerService {
 
   public constructor(private readonly apiService: TwitchApiService) {}
 
-  public getListener(): EventSubWsListener {
+  public async getListener(): Promise<EventSubWsListener> {
     if (this.listener) {
       return this.listener
     }
 
     const listener = new EventSubWsListener({
-      apiClient: this.apiService.getApiClient(),
+      apiClient: await this.apiService.getApiClient(),
     })
 
     listener.onRevoke((subscription, status) => {
@@ -27,7 +27,8 @@ export class TwitchListenerService {
   }
 
   public async start(): Promise<void> {
-    await this.getListener().start()
+    const listener = await this.getListener()
+    await listener.start()
   }
 
   public async stop(): Promise<void> {

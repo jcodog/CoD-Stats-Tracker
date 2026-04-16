@@ -28,7 +28,7 @@
     "coverage": "bun run coverage:clean && bun run coverage:collect && bun run coverage:build-report",
     "coverage:build-report": "node scripts/coverage/build-report.mjs",
     "coverage:clean": "node scripts/coverage/clean.mjs",
-    "coverage:collect": "bun test --coverage --coverage-reporter=text --coverage-reporter=lcov --coverage-dir .coverage apps/web/app apps/web/lib packages/backend/convex packages/backend/src",
+    "coverage:collect": "bun test --coverage --coverage-reporter=text --coverage-reporter=lcov --coverage-dir .coverage apps/web/src packages/backend/convex packages/backend/src",
     "coverage:prepare": "node scripts/coverage/prepare.mjs",
     "convex:codegen": "turbo run codegen --filter=@workspace/backend",
     "convex:dev": "turbo run dev --filter=@workspace/backend",

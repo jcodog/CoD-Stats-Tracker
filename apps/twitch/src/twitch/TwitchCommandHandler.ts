@@ -1,19 +1,23 @@
+import type { Id } from "@workspace/backend/convex/_generated/dataModel"
+import {
+  COMPETITIVE_RANK_VALUES,
+  getParticipantRankLabel,
+  parseCompetitiveRank,
+  type CompetitiveRank,
+} from "@workspace/backend/convex/lib/rankValidator"
 import { ConvexService } from "@/convex/ConvexService"
 import { TwitchApiService } from "@/twitch/TwitchApiService"
 
 type HandleChatMessageInput = {
-  creatorId: string
   broadcasterId: string
   chatterUserId: string
   chatterLogin: string
   chatterDisplayName: string
   messageText: string
+  queueId: Id<"viewerQueues">
 }
 
 export class TwitchCommandHandler {
-  private readonly cooldowns = new Map<string, number>()
-  private static readonly COOLDOWN_MS = 10 * 60 * 1000
-
   public constructor(
     private readonly convexService: ConvexService,
     private readonly apiService: TwitchApiService
@@ -23,59 +27,175 @@ export class TwitchCommandHandler {
     const command = this.parseCommand(input.messageText)
     if (!command) return
 
-    if (command === "join") {
-      await this.handleJoin(input)
-      return
-    }
-
-    if (command === "leave") {
-      await this.handleLeave(input)
-      return
-    }
-
-    if (command === "queue") {
-      await this.handleQueue(input)
+    switch (command.kind) {
+      case "join":
+        await this.handleJoin(input, command.rankInput)
+        return
+      case "leave":
+        await this.handleLeave(input)
+        return
+      case "queue":
+        await this.handleQueue(input)
+        return
     }
   }
 
-  private parseCommand(message: string): "join" | "leave" | "queue" | null {
-    const normalized = message.trim().toLowerCase()
-    if (normalized === "!join") return "join"
-    if (normalized === "!leave") return "leave"
-    if (normalized === "!queue") return "queue"
+  private parseCommand(
+    message: string
+  ):
+    | { kind: "join"; rankInput: string | null }
+    | { kind: "leave" }
+    | { kind: "queue" }
+    | null {
+    const [command, rankInput] = message.trim().split(/\s+/, 2)
+    const normalized = command?.toLowerCase()
+
+    if (normalized === "!join") {
+      return {
+        kind: "join",
+        rankInput: rankInput?.trim() || null,
+      }
+    }
+
+    if (normalized === "!leave") {
+      return { kind: "leave" }
+    }
+
+    if (normalized === "!queue") {
+      return { kind: "queue" }
+    }
+
     return null
   }
 
-  private isRateLimited(key: string): boolean {
-    const now = Date.now()
-    const lastUsed = this.cooldowns.get(key)
-    if (!lastUsed) return false
-    return now - lastUsed < TwitchCommandHandler.COOLDOWN_MS
+  private async reply(input: HandleChatMessageInput, message: string) {
+    await this.apiService.sendChatMessage(input.broadcasterId, message)
   }
 
-  private markUsed(key: string): void {
-    this.cooldowns.set(key, Date.now())
-  }
+  private async handleJoin(
+    input: HandleChatMessageInput,
+    rankInput: string | null
+  ): Promise<void> {
+    let rank: CompetitiveRank | "unknown" = "unknown"
 
-  private async handleJoin(input: HandleChatMessageInput): Promise<void> {
-    const rateLimitKey = `${input.creatorId}:twitch:${input.chatterUserId}:join`
+    if (rankInput) {
+      const parsedRank = parseCompetitiveRank(rankInput)
 
-    if (this.isRateLimited(rateLimitKey)) {
-      return
+      if (!parsedRank) {
+        await this.reply(
+          input,
+          `@${input.chatterLogin} invalid rank. Use one of: ${COMPETITIVE_RANK_VALUES.join(", ")}.`
+        )
+        return
+      }
+
+      rank = parsedRank
     }
 
-    this.markUsed(rateLimitKey)
+    try {
+      const result = await this.convexService.joinQueueFromTwitch({
+        avatarUrl: undefined,
+        displayName: input.chatterDisplayName,
+        queueId: input.queueId,
+        rank,
+        twitchLogin: input.chatterLogin,
+        twitchUserId: input.chatterUserId,
+      })
 
-    await this.convexService.joinQueueFromTwitch({
-      creatorId: input.creatorId,
-      twitchUserId: input.chatterUserId,
-      twitchLogin: input.chatterLogin,
-      displayName: input.chatterDisplayName,
-      joinedAt: Date.now(),
-    })
+      if (result.status === "already_joined") {
+        await this.reply(
+          input,
+          `@${input.chatterLogin} you're already in the queue.`
+        )
+        return
+      }
+
+      if (result.status === "cooldown") {
+        const cooldownMinutes = Math.ceil(result.cooldownRemainingMs / 60000)
+        await this.reply(
+          input,
+          `@${input.chatterLogin} you can rejoin in about ${cooldownMinutes} minute${cooldownMinutes === 1 ? "" : "s"}.`
+        )
+        return
+      }
+
+      await this.reply(
+        input,
+        `@${input.chatterLogin} joined the queue${rank === "unknown" ? " with rank unknown" : ` as ${getParticipantRankLabel(rank).toLowerCase()}`}.`
+      )
+    } catch (error) {
+      await this.reply(
+        input,
+        `@${input.chatterLogin} ${this.toCommandErrorMessage(error, "I couldn't join you to the queue.")}`
+      )
+    }
   }
 
-  private async handleLeave(_input: HandleChatMessageInput): Promise<void> {}
+  private async handleLeave(input: HandleChatMessageInput): Promise<void> {
+    try {
+      await this.convexService.leaveQueueFromTwitch({
+        queueId: input.queueId,
+        twitchUserId: input.chatterUserId,
+      })
+      await this.reply(input, `@${input.chatterLogin} you left the queue.`)
+    } catch (error) {
+      await this.reply(
+        input,
+        `@${input.chatterLogin} ${this.toCommandErrorMessage(error, "I couldn't remove you from the queue.")}`
+      )
+    }
+  }
 
-  private async handleQueue(_input: HandleChatMessageInput): Promise<void> {}
+  private async handleQueue(input: HandleChatMessageInput): Promise<void> {
+    try {
+      const snapshot = await this.convexService.getQueueSnapshot({
+        queueId: input.queueId,
+        twitchUserId: input.chatterUserId,
+      })
+      const preview = snapshot.entries
+        .slice(0, 3)
+        .map(
+          (
+            entry: Awaited<
+              ReturnType<ConvexService["getQueueSnapshot"]>
+            >["entries"][number]
+          ) => `@${entry.username}`
+        )
+        .join(", ")
+      const queueStatus = snapshot.isActive ? "open" : "closed"
+      const positionText =
+        snapshot.yourPosition === null
+          ? "You're not currently in line."
+          : `You're #${snapshot.yourPosition}.`
+
+      await this.reply(
+        input,
+        `Queue is ${queueStatus} with ${snapshot.size} waiting. ${positionText}${preview ? ` Up next: ${preview}.` : ""}`
+      )
+    } catch (error) {
+      await this.reply(
+        input,
+        `@${input.chatterLogin} ${this.toCommandErrorMessage(error, "I couldn't read the queue right now.")}`
+      )
+    }
+  }
+
+  private toCommandErrorMessage(error: unknown, fallback: string) {
+    if (!(error instanceof Error) || !error.message.trim()) {
+      return fallback
+    }
+
+    const normalized = error.message.replace(/^Uncaught Error:\s*/u, "").trim()
+
+    switch (normalized) {
+      case "Queue is not active":
+        return "the queue is currently closed."
+      case "Viewer is not in the queue":
+        return "you're not currently in the queue."
+      case "Queue not found":
+        return "this queue is no longer available."
+      default:
+        return fallback
+    }
+  }
 }

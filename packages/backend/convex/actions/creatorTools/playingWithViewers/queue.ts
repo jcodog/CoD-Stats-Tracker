@@ -2,56 +2,74 @@
 
 import { v } from "convex/values"
 import { internal } from "../../../_generated/api"
-import { action } from "../../../_generated/server"
+import type { Id } from "../../../_generated/dataModel"
+import { action, type ActionCtx } from "../../../_generated/server"
+import {
+  inviteCodeTypeValidator,
+  inviteModeValidator,
+  queueConfigRankValidator,
+} from "../../../lib/playingWithViewers"
 import {
   requireOwnedQueueActionAccess,
   requireOwnedQueueEntryActionAccess,
 } from "../../../lib/creatorToolsActionAuth"
 
-const rankValidator = v.union(
-  v.literal("bronze"),
-  v.literal("silver"),
-  v.literal("gold"),
-  v.literal("platinum"),
-  v.literal("diamond"),
-  v.literal("crimson"),
-  v.literal("iridescent"),
-  v.literal("top250")
-)
+async function getUpdatedRoundResult(
+  ctx: ActionCtx,
+  roundId: Id<"viewerQueueRounds">
+) {
+  const round = await ctx.runQuery(
+    internal.queries.creatorTools.playingWithViewers.queue.getRoundById,
+    {
+      roundId,
+    }
+  )
 
-const inviteModeValidator = v.union(
-  v.literal("discord_dm"),
-  v.literal("manual_creator_contact")
-)
+  if (!round) {
+    throw new Error("Queue round not found")
+  }
+
+  return {
+    createdAt: round.createdAt,
+    roundId: round._id,
+    selectedCount: round.selectedCount,
+    selectedUsers: round.selectedUsers,
+  }
+}
 
 export const updateQueueSettings = action({
   args: {
-    queueId: v.id("viewerQueues"),
-    title: v.string(),
     creatorDisplayName: v.string(),
-    gameLabel: v.string(),
     creatorMessage: v.optional(v.string()),
-    rulesText: v.optional(v.string()),
-    playersPerBatch: v.number(),
-    matchesPerViewer: v.number(),
-    minRank: rankValidator,
-    maxRank: rankValidator,
+    gameLabel: v.string(),
     inviteMode: inviteModeValidator,
+    matchesPerViewer: v.number(),
+    maxRank: queueConfigRankValidator,
+    minRank: queueConfigRankValidator,
+    playersPerBatch: v.number(),
+    queueId: v.id("viewerQueues"),
+    rulesText: v.optional(v.string()),
+    title: v.string(),
   },
   handler: async (ctx, args) => {
-    await requireOwnedQueueActionAccess(ctx, args.queueId)
+    const { twitchAccount } = await requireOwnedQueueActionAccess(ctx, args.queueId)
 
     return await ctx.runMutation(
       internal.mutations.creatorTools.playingWithViewers.queue.updateQueueSettings,
-      args
+      {
+        ...args,
+        twitchBroadcasterId: twitchAccount.providerUserId,
+        twitchBroadcasterLogin:
+          twitchAccount.providerLogin ?? twitchAccount.displayName ?? "",
+      }
     )
   },
 })
 
 export const setQueueActive = action({
   args: {
-    queueId: v.id("viewerQueues"),
     isActive: v.boolean(),
+    queueId: v.id("viewerQueues"),
   },
   handler: async (ctx, args) => {
     await requireOwnedQueueActionAccess(ctx, args.queueId)
@@ -82,11 +100,99 @@ export const removeQueueEntry = action({
     entryId: v.id("viewerQueueEntries"),
   },
   handler: async (ctx, args) => {
-    await requireOwnedQueueEntryActionAccess(ctx, args.entryId)
-
-    return await ctx.runMutation(
+    const { queue } = await requireOwnedQueueEntryActionAccess(ctx, args.entryId)
+    const result = await ctx.runMutation(
       internal.mutations.creatorTools.playingWithViewers.queue.removeQueueEntry,
       args
     )
+
+    await ctx.runAction(
+      internal.actions.creatorTools.playingWithViewers.discord.syncQueueMessageAfterViewerInteraction,
+      {
+        queueId: queue._id,
+      }
+    )
+
+    return result
+  },
+})
+
+export const selectNextBatchAndNotify = action({
+  args: {
+    inviteCode: v.optional(v.string()),
+    inviteCodeType: v.optional(inviteCodeTypeValidator),
+    queueId: v.id("viewerQueues"),
+  },
+  handler: async (ctx, args) => {
+    await requireOwnedQueueActionAccess(ctx, args.queueId)
+
+    const result = await ctx.runMutation(
+      internal.mutations.creatorTools.playingWithViewers.queue.selectNextBatch,
+      args
+    )
+
+    await ctx.runMutation(
+      internal.mutations.creatorTools.playingWithViewers.notifications.initializeRoundNotifications,
+      {
+        roundId: result.roundId,
+      }
+    )
+
+    if (result.mode === "bot_dm") {
+      await ctx.runAction(
+        internal.actions.creatorTools.playingWithViewers.discord.deliverDiscordNotificationsForRound,
+        {
+          roundId: result.roundId,
+        }
+      )
+    }
+
+    const updatedRound = await getUpdatedRoundResult(ctx, result.roundId)
+
+    return {
+      ...updatedRound,
+      inviteMode: result.mode,
+      selectionKind: "batch" as const,
+    }
+  },
+})
+
+export const inviteQueueEntryNowAndNotify = action({
+  args: {
+    entryId: v.id("viewerQueueEntries"),
+    inviteCode: v.optional(v.string()),
+    inviteCodeType: v.optional(inviteCodeTypeValidator),
+  },
+  handler: async (ctx, args) => {
+    await requireOwnedQueueEntryActionAccess(ctx, args.entryId)
+
+    const result = await ctx.runMutation(
+      internal.mutations.creatorTools.playingWithViewers.queue.inviteQueueEntryNow,
+      args
+    )
+
+    await ctx.runMutation(
+      internal.mutations.creatorTools.playingWithViewers.notifications.initializeRoundNotifications,
+      {
+        roundId: result.roundId,
+      }
+    )
+
+    if (result.mode === "bot_dm") {
+      await ctx.runAction(
+        internal.actions.creatorTools.playingWithViewers.discord.deliverDiscordNotificationsForRound,
+        {
+          roundId: result.roundId,
+        }
+      )
+    }
+
+    const updatedRound = await getUpdatedRoundResult(ctx, result.roundId)
+
+    return {
+      ...updatedRound,
+      inviteMode: result.mode,
+      selectionKind: "entry" as const,
+    }
   },
 })

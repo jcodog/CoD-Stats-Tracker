@@ -13,7 +13,6 @@ import { useQuery } from "convex/react"
 import {
   IconAlertTriangle,
   IconArrowRight,
-  IconAt,
   IconBrandDiscord,
   IconBrandTwitch,
   IconCopy,
@@ -28,10 +27,14 @@ import {
 import { api } from "@workspace/backend/convex/_generated/api"
 import type { Doc, Id } from "@workspace/backend/convex/_generated/dataModel"
 import {
+  COMPETITIVE_RANK_OPTIONS,
   DEFAULT_INVITE_CODE_TYPE,
   getInviteCodeTypeLabel,
+  getParticipantRankLabel,
   type InviteCodeType,
-  type RankValue,
+  type ParticipantRankValue,
+  type QueueConfigRankValue,
+  type QueuePlatform,
 } from "@workspace/backend/lib/playingWithViewers"
 import { AppSelect } from "@/components/AppSelect"
 import {
@@ -125,6 +128,8 @@ type ViewerQueueEntry = Doc<"viewerQueueEntries">
 type ViewerQueueRound = Doc<"viewerQueueRounds">
 type InviteMode = ViewerQueue["inviteMode"]
 type QueueRoundUser = ViewerQueueRound["selectedUsers"][number]
+type QueueNotificationMethod = QueueRoundUser["notificationMethod"]
+type QueueNotificationStatus = QueueRoundUser["notificationStatus"]
 
 type QueueFormState = {
   channelId: string
@@ -134,8 +139,8 @@ type QueueFormState = {
   guildId: string
   inviteMode: InviteMode
   matchesPerViewer: string
-  maxRank: RankValue
-  minRank: RankValue
+  maxRank: QueueConfigRankValue
+  minRank: QueueConfigRankValue
   playersPerBatch: string
   rulesText: string
   title: string
@@ -153,23 +158,19 @@ type SelectionDialogState =
 type SelectionResultState = {
   createdAt: number
   inviteMode: InviteMode
+  roundId: Id<"viewerQueueRounds">
   selectionKind: "batch" | "entry"
   selectedUsers: QueueRoundUser[]
 } | null
 
-const rankOptions: Array<{ label: string; value: RankValue }> = [
-  { label: "Bronze", value: "bronze" },
-  { label: "Silver", value: "silver" },
-  { label: "Gold", value: "gold" },
-  { label: "Platinum", value: "platinum" },
-  { label: "Diamond", value: "diamond" },
-  { label: "Crimson", value: "crimson" },
-  { label: "Iridescent", value: "iridescent" },
-  { label: "Top 250", value: "top250" },
-]
+const rankOptions: Array<{ label: string; value: QueueConfigRankValue }> =
+  COMPETITIVE_RANK_OPTIONS.map((rank) => ({
+    label: getParticipantRankLabel(rank),
+    value: rank,
+  }))
 
 const inviteModeOptions: Array<{ label: string; value: InviteMode }> = [
-  { label: "Discord DM", value: "discord_dm" },
+  { label: "Bot DM", value: "bot_dm" },
   { label: "Manual contact", value: "manual_creator_contact" },
 ]
 const inviteCodeTypeOptions: Array<{ label: string; value: InviteCodeType }> = [
@@ -212,7 +213,7 @@ function getDefaultQueueFormState(name: string): QueueFormState {
     creatorMessage: defaultCreatorMessage,
     gameLabel: "Call of Duty: Black Ops 7",
     guildId: "",
-    inviteMode: "discord_dm",
+    inviteMode: "bot_dm",
     matchesPerViewer: "1",
     maxRank: "top250",
     minRank: "bronze",
@@ -249,8 +250,129 @@ function toErrorMessage(error: unknown, fallback: string) {
   return fallback
 }
 
-function getRankLabel(rank: RankValue) {
-  return rankOptions.find((option) => option.value === rank)?.label ?? rank
+function getRankLabel(rank: ParticipantRankValue) {
+  return getParticipantRankLabel(rank)
+}
+
+function getPlatformLabel(platform: QueuePlatform) {
+  return platform === "discord" ? "Discord" : "Twitch"
+}
+
+function PlatformBadge({
+  platform,
+}: Readonly<{
+  platform: QueuePlatform
+}>) {
+  const Icon = platform === "discord" ? IconBrandDiscord : IconBrandTwitch
+
+  return (
+    <Badge className="gap-1.5" variant="outline">
+      <Icon className="size-3.5" />
+      {getPlatformLabel(platform)}
+    </Badge>
+  )
+}
+
+function getDiscordMention(user: QueueRoundUser) {
+  if (user.platform !== "discord") {
+    return null
+  }
+
+  const discordId = user.discordUserId ?? user.platformUserId
+  return discordId ? `<@${discordId}>` : null
+}
+
+function getTwitchHandle(user: QueueRoundUser) {
+  if (user.platform !== "twitch") {
+    return null
+  }
+
+  return `@${user.username}`
+}
+
+function getContactLabel(user: QueueRoundUser) {
+  const discordMention = getDiscordMention(user)
+  const twitchHandle = getTwitchHandle(user)
+
+  return discordMention ?? twitchHandle ?? `@${user.username}`
+}
+
+function getNotificationState(user: QueueRoundUser): {
+  failureReason: string | undefined
+  notificationMethod: QueueNotificationMethod
+  notificationStatus: QueueNotificationStatus
+} {
+  return {
+    failureReason: user.notificationFailureReason ?? user.dmFailureReason,
+    notificationMethod:
+      user.notificationMethod ??
+      (user.dmStatus ? "discord_dm" : undefined),
+    notificationStatus: user.notificationStatus ?? user.dmStatus,
+  }
+}
+
+function getNotificationBadgePresentation(user: QueueRoundUser): {
+  label: string
+  variant: "destructive" | "outline" | "secondary"
+} | null {
+  const { notificationMethod, notificationStatus } = getNotificationState(user)
+
+  if (!notificationMethod || !notificationStatus) {
+    return null
+  }
+
+  if (notificationStatus === "pending") {
+    return {
+      label:
+        notificationMethod === "twitch_whisper"
+          ? "Whisper pending"
+          : notificationMethod === "twitch_chat_fallback"
+            ? "Chat pending"
+            : "DM pending",
+      variant: "outline",
+    }
+  }
+
+  if (notificationStatus === "failed") {
+    return {
+      label:
+        notificationMethod === "twitch_whisper"
+          ? "Whisper failed"
+          : notificationMethod === "twitch_chat_fallback"
+            ? "Chat failed"
+            : "DM failed",
+      variant: "destructive",
+    }
+  }
+
+  return {
+    label:
+      notificationMethod === "twitch_whisper"
+        ? "Whisper sent"
+        : notificationMethod === "twitch_chat_fallback"
+          ? "Chat sent"
+          : "DM sent",
+    variant: "secondary",
+  }
+}
+
+function summarizeNotificationStatuses(selectedUsers: QueueRoundUser[]) {
+  return selectedUsers.reduce(
+    (summary, user) => {
+      const { notificationStatus } = getNotificationState(user)
+
+      if (notificationStatus === "failed") {
+        summary.failed += 1
+      } else if (notificationStatus === "pending") {
+        summary.pending += 1
+      } else if (notificationStatus === "sent") {
+        summary.sent += 1
+      }
+
+      return summary
+    },
+    { failed: 0, pending: 0, sent: 0 }
+  )
 }
 
 function getInitials(value: string) {
@@ -323,11 +445,17 @@ function formatDiscordContext(
     : "Discord target configured"
 }
 
-function isRankRangeValid(minRank: RankValue, maxRank: RankValue) {
+function isRankRangeValid(
+  minRank: QueueConfigRankValue,
+  maxRank: QueueConfigRankValue
+) {
   return (rankOrder.get(minRank) ?? 0) <= (rankOrder.get(maxRank) ?? 0)
 }
 
-function normalizeRankBounds(minRank: RankValue, maxRank: RankValue) {
+function normalizeRankBounds(
+  minRank: QueueConfigRankValue,
+  maxRank: QueueConfigRankValue
+) {
   if (isRankRangeValid(minRank, maxRank)) {
     return { maxRank, minRank }
   }
@@ -336,10 +464,14 @@ function normalizeRankBounds(minRank: RankValue, maxRank: RankValue) {
 }
 
 function isRankWithinRange(
-  rank: RankValue,
-  minRank: RankValue,
-  maxRank: RankValue
+  rank: ParticipantRankValue,
+  minRank: QueueConfigRankValue,
+  maxRank: QueueConfigRankValue
 ) {
+  if (rank === "unknown") {
+    return true
+  }
+
   const weight = rankOrder.get(rank) ?? 0
   return (
     weight >= (rankOrder.get(minRank) ?? 0) &&
@@ -460,23 +592,28 @@ function LockedState({ queueTitle }: Readonly<{ queueTitle: string }>) {
 }
 
 function SelectionResultSummary({
-  onCopyMentions,
-  onCopyUsernames,
+  onCopyContactList,
+  onCopyDiscordMentions,
+  onCopyTwitchHandles,
   selectionResult,
 }: Readonly<{
-  onCopyMentions: () => Promise<void>
-  onCopyUsernames: () => Promise<void>
+  onCopyContactList: () => Promise<void>
+  onCopyDiscordMentions: () => Promise<void>
+  onCopyTwitchHandles: () => Promise<void>
   selectionResult: SelectionResultState
 }>) {
   if (!selectionResult) {
     return null
   }
 
-  const hasDmStatuses = selectionResult.selectedUsers.some(
-    (user) => user.dmStatus !== undefined
+  const notificationSummary = summarizeNotificationStatuses(
+    selectionResult.selectedUsers
   )
-  const failedDmCount = selectionResult.selectedUsers.filter(
-    (user) => user.dmStatus === "failed"
+  const discordUserCount = selectionResult.selectedUsers.filter(
+    (user) => user.platform === "discord"
+  ).length
+  const twitchUserCount = selectionResult.selectedUsers.filter(
+    (user) => user.platform === "twitch"
   ).length
 
   return (
@@ -490,15 +627,17 @@ function SelectionResultSummary({
         </span>
       </div>
 
-      {selectionResult.inviteMode === "discord_dm" && failedDmCount > 0 ? (
+      {selectionResult.inviteMode === "bot_dm" &&
+      notificationSummary.failed > 0 ? (
         <div className="border-b border-border/70 px-4 py-3">
           <Alert variant="destructive">
             <IconAlertTriangle />
             <AlertTitle>Manual follow-up needed</AlertTitle>
             <AlertDescription>
-              {failedDmCount} viewer{failedDmCount === 1 ? "" : "s"} could not
-              be reached by Discord DM. Ask them to enable DMs or contact them
-              manually.
+              {notificationSummary.failed} viewer
+              {notificationSummary.failed === 1 ? "" : "s"} could not be
+              reached by the bot delivery flow. Review the round below and
+              follow up manually where needed.
             </AlertDescription>
           </Alert>
         </div>
@@ -506,13 +645,27 @@ function SelectionResultSummary({
 
       {selectionResult.inviteMode === "manual_creator_contact" ? (
         <div className="flex flex-wrap items-center gap-2 border-b border-border/70 px-4 py-3">
-          <Button onClick={onCopyUsernames} size="sm" variant="outline">
+          <Button onClick={onCopyContactList} size="sm" variant="outline">
             <IconCopy data-icon="inline-start" />
-            Copy usernames
+            Copy contact list
           </Button>
-          <Button onClick={onCopyMentions} size="sm" variant="outline">
-            <IconAt data-icon="inline-start" />
-            Copy mentions
+          <Button
+            disabled={discordUserCount === 0}
+            onClick={onCopyDiscordMentions}
+            size="sm"
+            variant="outline"
+          >
+            <IconBrandDiscord data-icon="inline-start" />
+            Copy Discord mentions
+          </Button>
+          <Button
+            disabled={twitchUserCount === 0}
+            onClick={onCopyTwitchHandles}
+            size="sm"
+            variant="outline"
+          >
+            <IconBrandTwitch data-icon="inline-start" />
+            Copy Twitch handles
           </Button>
         </div>
       ) : null}
@@ -520,7 +673,7 @@ function SelectionResultSummary({
       <div className="flex max-h-105 flex-col divide-y divide-border/70 overflow-y-auto">
         {selectionResult.selectedUsers.map((user) => (
           <div
-            key={`${selectionResult.createdAt}-${user.discordUserId}`}
+            key={`${user.platform}:${user.platformUserId}`}
             className="flex flex-col gap-3 px-4 py-4"
           >
             <div className="flex items-start justify-between gap-4">
@@ -535,29 +688,36 @@ function SelectionResultSummary({
                   <div className="truncate font-medium text-foreground">
                     {user.displayName}
                   </div>
-                  <div className="truncate text-sm text-muted-foreground">
-                    @{user.username}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="truncate text-sm text-muted-foreground">
+                      {getContactLabel(user)}
+                    </span>
+                    <PlatformBadge platform={user.platform} />
                   </div>
                 </div>
               </div>
 
               <div className="flex flex-wrap items-center justify-end gap-2">
                 <Badge variant="outline">{getRankLabel(user.rank)}</Badge>
-                {hasDmStatuses && user.dmStatus ? (
-                  <Badge
-                    variant={
-                      user.dmStatus === "failed" ? "destructive" : "secondary"
-                    }
-                  >
-                    {user.dmStatus === "failed" ? "DM failed" : "DM sent"}
-                  </Badge>
-                ) : null}
+                {(() => {
+                  const notificationBadge = getNotificationBadgePresentation(user)
+
+                  if (!notificationBadge) {
+                    return null
+                  }
+
+                  return (
+                    <Badge variant={notificationBadge.variant}>
+                      {notificationBadge.label}
+                    </Badge>
+                  )
+                })()}
               </div>
             </div>
 
-            {user.dmFailureReason ? (
+            {getNotificationState(user).failureReason ? (
               <p className="text-sm text-muted-foreground">
-                {user.dmFailureReason}
+                {getNotificationState(user).failureReason}
               </p>
             ) : null}
           </div>
@@ -646,6 +806,28 @@ export function PlayWithViewersDashboardView({
     useState<Id<"viewerQueues"> | null>(null)
   const [queueBotPermissionStatus, setQueueBotPermissionStatus] =
     useState<QueueChannelBotPermissionStatus | null>(null)
+  const selectionResultRound = useQuery(
+    api.queries.creatorTools.playingWithViewers.queue.getQueueRoundById,
+    selectionResultState?.roundId
+      ? { roundId: selectionResultState.roundId }
+      : "skip"
+  ) as ViewerQueueRound | null | undefined
+  const selectionResult = useMemo<SelectionResultState>(() => {
+    if (!selectionResultState) {
+      return null
+    }
+
+    if (!selectionResultRound) {
+      return selectionResultState
+    }
+
+    return {
+      ...selectionResultState,
+      createdAt: selectionResultRound.createdAt,
+      inviteMode: selectionResultRound.mode,
+      selectedUsers: selectionResultRound.selectedUsers,
+    }
+  }, [selectionResultRound, selectionResultState])
   const hasAuditedQueuePermissions = Boolean(
     queue && auditedQueueId === queue._id
   )
@@ -933,29 +1115,59 @@ export function PlayWithViewersDashboardView({
     }
   }
 
-  async function handleCopyMentions() {
-    if (!selectionResultState) {
+  async function handleCopyDiscordMentions() {
+    if (!selectionResult) {
+      return
+    }
+
+    const mentions = selectionResult.selectedUsers
+      .map((user) => getDiscordMention(user))
+      .filter((value): value is string => Boolean(value))
+
+    if (mentions.length === 0) {
+      toast.error("No Discord viewers were selected for this round.")
       return
     }
 
     await handleCopyToClipboard(
-      selectionResultState.selectedUsers
-        .map((user) => `<@${user.discordUserId}>`)
-        .join("\n"),
-      "Mentions copied."
+      mentions.join("\n"),
+      "Discord mentions copied."
     )
   }
 
-  async function handleCopyUsernames() {
-    if (!selectionResultState) {
+  async function handleCopyTwitchHandles() {
+    if (!selectionResult) {
+      return
+    }
+
+    const handles = selectionResult.selectedUsers
+      .map((user) => getTwitchHandle(user))
+      .filter((value): value is string => Boolean(value))
+
+    if (handles.length === 0) {
+      toast.error("No Twitch viewers were selected for this round.")
       return
     }
 
     await handleCopyToClipboard(
-      selectionResultState.selectedUsers
-        .map((user) => user.username)
+      handles.join("\n"),
+      "Twitch handles copied."
+    )
+  }
+
+  async function handleCopyContactList() {
+    if (!selectionResult) {
+      return
+    }
+
+    await handleCopyToClipboard(
+      selectionResult.selectedUsers
+        .map(
+          (user) =>
+            `${user.displayName} (${getPlatformLabel(user.platform)}) - ${getContactLabel(user)}`
+        )
         .join("\n"),
-      "Usernames copied."
+      "Contact list copied."
     )
   }
 
@@ -1262,8 +1474,8 @@ export function PlayWithViewersDashboardView({
     }
 
     const inviteCode = selectionInviteCode.trim() || undefined
-    if (queue.inviteMode === "discord_dm" && !inviteCode) {
-      toast.error("Invite code is required for Discord DM mode.")
+    if (queue.inviteMode === "bot_dm" && !inviteCode) {
+      toast.error("Invite code is required for Bot DM mode.")
       return
     }
 
@@ -1285,47 +1497,55 @@ export function PlayWithViewersDashboardView({
               queueId: queue._id,
             })
 
-      const failedDmCount = result.selectedUsers.filter(
-        (user: QueueRoundUser) => user.dmStatus === "failed"
-      ).length
+      const selectedUsers = result.selectedUsers as QueueRoundUser[]
+      const notificationSummary = summarizeNotificationStatuses(selectedUsers)
 
       setSelectionResultState({
-        createdAt: Date.now(),
+        createdAt: result.createdAt,
         inviteMode: queue.inviteMode,
-        selectedUsers: result.selectedUsers as QueueRoundUser[],
+        roundId: result.roundId,
+        selectedUsers,
         selectionKind,
       })
 
       if (selectionDialogState?.kind === "entry") {
-        if (queue.inviteMode === "discord_dm") {
-          if (failedDmCount > 0) {
+        if (queue.inviteMode === "bot_dm") {
+          if (notificationSummary.failed > 0) {
             toast.error(
-              `Invite attempted. ${failedDmCount} Discord DM${failedDmCount === 1 ? "" : "s"} failed.`
+              `Invite attempted. ${notificationSummary.failed} bot ${notificationSummary.failed === 1 ? "delivery" : "deliveries"} failed.`
+            )
+          } else if (notificationSummary.pending > 0) {
+            toast.success(
+              `${selectionDialogState.displayName} was selected. Bot delivery is still in progress.`
             )
           } else {
             toast.success(
-              `${selectionDialogState.displayName} was invited by Discord DM.`
+              `${selectionDialogState.displayName} was selected and notified.`
             )
           }
         } else {
           toast.success(
-            `${selectionDialogState.displayName} is ready for manual invite.`
+            `${selectionDialogState.displayName} is ready for manual contact.`
           )
         }
       } else {
-        if (queue.inviteMode === "discord_dm") {
-          if (failedDmCount > 0) {
+        if (queue.inviteMode === "bot_dm") {
+          if (notificationSummary.failed > 0) {
             toast.error(
-              `Batch processed. ${failedDmCount} Discord DM${failedDmCount === 1 ? "" : "s"} failed.`
+              `Batch processed. ${notificationSummary.failed} bot ${notificationSummary.failed === 1 ? "delivery" : "deliveries"} failed.`
+            )
+          } else if (notificationSummary.pending > 0) {
+            toast.success(
+              `Selected ${result.selectedCount} viewer${result.selectedCount === 1 ? "" : "s"}. Bot delivery is still in progress.`
             )
           } else {
             toast.success(
-              `Invited ${result.selectedCount} viewer${result.selectedCount === 1 ? "" : "s"} by Discord DM.`
+              `Selected and notified ${result.selectedCount} viewer${result.selectedCount === 1 ? "" : "s"}.`
             )
           }
         } else {
           toast.success(
-            `Selected ${result.selectedCount} viewer${result.selectedCount === 1 ? "" : "s"} for manual invite.`
+            `Selected ${result.selectedCount} viewer${result.selectedCount === 1 ? "" : "s"} for manual contact.`
           )
         }
       }
@@ -1393,19 +1613,19 @@ export function PlayWithViewersDashboardView({
     : isPublishing
       ? "Retrying..."
       : "Retry publish"
-  const selectionResultTitle = !selectionResultState
+  const selectionResultTitle = !selectionResult
     ? "Selection results"
-    : selectionResultState.inviteMode === "discord_dm"
-      ? selectionResultState.selectionKind === "entry"
-        ? "Discord invite result"
-        : "Batch invite results"
-      : selectionResultState.selectionKind === "entry"
-        ? "Viewer ready to invite"
-        : "Batch ready to invite"
+    : selectionResult.inviteMode === "bot_dm"
+      ? selectionResult.selectionKind === "entry"
+        ? "Bot delivery result"
+        : "Batch delivery results"
+      : selectionResult.selectionKind === "entry"
+        ? "Viewer ready to contact"
+        : "Batch ready to contact"
   const selectionResultDescription =
-    selectionResultState?.inviteMode === "discord_dm"
-      ? "Review the Discord DM results and the invite message preview for the selected viewers."
-      : "Use this list to contact the selected viewers directly."
+    selectionResult?.inviteMode === "bot_dm"
+      ? "Live delivery status updates here as Discord DMs and Twitch bot notifications complete."
+      : "Use this list to contact the selected viewers directly on their platform."
 
   return (
     <div className="flex flex-1 flex-col gap-4">
@@ -1575,7 +1795,7 @@ export function PlayWithViewersDashboardView({
                     disabled={toolbarFieldPending !== null}
                     onValueChange={(value) =>
                       handleToolbarSettingsChange("minRank", {
-                        minRank: value as RankValue,
+                        minRank: value as QueueConfigRankValue,
                       })
                     }
                     options={rankOptions.map((option) => ({
@@ -1590,7 +1810,7 @@ export function PlayWithViewersDashboardView({
                     disabled={toolbarFieldPending !== null}
                     onValueChange={(value) =>
                       handleToolbarSettingsChange("maxRank", {
-                        maxRank: value as RankValue,
+                        maxRank: value as QueueConfigRankValue,
                       })
                     }
                     options={rankOptions.map((option) => ({
@@ -1756,8 +1976,9 @@ export function PlayWithViewersDashboardView({
                   </EmptyMedia>
                   <EmptyTitle>No viewers are waiting</EmptyTitle>
                   <EmptyDescription>
-                    Publish the Discord queue message, then viewers can join
-                    from Discord and appear here in arrival order.
+                    Publish the Discord queue message and keep Twitch commands
+                    enabled, then viewers can join from either platform and
+                    appear here in arrival order.
                   </EmptyDescription>
                 </EmptyHeader>
               </Empty>
@@ -1799,8 +2020,11 @@ export function PlayWithViewersDashboardView({
                               <div className="truncate font-medium text-foreground">
                                 {entry.displayName}
                               </div>
-                              <div className="truncate text-sm text-muted-foreground">
-                                @{entry.username}
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="truncate text-sm text-muted-foreground">
+                                  @{entry.username}
+                                </span>
+                                <PlatformBadge platform={entry.platform} />
                               </div>
                             </div>
                           </div>
@@ -2121,11 +2345,11 @@ export function PlayWithViewersDashboardView({
                         queue
                           ? setSettingsFormState((current) => ({
                               ...current,
-                              minRank: value as RankValue,
+                              minRank: value as QueueConfigRankValue,
                             }))
                           : setCreateFormState((current) => ({
                               ...current,
-                              minRank: value as RankValue,
+                              minRank: value as QueueConfigRankValue,
                             }))
                       }
                       options={rankOptions.map((option) => ({
@@ -2148,11 +2372,11 @@ export function PlayWithViewersDashboardView({
                         queue
                           ? setSettingsFormState((current) => ({
                               ...current,
-                              maxRank: value as RankValue,
+                              maxRank: value as QueueConfigRankValue,
                             }))
                           : setCreateFormState((current) => ({
                               ...current,
-                              maxRank: value as RankValue,
+                              maxRank: value as QueueConfigRankValue,
                             }))
                       }
                       options={rankOptions.map((option) => ({
@@ -2197,7 +2421,7 @@ export function PlayWithViewersDashboardView({
                     <FieldDescription>
                       {queue
                         ? `Discord target stays fixed on ${discordContextLabel}.`
-                        : "Discord DM mode requires a lobby code when selecting viewers."}
+                        : "Bot DM mode requires a lobby code when selecting viewers."}
                     </FieldDescription>
                   </Field>
                 </div>
@@ -2360,7 +2584,7 @@ export function PlayWithViewersDashboardView({
           </DialogHeader>
 
           <FieldGroup>
-            {queue?.inviteMode === "discord_dm" ? (
+            {queue?.inviteMode === "bot_dm" ? (
               <>
                 <Field>
                   <FieldLabel htmlFor="pwv-invite-code-type">
@@ -2389,8 +2613,8 @@ export function PlayWithViewersDashboardView({
                     value={selectionInviteCode}
                   />
                   <FieldDescription>
-                    Discord DM mode requires a code type and invite code before
-                    the round can be created.
+                    Bot DM mode requires a code type and invite code before the
+                    round can be created.
                   </FieldDescription>
                 </Field>
               </>
@@ -2399,7 +2623,8 @@ export function PlayWithViewersDashboardView({
                 <FieldLabel>Manual contact mode</FieldLabel>
                 <FieldDescription>
                   The selected viewers will open in a follow-up dialog with copy
-                  helpers for mentions and usernames.
+                  helpers for Discord mentions, Twitch handles, and a combined
+                  contact list.
                 </FieldDescription>
               </Field>
             )}
@@ -2441,9 +2666,10 @@ export function PlayWithViewersDashboardView({
           </DialogHeader>
 
           <SelectionResultSummary
-            onCopyMentions={handleCopyMentions}
-            onCopyUsernames={handleCopyUsernames}
-            selectionResult={selectionResultState}
+            onCopyContactList={handleCopyContactList}
+            onCopyDiscordMentions={handleCopyDiscordMentions}
+            onCopyTwitchHandles={handleCopyTwitchHandles}
+            selectionResult={selectionResult}
           />
 
           <DialogFooter>

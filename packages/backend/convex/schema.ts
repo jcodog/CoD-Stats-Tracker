@@ -22,6 +22,7 @@ import { viewerQueueEntries } from "./db/tables/creatorTools/playingWithViewers/
 import { viewerQueueRounds } from "./db/tables/creatorTools/playingWithViewers/rounds"
 import { viewerQueueMessageSyncs } from "./db/tables/creatorTools/playingWithViewers/messageSync"
 import { viewerQueueCooldowns } from "./db/tables/creatorTools/playingWithViewers/cooldowns"
+import { viewerQueueNotifications } from "./db/tables/creatorTools/playingWithViewers/notifications"
 import { activisionUsernames } from "./db/tables/activisionUsernames"
 import { rankedConfigs } from "./db/tables/rankedConfigs"
 import { rankedMaps } from "./db/tables/rankedMaps"
@@ -61,5 +62,6 @@ export default defineSchema({
   viewerQueueRounds,
   viewerQueueMessageSyncs,
   viewerQueueCooldowns,
+  viewerQueueNotifications,
   connectedAccounts,
 })

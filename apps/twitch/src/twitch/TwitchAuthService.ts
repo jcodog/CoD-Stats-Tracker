@@ -1,10 +1,21 @@
 import { env } from "@/lib/env"
+import { FileBackedTokenStore } from "@/lib/tokenStore"
 import { RefreshingAuthProvider } from "@twurple/auth"
+
+const DEFAULT_TWITCH_BOT_SCOPES = [
+  "user:read:chat",
+  "user:write:chat",
+  "user:bot",
+  "user:manage:whispers",
+] as const
 
 export class TwitchAuthService {
   private authProvider: RefreshingAuthProvider | null = null
+  private readonly tokenStore = new FileBackedTokenStore(
+    env.TWITCH_TOKEN_STORE_PATH
+  )
 
-  public getAuthProvider(): RefreshingAuthProvider {
+  public async getAuthProvider(): Promise<RefreshingAuthProvider> {
     if (this.authProvider) {
       return this.authProvider
     }
@@ -14,18 +25,33 @@ export class TwitchAuthService {
       clientSecret: env.TWITCH_CLIENT_SECRET,
     })
 
-    if (env.TWITCH_BOT_ACCESS_TOKEN && env.TWITCH_BOT_REFRESH_TOKEN) {
-      authProvider.addUser(env.TWITCH_BOT_USER_ID, {
-        accessToken: env.TWITCH_BOT_ACCESS_TOKEN,
-        refreshToken: env.TWITCH_BOT_REFRESH_TOKEN,
-        scope: ["user:read:chat", "user:write:chat", "user:bot"],
-        obtainmentTimestamp: Date.now(),
-        expiresIn: 0,
-      })
+    const storedToken = await this.tokenStore.read()
+    const initialToken =
+      storedToken ??
+      (env.TWITCH_BOT_ACCESS_TOKEN && env.TWITCH_BOT_REFRESH_TOKEN
+        ? {
+            accessToken: env.TWITCH_BOT_ACCESS_TOKEN,
+            expiresIn: 0,
+            obtainmentTimestamp: Date.now(),
+            refreshToken: env.TWITCH_BOT_REFRESH_TOKEN,
+            scope: [...DEFAULT_TWITCH_BOT_SCOPES],
+          }
+        : null)
+
+    if (!initialToken) {
+      throw new Error("Missing Twitch bot access or refresh token.")
     }
 
-    authProvider.onRefresh((userId, tokenData) => {
-      console.log("Refreshed Twitch token", { userId, tokenData })
+    authProvider.addUser(env.TWITCH_BOT_USER_ID, initialToken)
+
+    authProvider.onRefresh(async (_userId, tokenData) => {
+      await this.tokenStore.write({
+        accessToken: tokenData.accessToken,
+        expiresIn: tokenData.expiresIn ?? 0,
+        obtainmentTimestamp: tokenData.obtainmentTimestamp,
+        refreshToken: tokenData.refreshToken ?? initialToken.refreshToken,
+        scope: tokenData.scope ?? [...DEFAULT_TWITCH_BOT_SCOPES],
+      })
     })
 
     authProvider.onRefreshFailure((userId, error) => {
@@ -38,7 +64,7 @@ export class TwitchAuthService {
 
   public assertBotTokens(): void {
     if (!env.TWITCH_BOT_ACCESS_TOKEN || !env.TWITCH_BOT_REFRESH_TOKEN) {
-      throw new Error("Missing Twitch bot access or refresh token.")
+      return
     }
   }
 }

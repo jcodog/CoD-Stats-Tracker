@@ -370,17 +370,15 @@ function ReviewStepPanel({
           <ReviewRow label="Mode" value={selectedMode?.label ?? "Not set"} />
           <ReviewRow label="Map" value={selectedMap?.name ?? "Not set"} />
           <ReviewRow label="SR change" value={srChange.trim() || "Not set"} />
+          <ReviewRow
+            label="Loss protected"
+            value={lossProtected ? "Yes" : "No"}
+          />
           {loggingMode === "comprehensive" ? (
-            <>
-              <ReviewRow
-                label="Loss protected"
-                value={lossProtected ? "Yes" : "No"}
-              />
-              <ReviewRow
-                label="Notes"
-                value={notes.trim() || "No note added"}
-              />
-            </>
+            <ReviewRow
+              label="Notes"
+              value={notes.trim() || "No note added"}
+            />
           ) : null}
         </dl>
       </div>
@@ -396,7 +394,7 @@ function ReviewStepPanel({
             </p>
           </div>
           <Separator className="my-4" />
-          {optionalStats.length > 0 || lossProtected ? (
+          {optionalStats.length > 0 ? (
             <dl className="grid gap-4">
               {optionalStats.map((item) => (
                 <ReviewRow
@@ -405,10 +403,6 @@ function ReviewStepPanel({
                   value={item.value}
                 />
               ))}
-              <ReviewRow
-                label="Loss protected"
-                value={lossProtected ? "Yes" : "No"}
-              />
             </dl>
           ) : (
             <p className="text-sm text-muted-foreground">
@@ -934,6 +928,24 @@ export function DashboardStatsLogMatchSheet({
                     Enter the exact in-game SR delta as a whole number.
                   </FieldDescription>
                 </Field>
+                <Field
+                  className="rounded-xl border border-border/60 bg-muted/10 p-4"
+                  orientation="responsive"
+                >
+                  <Switch
+                    checked={lossProtected}
+                    onCheckedChange={(checked) =>
+                      updateField("lossProtected", checked)
+                    }
+                  />
+                  <FieldContent>
+                    <FieldTitle>Loss protected</FieldTitle>
+                    <FieldDescription>
+                      Turn this on only if the match explicitly used in-game
+                      loss protection.
+                    </FieldDescription>
+                  </FieldContent>
+                </Field>
               </FieldGroup>
             ) : null}
 
@@ -1134,24 +1146,6 @@ export function DashboardStatsLogMatchSheet({
                   </FieldGroup>
                 ) : null}
 
-                <Field
-                  className="rounded-xl border border-border/60 bg-muted/10 p-4"
-                  orientation="responsive"
-                >
-                  <Switch
-                    checked={lossProtected}
-                    onCheckedChange={(checked) =>
-                      updateField("lossProtected", checked)
-                    }
-                  />
-                  <FieldContent>
-                    <FieldTitle>Loss protected</FieldTitle>
-                    <FieldDescription>
-                      Leave this off unless the match explicitly used loss
-                      protection.
-                    </FieldDescription>
-                  </FieldContent>
-                </Field>
               </div>
             ) : null}
 

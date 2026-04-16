@@ -38,7 +38,8 @@
     "TWITCH_BOT_USER_LOGIN",
     "TWITCH_EVENTSUB_ENABLED",
     "TWITCH_CONVEX_URL",
-    "TWITCH_CONVEX_ADMIN_KEY"
+    "TWITCH_CONVEX_ADMIN_KEY",
+    "TWITCH_TOKEN_STORE_PATH"
   ],
   "tasks": {
     "codegen": {
@@ -122,7 +123,8 @@
         "VERCEL_PROJECT_ID_OR_NAME",
         "VERCEL_TEAM_ID",
         "FLAGS",
-        "FLAGS_SECRET"
+        "FLAGS_SECRET",
+        "TWITCH_TOKEN_STORE_PATH"
       ]
     },
     "build": {

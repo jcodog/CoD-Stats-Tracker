@@ -1,6 +1,6 @@
 import { defineTable } from "convex/server"
 import { v } from "convex/values"
-import { rankValidator } from "../../../../lib/rankValidator"
+import { participantRankValidator } from "../../../../lib/rankValidator"
 
 export const viewerQueueEntries = defineTable({
   queueId: v.id("viewerQueues"),
@@ -14,7 +14,7 @@ export const viewerQueueEntries = defineTable({
   displayName: v.string(),
   avatarUrl: v.optional(v.string()),
   linkedUserId: v.optional(v.id("users")),
-  rank: rankValidator,
+  rank: participantRankValidator,
   joinedAt: v.number(),
 })
   .index("by_queueId", ["queueId"])
@@ -25,3 +25,4 @@ export const viewerQueueEntries = defineTable({
     "platformUserId",
   ])
   .index("by_linkedUserId", ["linkedUserId"])
+  .index("by_queueId_and_linkedUserId", ["queueId", "linkedUserId"])

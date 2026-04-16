@@ -700,6 +700,7 @@ export type DataModel = {
         "providerUserId",
         "_creationTime",
       ];
+      by_userId: ["userId", "_creationTime"];
       by_userId_and_provider: ["userId", "provider", "_creationTime"];
     };
     searchIndexes: {};
@@ -1327,7 +1328,8 @@ export type DataModel = {
         | "diamond"
         | "crimson"
         | "iridescent"
-        | "top250";
+        | "top250"
+        | "unknown";
       username: string;
       _id: Id<"viewerQueueEntries">;
       _creationTime: number;
@@ -1351,6 +1353,7 @@ export type DataModel = {
       by_linkedUserId: ["linkedUserId", "_creationTime"];
       by_queueId: ["queueId", "_creationTime"];
       by_queueId_and_joinedAt: ["queueId", "joinedAt", "_creationTime"];
+      by_queueId_and_linkedUserId: ["queueId", "linkedUserId", "_creationTime"];
       by_queueId_and_platformUserId: [
         "queueId",
         "platform",
@@ -1386,9 +1389,87 @@ export type DataModel = {
     searchIndexes: {};
     vectorIndexes: {};
   };
+  viewerQueueNotifications: {
+    document: {
+      attemptCount: number;
+      avatarUrl?: string;
+      createdAt: number;
+      deliveredAt?: number;
+      displayName: string;
+      lastAttemptAt?: number;
+      linkedUserId?: Id<"users">;
+      nextAttemptAt: number;
+      notificationFailureReason?: string;
+      notificationMethod:
+        | "discord_dm"
+        | "twitch_whisper"
+        | "twitch_chat_fallback"
+        | "manual_creator_contact";
+      notificationStatus: "pending" | "sent" | "failed";
+      platform: "discord" | "twitch";
+      platformUserId: string;
+      queueId: Id<"viewerQueues">;
+      rank:
+        | "bronze"
+        | "silver"
+        | "gold"
+        | "platinum"
+        | "diamond"
+        | "crimson"
+        | "iridescent"
+        | "top250"
+        | "unknown";
+      roundId: Id<"viewerQueueRounds">;
+      updatedAt: number;
+      username: string;
+      _id: Id<"viewerQueueNotifications">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "attemptCount"
+      | "avatarUrl"
+      | "createdAt"
+      | "deliveredAt"
+      | "displayName"
+      | "lastAttemptAt"
+      | "linkedUserId"
+      | "nextAttemptAt"
+      | "notificationFailureReason"
+      | "notificationMethod"
+      | "notificationStatus"
+      | "platform"
+      | "platformUserId"
+      | "queueId"
+      | "rank"
+      | "roundId"
+      | "updatedAt"
+      | "username";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_platform_and_status_and_nextAttemptAt: [
+        "platform",
+        "notificationStatus",
+        "nextAttemptAt",
+        "_creationTime",
+      ];
+      by_roundId: ["roundId", "_creationTime"];
+      by_roundId_and_platformUserId: [
+        "roundId",
+        "platform",
+        "platformUserId",
+        "_creationTime",
+      ];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
   viewerQueueRounds: {
     document: {
       createdAt: number;
+      inviteCodeType?: "party_code" | "private_match_code";
       lobbyCode?: string;
       mode: "bot_dm" | "manual_creator_contact";
       queueId: Id<"viewerQueues">;
@@ -1406,7 +1487,7 @@ export type DataModel = {
           | "twitch_whisper"
           | "twitch_chat_fallback"
           | "manual_creator_contact";
-        notificationStatus?: "sent" | "failed";
+        notificationStatus?: "pending" | "sent" | "failed";
         platform: "discord" | "twitch";
         platformUserId: string;
         rank:
@@ -1417,7 +1498,8 @@ export type DataModel = {
           | "diamond"
           | "crimson"
           | "iridescent"
-          | "top250";
+          | "top250"
+          | "unknown";
         username: string;
       }>;
       _id: Id<"viewerQueueRounds">;
@@ -1427,6 +1509,7 @@ export type DataModel = {
       | "_creationTime"
       | "_id"
       | "createdAt"
+      | "inviteCodeType"
       | "lobbyCode"
       | "mode"
       | "queueId"
@@ -1527,6 +1610,7 @@ export type DataModel = {
         "_creationTime",
       ];
       by_guildId_and_channelId: ["guildId", "channelId", "_creationTime"];
+      by_isActive: ["isActive", "_creationTime"];
       by_twitchBroadcasterId: ["twitchBroadcasterId", "_creationTime"];
     };
     searchIndexes: {};
