@@ -12,13 +12,14 @@ async function main() {
   const apiService = new TwitchApiService(authService)
   const convexService = new ConvexService()
   const commandHandler = new TwitchCommandHandler(convexService, apiService)
-  const listenerService = new TwitchListenerService(apiService)
+  const listenerService = new TwitchListenerService()
   const notificationService = new TwitchNotificationService(
     convexService,
     apiService
   )
   const subscriptionManager = new TwitchSubscriptionManager(
     convexService,
+    apiService,
     listenerService,
     commandHandler
   )

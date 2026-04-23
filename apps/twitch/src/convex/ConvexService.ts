@@ -1,11 +1,9 @@
 import { ConvexHttpClient } from "convex/browser"
 import { api } from "@workspace/backend/convex/_generated/api"
 import { env } from "@/lib/env"
-import type { Id } from "@workspace/backend/convex/_generated/dataModel"
-import type {
-  FunctionArgs,
-  FunctionReturnType,
-} from "convex/server"
+import type { Doc, Id } from "@workspace/backend/convex/_generated/dataModel"
+import type { FunctionArgs, FunctionReturnType } from "convex/server"
+import { EnabledWorkerQueue } from "@workspace/backend/convex/queries/creatorTools/playingWithViewers/twitch"
 
 export class ConvexService {
   private readonly client: ConvexHttpClient
@@ -14,13 +12,10 @@ export class ConvexService {
     this.client = new ConvexHttpClient(env.TWITCH_CONVEX_URL)
   }
 
-  public async getEnabledQueues(): Promise<
-    FunctionReturnType<
-      typeof api.queries.creatorTools.playingWithViewers.twitch.getEnabledQueuesForWorker
-    >
-  > {
+  public async getEnabledQueues(): Promise<EnabledWorkerQueue[]> {
     return this.client.query(
-      api.queries.creatorTools.playingWithViewers.twitch.getEnabledQueuesForWorker,
+      api.queries.creatorTools.playingWithViewers.twitch
+        .getEnabledQueuesForWorker,
       {
         workerSecret: env.TWITCH_CONVEX_ADMIN_KEY,
       }
@@ -36,7 +31,8 @@ export class ConvexService {
     >
   > {
     return this.client.query(
-      api.queries.creatorTools.playingWithViewers.twitch.getQueueSnapshotForWorker,
+      api.queries.creatorTools.playingWithViewers.twitch
+        .getQueueSnapshotForWorker,
       {
         platform: "twitch",
         platformUserId: args.twitchUserId,
@@ -55,7 +51,8 @@ export class ConvexService {
     >
   ) {
     return this.client.action(
-      api.actions.creatorTools.playingWithViewers.twitch.enqueueViewerFromWorker,
+      api.actions.creatorTools.playingWithViewers.twitch
+        .enqueueViewerFromWorker,
       {
         ...args,
         workerSecret: env.TWITCH_CONVEX_ADMIN_KEY,
@@ -84,7 +81,8 @@ export class ConvexService {
     >
   > {
     return this.client.query(
-      api.queries.creatorTools.playingWithViewers.twitch.getPendingNotificationsForWorker,
+      api.queries.creatorTools.playingWithViewers.twitch
+        .getPendingNotificationsForWorker,
       {
         limit,
         workerSecret: env.TWITCH_CONVEX_ADMIN_KEY,
@@ -101,7 +99,8 @@ export class ConvexService {
     >
   ) {
     return this.client.action(
-      api.actions.creatorTools.playingWithViewers.twitch.recordNotificationResultFromWorker,
+      api.actions.creatorTools.playingWithViewers.twitch
+        .recordNotificationResultFromWorker,
       {
         ...args,
         workerSecret: env.TWITCH_CONVEX_ADMIN_KEY,
@@ -118,7 +117,8 @@ export class ConvexService {
     >
   ) {
     return this.client.action(
-      api.actions.creatorTools.playingWithViewers.twitch.deferNotificationFromWorker,
+      api.actions.creatorTools.playingWithViewers.twitch
+        .deferNotificationFromWorker,
       {
         ...args,
         workerSecret: env.TWITCH_CONVEX_ADMIN_KEY,

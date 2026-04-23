@@ -48,8 +48,7 @@ function CreatorNavSection({
       ) : null}
       <div className="flex flex-col gap-1">
         {items.map((item) => {
-          const active =
-            pathname === item.href || pathname.startsWith(`${item.href}/`)
+          const active = pathname === item.href
           const Icon = item.icon
 
           return (

@@ -1,8 +1,8 @@
+import { env } from "@/lib/env"
 import { TwitchAuthService } from "@/twitch/TwitchAuthService"
 import { TwitchListenerService } from "@/twitch/TwitchListenerService"
 import { TwitchNotificationService } from "@/twitch/TwitchNotificationService"
 import { TwitchSubscriptionManager } from "@/twitch/TwitchSubscriptionManager"
-import { env } from "@/lib/env"
 
 export class TwitchWorker {
   private notificationInterval: ReturnType<typeof setInterval> | null = null
@@ -16,7 +16,7 @@ export class TwitchWorker {
   ) {}
 
   public async start(): Promise<void> {
-    this.authService.assertBotTokens()
+    await this.authService.warmup()
 
     if (env.TWITCH_EVENTSUB_ENABLED) {
       await this.listenerService.start()

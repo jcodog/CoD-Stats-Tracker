@@ -1,5 +1,5 @@
 import { v } from "convex/values"
-import type { Doc } from "../../../_generated/dataModel"
+import type { Doc, Id } from "../../../_generated/dataModel"
 import { internalQuery, query } from "../../../_generated/server"
 import {
   getQueuePositionForIdentity,
@@ -121,6 +121,15 @@ export const getEnabledQueuesForWorker = query({
   },
 })
 
+export type EnabledWorkerQueue = {
+  creatorDisplayName: string
+  queueId: Id<"viewerQueues">
+  title: string
+  twitchBotAnnouncementsEnabled: boolean
+  twitchBroadcasterId: string
+  twitchBroadcasterLogin: string
+}
+
 export const getQueueSnapshotForWorker = query({
   args: {
     platform: queuePlatformValidator,
@@ -235,7 +244,7 @@ export const getPendingNotificationsForWorker = query({
         inviteCode: string | undefined
         inviteCodeType: "party_code" | "private_match_code" | undefined
         nextAttemptAt: number
-        notificationId: typeof notifications[number]["_id"]
+        notificationId: (typeof notifications)[number]["_id"]
         platformUserId: string
         title: string
         twitchBroadcasterId: string
