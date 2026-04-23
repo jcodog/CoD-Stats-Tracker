@@ -4,6 +4,7 @@ GPUShaderModule.exports = {
       name: "cod-stats-twitch",
       interpreter: "/root/.bun/bin/bun",
       script: "src/index.ts",
+      cwd: "/opt/cod-stats-tracker/current",
       exec_mode: "fork",
       instances: 1,
       env: {
