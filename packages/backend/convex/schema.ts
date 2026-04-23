@@ -21,11 +21,14 @@ import { viewerQueues } from "./db/tables/creatorTools/playingWithViewers/queues
 import { viewerQueueEntries } from "./db/tables/creatorTools/playingWithViewers/entries"
 import { viewerQueueRounds } from "./db/tables/creatorTools/playingWithViewers/rounds"
 import { viewerQueueMessageSyncs } from "./db/tables/creatorTools/playingWithViewers/messageSync"
+import { viewerQueueCooldowns } from "./db/tables/creatorTools/playingWithViewers/cooldowns"
+import { viewerQueueNotifications } from "./db/tables/creatorTools/playingWithViewers/notifications"
 import { activisionUsernames } from "./db/tables/activisionUsernames"
 import { rankedConfigs } from "./db/tables/rankedConfigs"
 import { rankedMaps } from "./db/tables/rankedMaps"
 import { rankedModes } from "./db/tables/rankedModes"
 import { rankedTitles } from "./db/tables/rankedTitles"
+import { connectedAccounts } from "./db/tables/connectedAccounts"
 
 export default defineSchema({
   sessions,
@@ -58,4 +61,7 @@ export default defineSchema({
   viewerQueueEntries,
   viewerQueueRounds,
   viewerQueueMessageSyncs,
+  viewerQueueCooldowns,
+  viewerQueueNotifications,
+  connectedAccounts,
 })

@@ -32,6 +32,7 @@ function createConvexEnv() {
       STRIPE_WEBHOOK_SECRET: z.string().optional(),
       SUPER_ADMIN_DISCORD_ID: z.string().optional(),
       SUPER_ADMIN_DISCORD_IDS: z.string().optional(),
+      TWITCH_CONVEX_ADMIN_KEY: z.string().optional(),
       VERCEL_ACCESS_TOKEN: z.string().optional(),
       VERCEL_PROJECT_ID_OR_NAME: z.string().optional(),
       VERCEL_TEAM_ID: z.string().optional(),

@@ -1,24 +1,28 @@
 import { defineTable } from "convex/server"
 import { v } from "convex/values"
+import { participantRankValidator } from "../../../../lib/rankValidator"
 
 export const viewerQueueEntries = defineTable({
   queueId: v.id("viewerQueues"),
-  discordUserId: v.string(),
+  platform: v.union(v.literal("discord"), v.literal("twitch")),
+  platformUserId: v.string(),
+
+  // Compatibility field for existing Discord code paths.
+  discordUserId: v.optional(v.string()),
+
   username: v.string(),
   displayName: v.string(),
   avatarUrl: v.optional(v.string()),
-  rank: v.union(
-    v.literal("bronze"),
-    v.literal("silver"),
-    v.literal("gold"),
-    v.literal("platinum"),
-    v.literal("diamond"),
-    v.literal("crimson"),
-    v.literal("iridescent"),
-    v.literal("top250")
-  ),
+  linkedUserId: v.optional(v.id("users")),
+  rank: participantRankValidator,
   joinedAt: v.number(),
 })
   .index("by_queueId", ["queueId"])
   .index("by_queueId_and_joinedAt", ["queueId", "joinedAt"])
-  .index("by_queueId_and_discordUserId", ["queueId", "discordUserId"])
+  .index("by_queueId_and_platformUserId", [
+    "queueId",
+    "platform",
+    "platformUserId",
+  ])
+  .index("by_linkedUserId", ["linkedUserId"])
+  .index("by_queueId_and_linkedUserId", ["queueId", "linkedUserId"])

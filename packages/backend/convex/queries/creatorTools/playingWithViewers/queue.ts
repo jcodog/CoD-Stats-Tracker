@@ -1,6 +1,16 @@
 import { v } from "convex/values"
 import { internalQuery, query } from "../../../_generated/server"
-import { requireCreatorToolsViewerAccess } from "../../../lib/creatorToolsAccess"
+import {
+  getQueuePositionForIdentity,
+  normalizePlatformUserId,
+} from "../../../lib/playingWithViewersIdentity"
+import {
+  queuePlatformValidator,
+} from "../../../lib/playingWithViewers"
+import {
+  requireCreatorToolsViewerAccess,
+  requireOwnedCreatorQueueAccess,
+} from "../../../lib/creatorToolsAccess"
 
 export const getQueueById = internalQuery({
   args: {
@@ -28,14 +38,21 @@ export const getQueueEntries = internalQuery({
       throw new Error("Queue not found")
     }
 
-    const entries = await ctx.db
+    return await ctx.db
       .query("viewerQueueEntries")
-      .withIndex("by_queueId_and_joinedAt", (q) =>
-        q.eq("queueId", args.queueId)
+      .withIndex("by_queueId_and_joinedAt", (query) =>
+        query.eq("queueId", args.queueId)
       )
       .collect()
+  },
+})
 
-    return entries
+export const getQueueEntryById = internalQuery({
+  args: {
+    entryId: v.id("viewerQueueEntries"),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.entryId)
   },
 })
 
@@ -54,13 +71,16 @@ export const getLatestQueueRound = internalQuery({
       return null
     }
 
-    const round = await ctx.db.get(queue.lastSelectedRoundId)
+    return await ctx.db.get(queue.lastSelectedRoundId)
+  },
+})
 
-    if (!round) {
-      return null
-    }
-
-    return round
+export const getRoundById = internalQuery({
+  args: {
+    roundId: v.id("viewerQueueRounds"),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.roundId)
   },
 })
 
@@ -81,14 +101,12 @@ export const getQueueByGuildAndChannel = internalQuery({
       throw new Error("channelId is required")
     }
 
-    const queue = await ctx.db
+    return await ctx.db
       .query("viewerQueues")
-      .withIndex("by_guildId_and_channelId", (q) =>
-        q.eq("guildId", guildId).eq("channelId", channelId)
+      .withIndex("by_guildId_and_channelId", (query) =>
+        query.eq("guildId", guildId).eq("channelId", channelId)
       )
-      .first()
-
-    return queue
+      .unique()
   },
 })
 
@@ -97,39 +115,75 @@ export const getQueueByCreatorUserId = internalQuery({
     creatorUserId: v.id("users"),
   },
   handler: async (ctx, args) => {
-    const queue = await ctx.db
+    return await ctx.db
       .query("viewerQueues")
-      .withIndex("by_creatorUserId", (q) =>
-        q.eq("creatorUserId", args.creatorUserId)
+      .withIndex("by_creatorUserId", (query) =>
+        query.eq("creatorUserId", args.creatorUserId)
       )
-      .first()
-
-    return queue
+      .unique()
   },
 })
 
-export const getQueueEntryById = internalQuery({
+export const getQueueByTwitchBroadcasterId = internalQuery({
   args: {
-    entryId: v.id("viewerQueueEntries"),
+    twitchBroadcasterId: v.string(),
   },
   handler: async (ctx, args) => {
-    return await ctx.db.get(args.entryId)
+    const twitchBroadcasterId = args.twitchBroadcasterId.trim()
+
+    if (!twitchBroadcasterId) {
+      throw new Error("twitchBroadcasterId is required")
+    }
+
+    return await ctx.db
+      .query("viewerQueues")
+      .withIndex("by_twitchBroadcasterId", (query) =>
+        query.eq("twitchBroadcasterId", twitchBroadcasterId)
+      )
+      .unique()
+  },
+})
+
+export const getQueueStatusForIdentity = internalQuery({
+  args: {
+    platform: queuePlatformValidator,
+    platformUserId: v.string(),
+    queueId: v.id("viewerQueues"),
+  },
+  handler: async (ctx, args) => {
+    const queue = await ctx.db.get(args.queueId)
+
+    if (!queue) {
+      throw new Error("Queue not found")
+    }
+
+    const { entries, position } = await getQueuePositionForIdentity(ctx, {
+      platform: args.platform,
+      platformUserId: normalizePlatformUserId(args.platformUserId),
+      queueId: args.queueId,
+    })
+
+    return {
+      isActive: queue.isActive,
+      joined: position !== null,
+      queueId: queue._id,
+      queuePosition: position,
+      queueSize: entries.length,
+    }
   },
 })
 
 export const getCurrentCreatorQueue = query({
   args: {},
   handler: async (ctx) => {
-    try {
-      const { user } = await requireCreatorToolsViewerAccess(ctx)
+    const { user } = await requireCreatorToolsViewerAccess(ctx)
 
-      return await ctx.db
-        .query("viewerQueues")
-        .withIndex("by_creatorUserId", (query) => query.eq("creatorUserId", user._id))
-        .first()
-    } catch {
-      return null
-    }
+    return await ctx.db
+      .query("viewerQueues")
+      .withIndex("by_creatorUserId", (query) =>
+        query.eq("creatorUserId", user._id)
+      )
+      .unique()
   },
 })
 
@@ -138,22 +192,39 @@ export const getCurrentCreatorQueueEntries = query({
     queueId: v.id("viewerQueues"),
   },
   handler: async (ctx, args) => {
-    try {
-      const { user } = await requireCreatorToolsViewerAccess(ctx)
-      const queue = await ctx.db.get(args.queueId)
+    await requireOwnedCreatorQueueAccess(ctx, args.queueId)
 
-      if (!queue || queue.creatorUserId !== user._id) {
-        return []
-      }
+    return await ctx.db
+      .query("viewerQueueEntries")
+      .withIndex("by_queueId_and_joinedAt", (query) =>
+        query.eq("queueId", args.queueId)
+      )
+      .collect()
+  },
+})
 
-      return await ctx.db
-        .query("viewerQueueEntries")
-        .withIndex("by_queueId_and_joinedAt", (query) =>
-          query.eq("queueId", args.queueId)
-        )
-        .collect()
-    } catch {
-      return []
+export const getQueueRoundById = query({
+  args: {
+    roundId: v.id("viewerQueueRounds"),
+  },
+  handler: async (ctx, args) => {
+    const { user } = await requireCreatorToolsViewerAccess(ctx)
+    const round = await ctx.db.get(args.roundId)
+
+    if (!round) {
+      return null
     }
+
+    const queue = await ctx.db.get(round.queueId)
+
+    if (!queue) {
+      throw new Error("Queue not found")
+    }
+
+    if (queue.creatorUserId !== user._id) {
+      throw new Error("You do not have access to this queue round.")
+    }
+
+    return round
   },
 })

@@ -1,9 +1,56 @@
+import { v } from "convex/values"
 import type { Doc } from "../_generated/dataModel"
+import {
+  COMPETITIVE_RANK_VALUES,
+  getParticipantRankLabel,
+  competitiveRankValidator,
+  participantRankValidator,
+  type CompetitiveRank,
+  type ParticipantRank,
+} from "./rankValidator"
 
-export type RankValue = Doc<"viewerQueueEntries">["rank"]
+export { getParticipantRankLabel }
+
+export const queueConfigRankValidator = competitiveRankValidator
+export const participantQueueRankValidator = participantRankValidator
+
+export const inviteModeValidator = v.union(
+  v.literal("bot_dm"),
+  v.literal("manual_creator_contact")
+)
+
+export const inviteCodeTypeValidator = v.union(
+  v.literal("party_code"),
+  v.literal("private_match_code")
+)
+
+export const queuePlatformValidator = v.union(
+  v.literal("discord"),
+  v.literal("twitch")
+)
+
+export const queueNotificationMethodValidator = v.union(
+  v.literal("discord_dm"),
+  v.literal("twitch_whisper"),
+  v.literal("twitch_chat_fallback"),
+  v.literal("manual_creator_contact")
+)
+
+export const queueNotificationStatusValidator = v.union(
+  v.literal("pending"),
+  v.literal("sent"),
+  v.literal("failed")
+)
+
+export type QueueConfigRankValue = Doc<"viewerQueues">["minRank"]
+export type ParticipantRankValue = Doc<"viewerQueueEntries">["rank"]
+export type RankValue = QueueConfigRankValue
 export type InviteCodeType = "party_code" | "private_match_code"
+export type QueuePlatform = "discord" | "twitch"
 
-export const RANK_WEIGHTS: Record<RankValue, number> = {
+export const COMPETITIVE_RANK_OPTIONS = [...COMPETITIVE_RANK_VALUES]
+
+export const RANK_WEIGHTS: Record<CompetitiveRank, number> = {
   bronze: 1,
   silver: 2,
   gold: 3,
@@ -12,6 +59,27 @@ export const RANK_WEIGHTS: Record<RankValue, number> = {
   crimson: 6,
   iridescent: 7,
   top250: 8,
+}
+
+export function isUnknownParticipantRank(
+  rank: ParticipantRankValue
+): rank is Extract<ParticipantRank, "unknown"> {
+  return rank === "unknown"
+}
+
+export function isParticipantRankEligible(args: {
+  maxRank: QueueConfigRankValue
+  minRank: QueueConfigRankValue
+  rank: ParticipantRankValue
+}) {
+  if (isUnknownParticipantRank(args.rank)) {
+    return true
+  }
+
+  const weight = RANK_WEIGHTS[args.rank]
+  return (
+    weight >= RANK_WEIGHTS[args.minRank] && weight <= RANK_WEIGHTS[args.maxRank]
+  )
 }
 
 export const DEFAULT_INVITE_CODE_TYPE: InviteCodeType = "party_code"
@@ -23,8 +91,6 @@ export const INVITE_CODE_TYPE_LABELS: Record<InviteCodeType, string> = {
 
 const INVITE_CODE_TEMPLATE_TOKEN = "{{inviteCode}}"
 
-// Edit these templates to change the instructions used in Discord DMs and the
-// creator-facing invite preview without touching the calling code.
 const INVITE_CODE_INSTRUCTION_TEMPLATES: Record<InviteCodeType, string> = {
   party_code: [
     "Open Call of Duty and head to the Social menu.",

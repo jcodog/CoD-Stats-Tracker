@@ -670,6 +670,42 @@ export type DataModel = {
     searchIndexes: {};
     vectorIndexes: {};
   };
+  connectedAccounts: {
+    document: {
+      createdAt: number;
+      displayName?: string;
+      provider: "discord" | "twitch";
+      providerLogin?: string;
+      providerUserId: string;
+      updatedAt: number;
+      userId: Id<"users">;
+      _id: Id<"connectedAccounts">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "createdAt"
+      | "displayName"
+      | "provider"
+      | "providerLogin"
+      | "providerUserId"
+      | "updatedAt"
+      | "userId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_provider_and_providerUserId: [
+        "provider",
+        "providerUserId",
+        "_creationTime",
+      ];
+      by_userId: ["userId", "_creationTime"];
+      by_userId_and_provider: ["userId", "provider", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
   featureFlags: {
     document: {
       adminBypass: boolean;
@@ -1242,12 +1278,47 @@ export type DataModel = {
     searchIndexes: {};
     vectorIndexes: {};
   };
+  viewerQueueCooldowns: {
+    document: {
+      command: "join";
+      lastUsedAt: number;
+      platform: "discord" | "twitch";
+      platformUserId: string;
+      queueId: Id<"viewerQueues">;
+      _id: Id<"viewerQueueCooldowns">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "command"
+      | "lastUsedAt"
+      | "platform"
+      | "platformUserId"
+      | "queueId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_queueId_platformUserId_command: [
+        "queueId",
+        "platform",
+        "platformUserId",
+        "command",
+        "_creationTime",
+      ];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
   viewerQueueEntries: {
     document: {
       avatarUrl?: string;
-      discordUserId: string;
+      discordUserId?: string;
       displayName: string;
       joinedAt: number;
+      linkedUserId?: Id<"users">;
+      platform: "discord" | "twitch";
+      platformUserId: string;
       queueId: Id<"viewerQueues">;
       rank:
         | "bronze"
@@ -1257,7 +1328,8 @@ export type DataModel = {
         | "diamond"
         | "crimson"
         | "iridescent"
-        | "top250";
+        | "top250"
+        | "unknown";
       username: string;
       _id: Id<"viewerQueueEntries">;
       _creationTime: number;
@@ -1269,19 +1341,25 @@ export type DataModel = {
       | "discordUserId"
       | "displayName"
       | "joinedAt"
+      | "linkedUserId"
+      | "platform"
+      | "platformUserId"
       | "queueId"
       | "rank"
       | "username";
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
+      by_linkedUserId: ["linkedUserId", "_creationTime"];
       by_queueId: ["queueId", "_creationTime"];
-      by_queueId_and_discordUserId: [
+      by_queueId_and_joinedAt: ["queueId", "joinedAt", "_creationTime"];
+      by_queueId_and_linkedUserId: ["queueId", "linkedUserId", "_creationTime"];
+      by_queueId_and_platformUserId: [
         "queueId",
-        "discordUserId",
+        "platform",
+        "platformUserId",
         "_creationTime",
       ];
-      by_queueId_and_joinedAt: ["queueId", "joinedAt", "_creationTime"];
     };
     searchIndexes: {};
     vectorIndexes: {};
@@ -1311,19 +1389,107 @@ export type DataModel = {
     searchIndexes: {};
     vectorIndexes: {};
   };
+  viewerQueueNotifications: {
+    document: {
+      attemptCount: number;
+      avatarUrl?: string;
+      createdAt: number;
+      deliveredAt?: number;
+      displayName: string;
+      lastAttemptAt?: number;
+      linkedUserId?: Id<"users">;
+      nextAttemptAt: number;
+      notificationFailureReason?: string;
+      notificationMethod:
+        | "discord_dm"
+        | "twitch_whisper"
+        | "twitch_chat_fallback"
+        | "manual_creator_contact";
+      notificationStatus: "pending" | "sent" | "failed";
+      platform: "discord" | "twitch";
+      platformUserId: string;
+      queueId: Id<"viewerQueues">;
+      rank:
+        | "bronze"
+        | "silver"
+        | "gold"
+        | "platinum"
+        | "diamond"
+        | "crimson"
+        | "iridescent"
+        | "top250"
+        | "unknown";
+      roundId: Id<"viewerQueueRounds">;
+      updatedAt: number;
+      username: string;
+      _id: Id<"viewerQueueNotifications">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "attemptCount"
+      | "avatarUrl"
+      | "createdAt"
+      | "deliveredAt"
+      | "displayName"
+      | "lastAttemptAt"
+      | "linkedUserId"
+      | "nextAttemptAt"
+      | "notificationFailureReason"
+      | "notificationMethod"
+      | "notificationStatus"
+      | "platform"
+      | "platformUserId"
+      | "queueId"
+      | "rank"
+      | "roundId"
+      | "updatedAt"
+      | "username";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_platform_and_status_and_nextAttemptAt: [
+        "platform",
+        "notificationStatus",
+        "nextAttemptAt",
+        "_creationTime",
+      ];
+      by_roundId: ["roundId", "_creationTime"];
+      by_roundId_and_platformUserId: [
+        "roundId",
+        "platform",
+        "platformUserId",
+        "_creationTime",
+      ];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
   viewerQueueRounds: {
     document: {
       createdAt: number;
+      inviteCodeType?: "party_code" | "private_match_code";
       lobbyCode?: string;
-      mode: "discord_dm" | "manual_creator_contact";
+      mode: "bot_dm" | "manual_creator_contact";
       queueId: Id<"viewerQueues">;
       selectedCount: number;
       selectedUsers: Array<{
         avatarUrl?: string;
-        discordUserId: string;
+        discordUserId?: string;
         displayName: string;
         dmFailureReason?: string;
         dmStatus?: "sent" | "failed";
+        linkedUserId?: Id<"users">;
+        notificationFailureReason?: string;
+        notificationMethod?:
+          | "discord_dm"
+          | "twitch_whisper"
+          | "twitch_chat_fallback"
+          | "manual_creator_contact";
+        notificationStatus?: "pending" | "sent" | "failed";
+        platform: "discord" | "twitch";
+        platformUserId: string;
         rank:
           | "bronze"
           | "silver"
@@ -1332,7 +1498,8 @@ export type DataModel = {
           | "diamond"
           | "crimson"
           | "iridescent"
-          | "top250";
+          | "top250"
+          | "unknown";
         username: string;
       }>;
       _id: Id<"viewerQueueRounds">;
@@ -1342,6 +1509,7 @@ export type DataModel = {
       | "_creationTime"
       | "_id"
       | "createdAt"
+      | "inviteCodeType"
       | "lobbyCode"
       | "mode"
       | "queueId"
@@ -1368,7 +1536,7 @@ export type DataModel = {
       gameLabel: string;
       guildId: string;
       guildName?: string;
-      inviteMode: "discord_dm" | "manual_creator_contact";
+      inviteMode: "bot_dm" | "manual_creator_contact";
       isActive: boolean;
       lastMessageSyncError?: string;
       lastSelectedRoundId?: Id<"viewerQueueRounds">;
@@ -1395,6 +1563,10 @@ export type DataModel = {
       playersPerBatch: number;
       rulesText?: string;
       title: string;
+      twitchBotAnnouncementsEnabled: boolean;
+      twitchBroadcasterId: string;
+      twitchBroadcasterLogin: string;
+      twitchCommandsEnabled: boolean;
       updatedAt: number;
       _id: Id<"viewerQueues">;
       _creationTime: number;
@@ -1423,6 +1595,10 @@ export type DataModel = {
       | "playersPerBatch"
       | "rulesText"
       | "title"
+      | "twitchBotAnnouncementsEnabled"
+      | "twitchBroadcasterId"
+      | "twitchBroadcasterLogin"
+      | "twitchCommandsEnabled"
       | "updatedAt";
     indexes: {
       by_id: ["_id"];
@@ -1434,6 +1610,8 @@ export type DataModel = {
         "_creationTime",
       ];
       by_guildId_and_channelId: ["guildId", "channelId", "_creationTime"];
+      by_isActive: ["isActive", "_creationTime"];
+      by_twitchBroadcasterId: ["twitchBroadcasterId", "_creationTime"];
     };
     searchIndexes: {};
     vectorIndexes: {};

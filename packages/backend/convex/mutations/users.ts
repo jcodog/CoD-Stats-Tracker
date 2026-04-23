@@ -5,6 +5,7 @@ import { DataModel } from "../_generated/dataModel"
 import { parseUserRole } from "../lib/staffRoles"
 import { resolveConfiguredUserRole } from "../lib/staffRoleConfig"
 import {
+  getConnectedAccountsFromClerkUser,
   getDiscordIdFromClerkUser,
   resolveProvisionedUserRoleFromClerk,
 } from "../lib/clerkUsers"
@@ -42,7 +43,7 @@ export const upsertFromClerk = internalMutation({
     const doc = existingByClerk ?? existingByDiscord
 
     if (!doc) {
-      await ctx.db.insert("users", {
+      const userId = await ctx.db.insert("users", {
         clerkUserId,
         discordId,
         name,
@@ -56,6 +57,11 @@ export const upsertFromClerk = internalMutation({
         chatgptRevokedAt: undefined,
         createdAt: now,
         updatedAt: now,
+      })
+      await syncConnectedAccountsForUserRecords(ctx, {
+        accounts: getConnectedAccountsFromClerkUser(data),
+        now,
+        userId,
       })
       return
     }
@@ -92,6 +98,12 @@ export const upsertFromClerk = internalMutation({
       await ctx.db.patch(doc._id, patch)
     }
 
+    await syncConnectedAccountsForUserRecords(ctx, {
+      accounts: getConnectedAccountsFromClerkUser(data),
+      now,
+      userId: doc._id,
+    })
+
     return
   },
 })
@@ -106,6 +118,15 @@ export const deleteFromClerk = internalMutation({
         `Ignoring Clerk user deletion for missing local user: ${clerkUserId}`
       )
       return
+    }
+
+    const connectedAccounts = await ctx.db
+      .query("connectedAccounts")
+      .withIndex("by_userId", (query) => query.eq("userId", user._id))
+      .collect()
+
+    for (const connectedAccount of connectedAccounts) {
+      await ctx.db.delete(connectedAccount._id)
     }
 
     await ctx.db.delete(user._id)
@@ -160,9 +181,128 @@ export const updateFromClerk = internalMutation({
       await ctx.db.patch(existing._id, patch)
     }
 
+    await syncConnectedAccountsForUserRecords(ctx, {
+      accounts: getConnectedAccountsFromClerkUser(data),
+      now,
+      userId: existing._id,
+    })
+
     return
   },
 })
+
+export const syncConnectedAccountsForUser = internalMutation({
+  args: {
+    userId: v.id("users"),
+    accounts: v.array(
+      v.object({
+        displayName: v.optional(v.string()),
+        provider: v.union(v.literal("discord"), v.literal("twitch")),
+        providerLogin: v.optional(v.string()),
+        providerUserId: v.string(),
+      })
+    ),
+  },
+  handler: async (ctx, args) => {
+    await syncConnectedAccountsForUserRecords(ctx, {
+      accounts: args.accounts,
+      now: Date.now(),
+      userId: args.userId,
+    })
+
+    return { userId: args.userId }
+  },
+})
+
+async function syncConnectedAccountsForUserRecords(
+  ctx: MutationCtx,
+  args: {
+    accounts: Array<{
+      displayName?: string
+      provider: "discord" | "twitch"
+      providerLogin?: string
+      providerUserId: string
+    }>
+    now: number
+    userId: DataModel["users"]["document"]["_id"]
+  }
+) {
+  const existingAccounts = await ctx.db
+    .query("connectedAccounts")
+    .withIndex("by_userId", (query) => query.eq("userId", args.userId))
+    .collect()
+
+  const desiredAccounts = new Map(
+    args.accounts.map((account) => [account.provider, account])
+  )
+
+  for (const desiredAccount of desiredAccounts.values()) {
+    const conflictingAccount = await ctx.db
+      .query("connectedAccounts")
+      .withIndex("by_provider_and_providerUserId", (query) =>
+        query
+          .eq("provider", desiredAccount.provider)
+          .eq("providerUserId", desiredAccount.providerUserId)
+      )
+      .unique()
+
+    if (conflictingAccount && conflictingAccount.userId !== args.userId) {
+      throw new Error(
+        `Account conflict: this ${desiredAccount.provider} account is already linked to a different CleoAI Cod Stats Service user.`
+      )
+    }
+
+    const existingAccount = existingAccounts.find(
+      (account) => account.provider === desiredAccount.provider
+    )
+
+    if (!existingAccount) {
+      await ctx.db.insert("connectedAccounts", {
+        createdAt: args.now,
+        displayName: desiredAccount.displayName?.trim() || undefined,
+        provider: desiredAccount.provider,
+        providerLogin: desiredAccount.providerLogin?.trim() || undefined,
+        providerUserId: desiredAccount.providerUserId.trim(),
+        updatedAt: args.now,
+        userId: args.userId,
+      })
+      continue
+    }
+
+    const patch: Partial<DataModel["connectedAccounts"]["document"]> = {}
+
+    if (existingAccount.providerUserId !== desiredAccount.providerUserId.trim()) {
+      patch.providerUserId = desiredAccount.providerUserId.trim()
+    }
+
+    if (
+      (existingAccount.providerLogin ?? undefined) !==
+      (desiredAccount.providerLogin?.trim() || undefined)
+    ) {
+      patch.providerLogin = desiredAccount.providerLogin?.trim() || undefined
+    }
+
+    if (
+      (existingAccount.displayName ?? undefined) !==
+      (desiredAccount.displayName?.trim() || undefined)
+    ) {
+      patch.displayName = desiredAccount.displayName?.trim() || undefined
+    }
+
+    if (Object.keys(patch).length > 0) {
+      patch.updatedAt = args.now
+      await ctx.db.patch(existingAccount._id, patch)
+    }
+  }
+
+  for (const existingAccount of existingAccounts) {
+    if (desiredAccounts.has(existingAccount.provider)) {
+      continue
+    }
+
+    await ctx.db.delete(existingAccount._id)
+  }
+}
 
 const userByClerkUserId = async (
   ctx: MutationCtx,
