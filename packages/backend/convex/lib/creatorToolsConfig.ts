@@ -1,5 +1,5 @@
 export const playWithViewersConfig = {
-  twitchDisabled: true,
+  twitchDisabled: false,
 } as const
 
 export type PlayWithViewersStoredTwitchContextLike = {
