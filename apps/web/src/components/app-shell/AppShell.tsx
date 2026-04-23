@@ -39,9 +39,9 @@ export async function AppShell({ children }: AppShellProps) {
     ...(creatorToolsAccess.hasCreatorAccess
       ? [
           {
-            href: "/creator-tools/play-with-viewers",
-            label: "Play With Viewers",
-            matchPaths: ["/creator-tools"],
+            href: "/creator",
+            label: "Creator",
+            matchPaths: ["/creator", "/creator-tools"],
           },
         ]
       : []),

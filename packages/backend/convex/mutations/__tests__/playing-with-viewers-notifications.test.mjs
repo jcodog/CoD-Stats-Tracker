@@ -248,7 +248,7 @@ describe("playing with viewers notification persistence", () => {
     })
   })
 
-  it("returns no Twitch notifications while the Twitch integration is disabled", async () => {
+  it("returns only due Twitch notifications when draining pending jobs", async () => {
     const queueId = "viewerQueues:1"
     const roundId = "viewerQueueRounds:1"
     const queryCtx = createQueryCtx({
@@ -334,6 +334,21 @@ describe("playing with viewers notification persistence", () => {
       getPendingTwitchNotifications._handler(queryCtx, { limit: 10 })
     )
 
-    expect(jobs).toHaveLength(0)
+    expect(jobs).toHaveLength(1)
+    expect(jobs[0]).toMatchObject({
+      notification: {
+        _id: "viewerQueueNotifications:1",
+        platformUserId: "twitch-1",
+        username: "due_viewer",
+      },
+      queue: {
+        creatorDisplayName: "Streamer",
+        twitchBroadcasterLogin: "streamer",
+      },
+      round: {
+        inviteCodeType: "party_code",
+        lobbyCode: "ABC123",
+      },
+    })
   })
 })

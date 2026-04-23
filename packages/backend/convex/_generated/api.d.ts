@@ -642,6 +642,16 @@ export declare const api: {
         any
       >;
     };
+    creator: {
+      account: {
+        setCurrentCreatorCodeActiveState: FunctionReference<
+          "mutation",
+          "public",
+          { codeActive: boolean },
+          any
+        >;
+      };
+    };
     oauth: {
       createAuthorizationCode: FunctionReference<
         "mutation",
@@ -933,6 +943,14 @@ export declare const api: {
           "query",
           "public",
           { code: string },
+          any
+        >;
+      };
+      dashboard: {
+        getCurrentCreatorDashboard: FunctionReference<
+          "query",
+          "public",
+          {},
           any
         >;
       };
