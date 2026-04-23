@@ -5,6 +5,9 @@ import type {
   PricingCatalogResponse,
 } from "@/features/billing/lib/billing-types"
 import { formatCurrencyAmount } from "@/features/billing/lib/format"
+import { CreatorCodeNotice } from "@/features/creator-attribution/components/CreatorCodeNotice"
+import { PricingCurrencySelect } from "@/features/pricing/components/PricingCurrencySelect"
+import type { PendingCreatorCodeSummary } from "@/lib/server/creator-attribution"
 
 type PricingFeatureRow = {
   category: string
@@ -90,15 +93,42 @@ function getPlanFeatureGridClassName(
   return "grid gap-3 md:grid-cols-2 xl:grid-cols-3"
 }
 
-export function PricingIntro() {
+export function PricingIntro({
+  availableCurrencies,
+  currencyNotice,
+  pendingCreatorCode,
+  selectedCurrency,
+}: {
+  availableCurrencies: PricingCatalogResponse["availableCurrencies"]
+  currencyNotice: PricingCatalogResponse["currencyNotice"]
+  pendingCreatorCode?: PendingCreatorCodeSummary | null
+  selectedCurrency: PricingCatalogResponse["selectedCurrency"]
+}) {
   return (
     <section className="grid gap-3 border-b border-border/70 pb-6">
-      <h1 className="max-w-[44rem] text-4xl leading-[0.96] font-semibold tracking-tight text-balance sm:text-5xl">
-        Pricing
-      </h1>
-      <p className="max-w-[40rem] text-base leading-8 text-pretty text-foreground/86 sm:text-lg">
-        Choose the CodStats plan that fits how you play and track ranked.
-      </p>
+      {pendingCreatorCode ? (
+        <CreatorCodeNotice
+          code={pendingCreatorCode.code}
+          discountPercent={pendingCreatorCode.discountPercent}
+        />
+      ) : null}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="grid gap-3">
+          <h1 className="max-w-[44rem] text-4xl leading-[0.96] font-semibold tracking-tight text-balance sm:text-5xl">
+            Pricing
+          </h1>
+          <p className="max-w-[40rem] text-base leading-8 text-pretty text-foreground/86 sm:text-lg">
+            Choose the CodStats plan that fits how you play and track ranked.
+          </p>
+        </div>
+        <PricingCurrencySelect
+          currencies={availableCurrencies}
+          value={selectedCurrency}
+        />
+      </div>
+      {currencyNotice ? (
+        <p className="text-sm leading-6 text-foreground/72">{currencyNotice}</p>
+      ) : null}
     </section>
   )
 }

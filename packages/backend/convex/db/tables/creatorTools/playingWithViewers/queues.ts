@@ -1,6 +1,7 @@
 import { defineTable } from "convex/server"
 import { v } from "convex/values"
 import { competitiveRankValidator } from "../../../../lib/rankValidator"
+import { storedInviteModeValidator } from "../../../../lib/playingWithViewers"
 
 export const viewerQueues = defineTable({
   creatorUserId: v.id("users"),
@@ -12,10 +13,10 @@ export const viewerQueues = defineTable({
   channelPermsCorrect: v.optional(v.boolean()),
   messageId: v.optional(v.string()),
 
-  twitchBroadcasterId: v.string(),
-  twitchBroadcasterLogin: v.string(),
-  twitchCommandsEnabled: v.boolean(),
-  twitchBotAnnouncementsEnabled: v.boolean(),
+  twitchBroadcasterId: v.optional(v.string()),
+  twitchBroadcasterLogin: v.optional(v.string()),
+  twitchCommandsEnabled: v.optional(v.boolean()),
+  twitchBotAnnouncementsEnabled: v.optional(v.boolean()),
 
   title: v.string(),
   creatorDisplayName: v.string(),
@@ -27,7 +28,7 @@ export const viewerQueues = defineTable({
   matchesPerViewer: v.number(),
   minRank: competitiveRankValidator,
   maxRank: competitiveRankValidator,
-  inviteMode: v.union(v.literal("bot_dm"), v.literal("manual_creator_contact")),
+  inviteMode: storedInviteModeValidator,
   lastSelectedRoundId: v.optional(v.id("viewerQueueRounds")),
   lastMessageSyncError: v.optional(v.string()),
   createdAt: v.number(),

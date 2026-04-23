@@ -10,6 +10,8 @@ import {
   DEFAULT_INVITE_CODE_TYPE,
   inviteCodeTypeValidator,
   inviteModeValidator,
+  normalizeStoredQueueParticipant,
+  normalizeStoredInviteMode,
   isParticipantRankEligible,
   participantQueueRankValidator,
   queueConfigRankValidator,
@@ -21,6 +23,11 @@ import {
   type QueueConfigRankValue,
   type QueuePlatform,
 } from "../../../lib/playingWithViewers"
+import {
+  getDisabledPlayWithViewersTwitchContext,
+  type PlayWithViewersStoredTwitchContextLike,
+  isPlayWithViewersTwitchEnabled,
+} from "../../../lib/creatorToolsConfig"
 
 const selectedQueueUserValidator = v.object({
   platform: queuePlatformValidator,
@@ -75,6 +82,37 @@ const requireNonEmptyString = (value: string, fieldName: string): string => {
   }
 
   return trimmed
+}
+
+function resolveStoredTwitchContext(args: {
+  currentQueue?: PlayWithViewersStoredTwitchContextLike
+  twitchBotAnnouncementsEnabled?: boolean
+  twitchBroadcasterId?: string
+  twitchBroadcasterLogin?: string
+  twitchCommandsEnabled?: boolean
+}) {
+  if (!isPlayWithViewersTwitchEnabled()) {
+    return getDisabledPlayWithViewersTwitchContext()
+  }
+
+  return {
+    twitchBotAnnouncementsEnabled:
+      args.twitchBotAnnouncementsEnabled ??
+      args.currentQueue?.twitchBotAnnouncementsEnabled ??
+      true,
+    twitchBroadcasterId: requireNonEmptyString(
+      args.twitchBroadcasterId ?? args.currentQueue?.twitchBroadcasterId ?? "",
+      "twitchBroadcasterId"
+    ),
+    twitchBroadcasterLogin: requireNonEmptyString(
+      args.twitchBroadcasterLogin ??
+        args.currentQueue?.twitchBroadcasterLogin ??
+        "",
+      "twitchBroadcasterLogin"
+    ),
+    twitchCommandsEnabled:
+      args.twitchCommandsEnabled ?? args.currentQueue?.twitchCommandsEnabled ?? true,
+  }
 }
 
 const validateQueueVolumeSettings = (args: {
@@ -152,25 +190,27 @@ function mapEntryToSelectedUser(entry: {
   discordUserId?: string
   displayName: string
   linkedUserId?: Id<"users">
-  platform: QueuePlatform
-  platformUserId: string
+  platform?: QueuePlatform
+  platformUserId?: string
   rank: ParticipantRankValue
   username: string
 }) {
+  const normalizedEntry = normalizeStoredQueueParticipant(entry)
+
   return {
-    avatarUrl: entry.avatarUrl,
-    displayName: entry.displayName,
-    discordUserId: entry.discordUserId,
+    avatarUrl: normalizedEntry.avatarUrl,
+    displayName: normalizedEntry.displayName,
+    discordUserId: normalizedEntry.discordUserId,
     dmFailureReason: undefined,
     dmStatus: undefined,
-    linkedUserId: entry.linkedUserId,
+    linkedUserId: normalizedEntry.linkedUserId,
     notificationFailureReason: undefined,
     notificationMethod: undefined,
     notificationStatus: undefined,
-    platform: entry.platform,
-    platformUserId: entry.platformUserId,
-    rank: entry.rank,
-    username: entry.username,
+    platform: normalizedEntry.platform,
+    platformUserId: normalizedEntry.platformUserId,
+    rank: normalizedEntry.rank,
+    username: normalizedEntry.username,
   }
 }
 
@@ -331,14 +371,12 @@ export const createQueue = internalMutation({
 
     const guildId = requireNonEmptyString(args.guildId, "guildId")
     const channelId = requireNonEmptyString(args.channelId, "channelId")
-    const twitchBroadcasterId = requireNonEmptyString(
-      args.twitchBroadcasterId,
-      "twitchBroadcasterId"
-    )
-    const twitchBroadcasterLogin = requireNonEmptyString(
-      args.twitchBroadcasterLogin,
-      "twitchBroadcasterLogin"
-    )
+    const twitchContext = resolveStoredTwitchContext({
+      twitchBotAnnouncementsEnabled: args.twitchBotAnnouncementsEnabled,
+      twitchBroadcasterId: args.twitchBroadcasterId,
+      twitchBroadcasterLogin: args.twitchBroadcasterLogin,
+      twitchCommandsEnabled: args.twitchCommandsEnabled,
+    })
     const existing = await ctx.db
       .query("viewerQueues")
       .withIndex("by_creatorUserId", (query) =>
@@ -373,10 +411,11 @@ export const createQueue = internalMutation({
       playersPerBatch: args.playersPerBatch,
       rulesText: args.rulesText?.trim() || undefined,
       title: requireNonEmptyString(args.title, "title"),
-      twitchBotAnnouncementsEnabled: args.twitchBotAnnouncementsEnabled ?? true,
-      twitchBroadcasterId,
-      twitchBroadcasterLogin,
-      twitchCommandsEnabled: args.twitchCommandsEnabled ?? true,
+      twitchBotAnnouncementsEnabled:
+        twitchContext.twitchBotAnnouncementsEnabled,
+      twitchBroadcasterId: twitchContext.twitchBroadcasterId,
+      twitchBroadcasterLogin: twitchContext.twitchBroadcasterLogin,
+      twitchCommandsEnabled: twitchContext.twitchCommandsEnabled,
       updatedAt: now,
     })
 
@@ -440,14 +479,15 @@ export const selectNextBatch = internalMutation({
       throw new Error("Queue not found")
     }
 
+    const inviteMode = normalizeStoredInviteMode(queue.inviteMode)
     const inviteCode = args.inviteCode?.trim()
     const inviteCodeType = args.inviteCodeType ?? DEFAULT_INVITE_CODE_TYPE
 
-    if (queue.inviteMode === "bot_dm" && !inviteCode) {
+    if (inviteMode === "bot_dm" && !inviteCode) {
       throw new Error("Invite code is required for bot_dm mode")
     }
 
-    if (queue.inviteMode === "bot_dm" && !args.inviteCodeType) {
+    if (inviteMode === "bot_dm" && !args.inviteCodeType) {
       throw new Error("Invite code type is required for bot_dm mode")
     }
 
@@ -481,10 +521,9 @@ export const selectNextBatch = internalMutation({
     const now = Date.now()
     const roundId = await ctx.db.insert("viewerQueueRounds", {
       createdAt: now,
-      inviteCodeType:
-        queue.inviteMode === "bot_dm" ? inviteCodeType : undefined,
+      inviteCodeType: inviteMode === "bot_dm" ? inviteCodeType : undefined,
       lobbyCode: inviteCode || undefined,
-      mode: queue.inviteMode,
+      mode: inviteMode,
       queueId: args.queueId,
       selectedCount: selectedUsers.length,
       selectedUsers,
@@ -496,7 +535,7 @@ export const selectNextBatch = internalMutation({
     })
 
     return {
-      mode: queue.inviteMode,
+      mode: inviteMode,
       queueId: queue._id,
       roundId,
       selectedCount: selectedUsers.length,
@@ -524,14 +563,15 @@ export const inviteQueueEntryNow = internalMutation({
       throw new Error("Queue not found")
     }
 
+    const inviteMode = normalizeStoredInviteMode(queue.inviteMode)
     const inviteCode = args.inviteCode?.trim()
     const inviteCodeType = args.inviteCodeType ?? DEFAULT_INVITE_CODE_TYPE
 
-    if (queue.inviteMode === "bot_dm" && !inviteCode) {
+    if (inviteMode === "bot_dm" && !inviteCode) {
       throw new Error("Invite code is required for bot_dm mode")
     }
 
-    if (queue.inviteMode === "bot_dm" && !args.inviteCodeType) {
+    if (inviteMode === "bot_dm" && !args.inviteCodeType) {
       throw new Error("Invite code type is required for bot_dm mode")
     }
 
@@ -542,10 +582,9 @@ export const inviteQueueEntryNow = internalMutation({
     const now = Date.now()
     const roundId = await ctx.db.insert("viewerQueueRounds", {
       createdAt: now,
-      inviteCodeType:
-        queue.inviteMode === "bot_dm" ? inviteCodeType : undefined,
+      inviteCodeType: inviteMode === "bot_dm" ? inviteCodeType : undefined,
       lobbyCode: inviteCode || undefined,
-      mode: queue.inviteMode,
+      mode: inviteMode,
       queueId: queue._id,
       selectedCount: selectedUsers.length,
       selectedUsers,
@@ -557,7 +596,7 @@ export const inviteQueueEntryNow = internalMutation({
     })
 
     return {
-      mode: queue.inviteMode,
+      mode: inviteMode,
       queueId: queue._id,
       roundId,
       selectedCount: selectedUsers.length,
@@ -698,6 +737,14 @@ export const updateQueueSettings = internalMutation({
       throw new Error("minRank cannot be higher than maxRank")
     }
 
+    const twitchContext = resolveStoredTwitchContext({
+      currentQueue: queue,
+      twitchBotAnnouncementsEnabled: args.twitchBotAnnouncementsEnabled,
+      twitchBroadcasterId: args.twitchBroadcasterId,
+      twitchBroadcasterLogin: args.twitchBroadcasterLogin,
+      twitchCommandsEnabled: args.twitchCommandsEnabled,
+    })
+
     await ctx.db.patch(args.queueId, {
       creatorDisplayName: requireNonEmptyString(
         args.creatorDisplayName,
@@ -713,23 +760,10 @@ export const updateQueueSettings = internalMutation({
       rulesText: args.rulesText?.trim() || undefined,
       title: requireNonEmptyString(args.title, "title"),
       twitchBotAnnouncementsEnabled:
-        args.twitchBotAnnouncementsEnabled ?? queue.twitchBotAnnouncementsEnabled,
-      twitchBroadcasterId:
-        args.twitchBroadcasterId !== undefined
-          ? requireNonEmptyString(
-              args.twitchBroadcasterId,
-              "twitchBroadcasterId"
-            )
-          : queue.twitchBroadcasterId,
-      twitchBroadcasterLogin:
-        args.twitchBroadcasterLogin !== undefined
-          ? requireNonEmptyString(
-              args.twitchBroadcasterLogin,
-              "twitchBroadcasterLogin"
-            )
-          : queue.twitchBroadcasterLogin,
-      twitchCommandsEnabled:
-        args.twitchCommandsEnabled ?? queue.twitchCommandsEnabled,
+        twitchContext.twitchBotAnnouncementsEnabled,
+      twitchBroadcasterId: twitchContext.twitchBroadcasterId,
+      twitchBroadcasterLogin: twitchContext.twitchBroadcasterLogin,
+      twitchCommandsEnabled: twitchContext.twitchCommandsEnabled,
       updatedAt: Date.now(),
     })
 
@@ -874,19 +908,20 @@ export const setQueueTwitchContext = internalMutation({
       throw new Error("Queue not found")
     }
 
+    const twitchContext = resolveStoredTwitchContext({
+      currentQueue: queue,
+      twitchBotAnnouncementsEnabled: args.twitchBotAnnouncementsEnabled,
+      twitchBroadcasterId: args.twitchBroadcasterId,
+      twitchBroadcasterLogin: args.twitchBroadcasterLogin,
+      twitchCommandsEnabled: args.twitchCommandsEnabled,
+    })
+
     await ctx.db.patch(args.queueId, {
       twitchBotAnnouncementsEnabled:
-        args.twitchBotAnnouncementsEnabled ?? queue.twitchBotAnnouncementsEnabled,
-      twitchBroadcasterId: requireNonEmptyString(
-        args.twitchBroadcasterId,
-        "twitchBroadcasterId"
-      ),
-      twitchBroadcasterLogin: requireNonEmptyString(
-        args.twitchBroadcasterLogin,
-        "twitchBroadcasterLogin"
-      ),
-      twitchCommandsEnabled:
-        args.twitchCommandsEnabled ?? queue.twitchCommandsEnabled,
+        twitchContext.twitchBotAnnouncementsEnabled,
+      twitchBroadcasterId: twitchContext.twitchBroadcasterId,
+      twitchBroadcasterLogin: twitchContext.twitchBroadcasterLogin,
+      twitchCommandsEnabled: twitchContext.twitchCommandsEnabled,
       updatedAt: Date.now(),
     })
 

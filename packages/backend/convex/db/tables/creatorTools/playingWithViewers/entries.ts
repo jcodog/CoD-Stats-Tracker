@@ -4,10 +4,10 @@ import { participantRankValidator } from "../../../../lib/rankValidator"
 
 export const viewerQueueEntries = defineTable({
   queueId: v.id("viewerQueues"),
-  platform: v.union(v.literal("discord"), v.literal("twitch")),
-  platformUserId: v.string(),
+  platform: v.optional(v.union(v.literal("discord"), v.literal("twitch"))),
+  platformUserId: v.optional(v.string()),
 
-  // Compatibility field for existing Discord code paths.
+  // Compatibility field for legacy Discord-only queue entries.
   discordUserId: v.optional(v.string()),
 
   username: v.string(),

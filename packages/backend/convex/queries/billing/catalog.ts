@@ -13,6 +13,10 @@ export type BillingCatalogPlan = BillingPlanRecord & {
   inactiveFeatureKeys: string[]
 }
 
+const SUPPORTED_CURRENCIES = ["GBP", "USD", "CAD", "EUR"] as const
+
+type SupportedCurrency = (typeof SUPPORTED_CURRENCIES)[number]
+
 type PricingCatalogEntry = {
   active: boolean
   description: string
@@ -39,6 +43,176 @@ type PricingCatalogEntry = {
   }
   relationship: "checkout" | "current" | "downgrade" | "switch" | "upgrade"
   sortOrder: number
+}
+
+function normalizePreferredCurrency(
+  value: string | null | undefined
+): SupportedCurrency | null {
+  if (typeof value !== "string") {
+    return null
+  }
+
+  const normalizedValue = value.trim().toUpperCase()
+
+  return SUPPORTED_CURRENCIES.includes(normalizedValue as SupportedCurrency)
+    ? (normalizedValue as SupportedCurrency)
+    : null
+}
+
+function getAlternatePlanAmount(args: {
+  interval: "month" | "year"
+  currency: Exclude<SupportedCurrency, "GBP">
+  plan: BillingPlanRecord
+}) {
+  switch (args.currency) {
+    case "USD":
+      return args.interval === "month"
+        ? args.plan.monthlyPriceAmountUsd
+        : args.plan.yearlyPriceAmountUsd
+    case "CAD":
+      return args.interval === "month"
+        ? args.plan.monthlyPriceAmountCad
+        : args.plan.yearlyPriceAmountCad
+    case "EUR":
+      return args.interval === "month"
+        ? args.plan.monthlyPriceAmountEur
+        : args.plan.yearlyPriceAmountEur
+  }
+}
+
+function getAlternatePriceId(args: {
+  interval: "month" | "year"
+  currency: Exclude<SupportedCurrency, "GBP">
+  plan: BillingPlanRecord
+}) {
+  switch (args.currency) {
+    case "USD":
+      return args.interval === "month"
+        ? args.plan.monthlyPriceIdUsd
+        : args.plan.yearlyPriceIdUsd
+    case "CAD":
+      return args.interval === "month"
+        ? args.plan.monthlyPriceIdCad
+        : args.plan.yearlyPriceIdCad
+    case "EUR":
+      return args.interval === "month"
+        ? args.plan.monthlyPriceIdEur
+        : args.plan.yearlyPriceIdEur
+  }
+}
+
+function planSupportsCurrency(plan: BillingPlanRecord, currency: SupportedCurrency) {
+  if (plan.planType !== "paid") {
+    return true
+  }
+
+  if (currency === "GBP") {
+    return true
+  }
+
+  const supportsMonthly =
+    plan.monthlyPriceAmount <= 0 ||
+    (getAlternatePlanAmount({
+      currency,
+      interval: "month",
+      plan,
+    }) ?? 0) > 0
+  const supportsYearly =
+    plan.yearlyPriceAmount <= 0 ||
+    (getAlternatePlanAmount({
+      currency,
+      interval: "year",
+      plan,
+    }) ?? 0) > 0
+
+  return supportsMonthly && supportsYearly
+}
+
+function getAvailableCurrencies(plans: BillingPlanRecord[]) {
+  const activePaidPlans = plans.filter(
+    (plan) => plan.active && plan.archivedAt === undefined && plan.planType === "paid"
+  )
+
+  return SUPPORTED_CURRENCIES.filter((currency) =>
+    activePaidPlans.every((plan) => planSupportsCurrency(plan, currency))
+  )
+}
+
+function resolvePricingCurrency(args: {
+  plans: BillingPlanRecord[]
+  preferredCurrency?: string | null
+}) {
+  const availableCurrencies = getAvailableCurrencies(args.plans)
+  const normalizedPreferredCurrency = normalizePreferredCurrency(
+    args.preferredCurrency
+  )
+  const selectedCurrency =
+    normalizedPreferredCurrency &&
+    availableCurrencies.includes(normalizedPreferredCurrency)
+      ? normalizedPreferredCurrency
+      : ("GBP" as SupportedCurrency)
+
+  return {
+    availableCurrencies,
+    currencyNotice:
+      normalizedPreferredCurrency &&
+      normalizedPreferredCurrency !== selectedCurrency
+        ? `Pricing is currently billed in ${selectedCurrency} for your selected plans.`
+        : null,
+    selectedCurrency,
+  }
+}
+
+function resolvePlanPricing<TInterval extends "month" | "year">(args: {
+  interval: TInterval
+  plan: BillingPlanRecord
+  selectedCurrency: SupportedCurrency
+}) {
+  if (args.plan.planType !== "paid") {
+    return null
+  }
+
+  if (args.selectedCurrency === "GBP") {
+    const amount =
+      args.interval === "month"
+        ? args.plan.monthlyPriceAmount
+        : args.plan.yearlyPriceAmount
+
+    return amount > 0
+      ? {
+          amount,
+          currency: "GBP",
+          interval: args.interval,
+        }
+      : null
+  }
+
+  const alternateAmount = getAlternatePlanAmount({
+    currency: args.selectedCurrency,
+    interval: args.interval,
+    plan: args.plan,
+  })
+
+  if ((alternateAmount ?? 0) > 0) {
+    return {
+      amount: alternateAmount!,
+      currency: args.selectedCurrency,
+      interval: args.interval,
+    }
+  }
+
+  const fallbackAmount =
+    args.interval === "month"
+      ? args.plan.monthlyPriceAmount
+      : args.plan.yearlyPriceAmount
+
+  return fallbackAmount > 0
+    ? {
+        amount: fallbackAmount,
+        currency: "GBP",
+        interval: args.interval,
+      }
+    : null
 }
 
 function getPlanRelationship(args: {
@@ -138,6 +312,7 @@ function buildPricingCatalog(args: {
   features: BillingFeatureRecord[]
   planFeatures: BillingPlanFeatureRecord[]
   plans: BillingPlanRecord[]
+  selectedCurrency: SupportedCurrency
 }) {
   const featuresByKey = new Map(
     args.features.map((feature) => [feature.key, feature])
@@ -168,22 +343,16 @@ function buildPricingCatalog(args: {
         planKey: plan.key,
         planType: plan.planType,
         pricing: {
-          month:
-            plan.planType === "paid" && plan.monthlyPriceAmount > 0
-              ? {
-                  amount: plan.monthlyPriceAmount,
-                  currency: plan.currency,
-                  interval: "month" as const,
-                }
-              : null,
-          year:
-            plan.planType === "paid" && plan.yearlyPriceAmount > 0
-              ? {
-                  amount: plan.yearlyPriceAmount,
-                  currency: plan.currency,
-                  interval: "year" as const,
-                }
-              : null,
+          month: resolvePlanPricing({
+            interval: "month",
+            plan,
+            selectedCurrency: args.selectedCurrency,
+          }),
+          year: resolvePlanPricing({
+            interval: "year",
+            plan,
+            selectedCurrency: args.selectedCurrency,
+          }),
         },
         relationship: getPlanRelationship({
           currentPlan: args.currentPlan,
@@ -266,8 +435,10 @@ export const getPricingCatalog = internalQuery({
 })
 
 export const getCustomerPricingCatalog = query({
-  args: {},
-  handler: async (ctx) => {
+  args: {
+    preferredCurrency: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
     const [plans, planFeatures, features, identity] = await Promise.all([
       listBillingPlans(ctx),
       ctx.db.query("billingPlanFeatures").collect(),
@@ -285,39 +456,57 @@ export const getCustomerPricingCatalog = query({
     const resolvedState = user ? await buildResolvedBillingState(ctx, user) : null
     const currentPlan = resolvedState?.effectivePlan ?? null
     const currentInterval = resolvedState?.subscription?.interval
+    const pricingCurrency = resolvePricingCurrency({
+      plans,
+      preferredCurrency: args.preferredCurrency,
+    })
 
     return {
+      availableCurrencies: pricingCurrency.availableCurrencies,
       currentInterval,
       currentPlanKey: resolvedState?.effectivePlanKey ?? null,
+      currencyNotice: pricingCurrency.currencyNotice,
       plans: buildPricingCatalog({
         currentPlan,
         currentSubscriptionInterval: currentInterval,
         features,
         planFeatures,
         plans,
+        selectedCurrency: pricingCurrency.selectedCurrency,
       }),
+      selectedCurrency: pricingCurrency.selectedCurrency,
     }
   },
 })
 
 export const getPublicPricingCatalog = query({
-  args: {},
-  handler: async (ctx) => {
+  args: {
+    preferredCurrency: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
     const [plans, planFeatures, features] = await Promise.all([
       listBillingPlans(ctx),
       ctx.db.query("billingPlanFeatures").collect(),
       listBillingFeatures(ctx),
     ])
+    const pricingCurrency = resolvePricingCurrency({
+      plans,
+      preferredCurrency: args.preferredCurrency,
+    })
 
     return {
+      availableCurrencies: pricingCurrency.availableCurrencies,
       currentInterval: null,
       currentPlanKey: null,
+      currencyNotice: pricingCurrency.currencyNotice,
       plans: buildPricingCatalog({
         currentPlan: null,
         features,
         planFeatures,
         plans,
+        selectedCurrency: pricingCurrency.selectedCurrency,
       }),
+      selectedCurrency: pricingCurrency.selectedCurrency,
     }
   },
 })

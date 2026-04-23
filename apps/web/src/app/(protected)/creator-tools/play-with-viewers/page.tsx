@@ -1,6 +1,7 @@
 import { currentUser } from "@clerk/nextjs/server"
 import { notFound } from "next/navigation"
 
+import { playWithViewersConfig } from "@/features/creator-tools/play-with-viewers/lib/play-with-viewers-config"
 import { PlayWithViewersDashboardView } from "@/features/creator-tools/play-with-viewers/views/PlayWithViewersDashboardView"
 import { createPageMetadata } from "@/lib/metadata/page"
 import { getCreatorToolsAccessState } from "@/lib/server/creator-tools-access"
@@ -105,6 +106,7 @@ export default async function PlayWithViewersPage() {
     <PlayWithViewersDashboardView
       hasTwitchLinked={hasLinkedTwitchAccount(clerkUser?.externalAccounts)}
       preferredCreatorDisplayName={resolveCreatorDisplayName(clerkUser)}
+      twitchEnabled={playWithViewersConfig.twitchEnabled}
     />
   )
 }

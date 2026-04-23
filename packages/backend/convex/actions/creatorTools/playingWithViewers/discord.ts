@@ -13,6 +13,7 @@ import {
   renderInviteCodeInstructions,
   type InviteCodeType,
 } from "../../../lib/playingWithViewers"
+import { getDisabledPlayWithViewersTwitchContext } from "../../../lib/creatorToolsConfig"
 import {
   requireCreatorToolsActionAccess,
   requireOwnedQueueActionAccess,
@@ -1327,8 +1328,19 @@ export const createQueueInOwnedGuild = action({
     title: v.string(),
   },
   handler: async (ctx, args) => {
-    const { clerkUserId, twitchAccount, user } =
-      await requireCreatorToolsActionAccess(ctx)
+    const access = await requireCreatorToolsActionAccess(ctx)
+    const { clerkUserId, user } = access
+    const twitchContext = access.hasTwitchLinked
+      ? {
+          twitchBotAnnouncementsEnabled: true,
+          twitchBroadcasterId: access.twitchAccount.providerUserId,
+          twitchBroadcasterLogin:
+            access.twitchAccount.providerLogin ??
+            access.twitchAccount.displayName ??
+            "",
+          twitchCommandsEnabled: true,
+        }
+      : getDisabledPlayWithViewersTwitchContext()
     const existingQueue = await ctx.runQuery(
       internal.queries.creatorTools.playingWithViewers.queue.getQueueByCreatorUserId,
       {
@@ -1370,9 +1382,7 @@ export const createQueueInOwnedGuild = action({
         playersPerBatch: args.playersPerBatch,
         rulesText: args.rulesText?.trim() || undefined,
         title: args.title.trim(),
-        twitchBroadcasterId: twitchAccount.providerUserId,
-        twitchBroadcasterLogin:
-          twitchAccount.providerLogin ?? twitchAccount.displayName ?? "",
+        ...twitchContext,
       }
     )
 

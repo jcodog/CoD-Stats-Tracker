@@ -1,7 +1,11 @@
 import { v } from "convex/values"
 import type { Doc, Id } from "../../../_generated/dataModel"
 import { internalMutation, type MutationCtx } from "../../../_generated/server"
-import { queueNotificationMethodValidator } from "../../../lib/playingWithViewers"
+import {
+  normalizeStoredQueueParticipant,
+  queueNotificationMethodValidator,
+  type QueuePlatform,
+} from "../../../lib/playingWithViewers"
 
 type NotificationMutationCtx = MutationCtx
 type QueueRoundSelectedUser = Doc<"viewerQueueRounds">["selectedUsers"][number]
@@ -10,9 +14,19 @@ type NotificationMethod = Exclude<
   "manual_creator_contact"
 >
 type NotificationStatus = Doc<"viewerQueueNotifications">["notificationStatus"]
+type NormalizedQueueRoundSelectedUser = QueueRoundSelectedUser & {
+  platform: QueuePlatform
+  platformUserId: string
+}
+
+function normalizeRoundSelectedUser(
+  user: QueueRoundSelectedUser
+): NormalizedQueueRoundSelectedUser {
+  return normalizeStoredQueueParticipant(user) as NormalizedQueueRoundSelectedUser
+}
 
 function getDefaultNotificationMethodForPlatform(
-  platform: QueueRoundSelectedUser["platform"]
+  platform: QueuePlatform
 ): NotificationMethod {
   return platform === "discord" ? "discord_dm" : "twitch_whisper"
 }
@@ -69,7 +83,7 @@ async function patchRoundSelectedUsers(
 async function getNotificationForRoundUser(
   ctx: NotificationMutationCtx,
   args: {
-    platform: QueueRoundSelectedUser["platform"]
+    platform: QueuePlatform
     platformUserId: string
     roundId: Id<"viewerQueueRounds">
   }
@@ -91,7 +105,7 @@ async function syncRoundSnapshotFromNotification(
     notificationFailureReason?: string
     notificationMethod: QueueRoundSelectedUser["notificationMethod"]
     notificationStatus: QueueRoundSelectedUser["notificationStatus"]
-    platform: QueueRoundSelectedUser["platform"]
+    platform: QueuePlatform
     platformUserId: string
     roundId: Id<"viewerQueueRounds">
   }
@@ -155,7 +169,8 @@ export const initializeRoundNotifications = internalMutation({
     const selectedUsers: QueueRoundSelectedUser[] = []
     let createdNotificationCount = 0
 
-    for (const user of round.selectedUsers) {
+    for (const storedUser of round.selectedUsers) {
+      const user = normalizeRoundSelectedUser(storedUser)
       const notificationMethod = getDefaultNotificationMethodForPlatform(
         user.platform
       )

@@ -1,6 +1,9 @@
 import type { Doc, Id } from "../_generated/dataModel"
 import type { MutationCtx, QueryCtx } from "../_generated/server"
-import type { QueuePlatform } from "./playingWithViewers"
+import {
+  normalizeStoredQueueParticipantIdentity,
+  type QueuePlatform,
+} from "./playingWithViewers"
 
 type IdentityDataCtx = Pick<QueryCtx, "db"> | Pick<MutationCtx, "db">
 type QueueEntryDoc = Doc<"viewerQueueEntries">
@@ -68,6 +71,32 @@ export async function findQueueEntryForIdentity(
     return directEntry
   }
 
+  if (args.platform === "discord") {
+    const entries = await ctx.db
+      .query("viewerQueueEntries")
+      .withIndex("by_queueId_and_joinedAt", (query) =>
+        query.eq("queueId", args.queueId)
+      )
+      .collect()
+
+    const legacyDiscordEntry =
+      entries.find((entry) => {
+        try {
+          const normalizedEntry = normalizeStoredQueueParticipantIdentity(entry)
+          return (
+            normalizedEntry.platform === args.platform &&
+            normalizedEntry.platformUserId === args.platformUserId
+          )
+        } catch {
+          return false
+        }
+      }) ?? null
+
+    if (legacyDiscordEntry) {
+      return legacyDiscordEntry
+    }
+  }
+
   if (!args.linkedUserId) {
     return null
   }
@@ -99,11 +128,17 @@ export async function getQueuePositionForIdentity(
     .collect()
 
   const position = entries.findIndex((entry) => {
-    if (
-      entry.platform === identity.platform &&
-      entry.platformUserId === identity.platformUserId
-    ) {
-      return true
+    try {
+      const normalizedEntry = normalizeStoredQueueParticipantIdentity(entry)
+
+      if (
+        normalizedEntry.platform === identity.platform &&
+        normalizedEntry.platformUserId === identity.platformUserId
+      ) {
+        return true
+      }
+    } catch {
+      return false
     }
 
     return Boolean(

@@ -15,6 +15,7 @@ import type {
   BillingResolvedState,
   CancellationResult,
   CheckoutIntentResult,
+  CheckoutQuoteResult,
   PaymentMethodMutationResult,
   PaymentMethodSetupIntentResult,
   PricingCatalogResponse,
@@ -25,6 +26,7 @@ import type {
   CancelSubscriptionInput,
   CreateSubscriptionIntentInput,
   PaymentMethodActionInput,
+  PreviewCheckoutQuoteInput,
   SubscriptionChangeInput,
   SubscriptionTargetInput,
   UpdateBillingProfileInput,
@@ -33,6 +35,7 @@ import {
   cancelSubscriptionSchema,
   createSubscriptionIntentSchema,
   paymentMethodActionSchema,
+  previewCheckoutQuoteSchema,
   subscriptionChangeSchema,
   subscriptionTargetSchema,
   updateBillingProfileSchema,
@@ -71,12 +74,31 @@ const BILLING_CATALOG_STALE_TIME = 10 * 60_000
 const BILLING_STATE_STALE_TIME = 2 * 60_000
 const BILLING_CENTER_STALE_TIME = 2 * 60_000
 
-async function queryPricingCatalog(convex: ConvexReactClient) {
+async function queryPricingCatalog(
+  convex: ConvexReactClient,
+  preferredCurrency?: string
+) {
   try {
     return (await convex.query(
       api.queries.billing.catalog.getCustomerPricingCatalog,
-      {}
+      preferredCurrency ? { preferredCurrency } : {}
     )) as PricingCatalogResponse
+  } catch (error) {
+    throw toBillingClientError(error)
+  }
+}
+
+async function queryCheckoutQuote(
+  convex: ConvexReactClient,
+  input: PreviewCheckoutQuoteInput
+) {
+  const payload = previewCheckoutQuoteSchema.parse(input)
+
+  try {
+    return (await convex.action(
+      api.actions.billing.customer.previewCheckoutQuote,
+      payload
+    )) as CheckoutQuoteResult
   } catch (error) {
     throw toBillingClientError(error)
   }
@@ -269,15 +291,29 @@ async function callRemovePaymentMethod(
   }
 }
 
-export function usePricingCatalog() {
+export function usePricingCatalog(preferredCurrency?: string) {
   const convex = useConvex()
   const { isAuthenticated, isLoading } = useConvexAuth()
 
   return useQuery({
     enabled: !isLoading && isAuthenticated,
-    queryFn: () => queryPricingCatalog(convex),
-    queryKey: billingQueryKeys.catalog,
+    queryFn: () => queryPricingCatalog(convex, preferredCurrency),
+    queryKey: billingQueryKeys.catalog(preferredCurrency),
     staleTime: BILLING_CATALOG_STALE_TIME,
+  })
+}
+
+export function useCheckoutQuote(input: PreviewCheckoutQuoteInput | null) {
+  const convex = useConvex()
+  const { isAuthenticated, isLoading } = useConvexAuth()
+
+  return useQuery({
+    enabled: !isLoading && isAuthenticated && input !== null,
+    queryFn: () => queryCheckoutQuote(convex, input as PreviewCheckoutQuoteInput),
+    queryKey:
+      input === null
+        ? ["billing", "checkoutQuote", "idle"]
+        : billingQueryKeys.checkoutQuote(input),
   })
 }
 
@@ -311,7 +347,9 @@ export function useInvalidateBillingQueries() {
   return {
     invalidateAll: async () => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: billingQueryKeys.catalog }),
+        queryClient.invalidateQueries({
+          queryKey: billingQueryKeys.catalogRoot,
+        }),
         queryClient.invalidateQueries({ queryKey: billingQueryKeys.center }),
         queryClient.invalidateQueries({ queryKey: billingQueryKeys.state }),
       ])

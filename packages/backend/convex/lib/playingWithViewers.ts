@@ -19,6 +19,14 @@ export const inviteModeValidator = v.union(
   v.literal("manual_creator_contact")
 )
 
+export const legacyInviteModeValidator = v.literal("discord_dm")
+
+export const storedInviteModeValidator = v.union(
+  v.literal("bot_dm"),
+  v.literal("manual_creator_contact"),
+  v.literal("discord_dm")
+)
+
 export const inviteCodeTypeValidator = v.union(
   v.literal("party_code"),
   v.literal("private_match_code")
@@ -45,8 +53,58 @@ export const queueNotificationStatusValidator = v.union(
 export type QueueConfigRankValue = Doc<"viewerQueues">["minRank"]
 export type ParticipantRankValue = Doc<"viewerQueueEntries">["rank"]
 export type RankValue = QueueConfigRankValue
+export type InviteMode = "bot_dm" | "manual_creator_contact"
+export type StoredInviteMode = InviteMode | "discord_dm"
 export type InviteCodeType = "party_code" | "private_match_code"
 export type QueuePlatform = "discord" | "twitch"
+
+type StoredQueueParticipantIdentity = {
+  discordUserId?: string
+  platform?: QueuePlatform
+  platformUserId?: string
+}
+
+export function normalizeStoredInviteMode(
+  inviteMode: StoredInviteMode
+): InviteMode {
+  return inviteMode === "discord_dm" ? "bot_dm" : inviteMode
+}
+
+export function normalizeStoredQueueParticipantIdentity(
+  participant: StoredQueueParticipantIdentity
+) {
+  const platform = participant.platform
+  const platformUserId = participant.platformUserId?.trim()
+  const discordUserId = participant.discordUserId?.trim()
+
+  if (platform && platformUserId) {
+    return {
+      discordUserId:
+        platform === "discord" ? discordUserId ?? platformUserId : discordUserId,
+      platform,
+      platformUserId,
+    }
+  }
+
+  if (discordUserId) {
+    return {
+      discordUserId,
+      platform: "discord" as const,
+      platformUserId: discordUserId,
+    }
+  }
+
+  throw new Error("Stored Play With Viewers participant is missing platform identity.")
+}
+
+export function normalizeStoredQueueParticipant<
+  T extends StoredQueueParticipantIdentity,
+>(participant: T) {
+  return {
+    ...participant,
+    ...normalizeStoredQueueParticipantIdentity(participant),
+  }
+}
 
 export const COMPETITIVE_RANK_OPTIONS = [...COMPETITIVE_RANK_VALUES]
 

@@ -1,6 +1,8 @@
 import { SignUp } from "@clerk/nextjs"
 
+import { CreatorCodeNotice } from "@/features/creator-attribution/components/CreatorCodeNotice"
 import type { RequestViewport } from "@/lib/server/request-viewport"
+import type { PendingCreatorCodeSummary } from "@/lib/server/creator-attribution"
 
 const signUpAppearance = {
   elements: {
@@ -11,8 +13,10 @@ const signUpAppearance = {
 } as const
 
 export function SignUpView({
+  pendingCreatorCode,
   viewport = "desktop",
 }: {
+  pendingCreatorCode?: PendingCreatorCodeSummary | null
   viewport?: RequestViewport
 }) {
   const isMobileView = viewport === "mobile"
@@ -26,7 +30,15 @@ export function SignUpView({
             : "mx-auto flex w-full max-w-md px-6 py-10"
         }
       >
-        <div className="w-full">
+        <div className="grid w-full gap-4">
+          {pendingCreatorCode ? (
+            <CreatorCodeNotice
+              code={pendingCreatorCode.code}
+              discountPercent={pendingCreatorCode.discountPercent}
+              layout="stacked"
+            />
+          ) : null}
+
           <SignUp
             appearance={signUpAppearance}
             path="/sign-up"

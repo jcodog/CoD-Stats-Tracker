@@ -31,7 +31,9 @@ import {
   DEFAULT_INVITE_CODE_TYPE,
   getInviteCodeTypeLabel,
   getParticipantRankLabel,
+  normalizeStoredInviteMode,
   type InviteCodeType,
+  type InviteMode,
   type ParticipantRankValue,
   type QueueConfigRankValue,
   type QueuePlatform,
@@ -126,7 +128,6 @@ import { toast } from "sonner"
 type ViewerQueue = Doc<"viewerQueues">
 type ViewerQueueEntry = Doc<"viewerQueueEntries">
 type ViewerQueueRound = Doc<"viewerQueueRounds">
-type InviteMode = ViewerQueue["inviteMode"]
 type QueueRoundUser = ViewerQueueRound["selectedUsers"][number]
 type QueueNotificationMethod = QueueRoundUser["notificationMethod"]
 type QueueNotificationStatus = QueueRoundUser["notificationStatus"]
@@ -230,7 +231,7 @@ function toQueueFormState(queue: ViewerQueue): QueueFormState {
     creatorMessage: queue.creatorMessage ?? "",
     gameLabel: queue.gameLabel,
     guildId: queue.guildId,
-    inviteMode: queue.inviteMode,
+    inviteMode: normalizeStoredInviteMode(queue.inviteMode),
     matchesPerViewer: String(queue.matchesPerViewer),
     maxRank: queue.maxRank,
     minRank: queue.minRank,
@@ -596,11 +597,13 @@ function SelectionResultSummary({
   onCopyDiscordMentions,
   onCopyTwitchHandles,
   selectionResult,
+  showTwitchTools,
 }: Readonly<{
   onCopyContactList: () => Promise<void>
   onCopyDiscordMentions: () => Promise<void>
   onCopyTwitchHandles: () => Promise<void>
   selectionResult: SelectionResultState
+  showTwitchTools: boolean
 }>) {
   if (!selectionResult) {
     return null
@@ -658,15 +661,17 @@ function SelectionResultSummary({
             <IconBrandDiscord data-icon="inline-start" />
             Copy Discord mentions
           </Button>
-          <Button
-            disabled={twitchUserCount === 0}
-            onClick={onCopyTwitchHandles}
-            size="sm"
-            variant="outline"
-          >
-            <IconBrandTwitch data-icon="inline-start" />
-            Copy Twitch handles
-          </Button>
+          {showTwitchTools ? (
+            <Button
+              disabled={twitchUserCount === 0}
+              onClick={onCopyTwitchHandles}
+              size="sm"
+              variant="outline"
+            >
+              <IconBrandTwitch data-icon="inline-start" />
+              Copy Twitch handles
+            </Button>
+          ) : null}
         </div>
       ) : null}
 
@@ -730,11 +735,13 @@ function SelectionResultSummary({
 type PlayWithViewersDashboardViewProps = {
   hasTwitchLinked: boolean
   preferredCreatorDisplayName: string
+  twitchEnabled: boolean
 }
 
 export function PlayWithViewersDashboardView({
   hasTwitchLinked,
   preferredCreatorDisplayName,
+  twitchEnabled,
 }: PlayWithViewersDashboardViewProps) {
   const currentUser = useQuery(api.queries.users.current)
   const queue = useQuery(
@@ -824,7 +831,7 @@ export function PlayWithViewersDashboardView({
     return {
       ...selectionResultState,
       createdAt: selectionResultRound.createdAt,
-      inviteMode: selectionResultRound.mode,
+      inviteMode: normalizeStoredInviteMode(selectionResultRound.mode),
       selectedUsers: selectionResultRound.selectedUsers,
     }
   }, [selectionResultRound, selectionResultState])
@@ -839,6 +846,9 @@ export function PlayWithViewersDashboardView({
   const settingsFormState = queue
     ? (settingsFormDraft ?? toQueueFormState(queue))
     : defaultCreateFormState
+  const queueInviteMode = queue
+    ? normalizeStoredInviteMode(queue.inviteMode)
+    : null
   const setCreateFormState: Dispatch<SetStateAction<QueueFormState>> = (
     updater
   ) => {
@@ -1259,16 +1269,13 @@ export function PlayWithViewersDashboardView({
 
   async function handleToolbarSettingsChange(
     field: string,
-    patch: Partial<
-      Pick<
-        ViewerQueue,
-        | "inviteMode"
-        | "matchesPerViewer"
-        | "maxRank"
-        | "minRank"
-        | "playersPerBatch"
-      >
-    >
+    patch: Partial<{
+      inviteMode: InviteMode
+      matchesPerViewer: number
+      maxRank: QueueConfigRankValue
+      minRank: QueueConfigRankValue
+      playersPerBatch: number
+    }>
   ) {
     if (!queue) {
       return
@@ -1286,11 +1293,12 @@ export function PlayWithViewersDashboardView({
         creatorDisplayName: queue.creatorDisplayName,
         creatorMessage: queue.creatorMessage,
         gameLabel: queue.gameLabel,
-        inviteMode: patch.inviteMode ?? queue.inviteMode,
-        matchesPerViewer: patch.matchesPerViewer ?? queue.matchesPerViewer,
+        inviteMode: patch.inviteMode ?? queueInviteMode ?? "bot_dm",
+        matchesPerViewer:
+          Number(patch.matchesPerViewer ?? queue.matchesPerViewer),
         maxRank: normalizedRanks.maxRank,
         minRank: normalizedRanks.minRank,
-        playersPerBatch: patch.playersPerBatch ?? queue.playersPerBatch,
+        playersPerBatch: Number(patch.playersPerBatch ?? queue.playersPerBatch),
         queueId: queue._id,
         rulesText: queue.rulesText,
         title: queue.title,
@@ -1474,7 +1482,7 @@ export function PlayWithViewersDashboardView({
     }
 
     const inviteCode = selectionInviteCode.trim() || undefined
-    if (queue.inviteMode === "bot_dm" && !inviteCode) {
+    if (queueInviteMode === "bot_dm" && !inviteCode) {
       toast.error("Invite code is required for Bot DM mode.")
       return
     }
@@ -1502,14 +1510,14 @@ export function PlayWithViewersDashboardView({
 
       setSelectionResultState({
         createdAt: result.createdAt,
-        inviteMode: queue.inviteMode,
+        inviteMode: queueInviteMode ?? "bot_dm",
         roundId: result.roundId,
         selectedUsers,
         selectionKind,
       })
 
       if (selectionDialogState?.kind === "entry") {
-        if (queue.inviteMode === "bot_dm") {
+        if (queueInviteMode === "bot_dm") {
           if (notificationSummary.failed > 0) {
             toast.error(
               `Invite attempted. ${notificationSummary.failed} bot ${notificationSummary.failed === 1 ? "delivery" : "deliveries"} failed.`
@@ -1529,7 +1537,7 @@ export function PlayWithViewersDashboardView({
           )
         }
       } else {
-        if (queue.inviteMode === "bot_dm") {
+        if (queueInviteMode === "bot_dm") {
           if (notificationSummary.failed > 0) {
             toast.error(
               `Batch processed. ${notificationSummary.failed} bot ${notificationSummary.failed === 1 ? "delivery" : "deliveries"} failed.`
@@ -1624,7 +1632,9 @@ export function PlayWithViewersDashboardView({
         : "Batch ready to contact"
   const selectionResultDescription =
     selectionResult?.inviteMode === "bot_dm"
-      ? "Live delivery status updates here as Discord DMs and Twitch bot notifications complete."
+      ? twitchEnabled
+        ? "Live delivery status updates here as Discord DMs and Twitch bot notifications complete."
+        : "Live delivery status updates here as Discord DMs complete."
       : "Use this list to contact the selected viewers directly on their platform."
 
   return (
@@ -1658,9 +1668,15 @@ export function PlayWithViewersDashboardView({
                     ? "Published"
                     : "Not published"}
               </Badge>
-              <Badge variant={hasTwitchLinked ? "secondary" : "destructive"}>
-                {hasTwitchLinked ? "Twitch linked" : "Twitch required"}
-              </Badge>
+              {twitchEnabled ? (
+                <Badge
+                  variant={hasTwitchLinked ? "secondary" : "destructive"}
+                >
+                  {hasTwitchLinked ? "Twitch linked" : "Twitch required"}
+                </Badge>
+              ) : (
+                <Badge variant="outline">Twitch bot disabled</Badge>
+              )}
             </div>
           </div>
 
@@ -1678,7 +1694,7 @@ export function PlayWithViewersDashboardView({
             <IconBrandDiscord />
             {discordContextLabel}
           </span>
-          {queue ? (
+          {queue && twitchEnabled ? (
             <span className="inline-flex items-center gap-1.5">
               <IconBrandTwitch />
               {hasTwitchLinked ? "Creator tools unlocked" : "Tools locked"}
@@ -1734,7 +1750,7 @@ export function PlayWithViewersDashboardView({
         </Alert>
       ) : null}
 
-      {!hasTwitchLinked ? (
+      {twitchEnabled && !hasTwitchLinked ? (
         <LockedState queueTitle={pageTitle} />
       ) : queue === null ? (
         <Panel className="border-dashed bg-muted/20">
@@ -2623,7 +2639,8 @@ export function PlayWithViewersDashboardView({
                 <FieldLabel>Manual contact mode</FieldLabel>
                 <FieldDescription>
                   The selected viewers will open in a follow-up dialog with copy
-                  helpers for Discord mentions, Twitch handles, and a combined
+                  helpers for Discord mentions
+                  {twitchEnabled ? ", Twitch handles," : ""} and a combined
                   contact list.
                 </FieldDescription>
               </Field>
@@ -2670,6 +2687,7 @@ export function PlayWithViewersDashboardView({
             onCopyDiscordMentions={handleCopyDiscordMentions}
             onCopyTwitchHandles={handleCopyTwitchHandles}
             selectionResult={selectionResult}
+            showTwitchTools={twitchEnabled}
           />
 
           <DialogFooter>
