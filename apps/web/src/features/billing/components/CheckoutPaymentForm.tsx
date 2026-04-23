@@ -25,7 +25,7 @@ type CheckoutPaymentFormProps = {
   submitLabel?: string
   subtitle?: string
   title?: string
-  variant?: "card" | "dialog"
+  variant?: "card" | "inline"
 }
 
 export function CheckoutPaymentForm({
@@ -116,7 +116,7 @@ export function CheckoutPaymentForm({
   }
 
   const form = (
-    <form className="space-y-5" onSubmit={handleSubmit}>
+    <form className="flex flex-col gap-5" onSubmit={handleSubmit}>
       <PaymentElement
         options={{
           defaultValues: defaultBillingEmail
@@ -146,7 +146,7 @@ export function CheckoutPaymentForm({
     </form>
   )
 
-  if (variant === "dialog") {
+  if (variant === "inline") {
     return form
   }
 

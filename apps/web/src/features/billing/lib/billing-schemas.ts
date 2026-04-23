@@ -8,6 +8,12 @@ const billingPlanKeySchema = z
   .regex(/^[a-z0-9][a-z0-9-_]*$/)
 
 export const billingIntervalSchema = z.enum(["month", "year"])
+export const supportedPricingCurrencySchema = z.enum([
+  "GBP",
+  "USD",
+  "CAD",
+  "EUR",
+])
 const billingAddressSchema = z.object({
   city: z.string().max(120).optional(),
   country: z.string().max(120).optional(),
@@ -18,11 +24,21 @@ const billingAddressSchema = z.object({
 })
 const paymentMethodIdSchema = z.string().trim().min(1).max(128)
 const stripeSubscriptionIdSchema = z.string().trim().min(1).max(128)
+const creatorCodeSchema = z.string().trim().min(3).max(48)
 
 export const createSubscriptionIntentSchema = z.object({
   attemptKey: z.string().trim().min(1).max(160).optional(),
+  creatorCode: creatorCodeSchema.optional(),
   interval: billingIntervalSchema,
   planKey: billingPlanKeySchema,
+  preferredCurrency: supportedPricingCurrencySchema.optional(),
+})
+
+export const previewCheckoutQuoteSchema = z.object({
+  creatorCode: creatorCodeSchema.optional(),
+  interval: billingIntervalSchema,
+  planKey: billingPlanKeySchema,
+  preferredCurrency: supportedPricingCurrencySchema.optional(),
 })
 
 export const subscriptionChangeSchema = z.object({
@@ -72,6 +88,9 @@ export const revokeCreatorGrantSchema = z.object({
 export type BillingIntervalInput = z.infer<typeof billingIntervalSchema>
 export type CreateSubscriptionIntentInput = z.infer<
   typeof createSubscriptionIntentSchema
+>
+export type PreviewCheckoutQuoteInput = z.infer<
+  typeof previewCheckoutQuoteSchema
 >
 export type SubscriptionChangeInput = z.infer<typeof subscriptionChangeSchema>
 export type SubscriptionTargetInput = z.infer<typeof subscriptionTargetSchema>

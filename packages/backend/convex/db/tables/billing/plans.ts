@@ -16,9 +16,21 @@ export const billingPlans = defineTable({
 
   monthlyPriceId: v.optional(v.string()),
   yearlyPriceId: v.optional(v.string()),
+  monthlyPriceIdUsd: v.optional(v.string()),
+  yearlyPriceIdUsd: v.optional(v.string()),
+  monthlyPriceIdCad: v.optional(v.string()),
+  yearlyPriceIdCad: v.optional(v.string()),
+  monthlyPriceIdEur: v.optional(v.string()),
+  yearlyPriceIdEur: v.optional(v.string()),
 
   monthlyPriceAmount: v.number(),
   yearlyPriceAmount: v.number(),
+  monthlyPriceAmountUsd: v.optional(v.number()),
+  yearlyPriceAmountUsd: v.optional(v.number()),
+  monthlyPriceAmountCad: v.optional(v.number()),
+  yearlyPriceAmountCad: v.optional(v.number()),
+  monthlyPriceAmountEur: v.optional(v.number()),
+  yearlyPriceAmountEur: v.optional(v.number()),
 
   currency: v.string(), // gbp
 

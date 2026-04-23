@@ -37,6 +37,9 @@ export class TwitchCommandHandler {
       case "queue":
         await this.handleQueue(input)
         return
+      case "test":
+        await this.handleTest(input)
+        return
     }
   }
 
@@ -46,6 +49,7 @@ export class TwitchCommandHandler {
     | { kind: "join"; rankInput: string | null }
     | { kind: "leave" }
     | { kind: "queue" }
+    | { kind: "test" }
     | null {
     const [command, rankInput] = message.trim().split(/\s+/, 2)
     const normalized = command?.toLowerCase()
@@ -63,6 +67,10 @@ export class TwitchCommandHandler {
 
     if (normalized === "!queue") {
       return { kind: "queue" }
+    }
+
+    if (normalized === "!test") {
+      return { kind: "test" }
     }
 
     return null
@@ -143,6 +151,14 @@ export class TwitchCommandHandler {
         input,
         `@${input.chatterLogin} ${this.toCommandErrorMessage(error, "I couldn't remove you from the queue.")}`
       )
+    }
+  }
+
+  private async handleTest(input: HandleChatMessageInput): Promise<void> {
+    try {
+      await this.reply(input, `@${input.chatterLogin} test worked.`)
+    } catch (error) {
+      console.error(error)
     }
   }
 

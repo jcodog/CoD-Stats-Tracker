@@ -6,18 +6,20 @@ import type { ActionCtx } from "../_generated/server"
 import { hasCreatorAccessFromState } from "./billingAccess"
 import { getClerkBackendClient } from "./clerk"
 import { getTwitchAccountFromClerkUser } from "./clerkUsers"
+import { isPlayWithViewersTwitchEnabled } from "./creatorToolsConfig"
 
 type CreatorActionActor = Awaited<ReturnType<typeof getCreatorActionActor>>
 type TwitchAccount = NonNullable<ReturnType<typeof getTwitchAccountFromClerkUser>>
 
-type CreatorToolsActionAccess = CreatorActionActor & {
-  hasTwitchLinked: true
-  twitchAccount: TwitchAccount
-}
-
-type CreatorToolsActionAccessWithoutTwitch = CreatorActionActor & {
-  hasTwitchLinked: true
-}
+type CreatorToolsActionAccess =
+  | (CreatorActionActor & {
+      hasTwitchLinked: true
+      twitchAccount: TwitchAccount
+    })
+  | (CreatorActionActor & {
+      hasTwitchLinked: false
+      twitchAccount?: never
+    })
 
 async function getCreatorActionActor(ctx: ActionCtx) {
   const identity = await ctx.auth.getUserIdentity()
@@ -65,20 +67,20 @@ export async function requireCreatorToolsActionAccess(
   options: {
     requireTwitchLinked: false
   }
-): Promise<CreatorToolsActionAccessWithoutTwitch>
+): Promise<CreatorToolsActionAccess>
 export async function requireCreatorToolsActionAccess(
   ctx: ActionCtx,
   options?: {
     requireTwitchLinked?: boolean
   }
-): Promise<CreatorToolsActionAccess | CreatorToolsActionAccessWithoutTwitch> {
+): Promise<CreatorToolsActionAccess> {
   const actor = await getCreatorActionActor(ctx)
   const requireTwitchLinked = options?.requireTwitchLinked ?? true
 
-  if (!requireTwitchLinked) {
+  if (!requireTwitchLinked || !isPlayWithViewersTwitchEnabled()) {
     return {
       ...actor,
-      hasTwitchLinked: true,
+      hasTwitchLinked: false,
     }
   }
 

@@ -13,6 +13,12 @@ export type BillingAttentionStatus =
   | "requires_action"
 
 export type BillingInterval = "month" | "year"
+export type SupportedPricingCurrency = "GBP" | "USD" | "CAD" | "EUR"
+export type CheckoutCreatorDiscountState =
+  | "applied"
+  | "eligible_but_not_entered"
+  | "not_eligible"
+  | "rejected"
 
 export type BillingAddress = {
   city?: string | null
@@ -60,9 +66,12 @@ export type PricingCatalogPlan = {
 }
 
 export type PricingCatalogResponse = {
+  availableCurrencies: SupportedPricingCurrency[]
+  currencyNotice: string | null
   currentInterval?: BillingInterval | null
   currentPlanKey: string | null
   plans: PricingCatalogPlan[]
+  selectedCurrency: SupportedPricingCurrency
 }
 
 export type BillingResolvedState = {
@@ -227,6 +236,9 @@ export type BillingCenterInvoice = {
 export type CheckoutIntentResult = {
   alreadyExists: boolean
   clientSecret?: string
+  creatorCode?: string | null
+  currency?: SupportedPricingCurrency
+  currencyNotice?: string | null
   customerSessionClientSecret?: string
   defaultBillingEmail?: string
   interval: BillingInterval
@@ -234,6 +246,25 @@ export type CheckoutIntentResult = {
   requiresConfirmation: boolean
   secretType: "none" | "payment_intent" | "setup_intent"
   status: string
+}
+
+export type CheckoutQuoteResult = {
+  creatorDiscount: {
+    amount: number
+    appliedCode: string | null
+    discountPercent: number | null
+    entryState: CheckoutCreatorDiscountState
+    message: string
+    sourceLabel: string | null
+  }
+  currency: SupportedPricingCurrency
+  currencyNotice: string | null
+  firstPaymentTotal: number
+  interval: BillingInterval
+  planKey: string
+  planName: string
+  planSubtotal: number
+  renewalTotal: number
 }
 
 export type BillingChangePreview = {

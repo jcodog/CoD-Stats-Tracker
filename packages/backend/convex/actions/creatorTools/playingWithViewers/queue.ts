@@ -9,6 +9,7 @@ import {
   inviteModeValidator,
   queueConfigRankValidator,
 } from "../../../lib/playingWithViewers"
+import { getDisabledPlayWithViewersTwitchContext } from "../../../lib/creatorToolsConfig"
 import {
   requireOwnedQueueActionAccess,
   requireOwnedQueueEntryActionAccess,
@@ -52,15 +53,24 @@ export const updateQueueSettings = action({
     title: v.string(),
   },
   handler: async (ctx, args) => {
-    const { twitchAccount } = await requireOwnedQueueActionAccess(ctx, args.queueId)
+    const access = await requireOwnedQueueActionAccess(ctx, args.queueId)
+    const twitchContext = access.hasTwitchLinked
+      ? {
+          twitchBotAnnouncementsEnabled: true,
+          twitchBroadcasterId: access.twitchAccount.providerUserId,
+          twitchBroadcasterLogin:
+            access.twitchAccount.providerLogin ??
+            access.twitchAccount.displayName ??
+            "",
+          twitchCommandsEnabled: true,
+        }
+      : getDisabledPlayWithViewersTwitchContext()
 
     return await ctx.runMutation(
       internal.mutations.creatorTools.playingWithViewers.queue.updateQueueSettings,
       {
         ...args,
-        twitchBroadcasterId: twitchAccount.providerUserId,
-        twitchBroadcasterLogin:
-          twitchAccount.providerLogin ?? twitchAccount.displayName ?? "",
+        ...twitchContext,
       }
     )
   },

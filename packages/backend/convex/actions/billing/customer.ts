@@ -26,13 +26,28 @@ import {
   getStripeSubscriptionItem,
   getSubscriptionItemCurrentPeriodEnd,
 } from "../../lib/billingStripe"
-import { getClerkBackendClient } from "../../lib/clerk"
+import {
+  getClerkBackendClient,
+  syncClerkCreatorAttributionMetadata,
+} from "../../lib/clerk"
 import { getStripe, STRIPE_CATALOG_APP } from "../../lib/stripe"
 
 type BillingPlanRecord = Doc<"billingPlans">
 type PublicActionCtx = ActionCtx
+type SupportedPricingCurrency = "GBP" | "USD" | "CAD" | "EUR"
+type CheckoutCreatorEntryState =
+  | "applied"
+  | "eligible_but_not_entered"
+  | "not_eligible"
+  | "rejected"
 
 const billingIntervalValidator = v.union(v.literal("month"), v.literal("year"))
+const supportedPricingCurrencyValidator = v.union(
+  v.literal("GBP"),
+  v.literal("USD"),
+  v.literal("CAD"),
+  v.literal("EUR")
+)
 const subscriptionCancellationModeValidator = v.union(
   v.literal("immediately"),
   v.literal("period_end")
@@ -340,6 +355,7 @@ async function getPurchasablePlan(args: {
   ctx: PublicActionCtx
   interval: "month" | "year"
   planKey: string
+  preferredCurrency?: SupportedPricingCurrency
 }) {
   const plan = await args.ctx.runQuery(
     internal.queries.billing.internal.getPlanByKey,
@@ -364,10 +380,106 @@ async function getPurchasablePlan(args: {
     )
   }
 
-  const priceId =
-    args.interval === "month" ? plan.monthlyPriceId : plan.yearlyPriceId
+  return {
+    ...resolveCheckoutPlanPricing({
+      interval: args.interval,
+      plan,
+      preferredCurrency: args.preferredCurrency,
+    }),
+    plan,
+  }
+}
 
-  if (!priceId) {
+function getPlanAmount(plan: BillingPlanRecord, interval: "month" | "year") {
+  return interval === "month" ? plan.monthlyPriceAmount : plan.yearlyPriceAmount
+}
+
+function getCheckoutPlanAmount(args: {
+  currency: SupportedPricingCurrency
+  interval: "month" | "year"
+  plan: BillingPlanRecord
+}) {
+  if (args.currency === "USD") {
+    return args.interval === "month"
+      ? args.plan.monthlyPriceAmountUsd
+      : args.plan.yearlyPriceAmountUsd
+  }
+
+  if (args.currency === "CAD") {
+    return args.interval === "month"
+      ? args.plan.monthlyPriceAmountCad
+      : args.plan.yearlyPriceAmountCad
+  }
+
+  if (args.currency === "EUR") {
+    return args.interval === "month"
+      ? args.plan.monthlyPriceAmountEur
+      : args.plan.yearlyPriceAmountEur
+  }
+
+  return getPlanAmount(args.plan, args.interval)
+}
+
+function getCheckoutPlanPriceId(args: {
+  currency: SupportedPricingCurrency
+  interval: "month" | "year"
+  plan: BillingPlanRecord
+}) {
+  if (args.currency === "USD") {
+    return args.interval === "month"
+      ? args.plan.monthlyPriceIdUsd
+      : args.plan.yearlyPriceIdUsd
+  }
+
+  if (args.currency === "CAD") {
+    return args.interval === "month"
+      ? args.plan.monthlyPriceIdCad
+      : args.plan.yearlyPriceIdCad
+  }
+
+  if (args.currency === "EUR") {
+    return args.interval === "month"
+      ? args.plan.monthlyPriceIdEur
+      : args.plan.yearlyPriceIdEur
+  }
+
+  return args.interval === "month" ? args.plan.monthlyPriceId : args.plan.yearlyPriceId
+}
+
+function resolveCheckoutPlanPricing(args: {
+  interval: "month" | "year"
+  plan: BillingPlanRecord
+  preferredCurrency?: SupportedPricingCurrency
+}) {
+  const preferredCurrency = args.preferredCurrency ?? "GBP"
+  const preferredAmount = getCheckoutPlanAmount({
+    currency: preferredCurrency,
+    interval: args.interval,
+    plan: args.plan,
+  })
+  const preferredPriceId = getCheckoutPlanPriceId({
+    currency: preferredCurrency,
+    interval: args.interval,
+    plan: args.plan,
+  })
+
+  if (
+    typeof preferredAmount === "number" &&
+    preferredPriceId &&
+    preferredCurrency !== "GBP"
+  ) {
+    return {
+      amount: preferredAmount,
+      currency: preferredCurrency,
+      currencyNotice: null,
+      priceId: preferredPriceId,
+    }
+  }
+
+  const gbpPriceId =
+    args.interval === "month" ? args.plan.monthlyPriceId : args.plan.yearlyPriceId
+
+  if (!gbpPriceId) {
     throw new BillingActionError(
       "missing_price",
       "That plan is missing Stripe pricing for the selected billing interval.",
@@ -376,13 +488,249 @@ async function getPurchasablePlan(args: {
   }
 
   return {
-    plan,
-    priceId,
+    amount: getPlanAmount(args.plan, args.interval),
+    currency: "GBP" as const,
+    currencyNotice:
+      preferredCurrency !== "GBP"
+        ? "This plan is billed in GBP for your current selection."
+        : null,
+    priceId: gbpPriceId,
   }
 }
 
-function getPlanAmount(plan: BillingPlanRecord, interval: "month" | "year") {
-  return interval === "month" ? plan.monthlyPriceAmount : plan.yearlyPriceAmount
+function normalizeCreatorCodeInput(value: string | undefined) {
+  if (!value) {
+    return undefined
+  }
+
+  const normalizedCode = value.trim().toUpperCase().replace(/[^A-Z0-9]/g, "")
+  return /^[A-Z0-9]{3,24}$/.test(normalizedCode) ? normalizedCode : undefined
+}
+
+function getCreatorDiscountAmount(args: {
+  amount: number
+  discountPercent: number | null
+}) {
+  if (!args.discountPercent || args.discountPercent <= 0) {
+    return 0
+  }
+
+  return Math.max(0, Math.round((args.amount * args.discountPercent) / 100))
+}
+
+function getCreatorSourceLabel(source: "cookie" | "manual" | "staff") {
+  if (source === "manual") {
+    return "Applied from code entry"
+  }
+
+  if (source === "staff") {
+    return "Applied by support"
+  }
+
+  return "Applied from creator link"
+}
+
+async function ensureCreatorDiscountCoupon(args: {
+  creatorCode: string
+  discountPercent: number
+  stripe: Stripe
+}) {
+  const couponId = [
+    "creator",
+    "once",
+    args.creatorCode.toLowerCase(),
+    String(args.discountPercent),
+  ].join("_")
+
+  try {
+    const existingCoupon = await args.stripe.coupons.retrieve(couponId)
+
+    if (!existingCoupon.deleted) {
+      return existingCoupon.id
+    }
+  } catch (error) {
+    if (
+      !(
+        error instanceof Stripe.errors.StripeInvalidRequestError &&
+        error.code === "resource_missing"
+      )
+    ) {
+      throw error
+    }
+  }
+
+  const createdCoupon = await args.stripe.coupons.create({
+    duration: "once",
+    id: couponId,
+    metadata: {
+      app: STRIPE_CATALOG_APP,
+      creatorCode: args.creatorCode,
+      kind: "creator_discount",
+    },
+    name: `${args.creatorCode} first payment discount`,
+    percent_off: args.discountPercent,
+  })
+
+  return createdCoupon.id
+}
+
+async function finalizeCreatorAttribution(args: {
+  creatorAccount: Doc<"creatorAccounts">
+  ctx: PublicActionCtx
+  normalizedCode: string
+  userContext: Awaited<ReturnType<typeof requireBillingUser>>
+}) {
+  const attributionResult = await args.ctx.runMutation(
+    internal.mutations.creator.attribution.ensureCanonicalAttribution,
+    {
+      clerkUserId: args.userContext.user.clerkUserId,
+      creatorAccountId: args.creatorAccount._id,
+      creatorCode: args.creatorAccount.code,
+      normalizedCode: args.normalizedCode,
+      source: "manual",
+      userId: args.userContext.user._id,
+    }
+  )
+
+  if (attributionResult.status === "applied") {
+    const clerkUser = await getClerkBackendClient().users.getUser(
+      args.userContext.user.clerkUserId
+    )
+
+    await syncClerkCreatorAttributionMetadata({
+      clerkUserId: args.userContext.user.clerkUserId,
+      code: args.creatorAccount.code,
+      currentPublicMetadata: clerkUser.publicMetadata,
+      source: "manual",
+    })
+  }
+
+  return attributionResult
+}
+
+async function resolveCheckoutCreatorDiscount(args: {
+  amount: number
+  creatorCode?: string
+  ctx: PublicActionCtx
+  finalizeCodeEntry?: boolean
+  userContext: Awaited<ReturnType<typeof requireBillingUser>>
+}) {
+  const activeAttribution = await args.ctx.runQuery(
+    internal.queries.creator.internal.getActiveAttributionByUserId,
+    {
+      userId: args.userContext.user._id,
+    }
+  )
+  const normalizedEnteredCode = normalizeCreatorCodeInput(args.creatorCode)
+
+  if (activeAttribution) {
+    const creatorAccount = await args.ctx.runQuery(
+      internal.queries.creator.internal.getCreatorAccountById,
+      {
+        creatorAccountId: activeAttribution.creatorAccountId,
+      }
+    )
+    const hasActiveDiscount =
+      creatorAccount &&
+      creatorAccount.codeActive &&
+      creatorAccount.discountPercent > 0 &&
+      creatorAccount.userId !== args.userContext.user._id
+
+    const appliedDiscount = hasActiveDiscount
+      ? {
+          amount: getCreatorDiscountAmount({
+            amount: args.amount,
+            discountPercent: creatorAccount.discountPercent,
+          }),
+          code: creatorAccount.code,
+          discountPercent: creatorAccount.discountPercent,
+          sourceLabel: getCreatorSourceLabel(activeAttribution.source),
+        }
+      : null
+
+    if (
+      normalizedEnteredCode &&
+      normalizedEnteredCode !== activeAttribution.normalizedCode
+    ) {
+      return {
+        appliedDiscount,
+        entryState: "rejected" as CheckoutCreatorEntryState,
+        message: `This account is already linked to ${activeAttribution.creatorCode}.`,
+      }
+    }
+
+    if (appliedDiscount) {
+      return {
+        appliedDiscount,
+        entryState: "applied" as CheckoutCreatorEntryState,
+        message:
+          activeAttribution.source === "manual"
+            ? "Already linked to your account."
+            : "Applied from creator link.",
+      }
+    }
+
+    return {
+      appliedDiscount: null,
+      entryState: "not_eligible" as CheckoutCreatorEntryState,
+      message:
+        "Your linked creator code is no longer eligible for a first payment discount.",
+    }
+  }
+
+  if (!normalizedEnteredCode) {
+    return {
+      appliedDiscount: null,
+      entryState: "eligible_but_not_entered" as CheckoutCreatorEntryState,
+      message: "Have a creator code? Enter it before payment to apply it.",
+    }
+  }
+
+  const creatorAccount = await args.ctx.runQuery(
+    internal.queries.creator.internal.getCreatorAccountByNormalizedCode,
+    {
+      normalizedCode: normalizedEnteredCode,
+    }
+  )
+
+  if (!creatorAccount || !creatorAccount.codeActive) {
+    return {
+      appliedDiscount: null,
+      entryState: "rejected" as CheckoutCreatorEntryState,
+      message: "This creator code isn't available right now.",
+    }
+  }
+
+  if (creatorAccount.userId === args.userContext.user._id) {
+    return {
+      appliedDiscount: null,
+      entryState: "rejected" as CheckoutCreatorEntryState,
+      message: "You can't apply your own creator code to this account.",
+    }
+  }
+
+  if (args.finalizeCodeEntry) {
+    await finalizeCreatorAttribution({
+      creatorAccount,
+      ctx: args.ctx,
+      normalizedCode: normalizedEnteredCode,
+      userContext: args.userContext,
+    })
+  }
+
+  return {
+    appliedDiscount: {
+      amount: getCreatorDiscountAmount({
+        amount: args.amount,
+        discountPercent: creatorAccount.discountPercent,
+      }),
+      code: creatorAccount.code,
+      discountPercent: creatorAccount.discountPercent,
+      sourceLabel: "Applied from code entry",
+    },
+    entryState: "applied" as CheckoutCreatorEntryState,
+    message: "Applied from code entry.",
+  }
 }
 
 function getPreviewProrationBreakdown(args: {
@@ -1356,8 +1704,10 @@ async function cancelIncompleteSubscription(args: {
 export const createSubscriptionIntent = action({
   args: {
     attemptKey: v.optional(v.string()),
+    creatorCode: v.optional(v.string()),
     interval: billingIntervalValidator,
     planKey: v.string(),
+    preferredCurrency: v.optional(supportedPricingCurrencyValidator),
   },
   handler: async (ctx, args) => {
     try {
@@ -1369,10 +1719,19 @@ export const createSubscriptionIntent = action({
         userContext,
       })
       const stripe = getStripe()
-      const { plan, priceId } = await getPurchasablePlan({
+      const { amount, currency, currencyNotice, plan, priceId } =
+        await getPurchasablePlan({
         ctx,
         interval: args.interval,
         planKey: args.planKey,
+        preferredCurrency: args.preferredCurrency,
+      })
+      const creatorDiscount = await resolveCheckoutCreatorDiscount({
+        amount,
+        creatorCode: args.creatorCode,
+        ctx,
+        finalizeCodeEntry: true,
+        userContext,
       })
       const customerId = await ensureStripeCustomer({
         ctx,
@@ -1425,6 +1784,9 @@ export const createSubscriptionIntent = action({
           return {
             alreadyExists: true,
             clientSecret: confirmationPayload.clientSecret,
+            creatorCode: creatorDiscount.appliedDiscount?.code ?? null,
+            currency,
+            currencyNotice,
             customerSessionClientSecret,
             defaultBillingEmail: userContext.email,
             interval: args.interval,
@@ -1462,6 +1824,18 @@ export const createSubscriptionIntent = action({
         {
           collection_method: "charge_automatically",
           customer: customerId,
+          discounts: creatorDiscount.appliedDiscount?.discountPercent
+            ? [
+                {
+                  coupon: await ensureCreatorDiscountCoupon({
+                    creatorCode: creatorDiscount.appliedDiscount.code,
+                    discountPercent:
+                      creatorDiscount.appliedDiscount.discountPercent,
+                    stripe,
+                  }),
+                },
+              ]
+            : undefined,
           expand: [
             "customer",
             "default_payment_method",
@@ -1476,7 +1850,11 @@ export const createSubscriptionIntent = action({
             app: STRIPE_CATALOG_APP,
             billingInterval: args.interval,
             clerkUserId: userContext.user.clerkUserId,
+            creatorCode: creatorDiscount.appliedDiscount?.code ?? "",
+            creatorDiscountPercent:
+              creatorDiscount.appliedDiscount?.discountPercent?.toString() ?? "",
             planKey: plan.key,
+            pricingCurrency: currency,
             userId: userContext.user._id,
           },
           payment_behavior: "default_incomplete",
@@ -1531,6 +1909,9 @@ export const createSubscriptionIntent = action({
       return {
         alreadyExists: false,
         clientSecret: confirmationPayload.clientSecret,
+        creatorCode: creatorDiscount.appliedDiscount?.code ?? null,
+        currency,
+        currencyNotice,
         customerSessionClientSecret,
         defaultBillingEmail: userContext.email,
         interval: args.interval,
@@ -1538,6 +1919,64 @@ export const createSubscriptionIntent = action({
         requiresConfirmation: confirmationPayload.clientSecret !== undefined,
         secretType: confirmationPayload.secretType,
         status: subscription.status,
+      }
+    } catch (error) {
+      throw sanitizeBillingError(error)
+    }
+  },
+})
+
+export const previewCheckoutQuote = action({
+  args: {
+    creatorCode: v.optional(v.string()),
+    interval: billingIntervalValidator,
+    planKey: v.string(),
+    preferredCurrency: v.optional(supportedPricingCurrencyValidator),
+  },
+  handler: async (ctx, args) => {
+    try {
+      await assertCheckoutEnabled(ctx)
+
+      const userContext = await requireBillingUser(ctx)
+      assertCreatorGrantAllowsSelfServeBilling({
+        action: "checkout",
+        userContext,
+      })
+
+      const { amount, currency, currencyNotice, plan } = await getPurchasablePlan({
+        ctx,
+        interval: args.interval,
+        planKey: args.planKey,
+        preferredCurrency: args.preferredCurrency,
+      })
+      const creatorDiscount = await resolveCheckoutCreatorDiscount({
+        amount,
+        creatorCode: args.creatorCode,
+        ctx,
+        userContext,
+      })
+
+      return {
+        creatorDiscount: {
+          amount: creatorDiscount.appliedDiscount?.amount ?? 0,
+          appliedCode: creatorDiscount.appliedDiscount?.code ?? null,
+          discountPercent:
+            creatorDiscount.appliedDiscount?.discountPercent ?? null,
+          entryState: creatorDiscount.entryState,
+          message: creatorDiscount.message,
+          sourceLabel: creatorDiscount.appliedDiscount?.sourceLabel ?? null,
+        },
+        currency,
+        currencyNotice,
+        firstPaymentTotal: Math.max(
+          amount - (creatorDiscount.appliedDiscount?.amount ?? 0),
+          0
+        ),
+        interval: args.interval,
+        planKey: plan.key,
+        planName: plan.name,
+        planSubtotal: amount,
+        renewalTotal: amount,
       }
     } catch (error) {
       throw sanitizeBillingError(error)

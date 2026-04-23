@@ -421,14 +421,26 @@ export type DataModel = {
       description: string;
       key: string;
       monthlyPriceAmount: number;
+      monthlyPriceAmountCad?: number;
+      monthlyPriceAmountEur?: number;
+      monthlyPriceAmountUsd?: number;
       monthlyPriceId?: string;
+      monthlyPriceIdCad?: string;
+      monthlyPriceIdEur?: string;
+      monthlyPriceIdUsd?: string;
       name: string;
       planType: "free" | "paid";
       sortOrder: number;
       stripeProductId?: string;
       updatedAt: number;
       yearlyPriceAmount: number;
+      yearlyPriceAmountCad?: number;
+      yearlyPriceAmountEur?: number;
+      yearlyPriceAmountUsd?: number;
       yearlyPriceId?: string;
+      yearlyPriceIdCad?: string;
+      yearlyPriceIdEur?: string;
+      yearlyPriceIdUsd?: string;
       _id: Id<"billingPlans">;
       _creationTime: number;
     };
@@ -442,14 +454,26 @@ export type DataModel = {
       | "description"
       | "key"
       | "monthlyPriceAmount"
+      | "monthlyPriceAmountCad"
+      | "monthlyPriceAmountEur"
+      | "monthlyPriceAmountUsd"
       | "monthlyPriceId"
+      | "monthlyPriceIdCad"
+      | "monthlyPriceIdEur"
+      | "monthlyPriceIdUsd"
       | "name"
       | "planType"
       | "sortOrder"
       | "stripeProductId"
       | "updatedAt"
       | "yearlyPriceAmount"
-      | "yearlyPriceId";
+      | "yearlyPriceAmountCad"
+      | "yearlyPriceAmountEur"
+      | "yearlyPriceAmountUsd"
+      | "yearlyPriceId"
+      | "yearlyPriceIdCad"
+      | "yearlyPriceIdEur"
+      | "yearlyPriceIdUsd";
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
@@ -702,6 +726,96 @@ export type DataModel = {
       ];
       by_userId: ["userId", "_creationTime"];
       by_userId_and_provider: ["userId", "provider", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  creatorAccounts: {
+    document: {
+      chargesEnabled?: boolean;
+      clerkUserId: string;
+      code: string;
+      codeActive: boolean;
+      createdAt: number;
+      detailsSubmitted?: boolean;
+      discountPercent: number;
+      normalizedCode: string;
+      payoutEligible: boolean;
+      payoutPercent: number;
+      payoutsEnabled?: boolean;
+      requirementsDue?: Array<string>;
+      stripeConnectedAccountId?: string;
+      updatedAt: number;
+      userId: Id<"users">;
+      _id: Id<"creatorAccounts">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "chargesEnabled"
+      | "clerkUserId"
+      | "code"
+      | "codeActive"
+      | "createdAt"
+      | "detailsSubmitted"
+      | "discountPercent"
+      | "normalizedCode"
+      | "payoutEligible"
+      | "payoutPercent"
+      | "payoutsEnabled"
+      | "requirementsDue"
+      | "stripeConnectedAccountId"
+      | "updatedAt"
+      | "userId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_clerkUserId: ["clerkUserId", "_creationTime"];
+      by_normalizedCode: ["normalizedCode", "_creationTime"];
+      by_userId: ["userId", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  creatorAttributions: {
+    document: {
+      active: boolean;
+      clerkUserId: string;
+      createdAt: number;
+      creatorAccountId: Id<"creatorAccounts">;
+      creatorCode: string;
+      normalizedCode: string;
+      overriddenAt?: number;
+      overrideReason?: string;
+      source: "cookie" | "manual" | "staff";
+      updatedAt: number;
+      userId: Id<"users">;
+      _id: Id<"creatorAttributions">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "active"
+      | "clerkUserId"
+      | "createdAt"
+      | "creatorAccountId"
+      | "creatorCode"
+      | "normalizedCode"
+      | "overriddenAt"
+      | "overrideReason"
+      | "source"
+      | "updatedAt"
+      | "userId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_clerkUserId: ["clerkUserId", "_creationTime"];
+      by_creatorAccountId: ["creatorAccountId", "_creationTime"];
+      by_normalizedCode: ["normalizedCode", "_creationTime"];
+      by_userId: ["userId", "_creationTime"];
+      by_userId_active: ["userId", "active", "_creationTime"];
     };
     searchIndexes: {};
     vectorIndexes: {};
@@ -1317,8 +1431,8 @@ export type DataModel = {
       displayName: string;
       joinedAt: number;
       linkedUserId?: Id<"users">;
-      platform: "discord" | "twitch";
-      platformUserId: string;
+      platform?: "discord" | "twitch";
+      platformUserId?: string;
       queueId: Id<"viewerQueues">;
       rank:
         | "bronze"
@@ -1471,7 +1585,7 @@ export type DataModel = {
       createdAt: number;
       inviteCodeType?: "party_code" | "private_match_code";
       lobbyCode?: string;
-      mode: "bot_dm" | "manual_creator_contact";
+      mode: "bot_dm" | "manual_creator_contact" | "discord_dm";
       queueId: Id<"viewerQueues">;
       selectedCount: number;
       selectedUsers: Array<{
@@ -1488,8 +1602,8 @@ export type DataModel = {
           | "twitch_chat_fallback"
           | "manual_creator_contact";
         notificationStatus?: "pending" | "sent" | "failed";
-        platform: "discord" | "twitch";
-        platformUserId: string;
+        platform?: "discord" | "twitch";
+        platformUserId?: string;
         rank:
           | "bronze"
           | "silver"
@@ -1536,7 +1650,7 @@ export type DataModel = {
       gameLabel: string;
       guildId: string;
       guildName?: string;
-      inviteMode: "bot_dm" | "manual_creator_contact";
+      inviteMode: "bot_dm" | "manual_creator_contact" | "discord_dm";
       isActive: boolean;
       lastMessageSyncError?: string;
       lastSelectedRoundId?: Id<"viewerQueueRounds">;
@@ -1563,10 +1677,10 @@ export type DataModel = {
       playersPerBatch: number;
       rulesText?: string;
       title: string;
-      twitchBotAnnouncementsEnabled: boolean;
-      twitchBroadcasterId: string;
-      twitchBroadcasterLogin: string;
-      twitchCommandsEnabled: boolean;
+      twitchBotAnnouncementsEnabled?: boolean;
+      twitchBroadcasterId?: string;
+      twitchBroadcasterLogin?: string;
+      twitchCommandsEnabled?: boolean;
       updatedAt: number;
       _id: Id<"viewerQueues">;
       _creationTime: number;

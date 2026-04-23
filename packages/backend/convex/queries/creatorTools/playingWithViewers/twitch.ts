@@ -6,21 +6,27 @@ import {
   normalizePlatformUserId,
 } from "../../../lib/playingWithViewersIdentity"
 import { queuePlatformValidator } from "../../../lib/playingWithViewers"
+import {
+  hasEnabledPlayWithViewersTwitchContext,
+  isPlayWithViewersTwitchEnabled,
+  normalizePlayWithViewersTwitchContext,
+} from "../../../lib/creatorToolsConfig"
 import { requireValidTwitchWorkerSecret } from "../../../lib/workerAuth"
 
 export const getEnabledTwitchQueues = internalQuery({
   args: {},
   handler: async (ctx) => {
+    if (!isPlayWithViewersTwitchEnabled()) {
+      return []
+    }
+
     const activeQueues = await ctx.db
       .query("viewerQueues")
       .withIndex("by_isActive", (query) => query.eq("isActive", true))
       .collect()
 
-    return activeQueues.filter(
-      (queue) =>
-        queue.twitchCommandsEnabled &&
-        queue.twitchBroadcasterId.trim().length > 0 &&
-        queue.twitchBroadcasterLogin.trim().length > 0
+    return activeQueues.filter((queue) =>
+      hasEnabledPlayWithViewersTwitchContext(queue)
     )
   },
 })
@@ -30,6 +36,10 @@ export const getPendingTwitchNotifications = internalQuery({
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    if (!isPlayWithViewersTwitchEnabled()) {
+      return []
+    }
+
     const limit = Math.max(1, Math.min(args.limit ?? 25, 100))
     const now = Date.now()
     const notifications = await ctx.db
@@ -84,26 +94,30 @@ export const getEnabledQueuesForWorker = query({
   handler: async (ctx, args) => {
     requireValidTwitchWorkerSecret(args.workerSecret)
 
+    if (!isPlayWithViewersTwitchEnabled()) {
+      return []
+    }
+
     const activeQueues = await ctx.db
       .query("viewerQueues")
       .withIndex("by_isActive", (query) => query.eq("isActive", true))
       .collect()
 
     return activeQueues
-      .filter(
-        (queue) =>
-          queue.twitchCommandsEnabled &&
-          queue.twitchBroadcasterId.trim().length > 0 &&
-          queue.twitchBroadcasterLogin.trim().length > 0
-      )
-      .map((queue) => ({
-        creatorDisplayName: queue.creatorDisplayName,
-        queueId: queue._id,
-        title: queue.title,
-        twitchBotAnnouncementsEnabled: queue.twitchBotAnnouncementsEnabled,
-        twitchBroadcasterId: queue.twitchBroadcasterId,
-        twitchBroadcasterLogin: queue.twitchBroadcasterLogin,
-      }))
+      .filter((queue) => hasEnabledPlayWithViewersTwitchContext(queue))
+      .map((queue) => {
+        const twitchContext = normalizePlayWithViewersTwitchContext(queue)
+
+        return {
+          creatorDisplayName: queue.creatorDisplayName,
+          queueId: queue._id,
+          title: queue.title,
+          twitchBotAnnouncementsEnabled:
+            twitchContext.twitchBotAnnouncementsEnabled,
+          twitchBroadcasterId: twitchContext.twitchBroadcasterId,
+          twitchBroadcasterLogin: twitchContext.twitchBroadcasterLogin,
+        }
+      })
   },
 })
 
@@ -116,6 +130,10 @@ export const getQueueSnapshotForWorker = query({
   },
   handler: async (ctx, args) => {
     requireValidTwitchWorkerSecret(args.workerSecret)
+
+    if (!isPlayWithViewersTwitchEnabled()) {
+      throw new Error("Play With Viewers Twitch integration is disabled.")
+    }
 
     const queue = await ctx.db.get(args.queueId)
 
@@ -161,6 +179,10 @@ export const getPendingNotificationsForWorker = query({
   handler: async (ctx, args) => {
     requireValidTwitchWorkerSecret(args.workerSecret)
 
+    if (!isPlayWithViewersTwitchEnabled()) {
+      return []
+    }
+
     const limit = Math.max(1, Math.min(args.limit ?? 25, 100))
     const now = Date.now()
     const notifications = await ctx.db
@@ -184,6 +206,8 @@ export const getPendingNotificationsForWorker = query({
           return null
         }
 
+        const twitchContext = normalizePlayWithViewersTwitchContext(queue)
+
         return {
           attemptCount: notification.attemptCount,
           creatorDisplayName: queue.creatorDisplayName,
@@ -195,8 +219,8 @@ export const getPendingNotificationsForWorker = query({
           notificationId: notification._id,
           platformUserId: notification.platformUserId,
           title: queue.title,
-          twitchBroadcasterId: queue.twitchBroadcasterId,
-          twitchBroadcasterLogin: queue.twitchBroadcasterLogin,
+          twitchBroadcasterId: twitchContext.twitchBroadcasterId,
+          twitchBroadcasterLogin: twitchContext.twitchBroadcasterLogin,
           username: notification.username,
         }
       })

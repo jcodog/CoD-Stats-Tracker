@@ -65,3 +65,45 @@ export async function syncClerkPublicMetadataRole(args: {
     role: args.role,
   }
 }
+
+export async function syncClerkCreatorAttributionMetadata(args: {
+  clerkUserId: string
+  code: string
+  currentPublicMetadata: unknown
+  source: "cookie" | "manual" | "staff"
+}) {
+  const publicMetadata = normalizePublicMetadata(args.currentPublicMetadata)
+  const currentAttribution =
+    publicMetadata.creatorAttribution &&
+    typeof publicMetadata.creatorAttribution === "object" &&
+    !Array.isArray(publicMetadata.creatorAttribution)
+      ? (publicMetadata.creatorAttribution as Record<string, unknown>)
+      : null
+
+  if (
+    currentAttribution?.code === args.code &&
+    currentAttribution?.source === args.source
+  ) {
+    return {
+      changed: false,
+      publicMetadata,
+    }
+  }
+
+  const nextPublicMetadata = {
+    ...publicMetadata,
+    creatorAttribution: {
+      code: args.code,
+      source: args.source,
+    },
+  }
+
+  await getClerkBackendClient().users.updateUserMetadata(args.clerkUserId, {
+    publicMetadata: nextPublicMetadata,
+  })
+
+  return {
+    changed: true,
+    publicMetadata: nextPublicMetadata,
+  }
+}

@@ -4,7 +4,7 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "bun run --watch src/index.ts",
+    "dev": "cd ../.. && bun --watch apps/twitch/src/index.ts",
     "start": "bun run src/index.ts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit"

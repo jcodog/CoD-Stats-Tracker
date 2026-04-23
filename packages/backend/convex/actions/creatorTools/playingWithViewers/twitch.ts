@@ -7,7 +7,14 @@ import {
   participantQueueRankValidator,
   queueNotificationMethodValidator,
 } from "../../../lib/playingWithViewers"
+import { isPlayWithViewersTwitchEnabled } from "../../../lib/creatorToolsConfig"
 import { requireValidTwitchWorkerSecret } from "../../../lib/workerAuth"
+
+function requirePlayWithViewersTwitchEnabled() {
+  if (!isPlayWithViewersTwitchEnabled()) {
+    throw new Error("Play With Viewers Twitch integration is disabled.")
+  }
+}
 
 export const enqueueViewerFromWorker = action({
   args: {
@@ -21,6 +28,7 @@ export const enqueueViewerFromWorker = action({
   },
   handler: async (ctx, args) => {
     requireValidTwitchWorkerSecret(args.workerSecret)
+    requirePlayWithViewersTwitchEnabled()
 
     const result = await ctx.runMutation(
       internal.mutations.creatorTools.playingWithViewers.queue.enqueueViewerFromPlatform,
@@ -56,6 +64,7 @@ export const leaveViewerFromWorker = action({
   },
   handler: async (ctx, args) => {
     requireValidTwitchWorkerSecret(args.workerSecret)
+    requirePlayWithViewersTwitchEnabled()
 
     const result = await ctx.runMutation(
       internal.mutations.creatorTools.playingWithViewers.queue.leaveQueueFromPlatform,
@@ -87,6 +96,7 @@ export const recordNotificationResultFromWorker = action({
   },
   handler: async (ctx, args) => {
     requireValidTwitchWorkerSecret(args.workerSecret)
+    requirePlayWithViewersTwitchEnabled()
 
     return await ctx.runMutation(
       internal.mutations.creatorTools.playingWithViewers.notifications.recordNotificationResult,
@@ -109,6 +119,7 @@ export const deferNotificationFromWorker = action({
   },
   handler: async (ctx, args) => {
     requireValidTwitchWorkerSecret(args.workerSecret)
+    requirePlayWithViewersTwitchEnabled()
 
     return await ctx.runMutation(
       internal.mutations.creatorTools.playingWithViewers.notifications.deferNotification,

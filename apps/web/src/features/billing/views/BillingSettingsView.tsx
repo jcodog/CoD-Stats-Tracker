@@ -750,7 +750,7 @@ function SubscriptionsCard(args: {
         args.checkoutEnabled &&
         !args.creatorGrantActive ? (
           <Button asChild size="sm" variant="outline">
-            <Link href="/checkout">Start checkout</Link>
+            <Link href="/checkout">Open checkout</Link>
           </Button>
         ) : null}
       </CardHeader>
@@ -858,7 +858,7 @@ function SubscriptionsCard(args: {
                       </span>
                     ) : (
                       <Button asChild size="sm" variant="outline">
-                        <Link href="/checkout">Subscribe again</Link>
+                        <Link href="/checkout">Open checkout</Link>
                       </Button>
                     )
                   ) : (
@@ -925,7 +925,7 @@ function SubscriptionsCard(args: {
                 {args.creatorGrantActive
                   ? "Creator complimentary access is currently active. Checkout and plan changes stay unavailable while that access remains active."
                   : args.checkoutEnabled
-                    ? "Start checkout to create the first managed Stripe subscription for this account."
+                    ? "Open checkout to start the first managed Stripe subscription for this account. Any linked creator discount will be shown there before payment."
                     : "Checkout is currently disabled for this account."}
               </EmptyDescription>
             </EmptyHeader>

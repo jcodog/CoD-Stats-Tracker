@@ -31,7 +31,10 @@ import {
   DEFAULT_INVITE_CODE_TYPE,
   getInviteCodeTypeLabel,
   getParticipantRankLabel,
+  normalizeStoredInviteMode,
+  normalizeStoredQueueParticipant,
   type InviteCodeType,
+  type InviteMode,
   type ParticipantRankValue,
   type QueueConfigRankValue,
   type QueuePlatform,
@@ -126,8 +129,15 @@ import { toast } from "sonner"
 type ViewerQueue = Doc<"viewerQueues">
 type ViewerQueueEntry = Doc<"viewerQueueEntries">
 type ViewerQueueRound = Doc<"viewerQueueRounds">
-type InviteMode = ViewerQueue["inviteMode"]
 type QueueRoundUser = ViewerQueueRound["selectedUsers"][number]
+type NormalizedQueueRoundUser = QueueRoundUser & {
+  platform: QueuePlatform
+  platformUserId: string
+}
+type NormalizedViewerQueueEntry = ViewerQueueEntry & {
+  platform: QueuePlatform
+  platformUserId: string
+}
 type QueueNotificationMethod = QueueRoundUser["notificationMethod"]
 type QueueNotificationStatus = QueueRoundUser["notificationStatus"]
 
@@ -230,7 +240,7 @@ function toQueueFormState(queue: ViewerQueue): QueueFormState {
     creatorMessage: queue.creatorMessage ?? "",
     gameLabel: queue.gameLabel,
     guildId: queue.guildId,
-    inviteMode: queue.inviteMode,
+    inviteMode: normalizeStoredInviteMode(queue.inviteMode),
     matchesPerViewer: String(queue.matchesPerViewer),
     maxRank: queue.maxRank,
     minRank: queue.minRank,
@@ -271,6 +281,16 @@ function PlatformBadge({
       {getPlatformLabel(platform)}
     </Badge>
   )
+}
+
+function normalizeQueueRoundUser(user: QueueRoundUser): NormalizedQueueRoundUser {
+  return normalizeStoredQueueParticipant(user) as NormalizedQueueRoundUser
+}
+
+function normalizeViewerQueueEntry(
+  entry: ViewerQueueEntry
+): NormalizedViewerQueueEntry {
+  return normalizeStoredQueueParticipant(entry) as NormalizedViewerQueueEntry
 }
 
 function getDiscordMention(user: QueueRoundUser) {
@@ -596,23 +616,24 @@ function SelectionResultSummary({
   onCopyDiscordMentions,
   onCopyTwitchHandles,
   selectionResult,
+  showTwitchTools,
 }: Readonly<{
   onCopyContactList: () => Promise<void>
   onCopyDiscordMentions: () => Promise<void>
   onCopyTwitchHandles: () => Promise<void>
   selectionResult: SelectionResultState
+  showTwitchTools: boolean
 }>) {
   if (!selectionResult) {
     return null
   }
 
-  const notificationSummary = summarizeNotificationStatuses(
-    selectionResult.selectedUsers
-  )
-  const discordUserCount = selectionResult.selectedUsers.filter(
+  const selectedUsers = selectionResult.selectedUsers.map(normalizeQueueRoundUser)
+  const notificationSummary = summarizeNotificationStatuses(selectedUsers)
+  const discordUserCount = selectedUsers.filter(
     (user) => user.platform === "discord"
   ).length
-  const twitchUserCount = selectionResult.selectedUsers.filter(
+  const twitchUserCount = selectedUsers.filter(
     (user) => user.platform === "twitch"
   ).length
 
@@ -620,7 +641,7 @@ function SelectionResultSummary({
     <div className="flex flex-col">
       <div className="flex flex-wrap items-center gap-2 border-b border-border/70 px-4 py-3">
         <Badge variant="outline">
-          {selectionResult.selectedUsers.length} selected
+          {selectedUsers.length} selected
         </Badge>
         <span className="text-sm text-muted-foreground">
           {formatDateTime(selectionResult.createdAt)}
@@ -658,20 +679,22 @@ function SelectionResultSummary({
             <IconBrandDiscord data-icon="inline-start" />
             Copy Discord mentions
           </Button>
-          <Button
-            disabled={twitchUserCount === 0}
-            onClick={onCopyTwitchHandles}
-            size="sm"
-            variant="outline"
-          >
-            <IconBrandTwitch data-icon="inline-start" />
-            Copy Twitch handles
-          </Button>
+          {showTwitchTools ? (
+            <Button
+              disabled={twitchUserCount === 0}
+              onClick={onCopyTwitchHandles}
+              size="sm"
+              variant="outline"
+            >
+              <IconBrandTwitch data-icon="inline-start" />
+              Copy Twitch handles
+            </Button>
+          ) : null}
         </div>
       ) : null}
 
       <div className="flex max-h-105 flex-col divide-y divide-border/70 overflow-y-auto">
-        {selectionResult.selectedUsers.map((user) => (
+        {selectedUsers.map((user) => (
           <div
             key={`${user.platform}:${user.platformUserId}`}
             className="flex flex-col gap-3 px-4 py-4"
@@ -730,11 +753,13 @@ function SelectionResultSummary({
 type PlayWithViewersDashboardViewProps = {
   hasTwitchLinked: boolean
   preferredCreatorDisplayName: string
+  twitchEnabled: boolean
 }
 
 export function PlayWithViewersDashboardView({
   hasTwitchLinked,
   preferredCreatorDisplayName,
+  twitchEnabled,
 }: PlayWithViewersDashboardViewProps) {
   const currentUser = useQuery(api.queries.users.current)
   const queue = useQuery(
@@ -824,7 +849,7 @@ export function PlayWithViewersDashboardView({
     return {
       ...selectionResultState,
       createdAt: selectionResultRound.createdAt,
-      inviteMode: selectionResultRound.mode,
+      inviteMode: normalizeStoredInviteMode(selectionResultRound.mode),
       selectedUsers: selectionResultRound.selectedUsers,
     }
   }, [selectionResultRound, selectionResultState])
@@ -839,6 +864,9 @@ export function PlayWithViewersDashboardView({
   const settingsFormState = queue
     ? (settingsFormDraft ?? toQueueFormState(queue))
     : defaultCreateFormState
+  const queueInviteMode = queue
+    ? normalizeStoredInviteMode(queue.inviteMode)
+    : null
   const setCreateFormState: Dispatch<SetStateAction<QueueFormState>> = (
     updater
   ) => {
@@ -1162,6 +1190,7 @@ export function PlayWithViewersDashboardView({
 
     await handleCopyToClipboard(
       selectionResult.selectedUsers
+        .map(normalizeQueueRoundUser)
         .map(
           (user) =>
             `${user.displayName} (${getPlatformLabel(user.platform)}) - ${getContactLabel(user)}`
@@ -1259,16 +1288,13 @@ export function PlayWithViewersDashboardView({
 
   async function handleToolbarSettingsChange(
     field: string,
-    patch: Partial<
-      Pick<
-        ViewerQueue,
-        | "inviteMode"
-        | "matchesPerViewer"
-        | "maxRank"
-        | "minRank"
-        | "playersPerBatch"
-      >
-    >
+    patch: Partial<{
+      inviteMode: InviteMode
+      matchesPerViewer: number
+      maxRank: QueueConfigRankValue
+      minRank: QueueConfigRankValue
+      playersPerBatch: number
+    }>
   ) {
     if (!queue) {
       return
@@ -1286,11 +1312,12 @@ export function PlayWithViewersDashboardView({
         creatorDisplayName: queue.creatorDisplayName,
         creatorMessage: queue.creatorMessage,
         gameLabel: queue.gameLabel,
-        inviteMode: patch.inviteMode ?? queue.inviteMode,
-        matchesPerViewer: patch.matchesPerViewer ?? queue.matchesPerViewer,
+        inviteMode: patch.inviteMode ?? queueInviteMode ?? "bot_dm",
+        matchesPerViewer:
+          Number(patch.matchesPerViewer ?? queue.matchesPerViewer),
         maxRank: normalizedRanks.maxRank,
         minRank: normalizedRanks.minRank,
-        playersPerBatch: patch.playersPerBatch ?? queue.playersPerBatch,
+        playersPerBatch: Number(patch.playersPerBatch ?? queue.playersPerBatch),
         queueId: queue._id,
         rulesText: queue.rulesText,
         title: queue.title,
@@ -1474,7 +1501,7 @@ export function PlayWithViewersDashboardView({
     }
 
     const inviteCode = selectionInviteCode.trim() || undefined
-    if (queue.inviteMode === "bot_dm" && !inviteCode) {
+    if (queueInviteMode === "bot_dm" && !inviteCode) {
       toast.error("Invite code is required for Bot DM mode.")
       return
     }
@@ -1502,14 +1529,14 @@ export function PlayWithViewersDashboardView({
 
       setSelectionResultState({
         createdAt: result.createdAt,
-        inviteMode: queue.inviteMode,
+        inviteMode: queueInviteMode ?? "bot_dm",
         roundId: result.roundId,
         selectedUsers,
         selectionKind,
       })
 
       if (selectionDialogState?.kind === "entry") {
-        if (queue.inviteMode === "bot_dm") {
+        if (queueInviteMode === "bot_dm") {
           if (notificationSummary.failed > 0) {
             toast.error(
               `Invite attempted. ${notificationSummary.failed} bot ${notificationSummary.failed === 1 ? "delivery" : "deliveries"} failed.`
@@ -1529,7 +1556,7 @@ export function PlayWithViewersDashboardView({
           )
         }
       } else {
-        if (queue.inviteMode === "bot_dm") {
+        if (queueInviteMode === "bot_dm") {
           if (notificationSummary.failed > 0) {
             toast.error(
               `Batch processed. ${notificationSummary.failed} bot ${notificationSummary.failed === 1 ? "delivery" : "deliveries"} failed.`
@@ -1624,7 +1651,9 @@ export function PlayWithViewersDashboardView({
         : "Batch ready to contact"
   const selectionResultDescription =
     selectionResult?.inviteMode === "bot_dm"
-      ? "Live delivery status updates here as Discord DMs and Twitch bot notifications complete."
+      ? twitchEnabled
+        ? "Live delivery status updates here as Discord DMs and Twitch bot notifications complete."
+        : "Live delivery status updates here as Discord DMs complete."
       : "Use this list to contact the selected viewers directly on their platform."
 
   return (
@@ -1658,9 +1687,15 @@ export function PlayWithViewersDashboardView({
                     ? "Published"
                     : "Not published"}
               </Badge>
-              <Badge variant={hasTwitchLinked ? "secondary" : "destructive"}>
-                {hasTwitchLinked ? "Twitch linked" : "Twitch required"}
-              </Badge>
+              {twitchEnabled ? (
+                <Badge
+                  variant={hasTwitchLinked ? "secondary" : "destructive"}
+                >
+                  {hasTwitchLinked ? "Twitch linked" : "Twitch required"}
+                </Badge>
+              ) : (
+                <Badge variant="outline">Twitch bot disabled</Badge>
+              )}
             </div>
           </div>
 
@@ -1678,7 +1713,7 @@ export function PlayWithViewersDashboardView({
             <IconBrandDiscord />
             {discordContextLabel}
           </span>
-          {queue ? (
+          {queue && twitchEnabled ? (
             <span className="inline-flex items-center gap-1.5">
               <IconBrandTwitch />
               {hasTwitchLinked ? "Creator tools unlocked" : "Tools locked"}
@@ -1734,7 +1769,7 @@ export function PlayWithViewersDashboardView({
         </Alert>
       ) : null}
 
-      {!hasTwitchLinked ? (
+      {twitchEnabled && !hasTwitchLinked ? (
         <LockedState queueTitle={pageTitle} />
       ) : queue === null ? (
         <Panel className="border-dashed bg-muted/20">
@@ -2000,76 +2035,82 @@ export function PlayWithViewersDashboardView({
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {entries.map((entry, index) => (
-                      <TableRow key={entry._id}>
-                        <TableCell className="px-4 py-4 font-medium text-muted-foreground">
-                          {index + 1}
-                        </TableCell>
-                        <TableCell className="px-4 py-4">
-                          <div className="flex min-w-0 items-center gap-3">
-                            <Avatar className="size-10">
-                              <AvatarImage
-                                alt={entry.displayName}
-                                src={entry.avatarUrl}
-                              />
-                              <AvatarFallback>
-                                {getInitials(entry.displayName)}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div className="min-w-0">
-                              <div className="truncate font-medium text-foreground">
-                                {entry.displayName}
-                              </div>
-                              <div className="flex flex-wrap items-center gap-2">
-                                <span className="truncate text-sm text-muted-foreground">
-                                  @{entry.username}
-                                </span>
-                                <PlatformBadge platform={entry.platform} />
+                    {entries.map((entry, index) => {
+                      const normalizedEntry = normalizeViewerQueueEntry(entry)
+
+                      return (
+                        <TableRow key={entry._id}>
+                          <TableCell className="px-4 py-4 font-medium text-muted-foreground">
+                            {index + 1}
+                          </TableCell>
+                          <TableCell className="px-4 py-4">
+                            <div className="flex min-w-0 items-center gap-3">
+                              <Avatar className="size-10">
+                                <AvatarImage
+                                  alt={entry.displayName}
+                                  src={entry.avatarUrl}
+                                />
+                                <AvatarFallback>
+                                  {getInitials(entry.displayName)}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div className="min-w-0">
+                                <div className="truncate font-medium text-foreground">
+                                  {entry.displayName}
+                                </div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="truncate text-sm text-muted-foreground">
+                                    @{entry.username}
+                                  </span>
+                                  <PlatformBadge
+                                    platform={normalizedEntry.platform}
+                                  />
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        </TableCell>
-                        <TableCell className="px-4 py-4">
-                          <Badge variant="outline">
-                            {getRankLabel(entry.rank)}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="px-4 py-4 text-muted-foreground">
-                          {formatDateTime(entry.joinedAt)}
-                        </TableCell>
-                        <TableCell className="px-4 py-4 text-muted-foreground">
-                          {formatWaitDuration(entry.joinedAt, now)}
-                        </TableCell>
-                        <TableCell className="px-4 py-4">
-                          <div className="flex items-center justify-end gap-2">
-                            <Button
-                              disabled={isSelectingBatch}
-                              onClick={() =>
-                                openSelectionDialog({
-                                  displayName: entry.displayName,
-                                  entryId: entry._id,
-                                  kind: "entry",
-                                })
-                              }
-                              size="xs"
-                              variant="outline"
-                            >
-                              Invite now
-                            </Button>
-                            <Button
-                              disabled={removingEntryId === entry._id}
-                              onClick={() => handleRemoveEntry(entry._id)}
-                              size="xs"
-                              variant="ghost"
-                            >
-                              {removingEntryId === entry._id
-                                ? "Removing..."
-                                : "Remove"}
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                          </TableCell>
+                          <TableCell className="px-4 py-4">
+                            <Badge variant="outline">
+                              {getRankLabel(entry.rank)}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="px-4 py-4 text-muted-foreground">
+                            {formatDateTime(entry.joinedAt)}
+                          </TableCell>
+                          <TableCell className="px-4 py-4 text-muted-foreground">
+                            {formatWaitDuration(entry.joinedAt, now)}
+                          </TableCell>
+                          <TableCell className="px-4 py-4">
+                            <div className="flex items-center justify-end gap-2">
+                              <Button
+                                disabled={isSelectingBatch}
+                                onClick={() =>
+                                  openSelectionDialog({
+                                    displayName: entry.displayName,
+                                    entryId: entry._id,
+                                    kind: "entry",
+                                  })
+                                }
+                                size="xs"
+                                variant="outline"
+                              >
+                                Invite now
+                              </Button>
+                              <Button
+                                disabled={removingEntryId === entry._id}
+                                onClick={() => handleRemoveEntry(entry._id)}
+                                size="xs"
+                                variant="ghost"
+                              >
+                                {removingEntryId === entry._id
+                                  ? "Removing..."
+                                  : "Remove"}
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
                   </TableBody>
                 </Table>
               </ScrollArea>
@@ -2623,7 +2664,8 @@ export function PlayWithViewersDashboardView({
                 <FieldLabel>Manual contact mode</FieldLabel>
                 <FieldDescription>
                   The selected viewers will open in a follow-up dialog with copy
-                  helpers for Discord mentions, Twitch handles, and a combined
+                  helpers for Discord mentions
+                  {twitchEnabled ? ", Twitch handles," : ""} and a combined
                   contact list.
                 </FieldDescription>
               </Field>
@@ -2670,6 +2712,7 @@ export function PlayWithViewersDashboardView({
             onCopyDiscordMentions={handleCopyDiscordMentions}
             onCopyTwitchHandles={handleCopyTwitchHandles}
             selectionResult={selectionResult}
+            showTwitchTools={twitchEnabled}
           />
 
           <DialogFooter>

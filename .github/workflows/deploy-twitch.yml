@@ -1,0 +1,63 @@
+name: Deploy Twitch Bot
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "apps/twitch/**"
+      - ".github/workflows/deploy-twitch.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-twitch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck Twitch app
+        run: bun run --cwd apps/twitch typecheck
+
+  deploy-twitch:
+    needs: validate-twitch
+    runs-on: self-hosted
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Sync monorepo to VPS
+        run: |
+          sudo -n rsync -a --delete ./ /opt/cod-stats-tracker/current/
+
+      - name: Copy Twitch env from shared storage
+        run: |
+          test -f /opt/cod-stats-tracker/shared/.env
+          sudo -n cp /opt/cod-stats-tracker/shared/.env /opt/cod-stats-tracker/current/apps/twitch/.env
+
+      - name: Reload PM2 app
+        run: |
+          PM2="/root/.bun/install/global/node_modules/pm2/bin/pm2"
+          cd /opt/cod-stats-tracker/current/apps/twitch
+          sudo -n PM2_HOME=/root/.pm2 "$PM2" startOrReload ecosystem.config.cjs --update-env \
+            || sudo -n PM2_HOME=/root/.pm2 "$PM2" start ecosystem.config.cjs
+          sudo -n PM2_HOME=/root/.pm2 "$PM2" save

@@ -50,7 +50,24 @@ export declare const api: {
         createSubscriptionIntent: FunctionReference<
           "action",
           "public",
-          { attemptKey?: string; interval: "month" | "year"; planKey: string },
+          {
+            attemptKey?: string;
+            creatorCode?: string;
+            interval: "month" | "year";
+            planKey: string;
+            preferredCurrency?: "GBP" | "USD" | "CAD" | "EUR";
+          },
+          any
+        >;
+        previewCheckoutQuote: FunctionReference<
+          "action",
+          "public",
+          {
+            creatorCode?: string;
+            interval: "month" | "year";
+            planKey: string;
+            preferredCurrency?: "GBP" | "USD" | "CAD" | "EUR";
+          },
           any
         >;
         previewSubscriptionChange: FunctionReference<
@@ -100,6 +117,16 @@ export declare const api: {
             name?: string;
             phone?: string;
           },
+          any
+        >;
+      };
+    };
+    creator: {
+      attribution: {
+        applyCreatorCode: FunctionReference<
+          "action",
+          "public",
+          { code: string; source: "cookie" | "manual" },
           any
         >;
       };
@@ -316,6 +343,28 @@ export declare const api: {
           "action",
           "public",
           { guildId?: string; scope: "guild" | "global" },
+          any
+        >;
+      };
+    };
+    migrations: {
+      playingWithViewers: {
+        runLegacyViewerQueueSchemaMigration: FunctionReference<
+          "action",
+          "public",
+          { confirm: string; dryRun?: boolean },
+          any
+        >;
+        runViewerQueueInviteModeMigration: FunctionReference<
+          "action",
+          "public",
+          { confirm: string; dryRun?: boolean },
+          any
+        >;
+        runViewerQueueTwitchDisableMigration: FunctionReference<
+          "action",
+          "public",
+          { confirm: string; dryRun?: boolean },
           any
         >;
       };
@@ -751,10 +800,15 @@ export declare const api: {
         getCustomerPricingCatalog: FunctionReference<
           "query",
           "public",
-          {},
+          { preferredCurrency?: string },
           any
         >;
-        getPublicPricingCatalog: FunctionReference<"query", "public", {}, any>;
+        getPublicPricingCatalog: FunctionReference<
+          "query",
+          "public",
+          { preferredCurrency?: string },
+          any
+        >;
       };
       center: {
         getCurrentUserBillingCenter: FunctionReference<
@@ -866,6 +920,22 @@ export declare const api: {
         { sub: string },
         any
       >;
+    };
+    creator: {
+      attribution: {
+        getCurrentUserAttribution: FunctionReference<
+          "query",
+          "public",
+          {},
+          any
+        >;
+        getPublicCreatorCodeSummary: FunctionReference<
+          "query",
+          "public",
+          { code: string },
+          any
+        >;
+      };
     };
     creatorTools: {
       playingWithViewers: {
@@ -1454,6 +1524,23 @@ export declare const internal: {
         >;
       };
     };
+    creator: {
+      attribution: {
+        ensureCanonicalAttribution: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            clerkUserId: string;
+            creatorAccountId: Id<"creatorAccounts">;
+            creatorCode: string;
+            normalizedCode: string;
+            source: "cookie" | "manual" | "staff";
+            userId: Id<"users">;
+          },
+          any
+        >;
+      };
+    };
     creatorTools: {
       playingWithViewers: {
         notifications: {
@@ -1779,6 +1866,28 @@ export declare const internal: {
         >;
       };
     };
+    migrations: {
+      playingWithViewers: {
+        disableViewerQueueTwitchIntegration: FunctionReference<
+          "mutation",
+          "internal",
+          { dryRun?: boolean },
+          any
+        >;
+        migrateLegacyViewerQueueInviteModes: FunctionReference<
+          "mutation",
+          "internal",
+          { dryRun?: boolean },
+          any
+        >;
+        migrateLegacyViewerQueueSchema: FunctionReference<
+          "mutation",
+          "internal",
+          { dryRun?: boolean },
+          any
+        >;
+      };
+    };
     staff: {
       internal: {
         insertAuditLog: FunctionReference<
@@ -2060,6 +2169,34 @@ export declare const internal: {
           "query",
           "internal",
           { userId: Id<"users"> },
+          any
+        >;
+      };
+    };
+    creator: {
+      internal: {
+        getActiveAttributionByUserId: FunctionReference<
+          "query",
+          "internal",
+          { userId: Id<"users"> },
+          any
+        >;
+        getCreatorAccountById: FunctionReference<
+          "query",
+          "internal",
+          { creatorAccountId: Id<"creatorAccounts"> },
+          any
+        >;
+        getCreatorAccountByNormalizedCode: FunctionReference<
+          "query",
+          "internal",
+          { normalizedCode: string },
+          any
+        >;
+        getUserByClerkUserId: FunctionReference<
+          "query",
+          "internal",
+          { clerkUserId: string },
           any
         >;
       };

@@ -29,6 +29,8 @@ import { rankedMaps } from "./db/tables/rankedMaps"
 import { rankedModes } from "./db/tables/rankedModes"
 import { rankedTitles } from "./db/tables/rankedTitles"
 import { connectedAccounts } from "./db/tables/connectedAccounts"
+import { creatorAccounts } from "./db/tables/creatorAccounts"
+import { creatorAttributions } from "./db/tables/creatorAttributions"
 
 export default defineSchema({
   sessions,
@@ -64,4 +66,6 @@ export default defineSchema({
   viewerQueueCooldowns,
   viewerQueueNotifications,
   connectedAccounts,
+  creatorAccounts,
+  creatorAttributions,
 })

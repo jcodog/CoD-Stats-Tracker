@@ -6,21 +6,22 @@ import {
 import {
   queueNotificationMethodValidator,
   queueNotificationStatusValidator,
+  storedInviteModeValidator,
 } from "../../../../lib/playingWithViewers"
 
 export const viewerQueueRounds = defineTable({
   queueId: v.id("viewerQueues"),
-  mode: v.union(v.literal("bot_dm"), v.literal("manual_creator_contact")),
+  mode: storedInviteModeValidator,
   lobbyCode: v.optional(v.string()),
   inviteCodeType: v.optional(
     v.union(v.literal("party_code"), v.literal("private_match_code"))
   ),
   selectedUsers: v.array(
     v.object({
-      platform: v.union(v.literal("discord"), v.literal("twitch")),
-      platformUserId: v.string(),
+      platform: v.optional(v.union(v.literal("discord"), v.literal("twitch"))),
+      platformUserId: v.optional(v.string()),
 
-      // Compatibility field for current Discord-only action paths.
+      // Compatibility field for legacy Discord-only round snapshots.
       discordUserId: v.optional(v.string()),
 
       username: v.string(),
