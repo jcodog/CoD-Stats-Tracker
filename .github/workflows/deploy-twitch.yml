@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - "apps/twitch/**"
+      - ".github/workflows/deploy-twitch.yml"
   workflow_dispatch:
 
 permissions:
@@ -46,9 +47,12 @@ jobs:
 
       - name: Sync monorepo to VPS
         run: |
-          sudo -n mkdir -p /opt/cod-stats-tracker/current /opt/cod-stats-tracker/shared
           sudo -n rsync -a --delete ./ /opt/cod-stats-tracker/current/
-          sudo -n ln -sf /opt/cod-stats-tracker/shared/.env /opt/cod-stats-tracker/current/apps/twitch/.env
+
+      - name: Copy Twitch env from shared storage
+        run: |
+          test -f /opt/cod-stats-tracker/shared/.env
+          sudo -n cp /opt/cod-stats-tracker/shared/.env /opt/cod-stats-tracker/current/apps/twitch/.env
 
       - name: Reload PM2 app
         run: |

@@ -32,6 +32,7 @@ import {
   getInviteCodeTypeLabel,
   getParticipantRankLabel,
   normalizeStoredInviteMode,
+  normalizeStoredQueueParticipant,
   type InviteCodeType,
   type InviteMode,
   type ParticipantRankValue,
@@ -129,6 +130,14 @@ type ViewerQueue = Doc<"viewerQueues">
 type ViewerQueueEntry = Doc<"viewerQueueEntries">
 type ViewerQueueRound = Doc<"viewerQueueRounds">
 type QueueRoundUser = ViewerQueueRound["selectedUsers"][number]
+type NormalizedQueueRoundUser = QueueRoundUser & {
+  platform: QueuePlatform
+  platformUserId: string
+}
+type NormalizedViewerQueueEntry = ViewerQueueEntry & {
+  platform: QueuePlatform
+  platformUserId: string
+}
 type QueueNotificationMethod = QueueRoundUser["notificationMethod"]
 type QueueNotificationStatus = QueueRoundUser["notificationStatus"]
 
@@ -272,6 +281,16 @@ function PlatformBadge({
       {getPlatformLabel(platform)}
     </Badge>
   )
+}
+
+function normalizeQueueRoundUser(user: QueueRoundUser): NormalizedQueueRoundUser {
+  return normalizeStoredQueueParticipant(user) as NormalizedQueueRoundUser
+}
+
+function normalizeViewerQueueEntry(
+  entry: ViewerQueueEntry
+): NormalizedViewerQueueEntry {
+  return normalizeStoredQueueParticipant(entry) as NormalizedViewerQueueEntry
 }
 
 function getDiscordMention(user: QueueRoundUser) {
@@ -609,13 +628,12 @@ function SelectionResultSummary({
     return null
   }
 
-  const notificationSummary = summarizeNotificationStatuses(
-    selectionResult.selectedUsers
-  )
-  const discordUserCount = selectionResult.selectedUsers.filter(
+  const selectedUsers = selectionResult.selectedUsers.map(normalizeQueueRoundUser)
+  const notificationSummary = summarizeNotificationStatuses(selectedUsers)
+  const discordUserCount = selectedUsers.filter(
     (user) => user.platform === "discord"
   ).length
-  const twitchUserCount = selectionResult.selectedUsers.filter(
+  const twitchUserCount = selectedUsers.filter(
     (user) => user.platform === "twitch"
   ).length
 
@@ -623,7 +641,7 @@ function SelectionResultSummary({
     <div className="flex flex-col">
       <div className="flex flex-wrap items-center gap-2 border-b border-border/70 px-4 py-3">
         <Badge variant="outline">
-          {selectionResult.selectedUsers.length} selected
+          {selectedUsers.length} selected
         </Badge>
         <span className="text-sm text-muted-foreground">
           {formatDateTime(selectionResult.createdAt)}
@@ -676,7 +694,7 @@ function SelectionResultSummary({
       ) : null}
 
       <div className="flex max-h-105 flex-col divide-y divide-border/70 overflow-y-auto">
-        {selectionResult.selectedUsers.map((user) => (
+        {selectedUsers.map((user) => (
           <div
             key={`${user.platform}:${user.platformUserId}`}
             className="flex flex-col gap-3 px-4 py-4"
@@ -1172,6 +1190,7 @@ export function PlayWithViewersDashboardView({
 
     await handleCopyToClipboard(
       selectionResult.selectedUsers
+        .map(normalizeQueueRoundUser)
         .map(
           (user) =>
             `${user.displayName} (${getPlatformLabel(user.platform)}) - ${getContactLabel(user)}`
@@ -2016,76 +2035,82 @@ export function PlayWithViewersDashboardView({
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {entries.map((entry, index) => (
-                      <TableRow key={entry._id}>
-                        <TableCell className="px-4 py-4 font-medium text-muted-foreground">
-                          {index + 1}
-                        </TableCell>
-                        <TableCell className="px-4 py-4">
-                          <div className="flex min-w-0 items-center gap-3">
-                            <Avatar className="size-10">
-                              <AvatarImage
-                                alt={entry.displayName}
-                                src={entry.avatarUrl}
-                              />
-                              <AvatarFallback>
-                                {getInitials(entry.displayName)}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div className="min-w-0">
-                              <div className="truncate font-medium text-foreground">
-                                {entry.displayName}
-                              </div>
-                              <div className="flex flex-wrap items-center gap-2">
-                                <span className="truncate text-sm text-muted-foreground">
-                                  @{entry.username}
-                                </span>
-                                <PlatformBadge platform={entry.platform} />
+                    {entries.map((entry, index) => {
+                      const normalizedEntry = normalizeViewerQueueEntry(entry)
+
+                      return (
+                        <TableRow key={entry._id}>
+                          <TableCell className="px-4 py-4 font-medium text-muted-foreground">
+                            {index + 1}
+                          </TableCell>
+                          <TableCell className="px-4 py-4">
+                            <div className="flex min-w-0 items-center gap-3">
+                              <Avatar className="size-10">
+                                <AvatarImage
+                                  alt={entry.displayName}
+                                  src={entry.avatarUrl}
+                                />
+                                <AvatarFallback>
+                                  {getInitials(entry.displayName)}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div className="min-w-0">
+                                <div className="truncate font-medium text-foreground">
+                                  {entry.displayName}
+                                </div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="truncate text-sm text-muted-foreground">
+                                    @{entry.username}
+                                  </span>
+                                  <PlatformBadge
+                                    platform={normalizedEntry.platform}
+                                  />
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        </TableCell>
-                        <TableCell className="px-4 py-4">
-                          <Badge variant="outline">
-                            {getRankLabel(entry.rank)}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="px-4 py-4 text-muted-foreground">
-                          {formatDateTime(entry.joinedAt)}
-                        </TableCell>
-                        <TableCell className="px-4 py-4 text-muted-foreground">
-                          {formatWaitDuration(entry.joinedAt, now)}
-                        </TableCell>
-                        <TableCell className="px-4 py-4">
-                          <div className="flex items-center justify-end gap-2">
-                            <Button
-                              disabled={isSelectingBatch}
-                              onClick={() =>
-                                openSelectionDialog({
-                                  displayName: entry.displayName,
-                                  entryId: entry._id,
-                                  kind: "entry",
-                                })
-                              }
-                              size="xs"
-                              variant="outline"
-                            >
-                              Invite now
-                            </Button>
-                            <Button
-                              disabled={removingEntryId === entry._id}
-                              onClick={() => handleRemoveEntry(entry._id)}
-                              size="xs"
-                              variant="ghost"
-                            >
-                              {removingEntryId === entry._id
-                                ? "Removing..."
-                                : "Remove"}
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                          </TableCell>
+                          <TableCell className="px-4 py-4">
+                            <Badge variant="outline">
+                              {getRankLabel(entry.rank)}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="px-4 py-4 text-muted-foreground">
+                            {formatDateTime(entry.joinedAt)}
+                          </TableCell>
+                          <TableCell className="px-4 py-4 text-muted-foreground">
+                            {formatWaitDuration(entry.joinedAt, now)}
+                          </TableCell>
+                          <TableCell className="px-4 py-4">
+                            <div className="flex items-center justify-end gap-2">
+                              <Button
+                                disabled={isSelectingBatch}
+                                onClick={() =>
+                                  openSelectionDialog({
+                                    displayName: entry.displayName,
+                                    entryId: entry._id,
+                                    kind: "entry",
+                                  })
+                                }
+                                size="xs"
+                                variant="outline"
+                              >
+                                Invite now
+                              </Button>
+                              <Button
+                                disabled={removingEntryId === entry._id}
+                                onClick={() => handleRemoveEntry(entry._id)}
+                                size="xs"
+                                variant="ghost"
+                              >
+                                {removingEntryId === entry._id
+                                  ? "Removing..."
+                                  : "Remove"}
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
                   </TableBody>
                 </Table>
               </ScrollArea>
