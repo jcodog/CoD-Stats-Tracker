@@ -25,7 +25,9 @@ export class TwitchApiService {
   ): Promise<void> {
     const apiClient = await this.getApiClient()
 
-    await apiClient.chat.sendChatMessage(broadcasterId, message)
+    await apiClient.asUser(env.TWITCH_BOT_USER_ID, async (ctx) => {
+      await ctx.chat.sendChatMessage(broadcasterId, message)
+    })
   }
 
   public async sendWhisper(
@@ -34,10 +36,12 @@ export class TwitchApiService {
   ): Promise<void> {
     const apiClient = await this.getApiClient()
 
-    await apiClient.whispers.sendWhisper(
-      env.TWITCH_BOT_USER_ID,
-      recipientId,
-      message
-    )
+    await apiClient.asUser(env.TWITCH_BOT_USER_ID, async (ctx) => {
+      await ctx.whispers.sendWhisper(
+        env.TWITCH_BOT_USER_ID,
+        recipientId,
+        message
+      )
+    })
   }
 }
