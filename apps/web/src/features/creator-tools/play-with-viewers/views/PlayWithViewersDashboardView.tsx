@@ -104,6 +104,7 @@ import {
 } from "@workspace/ui/components/field"
 import { Input } from "@workspace/ui/components/input"
 import { ScrollArea } from "@workspace/ui/components/scroll-area"
+import { SidebarTrigger } from "@workspace/ui/components/sidebar"
 import {
   Sheet,
   SheetContent,
@@ -547,7 +548,7 @@ function ToolbarDivider() {
 
 function QueueLoadingState() {
   return (
-    <div className="flex flex-1 flex-col gap-4">
+    <div className="flex min-w-0 flex-1 flex-col gap-4 overflow-x-hidden px-4 py-4 md:px-6 lg:px-8">
       <div className="flex flex-col gap-3 border-b border-border/70 pb-4">
         <Skeleton className="h-8 w-56" />
         <div className="flex flex-wrap gap-2">
@@ -1657,45 +1658,48 @@ export function PlayWithViewersDashboardView({
       : "Use this list to contact the selected viewers directly on their platform."
 
   return (
-    <div className="flex flex-1 flex-col gap-4">
+    <div className="flex min-w-0 flex-1 flex-col gap-4 overflow-x-hidden px-4 py-4 md:px-6 lg:px-8">
       <header className="flex flex-col gap-3 border-b border-border/70 pb-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-          <div className="flex min-w-0 flex-col gap-2">
-            <h1 className="text-2xl font-semibold tracking-tight">
-              {pageTitle}
-            </h1>
-            <div className="flex flex-wrap items-center gap-2">
-              {queue ? (
-                <Badge variant={queue.isActive ? "default" : "outline"}>
-                  {queue.isActive ? "Active" : "Inactive"}
-                </Badge>
-              ) : (
-                <Badge variant="outline">Not configured</Badge>
-              )}
-              <Badge
-                variant={
-                  queue?.lastMessageSyncError
-                    ? "destructive"
-                    : queue?.messageId
-                      ? "secondary"
-                      : "outline"
-                }
-              >
-                {queue?.lastMessageSyncError
-                  ? "Discord sync issue"
-                  : queue?.messageId
-                    ? "Published"
-                    : "Not published"}
-              </Badge>
-              {twitchEnabled ? (
+          <div className="flex min-w-0 items-start gap-2">
+            <SidebarTrigger className="-ml-1 mt-0.5 shrink-0 md:hidden" />
+            <div className="flex min-w-0 flex-col gap-2">
+              <h1 className="text-2xl font-semibold tracking-tight">
+                {pageTitle}
+              </h1>
+              <div className="flex flex-wrap items-center gap-2">
+                {queue ? (
+                  <Badge variant={queue.isActive ? "default" : "outline"}>
+                    {queue.isActive ? "Active" : "Inactive"}
+                  </Badge>
+                ) : (
+                  <Badge variant="outline">Not configured</Badge>
+                )}
                 <Badge
-                  variant={hasTwitchLinked ? "secondary" : "destructive"}
+                  variant={
+                    queue?.lastMessageSyncError
+                      ? "destructive"
+                      : queue?.messageId
+                        ? "secondary"
+                        : "outline"
+                  }
                 >
-                  {hasTwitchLinked ? "Twitch linked" : "Twitch required"}
+                  {queue?.lastMessageSyncError
+                    ? "Discord sync issue"
+                    : queue?.messageId
+                      ? "Published"
+                      : "Not published"}
                 </Badge>
-              ) : (
-                <Badge variant="outline">Twitch bot disabled</Badge>
-              )}
+                {twitchEnabled ? (
+                  <Badge
+                    variant={hasTwitchLinked ? "secondary" : "destructive"}
+                  >
+                    {hasTwitchLinked ? "Twitch linked" : "Twitch required"}
+                  </Badge>
+                ) : (
+                  <Badge variant="outline">Twitch bot disabled</Badge>
+                )}
+              </div>
             </div>
           </div>
 
@@ -1708,15 +1712,17 @@ export function PlayWithViewersDashboardView({
           ) : null}
         </div>
 
-        <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
-          <span className="inline-flex items-center gap-1.5">
-            <IconBrandDiscord />
-            {discordContextLabel}
+        <div className="flex min-w-0 flex-wrap items-center gap-4 text-sm text-muted-foreground">
+          <span className="inline-flex min-w-0 max-w-full items-start gap-1.5">
+            <IconBrandDiscord className="mt-0.5 shrink-0" />
+            <span className="min-w-0 break-words">{discordContextLabel}</span>
           </span>
           {queue && twitchEnabled ? (
-            <span className="inline-flex items-center gap-1.5">
-              <IconBrandTwitch />
-              {hasTwitchLinked ? "Creator tools unlocked" : "Tools locked"}
+            <span className="inline-flex min-w-0 max-w-full items-start gap-1.5">
+              <IconBrandTwitch className="mt-0.5 shrink-0" />
+              <span className="min-w-0 break-words">
+                {hasTwitchLinked ? "Creator tools unlocked" : "Tools locked"}
+              </span>
             </span>
           ) : null}
         </div>

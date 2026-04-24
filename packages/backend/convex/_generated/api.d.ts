@@ -58,18 +58,6 @@ export declare const api: {
           },
           any
         >;
-        createSubscriptionIntent: FunctionReference<
-          "action",
-          "public",
-          {
-            attemptKey?: string;
-            creatorCode?: string;
-            interval: "month" | "year";
-            planKey: string;
-            preferredCurrency?: "GBP" | "USD" | "CAD" | "EUR";
-          },
-          any
-        >;
         getPublicPricingCatalog: FunctionReference<
           "action",
           "public",

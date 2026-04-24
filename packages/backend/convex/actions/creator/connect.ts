@@ -5,7 +5,6 @@ import type { Id } from "../../_generated/dataModel"
 import { action, type ActionCtx } from "../../_generated/server"
 import { getConvexEnv } from "../../env"
 import {
-  buildCreatorConnectedAccountCreateParams,
   createStripeAccountLinkV2,
   createStripeRecipientAccountV2,
   isStripeV2CompatibilityError,

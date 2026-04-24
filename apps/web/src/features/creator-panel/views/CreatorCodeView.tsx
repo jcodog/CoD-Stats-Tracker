@@ -30,12 +30,6 @@ import {
 } from "@workspace/ui/components/alert"
 import { Button } from "@workspace/ui/components/button"
 import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyTitle,
-} from "@workspace/ui/components/empty"
-import {
   Field,
   FieldDescription,
   FieldGroup,
@@ -152,14 +146,16 @@ export function CreatorCodeView() {
       <div className="flex flex-1 flex-col">
         <CreatorConsoleHeader description={pageDescription} />
         <div className="px-4 py-6 md:px-6 lg:px-8">
-          <Empty>
-            <EmptyHeader>
-              <EmptyTitle>No creator code configured</EmptyTitle>
-              <EmptyDescription>
+          <section className="grid max-w-3xl gap-4 border-y border-border/60 py-5">
+            <div className="grid gap-2">
+              <h2 className="text-lg font-semibold tracking-tight">
+                No creator code configured
+              </h2>
+              <p className="text-sm text-muted-foreground">
                 This account can access creator tools, but the creator profile
                 has not been provisioned yet.
-              </EmptyDescription>
-            </EmptyHeader>
+              </p>
+            </div>
             <div className="flex flex-wrap gap-2">
               <Button asChild size="sm">
                 <Link href="/creator">Back to creator home</Link>
@@ -170,7 +166,7 @@ export function CreatorCodeView() {
                 </Link>
               </Button>
             </div>
-          </Empty>
+          </section>
         </div>
       </div>
     )

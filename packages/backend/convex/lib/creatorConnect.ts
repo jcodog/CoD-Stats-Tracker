@@ -1,43 +1,6 @@
-import type Stripe from "stripe"
-
 import type { Id } from "../_generated/dataModel"
 import { getConvexEnv } from "../env"
 import { STRIPE_CATALOG_APP } from "./stripe"
-
-export function buildCreatorConnectedAccountCreateParams(args: {
-  clerkUserId: string
-  country: string
-  creatorAccountId: Id<"creatorAccounts">
-  creatorCode: string
-  email?: string
-  userId: Id<"users">
-}): Stripe.AccountCreateParams {
-  return {
-    capabilities: {
-      transfers: {
-        requested: true,
-      },
-    },
-    controller: {
-      fees: { payer: "application" },
-      losses: { payments: "application" },
-      requirement_collection: "application",
-      stripe_dashboard: { type: "none" },
-    },
-    country: args.country,
-    email: args.email,
-    metadata: {
-      app: STRIPE_CATALOG_APP,
-      clerkUserId: args.clerkUserId,
-      creatorAccountId: args.creatorAccountId,
-      creatorCode: args.creatorCode,
-      userId: args.userId,
-    },
-    tos_acceptance: {
-      service_agreement: "recipient",
-    },
-  }
-}
 
 export type StripeV2AccountLink = {
   account: string

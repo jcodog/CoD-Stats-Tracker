@@ -233,21 +233,6 @@ export type BillingCenterInvoice = {
   stripeInvoiceId: string
 }
 
-export type CheckoutIntentResult = {
-  alreadyExists: boolean
-  clientSecret?: string
-  creatorCode?: string | null
-  currency?: SupportedPricingCurrency
-  currencyNotice?: string | null
-  customerSessionClientSecret?: string
-  defaultBillingEmail?: string
-  interval: BillingInterval
-  planKey: string
-  requiresConfirmation: boolean
-  secretType: "none" | "payment_intent" | "setup_intent"
-  status: string
-}
-
 export type CheckoutSessionResult = {
   clientSecret: string
   creatorCode?: string | null

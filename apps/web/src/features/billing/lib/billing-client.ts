@@ -14,7 +14,6 @@ import type {
   BillingProfileUpdateResult,
   BillingResolvedState,
   CancellationResult,
-  CheckoutIntentResult,
   CheckoutSessionResult,
   CheckoutQuoteResult,
   PaymentMethodMutationResult,
@@ -26,7 +25,6 @@ import { billingQueryKeys } from "@/features/billing/lib/billing-query-keys"
 import type {
   CancelSubscriptionInput,
   CreateSubscriptionCheckoutSessionInput,
-  CreateSubscriptionIntentInput,
   PaymentMethodActionInput,
   PreviewCheckoutQuoteInput,
   SubscriptionChangeInput,
@@ -36,7 +34,6 @@ import type {
 import {
   cancelSubscriptionSchema,
   createSubscriptionCheckoutSessionSchema,
-  createSubscriptionIntentSchema,
   paymentMethodActionSchema,
   previewCheckoutQuoteSchema,
   subscriptionChangeSchema,
@@ -135,22 +132,6 @@ async function callSyncBillingCenter(convex: ConvexReactClient) {
       api.actions.billing.customer.syncBillingCenter,
       {}
     )) as BillingCenterSyncResult
-  } catch (error) {
-    throw toBillingClientError(error)
-  }
-}
-
-async function callCreateSubscriptionIntent(
-  convex: ConvexReactClient,
-  input: CreateSubscriptionIntentInput
-) {
-  const payload = createSubscriptionIntentSchema.parse(input)
-
-  try {
-    return (await convex.action(
-      api.actions.billing.customer.createSubscriptionIntent,
-      payload
-    )) as CheckoutIntentResult
   } catch (error) {
     throw toBillingClientError(error)
   }
@@ -382,19 +363,6 @@ export function useSyncBillingCenter() {
 
   return useMutation({
     mutationFn: () => callSyncBillingCenter(convex),
-    onSuccess: async () => {
-      await invalidateBilling.invalidateAll()
-    },
-  })
-}
-
-export function useCreateSubscriptionIntent() {
-  const convex = useConvex()
-  const invalidateBilling = useInvalidateBillingQueries()
-
-  return useMutation({
-    mutationFn: (input: CreateSubscriptionIntentInput) =>
-      callCreateSubscriptionIntent(convex, input),
     onSuccess: async () => {
       await invalidateBilling.invalidateAll()
     },

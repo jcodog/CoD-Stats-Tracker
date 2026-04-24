@@ -136,7 +136,11 @@ export function hasManagedCreatorGrantSubscriptionAccess(
 export function isManageableSubscriptionStatus(
   status: BillingSubscriptionStatus
 ) {
-  return status !== "canceled" && status !== "incomplete_expired"
+  return (
+    status !== "canceled" &&
+    status !== "incomplete_expired" &&
+    status !== "unpaid"
+  )
 }
 
 export function isManageableBillingSubscription(

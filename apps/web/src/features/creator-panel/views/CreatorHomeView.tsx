@@ -24,12 +24,6 @@ import {
   AlertTitle,
 } from "@workspace/ui/components/alert"
 import { Button } from "@workspace/ui/components/button"
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyTitle,
-} from "@workspace/ui/components/empty"
 import { Skeleton } from "@workspace/ui/components/skeleton"
 
 function CreatorHomeLoadingState() {
@@ -115,14 +109,16 @@ export function CreatorHomeView() {
       <div className="flex flex-1 flex-col">
         <CreatorConsoleHeader description={pageDescription} />
         <div className="px-4 py-6 md:px-6 lg:px-8">
-          <Empty>
-            <EmptyHeader>
-              <EmptyTitle>Creator profile not configured</EmptyTitle>
-              <EmptyDescription>
+          <section className="grid max-w-3xl gap-4 border-y border-border/60 py-5">
+            <div className="grid gap-2">
+              <h2 className="text-lg font-semibold tracking-tight">
+                Creator profile not configured
+              </h2>
+              <p className="text-sm text-muted-foreground">
                 Creator tools are available on this account, but the referral
                 code profile has not been created yet.
-              </EmptyDescription>
-            </EmptyHeader>
+              </p>
+            </div>
             <div className="flex flex-wrap gap-2">
               <Button asChild size="sm">
                 <Link href="/creator/tools/playing-with-viewers">
@@ -133,7 +129,7 @@ export function CreatorHomeView() {
                 <Link href="/dashboard">Back to dashboard</Link>
               </Button>
             </div>
-          </Empty>
+          </section>
         </div>
       </div>
     )

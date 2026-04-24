@@ -120,7 +120,6 @@ export function UpgradePlanView({
   }
 
   if (
-    billingStateQuery.data.accessSource === "paid_subscription" &&
     billingStateQuery.data.subscription &&
     ["active", "trialing", "past_due", "paused"].includes(
       billingStateQuery.data.subscription.status

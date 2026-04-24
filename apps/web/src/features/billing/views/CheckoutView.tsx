@@ -61,7 +61,6 @@ function getSelectedPlan(
 }
 
 function hasActivePaidSubscription(args: {
-  accessSource: string | null | undefined
   status:
     | "active"
     | "canceled"
@@ -75,7 +74,6 @@ function hasActivePaidSubscription(args: {
     | undefined
 }) {
   return (
-    args.accessSource === "paid_subscription" &&
     (args.status === "active" ||
       args.status === "trialing" ||
       args.status === "past_due" ||
@@ -332,8 +330,19 @@ export function CheckoutView({
       (plan) => plan.planType === "paid" && plan.active
     ) ?? []
   const selectedPlan = getSelectedPlan(paidPlans, initialPlanKey)
+  const billingState = billingStateQuery.data
+  const hasCreatorGrantAccess =
+    (billingState?.accessSource === "creator_grant" ||
+      billingState?.accessSource === "managed_grant_subscription") &&
+    billingState.hasCreatorAccess
+  const hasPaidAccess = hasActivePaidSubscription({
+    status: billingState?.subscription?.status,
+  })
   const checkoutQuoteQuery = useCheckoutQuote(
-    selectedPlan
+    selectedPlan &&
+      billingState !== undefined &&
+      !hasCreatorGrantAccess &&
+      !hasPaidAccess
       ? {
           creatorCode: submittedCreatorCode,
           interval: initialInterval,
@@ -342,19 +351,11 @@ export function CheckoutView({
         }
       : null
   )
-  const billingState = billingStateQuery.data
-  const hasCreatorGrantAccess =
-    (billingState?.accessSource === "creator_grant" ||
-      billingState?.accessSource === "managed_grant_subscription") &&
-    billingState.hasCreatorAccess
-  const hasPaidAccess = hasActivePaidSubscription({
-    accessSource: billingState?.accessSource,
-    status: billingState?.subscription?.status,
-  })
 
   useEffect(() => {
     if (
       !checkoutEnabled ||
+      billingState === undefined ||
       !selectedPlan ||
       !getStripePublishableKey() ||
       hasCreatorGrantAccess ||
@@ -396,6 +397,7 @@ export function CheckoutView({
   }, [
     checkoutEnabled,
     createCheckoutSession,
+    billingState,
     hasCreatorGrantAccess,
     hasPaidAccess,
     initialInterval,
