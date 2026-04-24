@@ -1081,7 +1081,7 @@ function buildCreatorProgramRows(args: {
         payoutsEnabled: creatorAccount.payoutsEnabled ?? null,
         pendingVerificationCount:
           creatorAccount.requirementsPendingVerification?.length ?? 0,
-        sharePath: `/pricing?creator=${encodeURIComponent(creatorAccount.code)}`,
+        sharePath: `/?creator=${encodeURIComponent(creatorAccount.code)}`,
         signupCount: attributedUserIds.length,
         userId: creatorAccount.userId,
         userName: user?.name ?? creatorAccount.clerkUserId,

@@ -102,7 +102,7 @@ export const getCurrentCreatorDashboard = query({
         requirementsPastDue: creatorAccount.requirementsPastDue ?? [],
         requirementsPendingVerification:
           creatorAccount.requirementsPendingVerification ?? [],
-        sharePath: `/pricing?creator=${encodeURIComponent(creatorAccount.code)}`,
+        sharePath: `/?creator=${encodeURIComponent(creatorAccount.code)}`,
         stripeConnectedAccountId:
           creatorAccount.stripeConnectedAccountId ?? null,
       },

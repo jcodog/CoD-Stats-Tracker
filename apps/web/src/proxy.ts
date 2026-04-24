@@ -1,4 +1,13 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server"
+import { NextResponse } from "next/server"
+
+import {
+  CREATOR_ATTRIBUTION_COOKIE_NAME,
+  CREATOR_ATTRIBUTION_QUERY_PARAM,
+  createSignedCreatorAttributionValue,
+  getCreatorAttributionCookieOptions,
+  normalizeCreatorCode,
+} from "@/lib/creator-attribution-cookie"
 
 // ChatGPT App endpoints must not require Clerk session.
 export const CHATGPT_APP_PUBLIC_ROUTE_PATTERNS = [
@@ -53,6 +62,29 @@ export default clerkMiddleware(async (auth, req) => {
   if (!isPublicRoute(req)) {
     await auth.protect()
   }
+
+  const creatorCode = normalizeCreatorCode(
+    req.nextUrl.searchParams.get(CREATOR_ATTRIBUTION_QUERY_PARAM)
+  )
+
+  if (!creatorCode) {
+    return
+  }
+
+  const signedValue = await createSignedCreatorAttributionValue(creatorCode)
+
+  if (!signedValue) {
+    return
+  }
+
+  const response = NextResponse.next()
+  response.cookies.set(
+    CREATOR_ATTRIBUTION_COOKIE_NAME,
+    signedValue,
+    getCreatorAttributionCookieOptions()
+  )
+
+  return response
 })
 
 export const config = {

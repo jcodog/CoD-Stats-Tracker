@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { startTransition, useState } from "react"
+import { startTransition, useEffect, useState } from "react"
 import { useMutation, useQuery } from "convex/react"
 import { useSearchParams } from "next/navigation"
 import {
@@ -113,6 +113,11 @@ export function CreatorCodeView() {
   )
   const searchParams = useSearchParams()
   const [isSaving, setIsSaving] = useState(false)
+  const [shareOrigin, setShareOrigin] = useState("")
+
+  useEffect(() => {
+    setShareOrigin(window.location.origin)
+  }, [])
 
   if (dashboard === undefined) {
     return (
@@ -149,21 +154,22 @@ export function CreatorCodeView() {
           <section className="grid max-w-3xl gap-4 border-y border-border/60 py-5">
             <div className="grid gap-2">
               <h2 className="text-lg font-semibold tracking-tight">
-                No creator code configured
+                Complete creator onboarding
               </h2>
               <p className="text-sm text-muted-foreground">
-                This account can access creator tools, but the creator profile
-                has not been provisioned yet.
+                Set up your creator code and Stripe Connect account to start
+                sharing your creator link and preparing payouts.
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
               <Button asChild size="sm">
-                <Link href="/creator">Back to creator home</Link>
+                <Link href="/creator/connect/start">
+                  <IconExternalLink data-icon="inline-start" />
+                  Complete creator onboarding
+                </Link>
               </Button>
               <Button asChild size="sm" variant="outline">
-                <Link href="/creator/tools/playing-with-viewers">
-                  Open playing with viewers
-                </Link>
+                <Link href="/creator">Back to creator home</Link>
               </Button>
             </div>
           </section>
@@ -184,6 +190,7 @@ export function CreatorCodeView() {
     payoutEligible: dashboard.creatorAccount.payoutEligible,
   })
   const sharePath = dashboard.creatorAccount.sharePath
+  const shareUrl = shareOrigin ? `${shareOrigin}${sharePath}` : sharePath
   const connectIntent = searchParams.get("connect")
   const connectMessage = searchParams.get("message")
   const connectActionLabel =
@@ -199,7 +206,6 @@ export function CreatorCodeView() {
   }
 
   async function handleCopyShareLink() {
-    const shareUrl = `${window.location.origin}${sharePath}`
     await navigator.clipboard.writeText(shareUrl)
     toast.success("Share link copied.")
   }
@@ -333,11 +339,11 @@ export function CreatorCodeView() {
                 </FieldDescription>
               </Field>
               <Field>
-                <FieldLabel htmlFor="creator-link">Share path</FieldLabel>
-                <Input id="creator-link" readOnly value={sharePath} />
+                <FieldLabel htmlFor="creator-link">Share link</FieldLabel>
+                <Input id="creator-link" readOnly value={shareUrl} />
                 <FieldDescription>
-                  The copied share URL uses the current site origin together
-                  with this path.
+                  This link works from the landing page, sign-up, pricing, and
+                  checkout flows.
                 </FieldDescription>
               </Field>
             </FieldGroup>

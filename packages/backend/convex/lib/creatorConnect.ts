@@ -151,9 +151,6 @@ export async function createStripeRecipientAccountV2(args: {
         recipient: {
           capabilities: {
             stripe_balance: {
-              payouts: {
-                requested: true,
-              },
               stripe_transfers: {
                 requested: true,
               },
@@ -167,12 +164,12 @@ export async function createStripeRecipientAccountV2(args: {
         responsibilities: {
           fees_collector: "application",
           losses_collector: "application",
-          requirements_collector: "stripe",
         },
       },
       display_name: args.displayName,
       identity: {
         country: args.country.toLowerCase(),
+        entity_type: "individual",
       },
       include: STRIPE_V2_ACCOUNT_INCLUDE,
       metadata: {
@@ -199,7 +196,7 @@ export async function retrieveStripeAccountV2(accountId: string) {
   const searchParams = new URLSearchParams()
 
   for (const includeValue of STRIPE_V2_ACCOUNT_INCLUDE) {
-    searchParams.append("include[]", includeValue)
+    searchParams.append("include", includeValue)
   }
 
   return await callStripeV2Api<StripeV2Account>({

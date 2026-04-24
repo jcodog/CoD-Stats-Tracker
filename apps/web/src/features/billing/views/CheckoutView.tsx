@@ -298,12 +298,14 @@ function CheckoutElementsContent({
 export function CheckoutView({
   checkoutEnabled,
   initialInterval,
+  initialCreatorCode,
   initialPlanKey,
   preferredCurrency,
   viewport = "desktop",
 }: {
   checkoutEnabled: boolean
   initialInterval: BillingInterval
+  initialCreatorCode?: string | null
   initialPlanKey: string
   preferredCurrency: SupportedPricingCurrency
   viewport?: RequestViewport
@@ -313,10 +315,12 @@ export function CheckoutView({
   const catalogQuery = usePricingCatalog(preferredCurrency)
   const billingStateQuery = useBillingState()
   const createCheckoutSession = useCreateSubscriptionCheckoutSession()
-  const [creatorCodeInput, setCreatorCodeInput] = useState("")
+  const [creatorCodeInput, setCreatorCodeInput] = useState(
+    initialCreatorCode ?? ""
+  )
   const [submittedCreatorCode, setSubmittedCreatorCode] = useState<
     string | undefined
-  >(undefined)
+  >(initialCreatorCode ?? undefined)
   const [sessionNonce, setSessionNonce] = useState(0)
   const [checkoutSession, setCheckoutSession] =
     useState<CheckoutSessionResult | null>(null)

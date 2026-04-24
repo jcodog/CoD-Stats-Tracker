@@ -262,8 +262,11 @@ function getRecipientTransferCapability(account: StripeAccountV2) {
 }
 
 function getRecipientPayoutCapability(account: StripeAccountV2) {
+  const capabilities = account.configuration?.recipient?.capabilities
+
   return (
-    account.configuration?.recipient?.capabilities?.stripe_balance?.payouts ??
+    capabilities?.stripe_balance?.payouts ??
+    capabilities?.stripe_balance?.stripe_transfers ??
     null
   )
 }

@@ -1,7 +1,7 @@
 "use node"
 
 import { internal } from "../../_generated/api"
-import type { Id } from "../../_generated/dataModel"
+import type { Doc, Id } from "../../_generated/dataModel"
 import { action, type ActionCtx } from "../../_generated/server"
 import { getConvexEnv } from "../../env"
 import {
@@ -11,9 +11,12 @@ import {
   retrieveStripeAccountV2,
 } from "../../lib/creatorConnect"
 import {
+  buildCreatorCodeSeed,
   DEFAULT_CREATOR_PROGRAM_DEFAULTS,
+  hasCreatorWorkspaceAccess,
   mapStripeConnectedAccountV2Snapshot,
   mapStripeConnectedAccountSnapshot,
+  normalizeCreatorCode,
   normalizeCreatorCountry,
 } from "../../lib/creatorProgram"
 import { getClerkBackendClient } from "../../lib/clerk"
@@ -51,7 +54,100 @@ function getAppPublicOrigin() {
   }
 }
 
-async function requireCurrentCreatorConnectContext(ctx: ActionCtx) {
+function buildCreatorCodeBase(args: {
+  email?: string
+  fallback: string
+  name?: string | null
+}) {
+  const emailLocalPart = args.email?.split("@")[0]
+  const seed =
+    buildCreatorCodeSeed(args.name) ||
+    buildCreatorCodeSeed(emailLocalPart) ||
+    buildCreatorCodeSeed(args.fallback) ||
+    "CREATOR"
+
+  return seed.length >= 3 ? seed : `${seed}COD`.slice(0, 3)
+}
+
+async function buildAvailableCreatorCode(ctx: ActionCtx, base: string) {
+  for (let attempt = 0; attempt < 25; attempt += 1) {
+    const suffix = attempt === 0 ? "" : String(attempt + 1)
+    const candidate = normalizeCreatorCode(
+      `${base.slice(0, 24 - suffix.length)}${suffix}`
+    )
+
+    if (!candidate) {
+      continue
+    }
+
+    const existingAccount = await ctx.runQuery(
+      internal.queries.creator.internal.getCreatorAccountByNormalizedCode,
+      {
+        normalizedCode: candidate,
+      }
+    )
+
+    if (!existingAccount) {
+      return candidate
+    }
+  }
+
+  throw new Error("Unable to generate an available creator code.")
+}
+
+async function createCreatorAccountFromDefaults(args: {
+  ctx: ActionCtx
+  email?: string
+  user: Doc<"users">
+}) {
+  const defaults =
+    (await args.ctx.runQuery(
+      internal.queries.creator.internal.getCreatorProgramDefaults,
+      {}
+    )) ?? DEFAULT_CREATOR_PROGRAM_DEFAULTS
+  const country = normalizeCreatorCountry(defaults.defaultCountry)
+
+  if (!country) {
+    throw new Error(
+      "Creator country is not configured. Update creator program defaults before starting Stripe onboarding."
+    )
+  }
+
+  const code = await buildAvailableCreatorCode(
+    args.ctx,
+    buildCreatorCodeBase({
+      email: args.email,
+      fallback: args.user.clerkUserId,
+      name: args.user.name,
+    })
+  )
+  const creatorAccount = await args.ctx.runMutation(
+    internal.mutations.creator.internal.upsertCreatorAccount,
+    {
+      clerkUserId: args.user.clerkUserId,
+      code,
+      codeActive: defaults.defaultCodeActive,
+      country,
+      discountPercent: defaults.defaultDiscountPercent,
+      payoutEligible: defaults.defaultPayoutEligible,
+      payoutPercent: defaults.defaultPayoutPercent,
+      userId: args.user._id,
+    }
+  )
+
+  if (!creatorAccount) {
+    throw new Error("Unable to create creator profile.")
+  }
+
+  return creatorAccount
+}
+
+async function requireCurrentCreatorConnectContext(
+  ctx: ActionCtx,
+  options?: {
+    createIfMissing?: boolean
+  }
+) {
   const identity = await ctx.auth.getUserIdentity()
 
   if (!identity) {
@@ -69,7 +165,7 @@ async function requireCurrentCreatorConnectContext(ctx: ActionCtx) {
     throw new Error("User not found.")
   }
 
-  const creatorAccount = await ctx.runQuery(
+  let creatorAccount = await ctx.runQuery(
     internal.queries.creator.internal.getCreatorAccountByUserId,
     {
       userId: user._id,
@@ -77,7 +173,37 @@ async function requireCurrentCreatorConnectContext(ctx: ActionCtx) {
   )
 
   if (!creatorAccount) {
-    throw new Error("Creator profile not configured.")
+    if (!options?.createIfMissing) {
+      throw new Error("Creator profile not configured.")
+    }
+
+    const billingState = await ctx.runQuery(
+      internal.queries.billing.resolution.resolveUserPlanState,
+      {
+        userId: user._id,
+      }
+    )
+
+    if (
+      !hasCreatorWorkspaceAccess({
+        fallbackPlanKey: user.plan,
+        state: billingState,
+        userRole: user.role,
+      })
+    ) {
+      throw new Error("Creator workspace access is required.")
+    }
+
+    const clerkUser = await getClerkBackendClient().users.getUser(
+      identity.subject
+    )
+    const creatorEmail = getPrimaryEmail(clerkUser)
+
+    creatorAccount = await createCreatorAccountFromDefaults({
+      ctx,
+      email: creatorEmail,
+      user,
+    })
   }
 
   return {
@@ -154,7 +280,9 @@ export const startHostedOnboarding = action({
   args: {},
   handler: async (ctx) => {
     const { creatorAccount, identity, user } =
-      await requireCurrentCreatorConnectContext(ctx)
+      await requireCurrentCreatorConnectContext(ctx, {
+        createIfMissing: true,
+      })
     const stripe = getStripe()
     const appOrigin = getAppPublicOrigin()
     const country =
