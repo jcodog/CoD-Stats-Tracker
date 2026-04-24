@@ -1,4 +1,5 @@
 import type { AppPlanKey } from "./billingAccess"
+import type { CreatorConnectState } from "./creatorProgram"
 import type {
   AuditLogResult,
   BillingFeatureApplyMode,
@@ -83,7 +84,12 @@ export type StaffManagementDashboard = {
 }
 
 export type StaffSubscriptionImpactRow = {
-  attentionStatus?: "none" | "past_due" | "paused" | "payment_failed" | "requires_action"
+  attentionStatus?:
+    | "none"
+    | "past_due"
+    | "paused"
+    | "payment_failed"
+    | "requires_action"
   cancelAt?: number
   cancelAtPeriodEnd: boolean
   clerkUserId: string
@@ -197,6 +203,42 @@ export type StaffCreatorGrantRecord = {
   userName: string
 }
 
+export type StaffCreatorProgramDefaultsRecord = {
+  defaultCodeActive: boolean
+  defaultCountry: string
+  defaultDiscountPercent: number
+  defaultPayoutEligible: boolean
+  defaultPayoutPercent: number
+}
+
+export type StaffCreatorProgramAccountRecord = {
+  accessSource: StaffBillingAccessSource
+  clerkUserId: string
+  code: string
+  codeActive: boolean
+  connectDisabledReason?: string | null
+  connectRequirementsDue: string[]
+  connectState: CreatorConnectState
+  connectStatusUpdatedAt?: number
+  country: string
+  currentAppPlanKey: AppPlanKey
+  currentPlanKey?: string | null
+  detailsSubmitted?: boolean | null
+  discountPercent: number
+  email?: string
+  hasConnectedAccount: boolean
+  id: string
+  paidConversionCount: number
+  payoutEligible: boolean
+  payoutPercent: number
+  payoutsEnabled?: boolean | null
+  pendingVerificationCount: number
+  sharePath: string
+  signupCount: number
+  userId: string
+  userName: string
+}
+
 export type StaffWebhookEventRecord = {
   customerId?: string
   errorMessage?: string
@@ -205,7 +247,12 @@ export type StaffWebhookEventRecord = {
   invoiceId?: string
   paymentIntentId?: string
   processedAt?: number
-  processingStatus: "failed" | "ignored" | "processed" | "processing" | "received"
+  processingStatus:
+    | "failed"
+    | "ignored"
+    | "processed"
+    | "processing"
+    | "received"
   receivedAt: number
   safeSummary: string
   subscriptionId?: string
@@ -228,10 +275,7 @@ export type StaffWebhookMetrics = {
   timeline: StaffWebhookTimelinePoint[]
 }
 
-export type StaffWebhookPayloadState =
-  | "available"
-  | "missing"
-  | "unavailable"
+export type StaffWebhookPayloadState = "available" | "missing" | "unavailable"
 
 export type StaffWebhookLedgerRecord = {
   customerId?: string
@@ -243,7 +287,12 @@ export type StaffWebhookLedgerRecord = {
   payloadUnavailableReason?: string
   paymentIntentId?: string
   processedAt?: number
-  processingStatus: "failed" | "ignored" | "processed" | "processing" | "received"
+  processingStatus:
+    | "failed"
+    | "ignored"
+    | "processed"
+    | "processing"
+    | "received"
   receivedAt: number
   safeSummary: string
   stripeEventId: string
@@ -278,6 +327,8 @@ export type StaffBillingDashboard = {
   assignments: StaffBillingAssignmentRecord[]
   auditLogs: StaffAuditLogEntry[]
   creatorGrants: StaffCreatorGrantRecord[]
+  creatorProgramAccounts: StaffCreatorProgramAccountRecord[]
+  creatorProgramDefaults: StaffCreatorProgramDefaultsRecord | null
   customers: StaffBillingCustomerRecord[]
   features: StaffBillingFeatureRecord[]
   generatedAt: number

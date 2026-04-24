@@ -736,6 +736,8 @@ export type DataModel = {
       clerkUserId: string;
       code: string;
       codeActive: boolean;
+      connectStatusUpdatedAt?: number;
+      country: string;
       createdAt: number;
       detailsSubmitted?: boolean;
       discountPercent: number;
@@ -743,8 +745,13 @@ export type DataModel = {
       payoutEligible: boolean;
       payoutPercent: number;
       payoutsEnabled?: boolean;
+      requirementsCurrentlyDue?: Array<string>;
+      requirementsDisabledReason?: string;
       requirementsDue?: Array<string>;
+      requirementsPastDue?: Array<string>;
+      requirementsPendingVerification?: Array<string>;
       stripeConnectedAccountId?: string;
+      stripeConnectedAccountVersion?: "v1" | "v2";
       updatedAt: number;
       userId: Id<"users">;
       _id: Id<"creatorAccounts">;
@@ -757,6 +764,8 @@ export type DataModel = {
       | "clerkUserId"
       | "code"
       | "codeActive"
+      | "connectStatusUpdatedAt"
+      | "country"
       | "createdAt"
       | "detailsSubmitted"
       | "discountPercent"
@@ -764,8 +773,13 @@ export type DataModel = {
       | "payoutEligible"
       | "payoutPercent"
       | "payoutsEnabled"
+      | "requirementsCurrentlyDue"
+      | "requirementsDisabledReason"
       | "requirementsDue"
+      | "requirementsPastDue"
+      | "requirementsPendingVerification"
       | "stripeConnectedAccountId"
+      | "stripeConnectedAccountVersion"
       | "updatedAt"
       | "userId";
     indexes: {
@@ -773,6 +787,10 @@ export type DataModel = {
       by_creation_time: ["_creationTime"];
       by_clerkUserId: ["clerkUserId", "_creationTime"];
       by_normalizedCode: ["normalizedCode", "_creationTime"];
+      by_stripeConnectedAccountId: [
+        "stripeConnectedAccountId",
+        "_creationTime",
+      ];
       by_userId: ["userId", "_creationTime"];
     };
     searchIndexes: {};
@@ -816,6 +834,38 @@ export type DataModel = {
       by_normalizedCode: ["normalizedCode", "_creationTime"];
       by_userId: ["userId", "_creationTime"];
       by_userId_active: ["userId", "active", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  creatorProgramDefaults: {
+    document: {
+      createdAt: number;
+      defaultCodeActive: boolean;
+      defaultCountry: string;
+      defaultDiscountPercent: number;
+      defaultPayoutEligible: boolean;
+      defaultPayoutPercent: number;
+      key: "global";
+      updatedAt: number;
+      _id: Id<"creatorProgramDefaults">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "createdAt"
+      | "defaultCodeActive"
+      | "defaultCountry"
+      | "defaultDiscountPercent"
+      | "defaultPayoutEligible"
+      | "defaultPayoutPercent"
+      | "key"
+      | "updatedAt";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_key: ["key", "_creationTime"];
     };
     searchIndexes: {};
     vectorIndexes: {};

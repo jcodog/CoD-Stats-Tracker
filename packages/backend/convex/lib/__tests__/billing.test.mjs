@@ -95,6 +95,7 @@ describe("billing helpers", () => {
 
     expect(isManageableSubscriptionStatus("active")).toBe(true);
     expect(isManageableSubscriptionStatus("canceled")).toBe(false);
+    expect(isManageableSubscriptionStatus("unpaid")).toBe(false);
     expect(
       isManageableBillingSubscription(
         {
@@ -108,6 +109,15 @@ describe("billing helpers", () => {
       isManageableBillingSubscription(
         {
           status: "incomplete_expired",
+          currentPeriodEnd: now + 60_000,
+        },
+        now,
+      ),
+    ).toBe(false);
+    expect(
+      isManageableBillingSubscription(
+        {
+          status: "unpaid",
           currentPeriodEnd: now + 60_000,
         },
         now,

@@ -5,7 +5,7 @@ import { auth } from "@clerk/nextjs/server"
 import { fetchQuery } from "convex/nextjs"
 
 import { api } from "@workspace/backend/convex/_generated/api"
-import { hasCreatorAccessFromState } from "@workspace/backend/convex/lib/billingAccess"
+import { hasCreatorWorkspaceAccess } from "@workspace/backend/convex/lib/creatorProgram"
 
 type CreatorToolsAccessState = {
   hasCreatorAccess: boolean
@@ -32,7 +32,12 @@ export const getCreatorToolsAccessState = cache(
       }
     }
 
-    const [dbUser, billingState] = await Promise.all([
+    const [creatorWorkspaceState, dbUser, billingState] = await Promise.all([
+      fetchQuery(
+        api.queries.creator.dashboard.getCurrentCreatorWorkspaceState,
+        {},
+        { token }
+      ),
       fetchQuery(api.queries.users.current, {}, { token }),
       fetchQuery(
         api.queries.billing.resolution.getCurrentUserResolvedBillingState,
@@ -42,9 +47,12 @@ export const getCreatorToolsAccessState = cache(
     ])
 
     return {
-      hasCreatorAccess: hasCreatorAccessFromState({
-        fallbackPlanKey: dbUser?.plan,
+      hasCreatorAccess: hasCreatorWorkspaceAccess({
+        fallbackPlanKey:
+          billingState?.accessSource === "legacy_plan" ? dbUser?.plan : undefined,
+        hasCreatorAccount: creatorWorkspaceState.hasCreatorAccount,
         state: billingState,
+        userRole: dbUser?.role ?? null,
       }),
       isSignedIn: true,
     }

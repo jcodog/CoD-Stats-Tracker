@@ -1,7 +1,7 @@
 import type { Id } from "../_generated/dataModel"
 import type { MutationCtx, QueryCtx } from "../_generated/server"
-import { hasCreatorAccessFromState } from "./billingAccess"
 import { buildResolvedBillingState } from "../queries/billing/resolution"
+import { hasCreatorWorkspaceAccess } from "./creatorProgram"
 
 type CreatorToolsDataCtx =
   | Pick<QueryCtx, "auth" | "db">
@@ -16,7 +16,9 @@ async function getCurrentUserRecord(ctx: CreatorToolsDataCtx) {
 
   const user = await ctx.db
     .query("users")
-    .withIndex("by_clerkUserId", (query) => query.eq("clerkUserId", identity.subject))
+    .withIndex("by_clerkUserId", (query) =>
+      query.eq("clerkUserId", identity.subject)
+    )
     .unique()
 
   if (!user) {
@@ -29,17 +31,29 @@ async function getCurrentUserRecord(ctx: CreatorToolsDataCtx) {
   }
 }
 
-export async function requireCreatorToolsViewerAccess(ctx: CreatorToolsDataCtx) {
+export async function requireCreatorToolsViewerAccess(
+  ctx: CreatorToolsDataCtx
+) {
   const actor = await getCurrentUserRecord(ctx)
-  const billingState = await buildResolvedBillingState(ctx, actor.user)
+  const [billingState, creatorAccount] = await Promise.all([
+    buildResolvedBillingState(ctx, actor.user),
+    ctx.db
+      .query("creatorAccounts")
+      .withIndex("by_userId", (query) => query.eq("userId", actor.user._id))
+      .unique(),
+  ])
 
   if (
-    !hasCreatorAccessFromState({
+    !hasCreatorWorkspaceAccess({
       fallbackPlanKey: actor.user.plan,
+      hasCreatorAccount: Boolean(creatorAccount),
       state: billingState,
+      userRole: actor.user.role,
     })
   ) {
-    throw new Error("Creator plan access is required for Play With Viewers.")
+    throw new Error(
+      "Creator workspace access is required for Play With Viewers."
+    )
   }
 
   return {

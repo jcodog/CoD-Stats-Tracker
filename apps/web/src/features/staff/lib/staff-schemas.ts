@@ -55,6 +55,12 @@ export const billingActionSchema = z.discriminatedUnion("action", [
     input: z.object({}).optional().default({}),
   }),
   z.object({
+    action: z.literal("prepareCreatorProgramConnectAccount"),
+    input: z.object({
+      targetUserId: z.string().min(1),
+    }),
+  }),
+  z.object({
     action: z.literal("previewFeatureArchive"),
     input: z.object({
       featureKey: catalogKeySchema,
@@ -96,6 +102,12 @@ export const billingActionSchema = z.discriminatedUnion("action", [
     }),
   }),
   z.object({
+    action: z.literal("refreshCreatorProgramConnectStatus"),
+    input: z.object({
+      targetUserId: z.string().min(1),
+    }),
+  }),
+  z.object({
     action: z.literal("replacePlanPrice"),
     input: z.object({
       amount: z.number().int().nonnegative(),
@@ -128,6 +140,28 @@ export const billingActionSchema = z.discriminatedUnion("action", [
       enabled: z.boolean(),
       featureKey: catalogKeySchema,
       planKey: catalogKeySchema,
+    }),
+  }),
+  z.object({
+    action: z.literal("upsertCreatorProgramAccount"),
+    input: z.object({
+      code: z.string().trim().max(40),
+      codeActive: z.boolean(),
+      country: z.string().trim().length(2),
+      discountPercent: z.number().int().min(0).max(100),
+      payoutEligible: z.boolean(),
+      payoutPercent: z.number().int().min(0).max(100),
+      targetUserId: z.string().min(1),
+    }),
+  }),
+  z.object({
+    action: z.literal("upsertCreatorProgramDefaults"),
+    input: z.object({
+      defaultCodeActive: z.boolean(),
+      defaultCountry: z.string().trim().length(2),
+      defaultDiscountPercent: z.number().int().min(0).max(100),
+      defaultPayoutEligible: z.boolean(),
+      defaultPayoutPercent: z.number().int().min(0).max(100),
     }),
   }),
   z.object({

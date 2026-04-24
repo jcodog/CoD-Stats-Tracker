@@ -16,6 +16,7 @@ import {
   buildWebhookSafeSummary,
   getWebhookObjectIds,
 } from "./lib/billingStripe"
+import { mapStripeConnectedAccountSnapshot } from "./lib/creatorProgram"
 import { getStripe } from "./lib/stripe"
 import { getConvexEnv } from "./env"
 import { handleDiscordInteractions } from "./http/discord/interactions"
@@ -293,6 +294,25 @@ http.route({
               stripeCustomerId: setupIntent.customer,
             })
           }
+
+          await ctx.runMutation(
+            internal.mutations.billing.state.markWebhookEventProcessed,
+            {
+              processingStatus: "processed",
+              stripeEventId: event.id,
+            }
+          )
+          break
+        }
+        case "account.updated": {
+          const account = event.data.object as Stripe.Account
+          const snapshot = mapStripeConnectedAccountSnapshot(account)
+
+          await ctx.runMutation(
+            internal.mutations.creator.internal
+              .applyStripeConnectedAccountSnapshot,
+            snapshot
+          )
 
           await ctx.runMutation(
             internal.mutations.billing.state.markWebhookEventProcessed,

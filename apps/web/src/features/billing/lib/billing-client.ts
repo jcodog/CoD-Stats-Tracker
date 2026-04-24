@@ -14,7 +14,7 @@ import type {
   BillingProfileUpdateResult,
   BillingResolvedState,
   CancellationResult,
-  CheckoutIntentResult,
+  CheckoutSessionResult,
   CheckoutQuoteResult,
   PaymentMethodMutationResult,
   PaymentMethodSetupIntentResult,
@@ -24,7 +24,7 @@ import type {
 import { billingQueryKeys } from "@/features/billing/lib/billing-query-keys"
 import type {
   CancelSubscriptionInput,
-  CreateSubscriptionIntentInput,
+  CreateSubscriptionCheckoutSessionInput,
   PaymentMethodActionInput,
   PreviewCheckoutQuoteInput,
   SubscriptionChangeInput,
@@ -33,7 +33,7 @@ import type {
 } from "@/features/billing/lib/billing-schemas"
 import {
   cancelSubscriptionSchema,
-  createSubscriptionIntentSchema,
+  createSubscriptionCheckoutSessionSchema,
   paymentMethodActionSchema,
   previewCheckoutQuoteSchema,
   subscriptionChangeSchema,
@@ -137,17 +137,17 @@ async function callSyncBillingCenter(convex: ConvexReactClient) {
   }
 }
 
-async function callCreateSubscriptionIntent(
+async function callCreateSubscriptionCheckoutSession(
   convex: ConvexReactClient,
-  input: CreateSubscriptionIntentInput
+  input: CreateSubscriptionCheckoutSessionInput
 ) {
-  const payload = createSubscriptionIntentSchema.parse(input)
+  const payload = createSubscriptionCheckoutSessionSchema.parse(input)
 
   try {
     return (await convex.action(
-      api.actions.billing.customer.createSubscriptionIntent,
+      api.actions.billing.customer.createSubscriptionCheckoutSession,
       payload
-    )) as CheckoutIntentResult
+    )) as CheckoutSessionResult
   } catch (error) {
     throw toBillingClientError(error)
   }
@@ -369,13 +369,13 @@ export function useSyncBillingCenter() {
   })
 }
 
-export function useCreateSubscriptionIntent() {
+export function useCreateSubscriptionCheckoutSession() {
   const convex = useConvex()
   const invalidateBilling = useInvalidateBillingQueries()
 
   return useMutation({
-    mutationFn: (input: CreateSubscriptionIntentInput) =>
-      callCreateSubscriptionIntent(convex, input),
+    mutationFn: (input: CreateSubscriptionCheckoutSessionInput) =>
+      callCreateSubscriptionCheckoutSession(convex, input),
     onSuccess: async () => {
       await invalidateBilling.invalidateAll()
     },

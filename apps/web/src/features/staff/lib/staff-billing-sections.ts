@@ -28,6 +28,7 @@ export type StaffBillingSection =
   | "subscriptions-overview"
   | "subscriptions-customers"
   | "subscriptions-active"
+  | "subscriptions-creator-program"
   | "subscriptions-creator-access"
   | "subscriptions-audit-log"
 
@@ -169,6 +170,20 @@ const STAFF_BILLING_SECTIONS: Record<
     minimumRole: "staff",
     title: "Active Subscriptions",
   },
+  "subscriptions-creator-program": {
+    breadcrumb: [
+      { href: "/staff/subscriptions", label: "Subscriptions" },
+      { label: "Creator program" },
+    ],
+    description:
+      "Configure creator accounts, manage code economics, and monitor Stripe Connect readiness without mixing this flow into complimentary access overrides.",
+    href: "/staff/subscriptions/creator-program",
+    icon: IconStars,
+    key: "subscriptions-creator-program",
+    label: "Creator program",
+    minimumRole: "admin",
+    title: "Creator Program",
+  },
   "subscriptions-creator-access": {
     breadcrumb: [
       { href: "/staff/subscriptions", label: "Subscriptions" },
@@ -212,6 +227,7 @@ export const STAFF_BILLING_SUBSCRIPTION_ITEMS = [
   STAFF_BILLING_SECTIONS["subscriptions-overview"],
   STAFF_BILLING_SECTIONS["subscriptions-customers"],
   STAFF_BILLING_SECTIONS["subscriptions-active"],
+  STAFF_BILLING_SECTIONS["subscriptions-creator-program"],
   STAFF_BILLING_SECTIONS["subscriptions-creator-access"],
   STAFF_BILLING_SECTIONS["subscriptions-audit-log"],
 ] as const satisfies readonly StaffBillingSectionConfig[]
@@ -263,6 +279,10 @@ export function resolveStaffBillingSectionFromPathname(
 
   if (pathname.startsWith("/staff/subscriptions/active")) {
     return "subscriptions-active"
+  }
+
+  if (pathname.startsWith("/staff/subscriptions/creator-program")) {
+    return "subscriptions-creator-program"
   }
 
   if (pathname.startsWith("/staff/subscriptions/creator-access")) {

@@ -30,7 +30,9 @@ function sortRankedTitles(left: RankedTitleRecord, right: RankedTitleRecord) {
     return left.sortOrder - right.sortOrder
   }
 
-  return left.label.localeCompare(right.label) || left.key.localeCompare(right.key)
+  return (
+    left.label.localeCompare(right.label) || left.key.localeCompare(right.key)
+  )
 }
 
 function sortRankedMaps(left: RankedMapRecord, right: RankedMapRecord) {
@@ -54,7 +56,9 @@ function sortRankedModes(left: RankedModeRecord, right: RankedModeRecord) {
     return left.sortOrder - right.sortOrder
   }
 
-  return left.label.localeCompare(right.label) || left.key.localeCompare(right.key)
+  return (
+    left.label.localeCompare(right.label) || left.key.localeCompare(right.key)
+  )
 }
 
 export const getUserByClerkUserId = internalQuery({
@@ -131,6 +135,9 @@ export const getBillingRecords = internalQuery({
       webhookEvents,
       users,
       auditLogs,
+      creatorAccounts,
+      creatorAttributions,
+      creatorProgramDefaults,
     ] = await Promise.all([
       ctx.db.query("billingPlans").collect(),
       ctx.db.query("billingFeatures").collect(),
@@ -149,16 +156,29 @@ export const getBillingRecords = internalQuery({
         .withIndex("by_createdAt")
         .order("desc")
         .take(200),
+      ctx.db.query("creatorAccounts").collect(),
+      ctx.db.query("creatorAttributions").collect(),
+      ctx.db
+        .query("creatorProgramDefaults")
+        .withIndex("by_key", (query) => query.eq("key", "global"))
+        .unique(),
     ])
 
     return {
-      auditLogs: auditLogs.filter((log) => log.entityType.startsWith("billing")),
+      auditLogs: auditLogs.filter((log) =>
+        log.entityType.startsWith("billing")
+      ),
       accessGrants,
+      creatorAccounts,
+      creatorAttributions,
+      creatorProgramDefaults,
       customers,
       features: features.sort(sortBySortOrderAndKey),
       planFeatures,
       plans: plans.sort(sortBySortOrderAndKey),
-      subscriptions: subscriptions.sort((left, right) => right.updatedAt - left.updatedAt),
+      subscriptions: subscriptions.sort(
+        (left, right) => right.updatedAt - left.updatedAt
+      ),
       users: users.sort(sortUsers),
       webhookEvents,
     }
@@ -214,7 +234,9 @@ export const getBillingWebhookEventById = internalQuery({
       return null
     }
 
-    const derivedObjectIds = getWebhookObjectIdsFromPayloadJson(event.payloadJson)
+    const derivedObjectIds = getWebhookObjectIdsFromPayloadJson(
+      event.payloadJson
+    )
 
     return {
       _id: event._id,
@@ -240,23 +262,26 @@ export const getBillingWebhookEventById = internalQuery({
 export const getOverviewRecords = internalQuery({
   args: {},
   handler: async (ctx) => {
-    const [users, plans, features, subscriptions, auditLogs] = await Promise.all([
-      ctx.db.query("users").collect(),
-      ctx.db.query("billingPlans").collect(),
-      ctx.db.query("billingFeatures").collect(),
-      ctx.db.query("billingSubscriptions").collect(),
-      ctx.db
-        .query("staffAuditLogs")
-        .withIndex("by_createdAt")
-        .order("desc")
-        .take(200),
-    ])
+    const [users, plans, features, subscriptions, auditLogs] =
+      await Promise.all([
+        ctx.db.query("users").collect(),
+        ctx.db.query("billingPlans").collect(),
+        ctx.db.query("billingFeatures").collect(),
+        ctx.db.query("billingSubscriptions").collect(),
+        ctx.db
+          .query("staffAuditLogs")
+          .withIndex("by_createdAt")
+          .order("desc")
+          .take(200),
+      ])
 
     return {
       auditLogs,
       features: features.sort(sortBySortOrderAndKey),
       plans: plans.sort(sortBySortOrderAndKey),
-      subscriptions: subscriptions.sort((left, right) => right.updatedAt - left.updatedAt),
+      subscriptions: subscriptions.sort(
+        (left, right) => right.updatedAt - left.updatedAt
+      ),
       users: users.sort(sortUsers).map((user) => ({
         clerkUserId: user.clerkUserId,
         role:

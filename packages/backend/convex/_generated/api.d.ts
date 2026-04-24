@@ -47,16 +47,21 @@ export declare const api: {
           {},
           any
         >;
-        createSubscriptionIntent: FunctionReference<
+        createSubscriptionCheckoutSession: FunctionReference<
           "action",
           "public",
           {
-            attemptKey?: string;
             creatorCode?: string;
             interval: "month" | "year";
             planKey: string;
             preferredCurrency?: "GBP" | "USD" | "CAD" | "EUR";
           },
+          any
+        >;
+        getPublicPricingCatalog: FunctionReference<
+          "action",
+          "public",
+          { preferredCurrency?: "GBP" | "USD" | "CAD" | "EUR" },
           any
         >;
         previewCheckoutQuote: FunctionReference<
@@ -100,6 +105,12 @@ export declare const api: {
           any
         >;
         syncBillingCenter: FunctionReference<"action", "public", {}, any>;
+        syncCheckoutSessionCompletion: FunctionReference<
+          "action",
+          "public",
+          { sessionId: string },
+          any
+        >;
         updateBillingProfile: FunctionReference<
           "action",
           "public",
@@ -127,6 +138,15 @@ export declare const api: {
           "action",
           "public",
           { code: string; source: "cookie" | "manual" },
+          any
+        >;
+      };
+      connect: {
+        startHostedOnboarding: FunctionReference<"action", "public", {}, any>;
+        syncCurrentCreatorConnectAccount: FunctionReference<
+          "action",
+          "public",
+          {},
           any
         >;
       };
@@ -412,6 +432,12 @@ export declare const api: {
           },
           any
         >;
+        prepareCreatorProgramConnectAccount: FunctionReference<
+          "action",
+          "public",
+          { targetUserId: Id<"users"> },
+          any
+        >;
         previewFeatureArchive: FunctionReference<
           "action",
           "public",
@@ -448,6 +474,12 @@ export declare const api: {
           { interval: "month" | "year"; planKey: string },
           any
         >;
+        refreshCreatorProgramConnectStatus: FunctionReference<
+          "action",
+          "public",
+          { targetUserId: Id<"users"> },
+          any
+        >;
         refreshWebhookLedger: FunctionReference<"action", "public", {}, any>;
         replacePlanPrice: FunctionReference<
           "action",
@@ -477,6 +509,32 @@ export declare const api: {
           "action",
           "public",
           { featureKey: string; planKeys: Array<string> },
+          any
+        >;
+        upsertCreatorProgramAccount: FunctionReference<
+          "action",
+          "public",
+          {
+            code: string;
+            codeActive: boolean;
+            country: string;
+            discountPercent: number;
+            payoutEligible: boolean;
+            payoutPercent: number;
+            targetUserId: Id<"users">;
+          },
+          any
+        >;
+        upsertCreatorProgramDefaults: FunctionReference<
+          "action",
+          "public",
+          {
+            defaultCodeActive: boolean;
+            defaultCountry: string;
+            defaultDiscountPercent: number;
+            defaultPayoutEligible: boolean;
+            defaultPayoutPercent: number;
+          },
           any
         >;
         upsertFeature: FunctionReference<
@@ -948,6 +1006,12 @@ export declare const api: {
       };
       dashboard: {
         getCurrentCreatorDashboard: FunctionReference<
+          "query",
+          "public",
+          {},
+          any
+        >;
+        getCurrentCreatorWorkspaceState: FunctionReference<
           "query",
           "public",
           {},
@@ -1554,6 +1618,54 @@ export declare const internal: {
             normalizedCode: string;
             source: "cookie" | "manual" | "staff";
             userId: Id<"users">;
+          },
+          any
+        >;
+      };
+      internal: {
+        applyStripeConnectedAccountSnapshot: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            chargesEnabled: boolean;
+            connectStatusUpdatedAt: number;
+            creatorAccountId?: Id<"creatorAccounts">;
+            detailsSubmitted: boolean;
+            payoutsEnabled: boolean;
+            requirementsCurrentlyDue: Array<string>;
+            requirementsDisabledReason?: string;
+            requirementsDue: Array<string>;
+            requirementsPastDue: Array<string>;
+            requirementsPendingVerification: Array<string>;
+            stripeConnectedAccountId: string;
+            stripeConnectedAccountVersion?: "v1" | "v2";
+          },
+          any
+        >;
+        upsertCreatorAccount: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            clerkUserId: string;
+            code: string;
+            codeActive: boolean;
+            country: string;
+            discountPercent: number;
+            payoutEligible: boolean;
+            payoutPercent: number;
+            userId: Id<"users">;
+          },
+          any
+        >;
+        upsertCreatorProgramDefaults: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            defaultCodeActive: boolean;
+            defaultCountry: string;
+            defaultDiscountPercent: number;
+            defaultPayoutEligible: boolean;
+            defaultPayoutPercent: number;
           },
           any
         >;
@@ -2209,6 +2321,24 @@ export declare const internal: {
           "query",
           "internal",
           { normalizedCode: string },
+          any
+        >;
+        getCreatorAccountByStripeConnectedAccountId: FunctionReference<
+          "query",
+          "internal",
+          { stripeConnectedAccountId: string },
+          any
+        >;
+        getCreatorAccountByUserId: FunctionReference<
+          "query",
+          "internal",
+          { userId: Id<"users"> },
+          any
+        >;
+        getCreatorProgramDefaults: FunctionReference<
+          "query",
+          "internal",
+          {},
           any
         >;
         getUserByClerkUserId: FunctionReference<

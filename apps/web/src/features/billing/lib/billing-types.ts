@@ -233,19 +233,23 @@ export type BillingCenterInvoice = {
   stripeInvoiceId: string
 }
 
-export type CheckoutIntentResult = {
-  alreadyExists: boolean
-  clientSecret?: string
+export type CheckoutSessionResult = {
+  clientSecret: string
   creatorCode?: string | null
-  currency?: SupportedPricingCurrency
-  currencyNotice?: string | null
-  customerSessionClientSecret?: string
-  defaultBillingEmail?: string
+  currency: SupportedPricingCurrency
+  currencyNotice: string | null
   interval: BillingInterval
   planKey: string
-  requiresConfirmation: boolean
-  secretType: "none" | "payment_intent" | "setup_intent"
-  status: string
+  sessionId: string
+}
+
+export type CheckoutSessionSyncResult = {
+  paymentStatus: "no_payment_required" | "paid" | "unpaid" | null
+  planKey: string | null
+  sessionId: string
+  status: "complete" | "expired" | "open"
+  subscriptionId: string | null
+  synced: boolean
 }
 
 export type CheckoutQuoteResult = {

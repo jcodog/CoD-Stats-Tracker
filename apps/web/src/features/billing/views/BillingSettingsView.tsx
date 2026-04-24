@@ -750,7 +750,7 @@ function SubscriptionsCard(args: {
         args.checkoutEnabled &&
         !args.creatorGrantActive ? (
           <Button asChild size="sm" variant="outline">
-            <Link href="/checkout">Open checkout</Link>
+              <Link href="/settings/billing/plan">Open plans</Link>
           </Button>
         ) : null}
       </CardHeader>
@@ -858,7 +858,7 @@ function SubscriptionsCard(args: {
                       </span>
                     ) : (
                       <Button asChild size="sm" variant="outline">
-                        <Link href="/checkout">Open checkout</Link>
+              <Link href="/settings/billing/plan">Open plans</Link>
                       </Button>
                     )
                   ) : (

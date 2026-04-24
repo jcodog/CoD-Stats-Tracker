@@ -26,8 +26,7 @@ const paymentMethodIdSchema = z.string().trim().min(1).max(128)
 const stripeSubscriptionIdSchema = z.string().trim().min(1).max(128)
 const creatorCodeSchema = z.string().trim().min(3).max(48)
 
-export const createSubscriptionIntentSchema = z.object({
-  attemptKey: z.string().trim().min(1).max(160).optional(),
+export const createSubscriptionCheckoutSessionSchema = z.object({
   creatorCode: creatorCodeSchema.optional(),
   interval: billingIntervalSchema,
   planKey: billingPlanKeySchema,
@@ -86,8 +85,8 @@ export const revokeCreatorGrantSchema = z.object({
 })
 
 export type BillingIntervalInput = z.infer<typeof billingIntervalSchema>
-export type CreateSubscriptionIntentInput = z.infer<
-  typeof createSubscriptionIntentSchema
+export type CreateSubscriptionCheckoutSessionInput = z.infer<
+  typeof createSubscriptionCheckoutSessionSchema
 >
 export type PreviewCheckoutQuoteInput = z.infer<
   typeof previewCheckoutQuoteSchema

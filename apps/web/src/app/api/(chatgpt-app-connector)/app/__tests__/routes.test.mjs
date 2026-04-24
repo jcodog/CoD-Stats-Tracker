@@ -14,7 +14,7 @@ import {
   CHATGPT_APP_VIEWS,
 } from "@workspace/backend/server/chatgpt-app-contract";
 import { resetServerEnvForTests } from "@workspace/backend/server/env";
-import { isPublicRoute } from "../../../../../../proxy.ts";
+import { isPublicRoute } from "../../../../../proxy.ts";
 
 const ACTIVE_USER = {
   _id: "user_test_123",
