@@ -11,12 +11,20 @@ import type {
   StaffBillingPlanRecord,
   StaffBillingUserLookupRecord,
   StaffCreatorGrantRecord,
+  StaffCreatorProgramAccountRecord,
+  StaffCreatorProgramDefaultsRecord,
   StaffImpactPreview,
   StaffMutationResponse,
 } from "@workspace/backend/convex/lib/staffTypes"
+import {
+  buildCreatorCodeSeed,
+  DEFAULT_CREATOR_PROGRAM_DEFAULTS,
+  formatCreatorRequirementLabel,
+} from "@workspace/backend/convex/lib/creatorProgram"
 import { resolveAppPlanKey } from "@workspace/backend/convex/lib/billingAccess"
 import type { UserRole } from "@workspace/backend/convex/lib/staffRoles"
 import { AppSelect } from "@/components/AppSelect"
+import { getCreatorConnectPresentation } from "@/features/creator-panel/lib/creator-panel"
 import {
   StaffKeyValueGrid,
   StaffMetricStrip,
@@ -183,12 +191,53 @@ type CreatorGrantRevocationState = {
   reason: string
 }
 
+type CreatorProgramDefaultsFormState = {
+  defaultCodeActive: boolean
+  defaultCountry: string
+  defaultDiscountPercent: string
+  defaultPayoutEligible: boolean
+  defaultPayoutPercent: string
+}
+
+type CreatorProgramAccountFormState = {
+  code: string
+  codeActive: boolean
+  country: string
+  discountPercent: string
+  mode: "create" | "edit"
+  payoutEligible: boolean
+  payoutPercent: string
+  targetUserId: string
+}
+
 type MultiSelectOption = {
   description?: string
   disabled?: boolean
   label: string
   value: string
 }
+
+const creatorCodeStateOptions = [
+  {
+    label: "Live",
+    value: "live",
+  },
+  {
+    label: "Paused",
+    value: "paused",
+  },
+]
+
+const creatorPayoutEligibilityOptions = [
+  {
+    label: "Eligible",
+    value: "eligible",
+  },
+  {
+    label: "Paused",
+    value: "paused",
+  },
+]
 
 function formatCurrencyAmount(amount: number, currency: string) {
   return new Intl.NumberFormat("en-GB", {
@@ -235,6 +284,113 @@ function diffKeys(args: { next: string[]; previous: string[] }) {
     added: args.next.filter((value) => !previousValues.has(value)),
     removed: args.previous.filter((value) => !nextValues.has(value)),
   }
+}
+
+function formatPercent(value: number) {
+  return `${value}%`
+}
+
+function buildCreatorProgramDefaultsFormState(
+  defaults: StaffCreatorProgramDefaultsRecord | null
+): CreatorProgramDefaultsFormState {
+  const sourceDefaults = defaults ?? DEFAULT_CREATOR_PROGRAM_DEFAULTS
+
+  return {
+    defaultCodeActive: sourceDefaults.defaultCodeActive,
+    defaultCountry: sourceDefaults.defaultCountry,
+    defaultDiscountPercent: String(sourceDefaults.defaultDiscountPercent),
+    defaultPayoutEligible: sourceDefaults.defaultPayoutEligible,
+    defaultPayoutPercent: String(sourceDefaults.defaultPayoutPercent),
+  }
+}
+
+function getSuggestedCreatorProgramCode(user: {
+  clerkUserId: string
+  userId: string
+  userName: string
+}) {
+  return (
+    [user.userName, user.clerkUserId, user.userId]
+      .map((value) => buildCreatorCodeSeed(value))
+      .find((value) => value.length >= 3) ?? ""
+  )
+}
+
+function buildCreatorProgramAccountFormState(args: {
+  account?: StaffCreatorProgramAccountRecord | null
+  defaults: StaffCreatorProgramDefaultsRecord | null
+  selectedUser?: StaffBillingUserLookupRecord | null
+}): CreatorProgramAccountFormState {
+  const sourceDefaults = args.defaults ?? DEFAULT_CREATOR_PROGRAM_DEFAULTS
+
+  return {
+    code:
+      args.account?.code ??
+      (args.selectedUser
+        ? getSuggestedCreatorProgramCode({
+            clerkUserId: args.selectedUser.clerkUserId,
+            userId: args.selectedUser.userId,
+            userName: args.selectedUser.userName,
+          })
+        : ""),
+    codeActive: args.account?.codeActive ?? sourceDefaults.defaultCodeActive,
+    country: args.account?.country ?? sourceDefaults.defaultCountry,
+    discountPercent: String(
+      args.account?.discountPercent ?? sourceDefaults.defaultDiscountPercent
+    ),
+    mode: args.account ? "edit" : "create",
+    payoutEligible:
+      args.account?.payoutEligible ?? sourceDefaults.defaultPayoutEligible,
+    payoutPercent: String(
+      args.account?.payoutPercent ?? sourceDefaults.defaultPayoutPercent
+    ),
+    targetUserId: args.account?.userId ?? args.selectedUser?.userId ?? "",
+  }
+}
+
+function CreatorProgramConnectBadge({
+  state,
+}: {
+  state: StaffCreatorProgramAccountRecord["connectState"]
+}) {
+  const presentation = getCreatorConnectPresentation(state)
+
+  return (
+    <span className="inline-flex items-center gap-2 text-sm font-medium text-foreground">
+      <span
+        aria-hidden="true"
+        className={`size-2 rounded-full ${presentation.indicatorClassName}`}
+      />
+      <span>{presentation.label}</span>
+    </span>
+  )
+}
+
+function getBillingAccessSourceLabel(
+  source:
+    | "creator_grant"
+    | "legacy_plan"
+    | "managed_grant_subscription"
+    | "none"
+    | "paid_subscription"
+) {
+  if (source === "paid_subscription") {
+    return "Paid subscription"
+  }
+
+  if (source === "managed_grant_subscription") {
+    return "Complimentary Creator"
+  }
+
+  if (source === "creator_grant") {
+    return "Creator override"
+  }
+
+  if (source === "legacy_plan") {
+    return "Legacy plan"
+  }
+
+  return "No active access"
 }
 
 function SyncStatusBadge({
@@ -316,22 +472,24 @@ function BillingAccessSourceBadge({
     | "paid_subscription"
 }) {
   if (source === "paid_subscription") {
-    return <Badge variant="secondary">paid subscription</Badge>
+    return (
+      <Badge variant="secondary">{getBillingAccessSourceLabel(source)}</Badge>
+    )
   }
 
   if (source === "managed_grant_subscription") {
-    return <Badge variant="secondary">complimentary stripe</Badge>
+    return (
+      <Badge variant="secondary">{getBillingAccessSourceLabel(source)}</Badge>
+    )
   }
 
   if (source === "creator_grant") {
-    return <Badge variant="secondary">creator override</Badge>
+    return (
+      <Badge variant="secondary">{getBillingAccessSourceLabel(source)}</Badge>
+    )
   }
 
-  if (source === "legacy_plan") {
-    return <Badge variant="outline">legacy plan</Badge>
-  }
-
-  return <Badge variant="outline">no access</Badge>
+  return <Badge variant="outline">{getBillingAccessSourceLabel(source)}</Badge>
 }
 
 function getActiveCreatorGrant(
@@ -525,6 +683,8 @@ export function StaffBillingView({
   const invalidateStaffQueries = useInvalidateStaffQueries()
   const canManageCreatorAccess =
     actorRole === "admin" || actorRole === "super_admin"
+  const canManageCreatorProgram =
+    actorRole === "admin" || actorRole === "super_admin"
   const [planForm, setPlanForm] = useState<PlanFormState | null>(null)
   const [featureForm, setFeatureForm] = useState<FeatureFormState | null>(null)
   const [archivePlanState, setArchivePlanState] =
@@ -558,6 +718,16 @@ export function StaffBillingView({
     useState<CreatorGrantConfirmationState | null>(null)
   const [creatorGrantRevocationState, setCreatorGrantRevocationState] =
     useState<CreatorGrantRevocationState | null>(null)
+  const [creatorProgramDefaultsForm, setCreatorProgramDefaultsForm] =
+    useState<CreatorProgramDefaultsFormState>(() =>
+      buildCreatorProgramDefaultsFormState(initialData.creatorProgramDefaults)
+    )
+  const [creatorProgramAccountForm, setCreatorProgramAccountForm] =
+    useState<CreatorProgramAccountFormState>(() =>
+      buildCreatorProgramAccountFormState({
+        defaults: initialData.creatorProgramDefaults,
+      })
+    )
   const [catalogAuditFilters, setCatalogAuditFilters] =
     useState<StaffFilterSelection>({
       action: [],
@@ -650,6 +820,35 @@ export function StaffBillingView({
     currentGrant: creatorGrantRecordsByUserId.get(user.userId) ?? null,
     user,
   }))
+  const creatorProgramAccountByUserId = new Map(
+    data.creatorProgramAccounts.map((account) => [account.userId, account])
+  )
+  const creatorProgramUserOptions = data.userDirectory
+    .slice()
+    .sort((left, right) => left.userName.localeCompare(right.userName))
+    .map((user) => ({
+      description: [
+        user.email ?? user.clerkUserId,
+        user.currentPlanKey ?? "no active plan",
+        creatorProgramAccountByUserId.has(user.userId)
+          ? "already configured"
+          : "ready to configure",
+      ].join(" · "),
+      disabled: false,
+      label: (
+        <div className="flex flex-col">
+          <span>{user.userName}</span>
+          <span className="text-xs text-muted-foreground">
+            {user.email ?? user.clerkUserId}
+          </span>
+        </div>
+      ),
+      value: user.userId,
+    }))
+  const selectedCreatorProgramUser =
+    data.userDirectory.find(
+      (user) => user.userId === creatorProgramAccountForm.targetUserId
+    ) ?? null
   const auditActionCounts = new Map<string, number>()
   const auditResultCounts = new Map<StaffAuditLogEntry["result"], number>()
 
@@ -1051,6 +1250,149 @@ export function StaffBillingView({
       header: "Stripe customer",
     },
   ]
+  const creatorProgramColumns: Array<
+    ColumnDef<StaffCreatorProgramAccountRecord>
+  > = [
+    {
+      accessorKey: "userName",
+      cell: ({ row }) => (
+        <div className="flex flex-col gap-1">
+          <span className="font-medium">{row.original.userName}</span>
+          <span className="text-xs text-muted-foreground">
+            {row.original.email ?? row.original.clerkUserId}
+          </span>
+        </div>
+      ),
+      header: "Creator",
+    },
+    {
+      accessorKey: "code",
+      cell: ({ row }) => (
+        <div className="flex flex-col gap-1">
+          <span className="font-medium">{row.original.code}</span>
+          <span className="text-xs text-muted-foreground">
+            {row.original.codeActive ? "Code live" : "Code disabled"}
+          </span>
+          <span className="text-xs text-muted-foreground">
+            {row.original.sharePath}
+          </span>
+        </div>
+      ),
+      header: "Code",
+    },
+    {
+      cell: ({ row }) => (
+        <div className="flex flex-col gap-1 text-sm">
+          <span>{formatPercent(row.original.discountPercent)} discount</span>
+          <span>{formatPercent(row.original.payoutPercent)} payout</span>
+          <span className="text-xs text-muted-foreground">
+            {row.original.payoutEligible ? "Payout eligible" : "Payout paused"}
+          </span>
+        </div>
+      ),
+      header: "Economics",
+      id: "economics",
+    },
+    {
+      cell: ({ row }) => (
+        <div className="flex flex-col gap-2">
+          <CreatorProgramConnectBadge state={row.original.connectState} />
+          <div className="text-xs text-muted-foreground">
+            {row.original.hasConnectedAccount
+              ? row.original.connectRequirementsDue.length > 0
+                ? `${row.original.connectRequirementsDue.length} requirement(s) due`
+                : row.original.pendingVerificationCount > 0
+                  ? `${row.original.pendingVerificationCount} item(s) in review`
+                  : row.original.payoutsEnabled
+                    ? "Payouts enabled"
+                    : "Waiting on Stripe review"
+              : "Connect not prepared"}
+          </div>
+          <div className="text-xs text-muted-foreground">
+            {row.original.connectStatusUpdatedAt
+              ? `Updated ${formatDateTime(row.original.connectStatusUpdatedAt)}`
+              : "No Stripe sync yet"}
+          </div>
+        </div>
+      ),
+      header: "Connect",
+      id: "connect",
+    },
+    {
+      cell: ({ row }) => (
+        <div className="flex flex-col gap-1 text-sm">
+          <span>{row.original.signupCount} attributed signup(s)</span>
+          <span>{row.original.paidConversionCount} paid conversion(s)</span>
+        </div>
+      ),
+      header: "Performance",
+      id: "performance",
+    },
+    {
+      cell: ({ row }) => (
+        <div className="flex flex-col gap-1 text-sm">
+          <span className="font-medium capitalize">
+            {row.original.currentAppPlanKey}
+          </span>
+          <span className="text-xs text-muted-foreground">
+            {getBillingAccessSourceLabel(row.original.accessSource)}
+          </span>
+        </div>
+      ),
+      header: "Access",
+      id: "access",
+    },
+    {
+      cell: ({ row }) => (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              aria-label={`Manage creator ${row.original.userName}`}
+              size="icon"
+              variant="ghost"
+            >
+              <IconDotsVertical aria-hidden="true" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuGroup>
+              <DropdownMenuItem
+                onClick={() =>
+                  setCreatorProgramAccountForm(
+                    buildCreatorProgramAccountFormState({
+                      account: row.original,
+                      defaults: data.creatorProgramDefaults,
+                    })
+                  )
+                }
+              >
+                Edit creator settings
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() =>
+                  void prepareCreatorProgramConnectAccount(row.original.userId)
+                }
+              >
+                {row.original.hasConnectedAccount
+                  ? "Recheck Connect setup"
+                  : "Prepare Connect setup"}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() =>
+                  void refreshCreatorProgramConnectStatus(row.original.userId)
+                }
+              >
+                Refresh Connect status
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ),
+      enableGlobalFilter: false,
+      header: "",
+      id: "actions",
+    },
+  ]
   const catalogAuditColumns: Array<ColumnDef<StaffAuditLogEntry>> = [
     {
       accessorKey: "createdAt",
@@ -1128,6 +1470,27 @@ export function StaffBillingView({
       grant.revokedAt === undefined &&
       (grant.endsAt === undefined || grant.endsAt > Date.now())
   ).length
+  const creatorProgramProvisionedCount = data.creatorProgramAccounts.length
+  const creatorProgramActiveCodeCount = data.creatorProgramAccounts.filter(
+    (account) => account.codeActive
+  ).length
+  const creatorProgramActionRequiredCount = data.creatorProgramAccounts.filter(
+    (account) => account.connectState === "action_required"
+  ).length
+  const creatorProgramReadyCount = data.creatorProgramAccounts.filter(
+    (account) => account.connectState === "ready"
+  ).length
+  const creatorProgramSignupCount = data.creatorProgramAccounts.reduce(
+    (count, account) => count + account.signupCount,
+    0
+  )
+  const creatorProgramPaidConversionCount = data.creatorProgramAccounts.reduce(
+    (count, account) => count + account.paidConversionCount,
+    0
+  )
+  const creatorProgramFollowUpAccounts = data.creatorProgramAccounts
+    .filter((account) => account.connectState !== "ready")
+    .slice(0, 6)
 
   async function handleMutationResult(result: StaffMutationResponse) {
     toast.success(result.summary)
@@ -1138,6 +1501,109 @@ export function StaffBillingView({
 
     if (result.syncSummary?.result === "error") {
       toast.error(result.syncSummary.summary)
+    }
+  }
+
+  function resetCreatorProgramAccountForm() {
+    setCreatorProgramAccountForm(
+      buildCreatorProgramAccountFormState({
+        defaults: data.creatorProgramDefaults,
+      })
+    )
+  }
+
+  async function saveCreatorProgramDefaults() {
+    try {
+      const result = await billingMutation.mutateAsync({
+        action: "upsertCreatorProgramDefaults",
+        input: {
+          defaultCodeActive: creatorProgramDefaultsForm.defaultCodeActive,
+          defaultCountry: creatorProgramDefaultsForm.defaultCountry,
+          defaultDiscountPercent: Number(
+            creatorProgramDefaultsForm.defaultDiscountPercent
+          ),
+          defaultPayoutEligible:
+            creatorProgramDefaultsForm.defaultPayoutEligible,
+          defaultPayoutPercent: Number(
+            creatorProgramDefaultsForm.defaultPayoutPercent
+          ),
+        },
+      })
+      await handleMutationResult(result)
+    } catch (error) {
+      toast.error(
+        error instanceof StaffClientError
+          ? error.message
+          : "Unable to update creator program defaults."
+      )
+    }
+  }
+
+  async function saveCreatorProgramAccount() {
+    if (!creatorProgramAccountForm.targetUserId) {
+      toast.error("Select a user before saving creator program settings.")
+      return
+    }
+
+    try {
+      const result = await billingMutation.mutateAsync({
+        action: "upsertCreatorProgramAccount",
+        input: {
+          code: creatorProgramAccountForm.code,
+          codeActive: creatorProgramAccountForm.codeActive,
+          country: creatorProgramAccountForm.country,
+          discountPercent: Number(creatorProgramAccountForm.discountPercent),
+          payoutEligible: creatorProgramAccountForm.payoutEligible,
+          payoutPercent: Number(creatorProgramAccountForm.payoutPercent),
+          targetUserId: creatorProgramAccountForm.targetUserId,
+        },
+      })
+      await handleMutationResult(result)
+      resetCreatorProgramAccountForm()
+    } catch (error) {
+      toast.error(
+        error instanceof StaffClientError
+          ? error.message
+          : "Unable to save creator program settings."
+      )
+    }
+  }
+
+  async function prepareCreatorProgramConnectAccount(targetUserId: string) {
+    try {
+      const result = await billingClient.runAction<StaffMutationResponse>({
+        action: "prepareCreatorProgramConnectAccount",
+        input: {
+          targetUserId,
+        },
+      })
+      await invalidateStaffQueries.invalidateBilling()
+      await handleMutationResult(result)
+    } catch (error) {
+      toast.error(
+        error instanceof StaffClientError
+          ? error.message
+          : "Unable to prepare Stripe Connect."
+      )
+    }
+  }
+
+  async function refreshCreatorProgramConnectStatus(targetUserId: string) {
+    try {
+      const result = await billingClient.runAction<StaffMutationResponse>({
+        action: "refreshCreatorProgramConnectStatus",
+        input: {
+          targetUserId,
+        },
+      })
+      await invalidateStaffQueries.invalidateBilling()
+      await handleMutationResult(result)
+    } catch (error) {
+      toast.error(
+        error instanceof StaffClientError
+          ? error.message
+          : "Unable to refresh Stripe Connect status."
+      )
     }
   }
 
@@ -1559,19 +2025,44 @@ export function StaffBillingView({
 
       <StaffMetricStrip
         columnsClassName="md:grid-cols-2 xl:grid-cols-5"
-        items={[
-          { label: "Plans", value: data.plans.length },
-          { label: "Features", value: data.features.length },
-          { label: "Customers", value: data.customers.length },
-          {
-            label: "Active subscriptions",
-            value: data.activeSubscriptionCount,
-          },
-          {
-            label: "Last sync",
-            value: data.lastSync ? data.lastSync.result : "Never",
-          },
-        ]}
+        items={
+          section === "subscriptions-creator-program"
+            ? [
+                {
+                  label: "Configured creators",
+                  value: creatorProgramProvisionedCount,
+                },
+                {
+                  label: "Live creator codes",
+                  value: creatorProgramActiveCodeCount,
+                },
+                {
+                  label: "Connect ready",
+                  value: creatorProgramReadyCount,
+                },
+                {
+                  label: "Connect action required",
+                  value: creatorProgramActionRequiredCount,
+                },
+                {
+                  label: "Paid conversions",
+                  value: creatorProgramPaidConversionCount,
+                },
+              ]
+            : [
+                { label: "Plans", value: data.plans.length },
+                { label: "Features", value: data.features.length },
+                { label: "Customers", value: data.customers.length },
+                {
+                  label: "Active subscriptions",
+                  value: data.activeSubscriptionCount,
+                },
+                {
+                  label: "Last sync",
+                  value: data.lastSync ? data.lastSync.result : "Never",
+                },
+              ]
+        }
       />
 
       {section === "catalog-overview" ? (
@@ -2218,6 +2709,380 @@ export function StaffBillingView({
               emptyTitle="No customers yet"
               getRowId={(row) => row.stripeCustomerId}
               searchPlaceholder="Search customers"
+            />
+          </StaffSection>
+        </div>
+      ) : null}
+
+      {section === "subscriptions-creator-program" ? (
+        <div className="grid gap-6">
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+            <StaffSection
+              description="New creator accounts inherit these defaults so codes can go live immediately while Stripe Connect onboarding still happens in the creator workspace."
+              title="Global defaults"
+            >
+              {canManageCreatorProgram ? (
+                <FieldGroup>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <Field>
+                      <FieldLabel>Default country</FieldLabel>
+                      <Input
+                        maxLength={2}
+                        onChange={(event) =>
+                          setCreatorProgramDefaultsForm((current) => ({
+                            ...current,
+                            defaultCountry: event.target.value.toUpperCase(),
+                          }))
+                        }
+                        value={creatorProgramDefaultsForm.defaultCountry}
+                      />
+                      <FieldDescription>
+                        Use the creator's Stripe-hosted onboarding country when
+                        configuring new creator accounts.
+                      </FieldDescription>
+                    </Field>
+                    <Field>
+                      <FieldLabel>Default discount percent</FieldLabel>
+                      <Input
+                        onChange={(event) =>
+                          setCreatorProgramDefaultsForm((current) => ({
+                            ...current,
+                            defaultDiscountPercent: event.target.value,
+                          }))
+                        }
+                        type="number"
+                        value={
+                          creatorProgramDefaultsForm.defaultDiscountPercent
+                        }
+                      />
+                    </Field>
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <Field>
+                      <FieldLabel>Default payout percent</FieldLabel>
+                      <Input
+                        onChange={(event) =>
+                          setCreatorProgramDefaultsForm((current) => ({
+                            ...current,
+                            defaultPayoutPercent: event.target.value,
+                          }))
+                        }
+                        type="number"
+                        value={creatorProgramDefaultsForm.defaultPayoutPercent}
+                      />
+                    </Field>
+                    <Field>
+                      <FieldLabel>Default code state</FieldLabel>
+                      <AppSelect
+                        onValueChange={(value) =>
+                          setCreatorProgramDefaultsForm((current) => ({
+                            ...current,
+                            defaultCodeActive: value === "live",
+                          }))
+                        }
+                        options={creatorCodeStateOptions}
+                        value={
+                          creatorProgramDefaultsForm.defaultCodeActive
+                            ? "live"
+                            : "paused"
+                        }
+                      />
+                      <FieldDescription>
+                        New creator profiles inherit this state until it is
+                        changed on the account itself.
+                      </FieldDescription>
+                    </Field>
+                  </div>
+                  <Field>
+                    <FieldLabel>Default payout eligibility</FieldLabel>
+                    <AppSelect
+                      onValueChange={(value) =>
+                        setCreatorProgramDefaultsForm((current) => ({
+                          ...current,
+                          defaultPayoutEligible: value === "eligible",
+                        }))
+                      }
+                      options={creatorPayoutEligibilityOptions}
+                      value={
+                        creatorProgramDefaultsForm.defaultPayoutEligible
+                          ? "eligible"
+                          : "paused"
+                      }
+                    />
+                    <FieldDescription>
+                      This default controls whether new creator profiles can
+                      accrue payouts before any per-account override.
+                    </FieldDescription>
+                  </Field>
+                  <div className="flex justify-end">
+                    <Button
+                      disabled={billingMutation.isPending}
+                      onClick={() => void saveCreatorProgramDefaults()}
+                    >
+                      Save defaults
+                    </Button>
+                  </div>
+                </FieldGroup>
+              ) : (
+                <div className="rounded-lg border border-border/70 bg-muted/20 px-4 py-6 text-sm text-muted-foreground">
+                  Creator program defaults are restricted to admins and
+                  super-admins.
+                </div>
+              )}
+            </StaffSection>
+
+            <StaffSection
+              action={
+                <Button
+                  onClick={resetCreatorProgramAccountForm}
+                  size="sm"
+                  variant="outline"
+                >
+                  Reset form
+                </Button>
+              }
+              description="Configure the creator profile for an existing user, including code behavior, economics, and Stripe Connect readiness."
+              title="Creator profile"
+            >
+              <FieldGroup>
+                <Field>
+                  <FieldLabel>User</FieldLabel>
+                  <AppSelect
+                    onValueChange={(value) => {
+                      const nextUser =
+                        data.userDirectory.find(
+                          (user) => user.userId === value
+                        ) ?? null
+                      const existingAccount = nextUser
+                        ? (creatorProgramAccountByUserId.get(nextUser.userId) ??
+                          null)
+                        : null
+
+                      setCreatorProgramAccountForm(
+                        buildCreatorProgramAccountFormState({
+                          account: existingAccount,
+                          defaults: data.creatorProgramDefaults,
+                          selectedUser: nextUser,
+                        })
+                      )
+                    }}
+                    options={creatorProgramUserOptions}
+                    placeholder="Select a user"
+                    value={creatorProgramAccountForm.targetUserId || null}
+                  />
+                  <FieldDescription>
+                    Select an existing user, then set the creator code and the
+                    profile defaults that should apply to their account.
+                  </FieldDescription>
+                </Field>
+
+                {selectedCreatorProgramUser ? (
+                  <div className="border-y border-border/70 py-3 text-sm">
+                    <div className="font-medium">
+                      {selectedCreatorProgramUser.userName}
+                    </div>
+                    <div className="mt-1 text-muted-foreground">
+                      {selectedCreatorProgramUser.email ??
+                        selectedCreatorProgramUser.clerkUserId}
+                    </div>
+                    <div className="mt-2 text-muted-foreground">
+                      Plan:{" "}
+                      {selectedCreatorProgramUser.currentPlanKey ??
+                        selectedCreatorProgramUser.currentAppPlanKey}
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Field>
+                    <FieldLabel>Creator code</FieldLabel>
+                    <Input
+                      onChange={(event) =>
+                        setCreatorProgramAccountForm((current) => ({
+                          ...current,
+                          code: event.target.value.toUpperCase(),
+                        }))
+                      }
+                      placeholder="Auto-generate if left blank"
+                      value={creatorProgramAccountForm.code}
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel>Country</FieldLabel>
+                    <Input
+                      maxLength={2}
+                      onChange={(event) =>
+                        setCreatorProgramAccountForm((current) => ({
+                          ...current,
+                          country: event.target.value.toUpperCase(),
+                        }))
+                      }
+                      value={creatorProgramAccountForm.country}
+                    />
+                  </Field>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Field>
+                    <FieldLabel>Discount percent</FieldLabel>
+                    <Input
+                      onChange={(event) =>
+                        setCreatorProgramAccountForm((current) => ({
+                          ...current,
+                          discountPercent: event.target.value,
+                        }))
+                      }
+                      type="number"
+                      value={creatorProgramAccountForm.discountPercent}
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel>Payout percent</FieldLabel>
+                    <Input
+                      onChange={(event) =>
+                        setCreatorProgramAccountForm((current) => ({
+                          ...current,
+                          payoutPercent: event.target.value,
+                        }))
+                      }
+                      type="number"
+                      value={creatorProgramAccountForm.payoutPercent}
+                    />
+                  </Field>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Field>
+                    <FieldLabel>Code state</FieldLabel>
+                    <AppSelect
+                      onValueChange={(value) =>
+                        setCreatorProgramAccountForm((current) => ({
+                          ...current,
+                          codeActive: value === "live",
+                        }))
+                      }
+                      options={creatorCodeStateOptions}
+                      value={
+                        creatorProgramAccountForm.codeActive ? "live" : "paused"
+                      }
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel>Payout eligibility</FieldLabel>
+                    <AppSelect
+                      onValueChange={(value) =>
+                        setCreatorProgramAccountForm((current) => ({
+                          ...current,
+                          payoutEligible: value === "eligible",
+                        }))
+                      }
+                      options={creatorPayoutEligibilityOptions}
+                      value={
+                        creatorProgramAccountForm.payoutEligible
+                          ? "eligible"
+                          : "paused"
+                      }
+                    />
+                  </Field>
+                </div>
+
+                <div className="flex justify-end gap-2">
+                  {creatorProgramAccountForm.mode === "edit" ? (
+                    <Button
+                      onClick={resetCreatorProgramAccountForm}
+                      size="sm"
+                      variant="outline"
+                    >
+                      Cancel edit
+                    </Button>
+                  ) : null}
+                  <Button
+                    disabled={
+                      billingMutation.isPending ||
+                      !creatorProgramAccountForm.targetUserId
+                    }
+                    onClick={() => void saveCreatorProgramAccount()}
+                    size="sm"
+                  >
+                    Save creator settings
+                  </Button>
+                </div>
+              </FieldGroup>
+            </StaffSection>
+          </div>
+
+          <StaffSection
+            contentClassName="grid gap-3"
+            description="These creators still need Stripe follow-up or have Connect setup in progress."
+            title="Connect follow-up"
+          >
+            {creatorProgramFollowUpAccounts.length > 0 ? (
+              creatorProgramFollowUpAccounts.map((account) => (
+                <div
+                  className="border-b border-border/70 py-4 last:border-b-0"
+                  key={account.id}
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="font-medium">{account.userName}</div>
+                      <div className="truncate text-sm text-muted-foreground">
+                        {account.email ?? account.clerkUserId}
+                      </div>
+                    </div>
+                    <CreatorProgramConnectBadge state={account.connectState} />
+                  </div>
+                  <div className="mt-3 grid gap-2 text-sm">
+                    <div className="flex items-center justify-between gap-4">
+                      <span className="text-muted-foreground">
+                        Creator code
+                      </span>
+                      <span className="font-medium">{account.code}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-4">
+                      <span className="text-muted-foreground">
+                        Attribution footprint
+                      </span>
+                      <span className="font-medium">
+                        {account.signupCount} signups /{" "}
+                        {account.paidConversionCount} paid
+                      </span>
+                    </div>
+                    {account.connectRequirementsDue.length > 0 ? (
+                      <div className="text-muted-foreground">
+                        {account.connectRequirementsDue
+                          .map((requirement) =>
+                            formatCreatorRequirementLabel(requirement)
+                          )
+                          .join(", ")}
+                      </div>
+                    ) : (
+                      <div className="text-muted-foreground">
+                        {account.pendingVerificationCount > 0
+                          ? `${account.pendingVerificationCount} Stripe verification item(s) pending.`
+                          : "Waiting on the creator to continue or Stripe to review."}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-sm text-muted-foreground">
+                All configured creator accounts are currently Connect-ready.
+              </div>
+            )}
+          </StaffSection>
+
+          <StaffSection
+            description={`Configured creator accounts cover ${creatorProgramSignupCount} attributed signup(s) and ${creatorProgramPaidConversionCount} paid conversion(s) across the program.`}
+            title="Creator program accounts"
+          >
+            <StaffDataTable
+              columns={creatorProgramColumns}
+              data={data.creatorProgramAccounts}
+              emptyDescription="Enable the first creator account to make creator codes operational by default."
+              emptyTitle="No creator accounts yet"
+              getRowId={(row) => row.id}
+              searchPlaceholder="Search creators"
             />
           </StaffSection>
         </div>

@@ -1,6 +1,7 @@
 import type { Doc } from "../../_generated/dataModel"
 import { query } from "../../_generated/server"
 import {
+  hasBillingSubscriptionPeriodRemaining,
   hasManagedCreatorGrantSubscriptionAccess,
   isManageableBillingSubscription,
 } from "../../lib/billing"
@@ -33,7 +34,9 @@ function getSubscriptionPriority(subscription: BillingSubscriptionRecord) {
 }
 
 function normalizeAddress(
-  address: BillingCustomerRecord["billingAddress"] | BillingPaymentMethodRecord["billingAddress"]
+  address:
+    | BillingCustomerRecord["billingAddress"]
+    | BillingPaymentMethodRecord["billingAddress"]
 ) {
   if (!address) {
     return null
@@ -99,7 +102,18 @@ function sortInvoices(left: BillingInvoiceRecord, right: BillingInvoiceRecord) {
 }
 
 function isVisibleSubscription(subscription: BillingSubscriptionRecord) {
-  return subscription.status !== "incomplete_expired"
+  if (subscription.status === "incomplete_expired") {
+    return false
+  }
+
+  if (
+    (subscription.status === "canceled" || subscription.status === "unpaid") &&
+    !hasBillingSubscriptionPeriodRemaining(subscription)
+  ) {
+    return false
+  }
+
+  return true
 }
 
 function getSubscriptionAmount(
@@ -113,9 +127,7 @@ function getSubscriptionAmount(
   return interval === "year" ? plan.yearlyPriceAmount : plan.monthlyPriceAmount
 }
 
-function getManagedGrantPresentation(
-  subscription: BillingSubscriptionRecord
-) {
+function getManagedGrantPresentation(subscription: BillingSubscriptionRecord) {
   if (subscription.managedGrantSource !== "creator_approval") {
     return null
   }
@@ -138,7 +150,9 @@ export const getCurrentUserBillingCenter = query({
 
     const user = await ctx.db
       .query("users")
-      .withIndex("by_clerkUserId", (query) => query.eq("clerkUserId", identity.subject))
+      .withIndex("by_clerkUserId", (query) =>
+        query.eq("clerkUserId", identity.subject)
+      )
       .unique()
 
     if (!user) {
@@ -146,25 +160,26 @@ export const getCurrentUserBillingCenter = query({
     }
 
     const now = Date.now()
-    const [customer, invoices, paymentMethods, plans, subscriptions] = await Promise.all([
-      ctx.db
-        .query("billingCustomers")
-        .withIndex("by_userId", (query) => query.eq("userId", user._id))
-        .unique(),
-      ctx.db
-        .query("billingInvoices")
-        .withIndex("by_userId", (query) => query.eq("userId", user._id))
-        .collect(),
-      ctx.db
-        .query("billingPaymentMethods")
-        .withIndex("by_userId", (query) => query.eq("userId", user._id))
-        .collect(),
-      ctx.db.query("billingPlans").collect(),
-      ctx.db
-        .query("billingSubscriptions")
-        .withIndex("by_userId", (query) => query.eq("userId", user._id))
-        .collect(),
-    ])
+    const [customer, invoices, paymentMethods, plans, subscriptions] =
+      await Promise.all([
+        ctx.db
+          .query("billingCustomers")
+          .withIndex("by_userId", (query) => query.eq("userId", user._id))
+          .unique(),
+        ctx.db
+          .query("billingInvoices")
+          .withIndex("by_userId", (query) => query.eq("userId", user._id))
+          .collect(),
+        ctx.db
+          .query("billingPaymentMethods")
+          .withIndex("by_userId", (query) => query.eq("userId", user._id))
+          .collect(),
+        ctx.db.query("billingPlans").collect(),
+        ctx.db
+          .query("billingSubscriptions")
+          .withIndex("by_userId", (query) => query.eq("userId", user._id))
+          .collect(),
+      ])
 
     const activePaymentMethods = paymentMethods
       .filter((paymentMethod) => paymentMethod.active)
@@ -180,15 +195,21 @@ export const getCurrentUserBillingCenter = query({
     const manageableSubscriptions = sortedSubscriptions.filter((subscription) =>
       isManageableBillingSubscription(subscription, now)
     )
-    const visibleSubscriptions = sortedSubscriptions.filter(isVisibleSubscription)
+    const visibleSubscriptions = sortedSubscriptions.filter(
+      isVisibleSubscription
+    )
     const manageableSubscriptionExists = manageableSubscriptions.length > 0
     const visibleInvoices = [...invoices]
-      .filter((invoice) => invoice.status !== "draft" && invoice.status !== "void")
+      .filter(
+        (invoice) => invoice.status !== "draft" && invoice.status !== "void"
+      )
       .sort(sortInvoices)
 
     const lastSyncedAtCandidates = [
       customer?.lastSyncedAt ?? 0,
-      ...activePaymentMethods.map((paymentMethod) => paymentMethod.updatedAt ?? 0),
+      ...activePaymentMethods.map(
+        (paymentMethod) => paymentMethod.updatedAt ?? 0
+      ),
       ...visibleInvoices.map((invoice) => invoice.updatedAt ?? 0),
       ...sortedSubscriptions.map((subscription) => subscription.updatedAt ?? 0),
     ]
@@ -210,13 +231,14 @@ export const getCurrentUserBillingCenter = query({
       },
       invoices: visibleInvoices.map((invoice) => {
         const relatedSubscription = invoice.stripeSubscriptionId
-          ? sortedSubscriptions.find(
+          ? (sortedSubscriptions.find(
               (subscription) =>
-                subscription.stripeSubscriptionId === invoice.stripeSubscriptionId
-            ) ?? null
+                subscription.stripeSubscriptionId ===
+                invoice.stripeSubscriptionId
+            ) ?? null)
           : null
         const relatedPlan = relatedSubscription
-          ? plansByKey.get(relatedSubscription.planKey) ?? null
+          ? (plansByKey.get(relatedSubscription.planKey) ?? null)
           : null
 
         return {
@@ -300,7 +322,8 @@ export const getCurrentUserBillingCenter = query({
                   interval: subscription.scheduledInterval ?? null,
                   planKey: subscription.scheduledPlanKey ?? null,
                   planName: subscription.scheduledPlanKey
-                    ? (plansByKey.get(subscription.scheduledPlanKey)?.name ?? null)
+                    ? (plansByKey.get(subscription.scheduledPlanKey)?.name ??
+                      null)
                     : null,
                   type: subscription.scheduledChangeType,
                 }

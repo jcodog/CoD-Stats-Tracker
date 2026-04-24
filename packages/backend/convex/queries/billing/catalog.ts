@@ -133,9 +133,11 @@ function getAvailableCurrencies(plans: BillingPlanRecord[]) {
     (plan) => plan.active && plan.archivedAt === undefined && plan.planType === "paid"
   )
 
-  return SUPPORTED_CURRENCIES.filter((currency) =>
-    activePaidPlans.every((plan) => planSupportsCurrency(plan, currency))
-  )
+  if (activePaidPlans.length === 0) {
+    return ["GBP"] as SupportedCurrency[]
+  }
+
+  return [...SUPPORTED_CURRENCIES]
 }
 
 function resolvePricingCurrency(args: {
@@ -151,6 +153,15 @@ function resolvePricingCurrency(args: {
     availableCurrencies.includes(normalizedPreferredCurrency)
       ? normalizedPreferredCurrency
       : ("GBP" as SupportedCurrency)
+  const hasFallbackPricing =
+    selectedCurrency !== "GBP" &&
+    args.plans.some(
+      (plan) =>
+        plan.active &&
+        plan.archivedAt === undefined &&
+        plan.planType === "paid" &&
+        !planSupportsCurrency(plan, selectedCurrency)
+    )
 
   return {
     availableCurrencies,
@@ -158,6 +169,8 @@ function resolvePricingCurrency(args: {
       normalizedPreferredCurrency &&
       normalizedPreferredCurrency !== selectedCurrency
         ? `Pricing is currently billed in ${selectedCurrency} for your selected plans.`
+        : hasFallbackPricing
+          ? `Some plans fall back to GBP because Stripe pricing for ${selectedCurrency} is not configured for every billing interval yet.`
         : null,
     selectedCurrency,
   }

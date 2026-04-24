@@ -3,13 +3,15 @@
 import { internal } from "../_generated/api"
 import type { Id } from "../_generated/dataModel"
 import type { ActionCtx } from "../_generated/server"
-import { hasCreatorAccessFromState } from "./billingAccess"
 import { getClerkBackendClient } from "./clerk"
 import { getTwitchAccountFromClerkUser } from "./clerkUsers"
+import { hasCreatorWorkspaceAccess } from "./creatorProgram"
 import { isPlayWithViewersTwitchEnabled } from "./creatorToolsConfig"
 
 type CreatorActionActor = Awaited<ReturnType<typeof getCreatorActionActor>>
-type TwitchAccount = NonNullable<ReturnType<typeof getTwitchAccountFromClerkUser>>
+type TwitchAccount = NonNullable<
+  ReturnType<typeof getTwitchAccountFromClerkUser>
+>
 
 type CreatorToolsActionAccess =
   | (CreatorActionActor & {
@@ -28,28 +30,37 @@ async function getCreatorActionActor(ctx: ActionCtx) {
     throw new Error("You must be signed in to manage Play With Viewers.")
   }
 
-  const user = await ctx.runQuery(internal.queries.staff.internal.getUserByClerkUserId, {
-    clerkUserId: identity.subject,
-  })
+  const user = await ctx.runQuery(
+    internal.queries.staff.internal.getUserByClerkUserId,
+    {
+      clerkUserId: identity.subject,
+    }
+  )
 
   if (!user) {
     throw new Error("Unable to resolve your creator account.")
   }
 
-  const billingState = await ctx.runQuery(
-    internal.queries.billing.resolution.resolveUserPlanState,
-    {
+  const [billingState, creatorAccount] = await Promise.all([
+    ctx.runQuery(internal.queries.billing.resolution.resolveUserPlanState, {
       userId: user._id,
-    }
-  )
+    }),
+    ctx.runQuery(internal.queries.creator.internal.getCreatorAccountByUserId, {
+      userId: user._id,
+    }),
+  ])
 
   if (
-    !hasCreatorAccessFromState({
+    !hasCreatorWorkspaceAccess({
       fallbackPlanKey: user.plan,
+      hasCreatorAccount: Boolean(creatorAccount),
       state: billingState,
+      userRole: user.role,
     })
   ) {
-    throw new Error("Creator plan access is required for Play With Viewers.")
+    throw new Error(
+      "Creator workspace access is required for Play With Viewers."
+    )
   }
 
   return {
@@ -84,7 +95,9 @@ export async function requireCreatorToolsActionAccess(
     }
   }
 
-  const clerkUser = await getClerkBackendClient().users.getUser(actor.clerkUserId)
+  const clerkUser = await getClerkBackendClient().users.getUser(
+    actor.clerkUserId
+  )
   const twitchAccount = getTwitchAccountFromClerkUser(clerkUser)
 
   if (!twitchAccount) {

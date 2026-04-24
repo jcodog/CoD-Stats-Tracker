@@ -1,9 +1,26 @@
 import Link from "next/link"
+import type { ReactElement, SVGProps } from "react"
 
 import { LandingLiveStats } from "@/features/landing/components/LandingLiveStats"
 import { NavbarAuthActions } from "@/features/landing/components/NavbarAuthActions"
 import { PUBLIC_SITE_ANALYTICS_URL } from "@/lib/site-analytics"
 import type { LandingMetricsResponse } from "@workspace/backend/landing/metrics"
+import { ClerkIconLight } from "@workspace/ui/components/ui/svgs/clerkIconLight"
+import { ClerkWordmarkDark } from "@workspace/ui/components/ui/svgs/clerkWordmarkDark"
+import { Cloudflare } from "@workspace/ui/components/ui/svgs/cloudflare"
+import { Convex } from "@workspace/ui/components/ui/svgs/convex"
+import { ConvexWordmarkDark } from "@workspace/ui/components/ui/svgs/convexWordmarkDark"
+import { NextjsIconDark } from "@workspace/ui/components/ui/svgs/nextjsIconDark"
+import { NextjsLogoDark } from "@workspace/ui/components/ui/svgs/nextjsLogoDark"
+import { Redis } from "@workspace/ui/components/ui/svgs/redis"
+import { ShadcnUiDark } from "@workspace/ui/components/ui/svgs/shadcnUiDark"
+import { Stripe } from "@workspace/ui/components/ui/svgs/stripe"
+import { StripeWordmark } from "@workspace/ui/components/ui/svgs/stripeWordmark"
+import { TurborepoIconDark } from "@workspace/ui/components/ui/svgs/turborepoIconDark"
+import { TurborepoWordmarkDark } from "@workspace/ui/components/ui/svgs/turborepoWordmarkDark"
+import { Typescript } from "@workspace/ui/components/ui/svgs/typescript"
+import { VercelDark } from "@workspace/ui/components/ui/svgs/vercelDark"
+import { VercelWordmarkDark } from "@workspace/ui/components/ui/svgs/vercelWordmarkDark"
 import {
   Avatar,
   AvatarFallback,
@@ -72,6 +89,79 @@ const creatorToolItems = [
     title: "Why creators matter here",
     detail:
       "Ranked creators sit at the center of community play. Supporting them makes CodStats more useful for the wider CoD ranked ecosystem, not just the person tracking solo sessions.",
+  },
+] as const
+
+type StackGraphic = (props: SVGProps<SVGSVGElement>) => ReactElement
+
+const engineeringStackItems: Array<{
+  Logo: StackGraphic
+  logoClassName: string
+  name: string
+  Wordmark?: StackGraphic
+  wordmarkClassName?: string
+}> = [
+  {
+    Logo: NextjsIconDark,
+    Wordmark: NextjsLogoDark,
+    logoClassName: "h-10 w-10",
+    name: "Next.js",
+    wordmarkClassName: "h-4 w-auto",
+  },
+  {
+    Logo: Typescript,
+    logoClassName: "h-11 w-11",
+    name: "TypeScript",
+  },
+  {
+    Logo: ClerkIconLight,
+    Wordmark: ClerkWordmarkDark,
+    logoClassName: "h-11 w-11",
+    name: "Clerk",
+    wordmarkClassName: "h-4 w-auto",
+  },
+  {
+    Logo: Convex,
+    Wordmark: ConvexWordmarkDark,
+    logoClassName: "h-11 w-11",
+    name: "Convex",
+    wordmarkClassName: "h-4 w-auto",
+  },
+  {
+    Logo: Stripe,
+    Wordmark: StripeWordmark,
+    logoClassName: "h-10 w-10",
+    name: "Stripe",
+    wordmarkClassName: "h-4 w-auto",
+  },
+  {
+    Logo: VercelDark,
+    Wordmark: VercelWordmarkDark,
+    logoClassName: "h-8 w-auto",
+    name: "Vercel",
+    wordmarkClassName: "h-3.5 w-auto",
+  },
+  {
+    Logo: Cloudflare,
+    logoClassName: "h-7 w-auto",
+    name: "Cloudflare",
+  },
+  {
+    Logo: TurborepoIconDark,
+    Wordmark: TurborepoWordmarkDark,
+    logoClassName: "h-10 w-10",
+    name: "Turborepo",
+    wordmarkClassName: "h-3.5 w-auto",
+  },
+  {
+    Logo: ShadcnUiDark,
+    logoClassName: "h-10 w-10",
+    name: "shadcn/ui",
+  },
+  {
+    Logo: Redis,
+    logoClassName: "h-10 w-auto",
+    name: "Redis",
   },
 ] as const
 
@@ -359,6 +449,59 @@ export function LandingCreatorToolsSection({
             </div>
           </article>
         ))}
+      </div>
+    </section>
+  )
+}
+
+export function LandingStackSection({
+  viewport,
+}: {
+  viewport: LandingViewport
+}) {
+  const gridClassName =
+    viewport === "mobile"
+      ? "grid-cols-2"
+      : "grid-cols-2 sm:grid-cols-3 lg:grid-cols-5"
+
+  return (
+    <section className="grid gap-6 pb-10">
+      <div className="grid gap-2">
+        <h2 className="text-2xl font-semibold tracking-tight text-balance sm:text-3xl">
+          Built on tools you can inspect
+        </h2>
+        <p className="max-w-[42rem] text-sm leading-7 text-pretty text-foreground/78 sm:text-base">
+          CodStats keeps the core stack legible: typed app code, trusted
+          billing, fast cached paths, and infrastructure that stays easy to
+          reason about.
+        </p>
+      </div>
+
+      <div className="border-y border-border/70 py-8">
+        <div className={cn("grid items-center gap-x-8 gap-y-8", gridClassName)}>
+          {engineeringStackItems.map((item) => {
+            const Logo = item.Logo
+            const Wordmark = item.Wordmark
+
+            return (
+              <figure
+                key={item.name}
+                className="flex min-h-24 items-center justify-center"
+              >
+                <span className="sr-only">{item.name}</span>
+                <div className="flex flex-col items-center justify-center gap-3">
+                  <Logo aria-hidden="true" className={item.logoClassName} />
+                  {Wordmark ? (
+                    <Wordmark
+                      aria-hidden="true"
+                      className={item.wordmarkClassName}
+                    />
+                  ) : null}
+                </div>
+              </figure>
+            )
+          })}
+        </div>
       </div>
     </section>
   )

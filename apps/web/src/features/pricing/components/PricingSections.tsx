@@ -112,7 +112,7 @@ export function PricingIntro({
           discountPercent={pendingCreatorCode.discountPercent}
         />
       ) : null}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="grid gap-3">
           <h1 className="max-w-[44rem] text-4xl leading-[0.96] font-semibold tracking-tight text-balance sm:text-5xl">
             Pricing
@@ -121,10 +121,12 @@ export function PricingIntro({
             Choose the CodStats plan that fits how you play and track ranked.
           </p>
         </div>
-        <PricingCurrencySelect
-          currencies={availableCurrencies}
-          value={selectedCurrency}
-        />
+        <div className="sm:pt-2">
+          <PricingCurrencySelect
+            currencies={availableCurrencies}
+            value={selectedCurrency}
+          />
+        </div>
       </div>
       {currencyNotice ? (
         <p className="text-sm leading-6 text-foreground/72">{currencyNotice}</p>

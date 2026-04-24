@@ -1,6 +1,6 @@
 import "server-only"
 
-import { fetchQuery } from "convex/nextjs"
+import { fetchAction } from "convex/nextjs"
 
 import { api } from "@workspace/backend/convex/_generated/api"
 
@@ -10,8 +10,8 @@ import type { SupportedPricingCurrency } from "@/lib/pricing-currency"
 export async function resolvePublicPricingCatalog(
   preferredCurrency?: SupportedPricingCurrency
 ) {
-  return (await fetchQuery(
-    api.queries.billing.catalog.getPublicPricingCatalog,
+  return (await fetchAction(
+    api.actions.billing.customer.getPublicPricingCatalog,
     preferredCurrency ? { preferredCurrency } : {}
   )) as PricingCatalogResponse
 }

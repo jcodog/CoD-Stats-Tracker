@@ -15,6 +15,7 @@ import type {
   BillingResolvedState,
   CancellationResult,
   CheckoutIntentResult,
+  CheckoutSessionResult,
   CheckoutQuoteResult,
   PaymentMethodMutationResult,
   PaymentMethodSetupIntentResult,
@@ -24,6 +25,7 @@ import type {
 import { billingQueryKeys } from "@/features/billing/lib/billing-query-keys"
 import type {
   CancelSubscriptionInput,
+  CreateSubscriptionCheckoutSessionInput,
   CreateSubscriptionIntentInput,
   PaymentMethodActionInput,
   PreviewCheckoutQuoteInput,
@@ -33,6 +35,7 @@ import type {
 } from "@/features/billing/lib/billing-schemas"
 import {
   cancelSubscriptionSchema,
+  createSubscriptionCheckoutSessionSchema,
   createSubscriptionIntentSchema,
   paymentMethodActionSchema,
   previewCheckoutQuoteSchema,
@@ -148,6 +151,22 @@ async function callCreateSubscriptionIntent(
       api.actions.billing.customer.createSubscriptionIntent,
       payload
     )) as CheckoutIntentResult
+  } catch (error) {
+    throw toBillingClientError(error)
+  }
+}
+
+async function callCreateSubscriptionCheckoutSession(
+  convex: ConvexReactClient,
+  input: CreateSubscriptionCheckoutSessionInput
+) {
+  const payload = createSubscriptionCheckoutSessionSchema.parse(input)
+
+  try {
+    return (await convex.action(
+      api.actions.billing.customer.createSubscriptionCheckoutSession,
+      payload
+    )) as CheckoutSessionResult
   } catch (error) {
     throw toBillingClientError(error)
   }
@@ -376,6 +395,19 @@ export function useCreateSubscriptionIntent() {
   return useMutation({
     mutationFn: (input: CreateSubscriptionIntentInput) =>
       callCreateSubscriptionIntent(convex, input),
+    onSuccess: async () => {
+      await invalidateBilling.invalidateAll()
+    },
+  })
+}
+
+export function useCreateSubscriptionCheckoutSession() {
+  const convex = useConvex()
+  const invalidateBilling = useInvalidateBillingQueries()
+
+  return useMutation({
+    mutationFn: (input: CreateSubscriptionCheckoutSessionInput) =>
+      callCreateSubscriptionCheckoutSession(convex, input),
     onSuccess: async () => {
       await invalidateBilling.invalidateAll()
     },

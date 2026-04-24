@@ -176,6 +176,14 @@ async function callBillingAction<T>(
           api.actions.staff.billing.backfillCreatorGrantStripeSubscriptions,
           {}
         )) as T
+      case "prepareCreatorProgramConnectAccount":
+        return (await convex.action(
+          api.actions.staff.billing.prepareCreatorProgramConnectAccount,
+          {
+            ...action.input,
+            targetUserId: action.input.targetUserId as Id<"users">,
+          }
+        )) as T
       case "archiveFeature":
         return (await convex.action(
           api.actions.staff.billing.archiveFeature,
@@ -224,6 +232,14 @@ async function callBillingAction<T>(
           api.actions.staff.billing.previewPriceReplacement,
           action.input
         )) as T
+      case "refreshCreatorProgramConnectStatus":
+        return (await convex.action(
+          api.actions.staff.billing.refreshCreatorProgramConnectStatus,
+          {
+            ...action.input,
+            targetUserId: action.input.targetUserId as Id<"users">,
+          }
+        )) as T
       case "replacePlanPrice":
         return (await convex.action(
           api.actions.staff.billing.replacePlanPrice,
@@ -255,6 +271,19 @@ async function callBillingAction<T>(
       case "upsertFeature":
         return (await convex.action(
           api.actions.staff.billing.upsertFeature,
+          action.input
+        )) as T
+      case "upsertCreatorProgramAccount":
+        return (await convex.action(
+          api.actions.staff.billing.upsertCreatorProgramAccount,
+          {
+            ...action.input,
+            targetUserId: action.input.targetUserId as Id<"users">,
+          }
+        )) as T
+      case "upsertCreatorProgramDefaults":
+        return (await convex.action(
+          api.actions.staff.billing.upsertCreatorProgramDefaults,
           action.input
         )) as T
       case "upsertPlan":

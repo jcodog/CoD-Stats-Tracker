@@ -1,4 +1,5 @@
 import {
+  IconAffiliate,
   IconHome2,
   IconLink,
   IconUsers,
@@ -7,11 +8,14 @@ import {
 
 export const creatorPrimaryNav = [
   {
+    description: "Workspace overview, program status, and creator activity.",
+    exact: true,
     href: "/creator",
     icon: IconHome2,
     label: "Home",
   },
   {
+    description: "Creator code, referral settings, and Stripe Connect status.",
     href: "/creator/code",
     icon: IconLink,
     label: "Creator code",
@@ -20,16 +24,77 @@ export const creatorPrimaryNav = [
 
 export const creatorToolNav = [
   {
+    description: "Queue management for creator-led viewer sessions.",
     href: "/creator/tools/playing-with-viewers",
     icon: IconUsers,
     label: "Playing with viewers",
   },
 ] as const
 
+export const creatorNavigationSections = [
+  {
+    items: creatorPrimaryNav,
+    key: "workspace",
+    label: "Workspace",
+  },
+  {
+    items: creatorToolNav,
+    key: "tools",
+    label: "Tools",
+  },
+] as const
+
+export type CreatorBreadcrumbItem = {
+  href?: string
+  label: string
+}
+
+export function isCreatorRouteActive(
+  pathname: string,
+  href: string,
+  options?: { exact?: boolean }
+) {
+  if (options?.exact) {
+    return pathname === href
+  }
+
+  return pathname === href || pathname.startsWith(`${href}/`)
+}
+
+export function resolveCreatorRoute(pathname: string) {
+  if (pathname.startsWith("/creator/tools/playing-with-viewers")) {
+    return {
+      breadcrumbs: [
+        { href: "/creator", label: "Home" },
+        { label: "Playing with viewers" },
+      ] satisfies CreatorBreadcrumbItem[],
+      title: "Playing with viewers",
+    }
+  }
+
+  if (pathname.startsWith("/creator/code")) {
+    return {
+      breadcrumbs: [
+        { label: "Creator code" },
+      ] satisfies CreatorBreadcrumbItem[],
+      title: "Creator code",
+    }
+  }
+
+  return {
+    breadcrumbs: [{ label: "Home" }] satisfies CreatorBreadcrumbItem[],
+    title: "Home",
+  }
+}
+
+export const CREATOR_WORKSPACE_TITLE = "Creator Workspace"
+export const CREATOR_WORKSPACE_ICON = IconAffiliate
+
 export function getCreatorConnectPresentation(connectState: string) {
   if (connectState === "ready") {
     return {
       description: "Payout setup is ready.",
+      indicatorClassName: "bg-emerald-500",
       label: "Ready",
       variant: "secondary" as const,
     }
@@ -37,7 +102,9 @@ export function getCreatorConnectPresentation(connectState: string) {
 
   if (connectState === "action_required") {
     return {
-      description: "Stripe still needs more information before payouts can go live.",
+      description:
+        "Stripe still needs more information before payouts can go live.",
+      indicatorClassName: "bg-destructive",
       label: "Action required",
       variant: "destructive" as const,
     }
@@ -46,6 +113,7 @@ export function getCreatorConnectPresentation(connectState: string) {
   if (connectState === "review") {
     return {
       description: "Stripe setup is in review.",
+      indicatorClassName: "bg-amber-500",
       label: "In review",
       variant: "outline" as const,
     }
@@ -53,6 +121,7 @@ export function getCreatorConnectPresentation(connectState: string) {
 
   return {
     description: "Stripe payout setup has not started yet.",
+    indicatorClassName: "bg-muted-foreground/55",
     label: "Not started",
     variant: "outline" as const,
   }

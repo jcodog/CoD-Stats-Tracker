@@ -13,17 +13,13 @@ import {
   hasManagedCreatorGrantSubscriptionAccess,
   maskIdentifier,
 } from "../../lib/billing"
-import {
-  hasCreatorAccess,
-  resolveAppPlanKey,
-} from "../../lib/billingAccess"
-import {
-  isStripeManagedCreatorGrantSubscription,
-} from "../../lib/billingStripe"
+import { hasCreatorAccess, resolveAppPlanKey } from "../../lib/billingAccess"
+import { isStripeManagedCreatorGrantSubscription } from "../../lib/billingStripe"
 import { getClerkBackendClient } from "../../lib/clerk"
 import { requireAuthorizedStaffAction } from "../../lib/staffActionAuth"
 import {
   resolveBillingFeatureApplyMode,
+  roleMeetsRequirement,
   type UserRole,
 } from "../../lib/staffRoles"
 import type {
@@ -35,6 +31,8 @@ import type {
   StaffBillingSyncSummary,
   StaffBillingUserLookupRecord,
   StaffCreatorGrantRecord,
+  StaffCreatorProgramAccountRecord,
+  StaffCreatorProgramDefaultsRecord,
   StaffImpactPreview,
   StaffMutationResponse,
   StaffSubscriptionImpactRow,
@@ -45,6 +43,22 @@ import type {
   StaffWebhookMetrics,
   StaffWebhookTimelinePoint,
 } from "../../lib/staffTypes"
+import {
+  buildCreatorCodeSeed,
+  DEFAULT_CREATOR_PROGRAM_DEFAULTS,
+  getCreatorConnectState,
+  mapStripeConnectedAccountV2Snapshot,
+  mapStripeConnectedAccountSnapshot,
+  normalizeCreatorCode,
+  normalizeCreatorCountry,
+  validateCreatorPercent,
+} from "../../lib/creatorProgram"
+import {
+  buildCreatorConnectedAccountCreateParams,
+  createStripeRecipientAccountV2,
+  isStripeV2CompatibilityError,
+  retrieveStripeAccountV2,
+} from "../../lib/creatorConnect"
 import { getStripe, STRIPE_CATALOG_APP } from "../../lib/stripe"
 import type { StripeCatalogSyncResult } from "../billing/syncCatalogToStripe"
 
@@ -58,6 +72,15 @@ type BillingSubscriptionStatus =
   | "paused"
   | "trialing"
   | "unpaid"
+
+const PAID_CONVERSION_STATUSES = new Set<BillingSubscriptionStatus>([
+  "active",
+  "canceled",
+  "past_due",
+  "paused",
+  "trialing",
+  "unpaid",
+])
 
 function mapAuditLogEntry(log: {
   _id: string
@@ -100,6 +123,10 @@ function isImpactStatus(status: string): status is SubscriptionStatus {
 
 function canViewFullBillingIdentifiers(role: UserRole) {
   return role === "admin" || role === "super_admin"
+}
+
+function canManageCreatorProgram(role: UserRole) {
+  return roleMeetsRequirement(role, "admin")
 }
 
 function maskBillingIdentifier(
@@ -761,7 +788,9 @@ async function backfillWebhookEventPayload(args: {
 
     console.error("Stripe webhook payload backfill failed", {
       error:
-        error instanceof Error ? error.message : "Unknown Stripe retrieval error",
+        error instanceof Error
+          ? error.message
+          : "Unknown Stripe retrieval error",
       stripeEventId: args.stripeEventId,
     })
 
@@ -843,12 +872,12 @@ function buildUserDirectory(args: {
     const currentPlanKey = hasManagedCreatorAccess
       ? currentSubscription?.planKey
       : activeGrant
-      ? activeGrant.planKey
-      : hasPaidAccess
-        ? currentSubscription?.planKey
-        : user.plan !== "free"
-          ? user.plan
-          : null
+        ? activeGrant.planKey
+        : hasPaidAccess
+          ? currentSubscription?.planKey
+          : user.plan !== "free"
+            ? user.plan
+            : null
     const currentAppPlanKey = resolveAppPlanKey({
       accessSource: hasManagedCreatorAccess
         ? "managed_grant_subscription"
@@ -869,12 +898,12 @@ function buildUserDirectory(args: {
       accessSource: hasManagedCreatorAccess
         ? "managed_grant_subscription"
         : activeGrant
-        ? "creator_grant"
-        : hasPaidAccess
-          ? "paid_subscription"
-          : currentPlanKey
-            ? "legacy_plan"
-            : "none",
+          ? "creator_grant"
+          : hasPaidAccess
+            ? "paid_subscription"
+            : currentPlanKey
+              ? "legacy_plan"
+              : "none",
       currentAppPlanKey,
       clerkUserId: user.clerkUserId,
       currentPlanKey,
@@ -935,6 +964,262 @@ function buildCreatorGrantRows(args: {
       userName: userById.get(grant.userId)?.name ?? grant.clerkUserId,
     }))
     .sort((left, right) => right.createdAt - left.createdAt)
+}
+
+function buildCreatorProgramRows(args: {
+  creatorAccounts: Array<{
+    _id: string
+    clerkUserId: string
+    code: string
+    codeActive: boolean
+    connectStatusUpdatedAt?: number
+    country: string
+    detailsSubmitted?: boolean
+    discountPercent: number
+    payoutEligible: boolean
+    payoutPercent: number
+    payoutsEnabled?: boolean
+    requirementsDisabledReason?: string
+    requirementsDue?: string[]
+    requirementsPendingVerification?: string[]
+    stripeConnectedAccountId?: string
+    userId: string
+  }>
+  creatorAttributions: Array<{
+    creatorAccountId: string
+    userId: string
+  }>
+  customers: Array<{
+    clerkUserId: string
+    email?: string
+  }>
+  subscriptions: Array<{
+    status: BillingSubscriptionStatus
+    userId: string
+  }>
+  userDirectory: StaffBillingUserLookupRecord[]
+  users: Array<{
+    _id: string
+    clerkUserId: string
+    name: string
+  }>
+}) {
+  const userById = new Map(args.users.map((user) => [user._id, user]))
+  const userDirectoryByUserId = new Map(
+    args.userDirectory.map((user) => [user.userId, user])
+  )
+  const emailByClerkUserId = new Map(
+    args.customers.map((customer) => [customer.clerkUserId, customer.email])
+  )
+  const subscriptionsByUserId = new Map<
+    string,
+    Array<(typeof args.subscriptions)[number]>
+  >()
+  const attributedUserIdsByCreatorAccountId = new Map<string, Set<string>>()
+
+  for (const subscription of args.subscriptions) {
+    const userSubscriptions =
+      subscriptionsByUserId.get(subscription.userId) ?? []
+    userSubscriptions.push(subscription)
+    subscriptionsByUserId.set(subscription.userId, userSubscriptions)
+  }
+
+  for (const attribution of args.creatorAttributions) {
+    const attributedUserIds =
+      attributedUserIdsByCreatorAccountId.get(attribution.creatorAccountId) ??
+      new Set<string>()
+    attributedUserIds.add(attribution.userId)
+    attributedUserIdsByCreatorAccountId.set(
+      attribution.creatorAccountId,
+      attributedUserIds
+    )
+  }
+
+  return args.creatorAccounts
+    .map<StaffCreatorProgramAccountRecord>((creatorAccount) => {
+      const user = userById.get(creatorAccount.userId)
+      const userDirectoryEntry = userDirectoryByUserId.get(
+        creatorAccount.userId
+      )
+      const attributedUserIds = Array.from(
+        attributedUserIdsByCreatorAccountId.get(creatorAccount._id) ?? []
+      )
+      const paidConversionCount = attributedUserIds.reduce((count, userId) => {
+        const subscriptions = subscriptionsByUserId.get(userId) ?? []
+
+        return (
+          count +
+          (subscriptions.some((subscription) =>
+            PAID_CONVERSION_STATUSES.has(subscription.status)
+          )
+            ? 1
+            : 0)
+        )
+      }, 0)
+
+      return {
+        accessSource: userDirectoryEntry?.accessSource ?? "none",
+        clerkUserId: creatorAccount.clerkUserId,
+        code: creatorAccount.code,
+        codeActive: creatorAccount.codeActive,
+        connectDisabledReason:
+          creatorAccount.requirementsDisabledReason ?? null,
+        connectRequirementsDue: creatorAccount.requirementsDue ?? [],
+        connectState: getCreatorConnectState(creatorAccount),
+        connectStatusUpdatedAt: creatorAccount.connectStatusUpdatedAt,
+        country: creatorAccount.country,
+        currentAppPlanKey: userDirectoryEntry?.currentAppPlanKey ?? "free",
+        currentPlanKey: userDirectoryEntry?.currentPlanKey ?? null,
+        detailsSubmitted: creatorAccount.detailsSubmitted ?? null,
+        discountPercent: creatorAccount.discountPercent,
+        email: emailByClerkUserId.get(creatorAccount.clerkUserId),
+        hasConnectedAccount: Boolean(creatorAccount.stripeConnectedAccountId),
+        id: creatorAccount._id,
+        paidConversionCount,
+        payoutEligible: creatorAccount.payoutEligible,
+        payoutPercent: creatorAccount.payoutPercent,
+        payoutsEnabled: creatorAccount.payoutsEnabled ?? null,
+        pendingVerificationCount:
+          creatorAccount.requirementsPendingVerification?.length ?? 0,
+        sharePath: `/pricing?creator=${encodeURIComponent(creatorAccount.code)}`,
+        signupCount: attributedUserIds.length,
+        userId: creatorAccount.userId,
+        userName: user?.name ?? creatorAccount.clerkUserId,
+      }
+    })
+    .sort((left, right) => left.userName.localeCompare(right.userName))
+}
+
+function buildGeneratedCreatorCodeBase(user: {
+  _id: Id<"users">
+  clerkUserId: string
+  name: string
+}) {
+  const candidates = [
+    buildCreatorCodeSeed(user.name),
+    buildCreatorCodeSeed(user.clerkUserId),
+    buildCreatorCodeSeed(String(user._id)),
+    buildCreatorCodeSeed(`${user.name}${user.clerkUserId}`),
+  ]
+
+  return (
+    candidates.find((candidate) => candidate.length >= 3) ??
+    buildCreatorCodeSeed(`CREATOR${String(user._id).slice(-6)}`)
+  )
+}
+
+function buildCreatorCodeCandidate(baseCode: string, suffix: number) {
+  const suffixText = suffix === 0 ? "" : String(suffix)
+  const trimmedBaseCode = baseCode.slice(0, Math.max(3, 24 - suffixText.length))
+
+  return normalizeCreatorCode(`${trimmedBaseCode}${suffixText}`)
+}
+
+async function resolveCreatorProgramCode(args: {
+  ctx: Parameters<typeof requireAuthorizedStaffAction>[0]
+  existingCreatorAccountId?: Id<"creatorAccounts">
+  requestedCode?: string
+  user: {
+    _id: Id<"users">
+    clerkUserId: string
+    name: string
+  }
+}) {
+  const requestedCode = args.requestedCode?.trim() ?? ""
+
+  if (requestedCode.length > 0) {
+    const normalizedRequestedCode = normalizeCreatorCode(requestedCode)
+
+    if (!normalizedRequestedCode) {
+      throw new Error(
+        "Creator code must be 3-24 characters and use only letters or numbers."
+      )
+    }
+
+    const conflictingAccount = await args.ctx.runQuery(
+      internal.queries.creator.internal.getCreatorAccountByNormalizedCode,
+      {
+        normalizedCode: normalizedRequestedCode,
+      }
+    )
+
+    if (
+      conflictingAccount &&
+      conflictingAccount._id !== args.existingCreatorAccountId
+    ) {
+      throw new Error(
+        "That creator code is already assigned to another account."
+      )
+    }
+
+    return normalizedRequestedCode
+  }
+
+  const baseCode = buildGeneratedCreatorCodeBase(args.user)
+
+  for (let suffix = 0; suffix < 1000; suffix += 1) {
+    const candidateCode = buildCreatorCodeCandidate(baseCode, suffix)
+
+    if (!candidateCode) {
+      continue
+    }
+
+    const conflictingAccount = await args.ctx.runQuery(
+      internal.queries.creator.internal.getCreatorAccountByNormalizedCode,
+      {
+        normalizedCode: candidateCode,
+      }
+    )
+
+    if (
+      !conflictingAccount ||
+      conflictingAccount._id === args.existingCreatorAccountId
+    ) {
+      return candidateCode
+    }
+  }
+
+  throw new Error(
+    "Unable to generate a unique creator code automatically. Set one manually."
+  )
+}
+
+async function syncCreatorProgramConnectAccount(args: {
+  creatorAccountId: Id<"creatorAccounts">
+  ctx: Parameters<typeof requireAuthorizedStaffAction>[0]
+  stripeConnectedAccountId: string
+}) {
+  let snapshot:
+    | ReturnType<typeof mapStripeConnectedAccountSnapshot>
+    | ReturnType<typeof mapStripeConnectedAccountV2Snapshot>
+
+  try {
+    const account = await retrieveStripeAccountV2(args.stripeConnectedAccountId)
+    snapshot = mapStripeConnectedAccountV2Snapshot(account)
+  } catch (error) {
+    if (!isStripeV2CompatibilityError(error)) {
+      throw error
+    }
+
+    const stripe = getStripe()
+    const account = await stripe.accounts.retrieve(
+      args.stripeConnectedAccountId
+    )
+    snapshot = {
+      ...mapStripeConnectedAccountSnapshot(account),
+      stripeConnectedAccountVersion: "v1" as const,
+    }
+  }
+
+  await args.ctx.runMutation(
+    internal.mutations.creator.internal.applyStripeConnectedAccountSnapshot,
+    {
+      ...snapshot,
+      creatorAccountId: args.creatorAccountId,
+    }
+  )
+
+  return snapshot
 }
 
 async function recordAuditLog(args: {
@@ -1103,6 +1388,36 @@ function buildBillingDashboard(
       startsAt?: number
       userId: string
     }>
+    creatorAccounts: Array<{
+      _id: string
+      chargesEnabled?: boolean
+      clerkUserId: string
+      code: string
+      codeActive: boolean
+      connectStatusUpdatedAt?: number
+      country: string
+      detailsSubmitted?: boolean
+      discountPercent: number
+      payoutEligible: boolean
+      payoutPercent: number
+      payoutsEnabled?: boolean
+      requirementsDisabledReason?: string
+      requirementsDue?: string[]
+      requirementsPendingVerification?: string[]
+      stripeConnectedAccountId?: string
+      userId: string
+    }>
+    creatorAttributions: Array<{
+      creatorAccountId: string
+      userId: string
+    }>
+    creatorProgramDefaults: {
+      defaultCodeActive: boolean
+      defaultCountry: string
+      defaultDiscountPercent: number
+      defaultPayoutEligible: boolean
+      defaultPayoutPercent: number
+    } | null
     features: Array<{
       active: boolean
       appliesTo?: string
@@ -1242,6 +1557,21 @@ function buildBillingDashboard(
     grants: args.accessGrants,
     users: args.users,
   })
+  const creatorProgramDefaults = canManageCreatorProgram(actorRole)
+    ? {
+        ...(args.creatorProgramDefaults ?? DEFAULT_CREATOR_PROGRAM_DEFAULTS),
+      }
+    : null
+  const creatorProgramAccounts = canManageCreatorProgram(actorRole)
+    ? buildCreatorProgramRows({
+        creatorAccounts: args.creatorAccounts,
+        creatorAttributions: args.creatorAttributions,
+        customers: args.customers,
+        subscriptions: args.subscriptions,
+        userDirectory,
+        users: args.users,
+      })
+    : []
   const webhookEventRows = buildWebhookEventRows({
     events: args.webhookEvents,
     fullIdentifiers,
@@ -1360,6 +1690,8 @@ function buildBillingDashboard(
     })),
     auditLogs: args.auditLogs.slice(0, 60).map(mapAuditLogEntry),
     creatorGrants: creatorGrantRows.slice(0, 60),
+    creatorProgramAccounts,
+    creatorProgramDefaults,
     customers: customerRows,
     features,
     generatedAt: Date.now(),
@@ -2857,7 +3189,9 @@ async function resolveExistingCreatorGrantStripeCustomer(args: {
   }
 
   try {
-    const customer = await args.stripe.customers.retrieve(metadataStripeCustomerId)
+    const customer = await args.stripe.customers.retrieve(
+      metadataStripeCustomerId
+    )
 
     if ("deleted" in customer && customer.deleted) {
       return undefined
@@ -2883,9 +3217,7 @@ async function resolveExistingCreatorGrantStripeCustomer(args: {
       "code" in error &&
       error.code === "resource_missing"
 
-    if (
-      isResourceMissingError
-    ) {
+    if (isResourceMissingError) {
       return undefined
     }
 
@@ -2908,7 +3240,8 @@ async function ensureCreatorGrantStripeCustomer(args: {
     name: string
   }
 }) {
-  const existingCustomerId = await resolveExistingCreatorGrantStripeCustomer(args)
+  const existingCustomerId =
+    await resolveExistingCreatorGrantStripeCustomer(args)
 
   if (existingCustomerId) {
     return existingCustomerId
@@ -3410,6 +3743,377 @@ async function cancelCreatorStripeGrant(args: {
   }
 }
 
+export const upsertCreatorProgramDefaults = action({
+  args: {
+    defaultCodeActive: v.boolean(),
+    defaultCountry: v.string(),
+    defaultDiscountPercent: v.number(),
+    defaultPayoutEligible: v.boolean(),
+    defaultPayoutPercent: v.number(),
+  },
+  handler: async (ctx, args): Promise<StaffMutationResponse> => {
+    const operator = await requireAuthorizedStaffAction(ctx, "admin")
+    const normalizedCountry = normalizeCreatorCountry(args.defaultCountry)
+
+    if (!normalizedCountry) {
+      throw new Error(
+        "Creator default country must be a valid ISO country code."
+      )
+    }
+
+    const defaultsBefore = await ctx.runQuery(
+      internal.queries.creator.internal.getCreatorProgramDefaults,
+      {}
+    )
+    const defaultsAfter = await ctx.runMutation(
+      internal.mutations.creator.internal.upsertCreatorProgramDefaults,
+      {
+        defaultCodeActive: args.defaultCodeActive,
+        defaultCountry: normalizedCountry,
+        defaultDiscountPercent: validateCreatorPercent({
+          allowZero: true,
+          label: "Default discount percent",
+          value: args.defaultDiscountPercent,
+        }),
+        defaultPayoutEligible: args.defaultPayoutEligible,
+        defaultPayoutPercent: validateCreatorPercent({
+          allowZero: true,
+          label: "Default payout percent",
+          value: args.defaultPayoutPercent,
+        }),
+      }
+    )
+
+    await recordAuditLog({
+      action: "billing.creator_program.defaults.updated",
+      actorClerkUserId: operator.actorClerkUserId,
+      actorName: operator.actorDisplayName,
+      actorRole: operator.actorRole,
+      ctx,
+      details: JSON.stringify(
+        {
+          after: defaultsAfter,
+          before: defaultsBefore ?? DEFAULT_CREATOR_PROGRAM_DEFAULTS,
+        },
+        null,
+        2
+      ),
+      entityId: "creator-program-defaults",
+      entityLabel: "Creator program defaults",
+      entityType: "billingCreatorProgramDefaults",
+      result: "success",
+      summary: "Updated creator program defaults.",
+    })
+
+    return {
+      summary: "Updated creator program defaults.",
+      syncSummary: null,
+    }
+  },
+})
+
+export const upsertCreatorProgramAccount = action({
+  args: {
+    code: v.string(),
+    codeActive: v.boolean(),
+    country: v.string(),
+    discountPercent: v.number(),
+    payoutEligible: v.boolean(),
+    payoutPercent: v.number(),
+    targetUserId: v.id("users"),
+  },
+  handler: async (ctx, args): Promise<StaffMutationResponse> => {
+    const operator = await requireAuthorizedStaffAction(ctx, "admin")
+    const [defaults, existingCreatorAccount, targetUser] = await Promise.all([
+      ctx.runQuery(
+        internal.queries.creator.internal.getCreatorProgramDefaults,
+        {}
+      ),
+      ctx.runQuery(
+        internal.queries.creator.internal.getCreatorAccountByUserId,
+        {
+          userId: args.targetUserId,
+        }
+      ),
+      ctx.runQuery(internal.queries.staff.internal.getUserById, {
+        userId: args.targetUserId,
+      }),
+    ])
+
+    if (!targetUser) {
+      throw new Error("The selected user was not found.")
+    }
+
+    const normalizedCountry = normalizeCreatorCountry(
+      args.country ||
+        existingCreatorAccount?.country ||
+        defaults?.defaultCountry ||
+        DEFAULT_CREATOR_PROGRAM_DEFAULTS.defaultCountry
+    )
+
+    if (!normalizedCountry) {
+      throw new Error("Creator country must be a valid ISO country code.")
+    }
+
+    if (
+      existingCreatorAccount?.stripeConnectedAccountId &&
+      normalizedCountry !== existingCreatorAccount.country
+    ) {
+      throw new Error(
+        "Creator country cannot change after Stripe Connect has already been prepared."
+      )
+    }
+
+    const code = await resolveCreatorProgramCode({
+      ctx,
+      existingCreatorAccountId: existingCreatorAccount?._id,
+      requestedCode: args.code || existingCreatorAccount?.code,
+      user: targetUser,
+    })
+    const creatorAccountAfter = await ctx.runMutation(
+      internal.mutations.creator.internal.upsertCreatorAccount,
+      {
+        clerkUserId: targetUser.clerkUserId,
+        code,
+        codeActive: args.codeActive,
+        country: normalizedCountry,
+        discountPercent: validateCreatorPercent({
+          allowZero: true,
+          label: "Discount percent",
+          value: args.discountPercent,
+        }),
+        payoutEligible: args.payoutEligible,
+        payoutPercent: validateCreatorPercent({
+          allowZero: true,
+          label: "Payout percent",
+          value: args.payoutPercent,
+        }),
+        userId: targetUser._id,
+      }
+    )
+
+    await recordAuditLog({
+      action: existingCreatorAccount
+        ? "billing.creator_program.account.updated"
+        : "billing.creator_program.account.created",
+      actorClerkUserId: operator.actorClerkUserId,
+      actorName: operator.actorDisplayName,
+      actorRole: operator.actorRole,
+      ctx,
+      details: JSON.stringify(
+        {
+          after: creatorAccountAfter,
+          before: existingCreatorAccount ?? null,
+        },
+        null,
+        2
+      ),
+      entityId: targetUser._id,
+      entityLabel: targetUser.name,
+      entityType: "billingCreatorProgramAccount",
+      result: "success",
+      summary: existingCreatorAccount
+        ? `Updated creator program settings for ${targetUser.name}.`
+        : `Enabled creator program settings for ${targetUser.name}.`,
+    })
+
+    return {
+      summary: existingCreatorAccount
+        ? `Updated creator program settings for ${targetUser.name}.`
+        : `Enabled creator account for ${targetUser.name}.`,
+      syncSummary: null,
+    }
+  },
+})
+
+export const prepareCreatorProgramConnectAccount = action({
+  args: {
+    targetUserId: v.id("users"),
+  },
+  handler: async (ctx, args): Promise<StaffMutationResponse> => {
+    const operator = await requireAuthorizedStaffAction(ctx, "admin")
+    const [creatorAccount, targetUser] = await Promise.all([
+      ctx.runQuery(
+        internal.queries.creator.internal.getCreatorAccountByUserId,
+        {
+          userId: args.targetUserId,
+        }
+      ),
+      ctx.runQuery(internal.queries.staff.internal.getUserById, {
+        userId: args.targetUserId,
+      }),
+    ])
+
+    if (!targetUser) {
+      throw new Error("The selected user was not found.")
+    }
+
+    if (!creatorAccount) {
+      throw new Error(
+        "Configure the creator account before preparing Stripe Connect."
+      )
+    }
+
+    const stripe = getStripe()
+    const clerkUser = await getClerkBackendClient().users.getUser(
+      targetUser.clerkUserId
+    )
+    const creatorEmail = getClerkUserEmail(clerkUser)
+
+    if (!creatorEmail) {
+      throw new Error(
+        "The selected user needs a primary email address before Stripe Connect can start."
+      )
+    }
+
+    let snapshot:
+      | ReturnType<typeof mapStripeConnectedAccountSnapshot>
+      | ReturnType<typeof mapStripeConnectedAccountV2Snapshot>
+
+    if (!creatorAccount.stripeConnectedAccountId) {
+      const account = await createStripeRecipientAccountV2({
+        clerkUserId: targetUser.clerkUserId,
+        country:
+          normalizeCreatorCountry(creatorAccount.country) ??
+          DEFAULT_CREATOR_PROGRAM_DEFAULTS.defaultCountry,
+        creatorAccountId: creatorAccount._id,
+        creatorCode: creatorAccount.code,
+        displayName: targetUser.name,
+        email: creatorEmail,
+        userId: targetUser._id,
+      })
+
+      snapshot = mapStripeConnectedAccountV2Snapshot(account)
+    } else {
+      try {
+        const account = await retrieveStripeAccountV2(
+          creatorAccount.stripeConnectedAccountId
+        )
+        snapshot = mapStripeConnectedAccountV2Snapshot(account)
+      } catch (error) {
+        if (!isStripeV2CompatibilityError(error)) {
+          throw error
+        }
+
+        const account = await stripe.accounts.retrieve(
+          creatorAccount.stripeConnectedAccountId
+        )
+        snapshot = {
+          ...mapStripeConnectedAccountSnapshot(account),
+          stripeConnectedAccountVersion: "v1" as const,
+        }
+      }
+    }
+
+    await ctx.runMutation(
+      internal.mutations.creator.internal.applyStripeConnectedAccountSnapshot,
+      {
+        ...snapshot,
+        creatorAccountId: creatorAccount._id,
+      }
+    )
+
+    await recordAuditLog({
+      action: "billing.creator_program.connect.prepared",
+      actorClerkUserId: operator.actorClerkUserId,
+      actorName: operator.actorDisplayName,
+      actorRole: operator.actorRole,
+      ctx,
+      details: JSON.stringify(
+        {
+          connectState: getCreatorConnectState(snapshot),
+          creatorAccountId: creatorAccount._id,
+          stripeConnectedAccountId: snapshot.stripeConnectedAccountId,
+        },
+        null,
+        2
+      ),
+      entityId: creatorAccount._id,
+      entityLabel: targetUser.name,
+      entityType: "billingCreatorProgramAccount",
+      result: "success",
+      summary: creatorAccount.stripeConnectedAccountId
+        ? `Refreshed Stripe Connect setup for ${targetUser.name}.`
+        : `Created Stripe Connect setup for ${targetUser.name}.`,
+    })
+
+    return {
+      summary: creatorAccount.stripeConnectedAccountId
+        ? `Refreshed Stripe Connect setup for ${targetUser.name}.`
+        : `Created Stripe Connect for ${targetUser.name}. The creator can continue onboarding from /creator/code.`,
+      syncSummary: null,
+    }
+  },
+})
+
+export const refreshCreatorProgramConnectStatus = action({
+  args: {
+    targetUserId: v.id("users"),
+  },
+  handler: async (ctx, args): Promise<StaffMutationResponse> => {
+    const operator = await requireAuthorizedStaffAction(ctx, "admin")
+    const [creatorAccount, targetUser] = await Promise.all([
+      ctx.runQuery(
+        internal.queries.creator.internal.getCreatorAccountByUserId,
+        {
+          userId: args.targetUserId,
+        }
+      ),
+      ctx.runQuery(internal.queries.staff.internal.getUserById, {
+        userId: args.targetUserId,
+      }),
+    ])
+
+    if (!targetUser) {
+      throw new Error("The selected user was not found.")
+    }
+
+    if (!creatorAccount) {
+      throw new Error("Creator account not found.")
+    }
+
+    if (!creatorAccount.stripeConnectedAccountId) {
+      return {
+        summary: `No Stripe Connect account has been prepared for ${targetUser.name} yet.`,
+        syncSummary: null,
+      }
+    }
+
+    const snapshot = await syncCreatorProgramConnectAccount({
+      creatorAccountId: creatorAccount._id,
+      ctx,
+      stripeConnectedAccountId: creatorAccount.stripeConnectedAccountId,
+    })
+
+    await recordAuditLog({
+      action: "billing.creator_program.connect.refreshed",
+      actorClerkUserId: operator.actorClerkUserId,
+      actorName: operator.actorDisplayName,
+      actorRole: operator.actorRole,
+      ctx,
+      details: JSON.stringify(
+        {
+          connectState: getCreatorConnectState(snapshot),
+          creatorAccountId: creatorAccount._id,
+          stripeConnectedAccountId: snapshot.stripeConnectedAccountId,
+        },
+        null,
+        2
+      ),
+      entityId: creatorAccount._id,
+      entityLabel: targetUser.name,
+      entityType: "billingCreatorProgramAccount",
+      result: "success",
+      summary: `Refreshed Stripe Connect status for ${targetUser.name}.`,
+    })
+
+    return {
+      summary: `Refreshed Stripe Connect status for ${targetUser.name}.`,
+      syncSummary: null,
+    }
+  },
+})
+
 export const grantCreatorAccess = action({
   args: {
     endsAt: v.optional(v.number()),
@@ -3456,7 +4160,9 @@ export const grantCreatorAccess = action({
         effectivePlanKey: plan.key,
       }) !== "creator"
     ) {
-      throw new Error("Creator access grants must use the Creator billing plan.")
+      throw new Error(
+        "Creator access grants must use the Creator billing plan."
+      )
     }
 
     if (normalizedReason.length < 8) {
@@ -3469,9 +4175,7 @@ export const grantCreatorAccess = action({
       args.endsAt !== undefined &&
       (!Number.isFinite(args.endsAt) || args.endsAt <= now)
     ) {
-      throw new Error(
-        "Creator access expiry must be a valid future timestamp."
-      )
+      throw new Error("Creator access expiry must be a valid future timestamp.")
     }
 
     const stripe = getStripe()

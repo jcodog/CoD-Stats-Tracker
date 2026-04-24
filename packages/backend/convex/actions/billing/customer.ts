@@ -4,8 +4,9 @@ import Stripe from "stripe"
 import { v } from "convex/values"
 
 import type { Doc } from "../../_generated/dataModel"
-import { internal } from "../../_generated/api"
+import { api, internal } from "../../_generated/api"
 import { action, type ActionCtx } from "../../_generated/server"
+import { getConvexEnv } from "../../env"
 import {
   reconcileBillingCustomer,
   reconcileStripeSubscription,
@@ -69,6 +70,28 @@ class BillingActionError extends Error {
     super(message)
     this.code = code
     this.status = status
+  }
+}
+
+function getAppPublicOrigin() {
+  const rawOrigin = getConvexEnv().APP_PUBLIC_ORIGIN?.trim()
+
+  if (!rawOrigin) {
+    throw new BillingActionError(
+      "missing_public_origin",
+      "Missing APP_PUBLIC_ORIGIN. Stripe Checkout requires an absolute app origin.",
+      500
+    )
+  }
+
+  try {
+    return new URL(rawOrigin).origin
+  } catch {
+    throw new BillingActionError(
+      "invalid_public_origin",
+      "Invalid APP_PUBLIC_ORIGIN. Use an absolute URL such as https://codstats.tech.",
+      500
+    )
   }
 }
 
@@ -443,7 +466,9 @@ function getCheckoutPlanPriceId(args: {
       : args.plan.yearlyPriceIdEur
   }
 
-  return args.interval === "month" ? args.plan.monthlyPriceId : args.plan.yearlyPriceId
+  return args.interval === "month"
+    ? args.plan.monthlyPriceId
+    : args.plan.yearlyPriceId
 }
 
 function resolveCheckoutPlanPricing(args: {
@@ -477,7 +502,9 @@ function resolveCheckoutPlanPricing(args: {
   }
 
   const gbpPriceId =
-    args.interval === "month" ? args.plan.monthlyPriceId : args.plan.yearlyPriceId
+    args.interval === "month"
+      ? args.plan.monthlyPriceId
+      : args.plan.yearlyPriceId
 
   if (!gbpPriceId) {
     throw new BillingActionError(
@@ -498,12 +525,72 @@ function resolveCheckoutPlanPricing(args: {
   }
 }
 
+async function getLiveStripePriceSnapshot(args: {
+  fallbackPricing: {
+    amount: number
+    currency: string
+    interval: "month" | "year"
+  } | null
+  interval: "month" | "year"
+  plan: BillingPlanRecord | null
+  preferredCurrency: SupportedPricingCurrency
+  priceCache: Map<string, Promise<Stripe.Price | null>>
+  stripe: Stripe
+}) {
+  if (!args.fallbackPricing || !args.plan) {
+    return args.fallbackPricing
+  }
+
+  const candidatePriceIds = Array.from(
+    new Set(
+      [
+        getCheckoutPlanPriceId({
+          currency: args.preferredCurrency,
+          interval: args.interval,
+          plan: args.plan,
+        }),
+        getCheckoutPlanPriceId({
+          currency: "GBP",
+          interval: args.interval,
+          plan: args.plan,
+        }),
+      ].filter((value): value is string => Boolean(value))
+    )
+  )
+
+  for (const priceId of candidatePriceIds) {
+    let pricePromise = args.priceCache.get(priceId)
+
+    if (!pricePromise) {
+      pricePromise = args.stripe.prices.retrieve(priceId).catch(() => null)
+      args.priceCache.set(priceId, pricePromise)
+    }
+
+    const price = await pricePromise
+
+    if (!price || "deleted" in price || typeof price.unit_amount !== "number") {
+      continue
+    }
+
+    return {
+      amount: price.unit_amount,
+      currency: price.currency.toUpperCase(),
+      interval: args.interval,
+    }
+  }
+
+  return args.fallbackPricing
+}
+
 function normalizeCreatorCodeInput(value: string | undefined) {
   if (!value) {
     return undefined
   }
 
-  const normalizedCode = value.trim().toUpperCase().replace(/[^A-Z0-9]/g, "")
+  const normalizedCode = value
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "")
   return /^[A-Z0-9]{3,24}$/.test(normalizedCode) ? normalizedCode : undefined
 }
 
@@ -943,18 +1030,76 @@ async function getExistingStripeSubscription(args: {
   })
 
   return (
-    [...subscriptions.data].sort((left, right) => {
-      const priorityDifference =
-        getStripeStatusPriority(right.status) -
-        getStripeStatusPriority(left.status)
+    [...subscriptions.data]
+      .filter((subscription) => shouldBlockNewCheckout(subscription))
+      .sort((left, right) => {
+        const priorityDifference =
+          getStripeStatusPriority(right.status) -
+          getStripeStatusPriority(left.status)
 
-      if (priorityDifference !== 0) {
-        return priorityDifference
-      }
+        if (priorityDifference !== 0) {
+          return priorityDifference
+        }
 
-      return right.created - left.created
-    })[0] ?? null
+        return right.created - left.created
+      })[0] ?? null
   )
+}
+
+function buildCheckoutReturnUrl(appOrigin: string) {
+  return `${appOrigin}/checkout/complete?session_id={CHECKOUT_SESSION_ID}`
+}
+
+function buildCheckoutCancelUrl(appOrigin: string) {
+  return `${appOrigin}/checkout/cancelled`
+}
+
+function hasStripeSubscriptionEnded(
+  subscription: Stripe.Subscription,
+  now = Date.now()
+) {
+  if (
+    subscription.status === "canceled" ||
+    subscription.status === "incomplete_expired" ||
+    subscription.status === "unpaid"
+  ) {
+    return true
+  }
+
+  if (
+    typeof subscription.ended_at === "number" &&
+    subscription.ended_at * 1000 <= now
+  ) {
+    return true
+  }
+
+  if (
+    typeof subscription.cancel_at === "number" &&
+    subscription.cancel_at * 1000 <= now
+  ) {
+    return true
+  }
+
+  if (
+    subscription.cancel_at_period_end &&
+    typeof subscription.current_period_end === "number" &&
+    subscription.current_period_end * 1000 <= now
+  ) {
+    return true
+  }
+
+  return false
+}
+
+function shouldBlockNewCheckout(
+  subscription: Stripe.Subscription,
+  now = Date.now()
+) {
+  if (hasStripeSubscriptionEnded(subscription, now)) {
+    return false
+  }
+
+  return true
 }
 
 async function listStripeSubscriptionsForCustomer(args: {
@@ -1225,10 +1370,13 @@ export const syncBillingCenter = action({
         })
       }
       await ctx.runMutation(
-        internal.mutations.billing.state.deleteBillingSubscriptionsMissingFromSync,
+        internal.mutations.billing.state
+          .deleteBillingSubscriptionsMissingFromSync,
         {
           stripeCustomerId: customerId,
-          stripeSubscriptionIds: subscriptions.map((subscription) => subscription.id),
+          stripeSubscriptionIds: subscriptions.map(
+            (subscription) => subscription.id
+          ),
           userId: userContext.user._id,
         }
       )
@@ -1721,11 +1869,11 @@ export const createSubscriptionIntent = action({
       const stripe = getStripe()
       const { amount, currency, currencyNotice, plan, priceId } =
         await getPurchasablePlan({
-        ctx,
-        interval: args.interval,
-        planKey: args.planKey,
-        preferredCurrency: args.preferredCurrency,
-      })
+          ctx,
+          interval: args.interval,
+          planKey: args.planKey,
+          preferredCurrency: args.preferredCurrency,
+        })
       const creatorDiscount = await resolveCheckoutCreatorDiscount({
         amount,
         creatorCode: args.creatorCode,
@@ -1759,10 +1907,23 @@ export const createSubscriptionIntent = action({
           stripe,
           subscriptionId: existingSubscription.id,
         })
+        const subscriptionStillBlocksCheckout =
+          shouldBlockNewCheckout(expandedSubscription)
         const currentPriceId =
           getStripeSubscriptionItem(expandedSubscription).price.id
 
-        if (
+        if (!subscriptionStillBlocksCheckout) {
+          await reconcileStripeSubscription({
+            ctx,
+            stripe,
+            subscription: expandedSubscription,
+          })
+          await syncCustomerBillingSnapshot({
+            ctx,
+            stripe,
+            stripeCustomerId: customerId,
+          })
+        } else if (
           expandedSubscription.status === "incomplete" &&
           currentPriceId === priceId &&
           getStripeSubscriptionInterval(expandedSubscription) === args.interval
@@ -1852,7 +2013,8 @@ export const createSubscriptionIntent = action({
             clerkUserId: userContext.user.clerkUserId,
             creatorCode: creatorDiscount.appliedDiscount?.code ?? "",
             creatorDiscountPercent:
-              creatorDiscount.appliedDiscount?.discountPercent?.toString() ?? "",
+              creatorDiscount.appliedDiscount?.discountPercent?.toString() ??
+              "",
             planKey: plan.key,
             pricingCurrency: currency,
             userId: userContext.user._id,
@@ -1926,6 +2088,332 @@ export const createSubscriptionIntent = action({
   },
 })
 
+export const createSubscriptionCheckoutSession = action({
+  args: {
+    creatorCode: v.optional(v.string()),
+    interval: billingIntervalValidator,
+    planKey: v.string(),
+    preferredCurrency: v.optional(supportedPricingCurrencyValidator),
+  },
+  handler: async (ctx, args) => {
+    try {
+      await assertCheckoutEnabled(ctx)
+
+      const userContext = await requireBillingUser(ctx)
+      assertCreatorGrantAllowsSelfServeBilling({
+        action: "checkout",
+        userContext,
+      })
+
+      const stripe = getStripe()
+      const appOrigin = getAppPublicOrigin()
+      const { amount, currency, currencyNotice, plan, priceId } =
+        await getPurchasablePlan({
+          ctx,
+          interval: args.interval,
+          planKey: args.planKey,
+          preferredCurrency: args.preferredCurrency,
+        })
+      const creatorDiscount = await resolveCheckoutCreatorDiscount({
+        amount,
+        creatorCode: args.creatorCode,
+        ctx,
+        finalizeCodeEntry: true,
+        userContext,
+      })
+      const customerId = await ensureStripeCustomer({
+        ctx,
+        email: userContext.email,
+        stripe,
+        userContext,
+      })
+      const existingSubscription = await getExistingStripeSubscription({
+        customerId,
+        stripe,
+      })
+
+      if (existingSubscription) {
+        const expandedSubscription = await getExpandedSubscription({
+          stripe,
+          subscriptionId: existingSubscription.id,
+        })
+        const subscriptionStillBlocksCheckout =
+          shouldBlockNewCheckout(expandedSubscription)
+
+        if (!subscriptionStillBlocksCheckout) {
+          await reconcileStripeSubscription({
+            ctx,
+            stripe,
+            subscription: expandedSubscription,
+          })
+          await syncCustomerBillingSnapshot({
+            ctx,
+            stripe,
+            stripeCustomerId: customerId,
+          })
+        } else if (expandedSubscription.status === "incomplete") {
+          await cancelIncompleteSubscription({
+            ctx,
+            reason: "replaced_before_confirmation",
+            stripe,
+            subscription: expandedSubscription,
+            userContext,
+          })
+          await syncCustomerBillingSnapshot({
+            ctx,
+            stripe,
+            stripeCustomerId: customerId,
+          })
+        } else {
+          throw new BillingActionError(
+            "existing_subscription",
+            "You already have an active subscription on file. Manage it from billing settings.",
+            409
+          )
+        }
+      }
+
+      const discountCouponId = creatorDiscount.appliedDiscount?.discountPercent
+        ? await ensureCreatorDiscountCoupon({
+            creatorCode: creatorDiscount.appliedDiscount.code,
+            discountPercent: creatorDiscount.appliedDiscount.discountPercent,
+            stripe,
+          })
+        : undefined
+
+      const metadata = {
+        app: STRIPE_CATALOG_APP,
+        billingInterval: args.interval,
+        clerkUserId: userContext.user.clerkUserId,
+        creatorCode: creatorDiscount.appliedDiscount?.code ?? "",
+        creatorDiscountPercent:
+          creatorDiscount.appliedDiscount?.discountPercent?.toString() ?? "",
+        planKey: plan.key,
+        pricingCurrency: currency,
+        userId: userContext.user._id,
+      }
+      const session = await stripe.checkout.sessions.create(
+        {
+          adaptive_pricing: {
+            enabled: true,
+          },
+          cancel_url: buildCheckoutCancelUrl(appOrigin),
+          client_reference_id: userContext.user._id,
+          customer: customerId,
+          discounts: discountCouponId
+            ? [{ coupon: discountCouponId }]
+            : undefined,
+          line_items: [{ price: priceId, quantity: 1 }],
+          metadata,
+          mode: "subscription",
+          return_url: buildCheckoutReturnUrl(appOrigin),
+          subscription_data: {
+            metadata,
+          },
+          ui_mode: "custom",
+        },
+        {
+          idempotencyKey: [
+            "billing",
+            "checkout-session",
+            userContext.user._id,
+            plan.key,
+            args.interval,
+            creatorDiscount.appliedDiscount?.code ?? "no-code",
+            currency,
+          ].join(":"),
+        }
+      )
+
+      if (!session.client_secret) {
+        throw new BillingActionError(
+          "missing_client_secret",
+          "Stripe did not return a Checkout Session client secret.",
+          502
+        )
+      }
+
+      await recordBillingAuditLog({
+        action: "billing.checkout.session_started",
+        ctx,
+        details: JSON.stringify(
+          {
+            creatorCode: creatorDiscount.appliedDiscount?.code ?? null,
+            currency,
+            interval: args.interval,
+            planKey: plan.key,
+            stripeCheckoutSessionId: session.id,
+          },
+          null,
+          2
+        ),
+        entityId: session.id,
+        entityLabel: plan.name,
+        result: "success",
+        summary: `Started Checkout Session for ${plan.name} (${args.interval}).`,
+        user: userContext.user,
+        userName: userContext.actorName,
+      })
+
+      return {
+        clientSecret: session.client_secret,
+        creatorCode: creatorDiscount.appliedDiscount?.code ?? null,
+        currency,
+        currencyNotice,
+        interval: args.interval,
+        planKey: plan.key,
+        sessionId: session.id,
+      }
+    } catch (error) {
+      throw sanitizeBillingError(error)
+    }
+  },
+})
+
+export const getPublicPricingCatalog = action({
+  args: {
+    preferredCurrency: v.optional(supportedPricingCurrencyValidator),
+  },
+  handler: async (ctx, args) => {
+    try {
+      const baseCatalog = await ctx.runQuery(
+        api.queries.billing.catalog.getPublicPricingCatalog,
+        args.preferredCurrency
+          ? { preferredCurrency: args.preferredCurrency }
+          : {}
+      )
+      const stripe = getStripe()
+      const priceCache = new Map<string, Promise<Stripe.Price | null>>()
+      const paidPlanKeys = baseCatalog.plans
+        .filter((plan) => plan.planType === "paid")
+        .map((plan) => plan.planKey)
+      const planRecords = await Promise.all(
+        paidPlanKeys.map((planKey) =>
+          ctx.runQuery(internal.queries.billing.internal.getPlanByKey, {
+            planKey,
+          })
+        )
+      )
+      const plansByKey = new Map(
+        planRecords
+          .filter((plan): plan is BillingPlanRecord => Boolean(plan))
+          .map((plan) => [plan.key, plan] as const)
+      )
+
+      return {
+        ...baseCatalog,
+        plans: await Promise.all(
+          baseCatalog.plans.map(async (plan) => ({
+            ...plan,
+            pricing: {
+              month: await getLiveStripePriceSnapshot({
+                fallbackPricing: plan.pricing.month,
+                interval: "month",
+                plan: plansByKey.get(plan.planKey) ?? null,
+                preferredCurrency: baseCatalog.selectedCurrency,
+                priceCache,
+                stripe,
+              }),
+              year: await getLiveStripePriceSnapshot({
+                fallbackPricing: plan.pricing.year,
+                interval: "year",
+                plan: plansByKey.get(plan.planKey) ?? null,
+                preferredCurrency: baseCatalog.selectedCurrency,
+                priceCache,
+                stripe,
+              }),
+            },
+          }))
+        ),
+      }
+    } catch (error) {
+      throw sanitizeBillingError(error)
+    }
+  },
+})
+
+export const syncCheckoutSessionCompletion = action({
+  args: {
+    sessionId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    try {
+      const userContext = await requireBillingUser(ctx)
+      const stripe = getStripe()
+      const session = await stripe.checkout.sessions.retrieve(args.sessionId, {
+        expand: ["customer", "subscription"],
+      })
+
+      const sessionCustomerId =
+        typeof session.customer === "string"
+          ? session.customer
+          : (session.customer?.id ?? null)
+      const sessionSubscriptionId =
+        typeof session.subscription === "string"
+          ? session.subscription
+          : (session.subscription?.id ?? null)
+      const sessionUserId = session.metadata?.userId?.trim()
+
+      if (
+        sessionUserId &&
+        sessionUserId !== userContext.user._id &&
+        sessionCustomerId !== userContext.customer?.stripeCustomerId
+      ) {
+        throw new BillingActionError(
+          "checkout_session_mismatch",
+          "That checkout session does not belong to this account.",
+          403
+        )
+      }
+
+      if (
+        sessionCustomerId &&
+        userContext.customer?.stripeCustomerId &&
+        sessionCustomerId !== userContext.customer.stripeCustomerId &&
+        sessionUserId !== userContext.user._id
+      ) {
+        throw new BillingActionError(
+          "checkout_session_customer_mismatch",
+          "That checkout session does not belong to this customer.",
+          403
+        )
+      }
+
+      if (sessionSubscriptionId) {
+        const expandedSubscription = await getExpandedSubscription({
+          stripe,
+          subscriptionId: sessionSubscriptionId,
+        })
+
+        await reconcileStripeSubscription({
+          ctx,
+          stripe,
+          subscription: expandedSubscription,
+        })
+      }
+
+      if (sessionCustomerId) {
+        await syncCustomerBillingSnapshot({
+          ctx,
+          stripe,
+          stripeCustomerId: sessionCustomerId,
+        })
+      }
+
+      return {
+        paymentStatus: session.payment_status,
+        planKey: session.metadata?.planKey ?? null,
+        sessionId: session.id,
+        status: session.status,
+        subscriptionId: sessionSubscriptionId,
+        synced: Boolean(sessionCustomerId || sessionSubscriptionId),
+      }
+    } catch (error) {
+      throw sanitizeBillingError(error)
+    }
+  },
+})
+
 export const previewCheckoutQuote = action({
   args: {
     creatorCode: v.optional(v.string()),
@@ -1943,12 +2431,13 @@ export const previewCheckoutQuote = action({
         userContext,
       })
 
-      const { amount, currency, currencyNotice, plan } = await getPurchasablePlan({
-        ctx,
-        interval: args.interval,
-        planKey: args.planKey,
-        preferredCurrency: args.preferredCurrency,
-      })
+      const { amount, currency, currencyNotice, plan } =
+        await getPurchasablePlan({
+          ctx,
+          interval: args.interval,
+          planKey: args.planKey,
+          preferredCurrency: args.preferredCurrency,
+        })
       const creatorDiscount = await resolveCheckoutCreatorDiscount({
         amount,
         creatorCode: args.creatorCode,

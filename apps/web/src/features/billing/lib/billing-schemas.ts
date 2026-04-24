@@ -34,6 +34,13 @@ export const createSubscriptionIntentSchema = z.object({
   preferredCurrency: supportedPricingCurrencySchema.optional(),
 })
 
+export const createSubscriptionCheckoutSessionSchema = z.object({
+  creatorCode: creatorCodeSchema.optional(),
+  interval: billingIntervalSchema,
+  planKey: billingPlanKeySchema,
+  preferredCurrency: supportedPricingCurrencySchema.optional(),
+})
+
 export const previewCheckoutQuoteSchema = z.object({
   creatorCode: creatorCodeSchema.optional(),
   interval: billingIntervalSchema,
@@ -88,6 +95,9 @@ export const revokeCreatorGrantSchema = z.object({
 export type BillingIntervalInput = z.infer<typeof billingIntervalSchema>
 export type CreateSubscriptionIntentInput = z.infer<
   typeof createSubscriptionIntentSchema
+>
+export type CreateSubscriptionCheckoutSessionInput = z.infer<
+  typeof createSubscriptionCheckoutSessionSchema
 >
 export type PreviewCheckoutQuoteInput = z.infer<
   typeof previewCheckoutQuoteSchema

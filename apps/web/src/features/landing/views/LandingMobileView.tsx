@@ -6,6 +6,7 @@ import {
   LandingHeroSection,
   LandingPlatformList,
   LandingSnapshotSection,
+  LandingStackSection,
 } from "@/features/landing/components/LandingSections"
 
 export function LandingMobileView({
@@ -23,6 +24,7 @@ export function LandingMobileView({
       <LandingFeatureList viewport="mobile" />
       <LandingPlatformList viewport="mobile" />
       <LandingCreatorToolsSection viewport="mobile" />
+      <LandingStackSection viewport="mobile" />
     </div>
   )
 }

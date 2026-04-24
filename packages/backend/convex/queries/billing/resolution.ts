@@ -175,10 +175,16 @@ export async function buildResolvedBillingState(
   const managedGrantEligible =
     managedGrantSubscription !== null &&
     hasManagedCreatorGrantSubscriptionAccess(managedGrantSubscription, now)
+  const hasLegacyPlanFallback =
+    Boolean(user.plan) &&
+    customer === null &&
+    subscriptions.length === 0 &&
+    grants.length === 0
   const effectivePlanKey =
     (managedGrantEligible ? managedGrantSubscription?.planKey : undefined) ??
     accessGrant?.planKey ??
-    (paidSubscriptionEligible ? subscription?.planKey : user.plan) ??
+    (paidSubscriptionEligible ? subscription?.planKey : undefined) ??
+    (hasLegacyPlanFallback ? user.plan : undefined) ??
     null
   const accessSource: BillingAccessSource =
     managedGrantEligible
@@ -187,7 +193,7 @@ export async function buildResolvedBillingState(
       ? "creator_grant"
       : paidSubscriptionEligible
         ? "paid_subscription"
-        : user.plan
+        : hasLegacyPlanFallback
           ? "legacy_plan"
           : "none"
   const featureKeys = await getResolvedPlanFeatureKeys({
@@ -244,7 +250,7 @@ export async function buildResolvedBillingState(
     accessSource,
     effectivePlan,
     effectivePlanKey,
-    fallbackPlanKey: user.plan,
+    fallbackPlanKey: hasLegacyPlanFallback ? user.plan : undefined,
     grantSource: accessGrant?.source,
     managedGrantSource: managedGrantSubscription?.managedGrantSource,
   })

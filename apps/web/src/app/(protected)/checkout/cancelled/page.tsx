@@ -14,13 +14,13 @@ export default function CheckoutCancelledPage() {
             Checkout cancelled
           </h1>
           <p className="text-sm text-muted-foreground">
-            No billing change was finalized. You can return to checkout or review
-            your current billing state from billing settings.
+            No billing change was finalized. Return to plans to pick another
+            option or review your current billing state from billing settings.
           </p>
         </div>
         <div className="mt-5 flex flex-col gap-3 sm:flex-row">
           <Button asChild>
-            <Link href="/checkout">Back to checkout</Link>
+            <Link href="/settings/billing/plan">Back to plans</Link>
           </Button>
           <Button asChild variant="outline">
             <Link href="/settings/billing">Open billing</Link>

@@ -31,6 +31,7 @@ import { rankedTitles } from "./db/tables/rankedTitles"
 import { connectedAccounts } from "./db/tables/connectedAccounts"
 import { creatorAccounts } from "./db/tables/creatorAccounts"
 import { creatorAttributions } from "./db/tables/creatorAttributions"
+import { creatorProgramDefaults } from "./db/tables/creatorProgramDefaults"
 
 export default defineSchema({
   sessions,
@@ -68,4 +69,5 @@ export default defineSchema({
   connectedAccounts,
   creatorAccounts,
   creatorAttributions,
+  creatorProgramDefaults,
 })

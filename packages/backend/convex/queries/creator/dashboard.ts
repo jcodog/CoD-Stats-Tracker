@@ -1,4 +1,8 @@
 import { query } from "../../_generated/server"
+import {
+  getCreatorConnectPendingActions,
+  getCreatorConnectState,
+} from "../../lib/creatorProgram"
 
 const PAID_CONVERSION_STATUSES = new Set([
   "active",
@@ -8,67 +12,6 @@ const PAID_CONVERSION_STATUSES = new Set([
   "trialing",
   "unpaid",
 ])
-
-function getConnectState(args: {
-  detailsSubmitted?: boolean
-  payoutsEnabled?: boolean
-  requirementsDue?: string[]
-  stripeConnectedAccountId?: string
-}) {
-  if (!args.stripeConnectedAccountId) {
-    return "not_started" as const
-  }
-
-  if ((args.requirementsDue?.length ?? 0) > 0 || args.detailsSubmitted === false) {
-    return "action_required" as const
-  }
-
-  if (args.payoutsEnabled === true) {
-    return "ready" as const
-  }
-
-  return "review" as const
-}
-
-function getPendingActions(args: {
-  codeActive?: boolean
-  detailsSubmitted?: boolean
-  payoutEligible?: boolean
-  payoutsEnabled?: boolean
-  requirementsDue?: string[]
-  stripeConnectedAccountId?: string
-}) {
-  const actions: string[] = []
-
-  if (args.codeActive === false) {
-    actions.push("Your creator code is currently disabled.")
-  }
-
-  if (args.payoutEligible === false) {
-    actions.push("Payout eligibility is currently paused for this account.")
-  }
-
-  if (!args.stripeConnectedAccountId) {
-    actions.push("Connect Stripe to start payout setup.")
-    return actions
-  }
-
-  if (args.detailsSubmitted === false) {
-    actions.push("Finish Stripe onboarding to submit your payout details.")
-  }
-
-  if ((args.requirementsDue?.length ?? 0) > 0) {
-    actions.push(
-      `Stripe still needs ${args.requirementsDue?.length ?? 0} additional detail${(args.requirementsDue?.length ?? 0) === 1 ? "" : "s"}.`
-    )
-  }
-
-  if (args.payoutsEnabled === false && (args.requirementsDue?.length ?? 0) === 0) {
-    actions.push("Stripe is still reviewing your payout setup before payouts can go live.")
-  }
-
-  return actions
-}
 
 export const getCurrentCreatorDashboard = query({
   args: {},
@@ -110,7 +53,9 @@ export const getCurrentCreatorDashboard = query({
       )
       .collect()
 
-    const attributedUserIds = [...new Set(attributions.map((item) => item.userId))]
+    const attributedUserIds = [
+      ...new Set(attributions.map((item) => item.userId)),
+    ]
     const subscriptionBuckets = await Promise.all(
       attributedUserIds.map((userId) =>
         ctx.db
@@ -120,35 +65,84 @@ export const getCurrentCreatorDashboard = query({
       )
     )
 
-    const paidConversionCount = subscriptionBuckets.reduce((count, subscriptions) => {
-      return count +
-        (subscriptions.some((subscription) =>
-          PAID_CONVERSION_STATUSES.has(subscription.status)
+    const paidConversionCount = subscriptionBuckets.reduce(
+      (count, subscriptions) => {
+        return (
+          count +
+          (subscriptions.some((subscription) =>
+            PAID_CONVERSION_STATUSES.has(subscription.status)
+          )
+            ? 1
+            : 0)
         )
-          ? 1
-          : 0)
-    }, 0)
+      },
+      0
+    )
 
-    const connectState = getConnectState(creatorAccount)
-    const pendingActions = getPendingActions(creatorAccount)
+    const connectState = getCreatorConnectState(creatorAccount)
+    const pendingActions = getCreatorConnectPendingActions(creatorAccount)
 
     return {
       creatorAccount: {
         code: creatorAccount.code,
         codeActive: creatorAccount.codeActive,
         connectState,
+        connectStatusUpdatedAt: creatorAccount.connectStatusUpdatedAt ?? null,
+        country: creatorAccount.country,
         detailsSubmitted: creatorAccount.detailsSubmitted ?? null,
         discountPercent: creatorAccount.discountPercent,
         payoutEligible: creatorAccount.payoutEligible,
         payoutPercent: creatorAccount.payoutPercent,
         payoutsEnabled: creatorAccount.payoutsEnabled ?? null,
         pendingActions,
+        requirementsCurrentlyDue: creatorAccount.requirementsCurrentlyDue ?? [],
+        requirementsDisabledReason:
+          creatorAccount.requirementsDisabledReason ?? null,
         requirementsDue: creatorAccount.requirementsDue ?? [],
+        requirementsPastDue: creatorAccount.requirementsPastDue ?? [],
+        requirementsPendingVerification:
+          creatorAccount.requirementsPendingVerification ?? [],
         sharePath: `/pricing?creator=${encodeURIComponent(creatorAccount.code)}`,
-        stripeConnectedAccountId: creatorAccount.stripeConnectedAccountId ?? null,
+        stripeConnectedAccountId:
+          creatorAccount.stripeConnectedAccountId ?? null,
       },
       paidConversionCount,
       signupCount: attributedUserIds.length,
+    }
+  },
+})
+
+export const getCurrentCreatorWorkspaceState = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity()
+
+    if (!identity) {
+      return {
+        hasCreatorAccount: false,
+      }
+    }
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerkUserId", (query) =>
+        query.eq("clerkUserId", identity.subject)
+      )
+      .unique()
+
+    if (!user) {
+      return {
+        hasCreatorAccount: false,
+      }
+    }
+
+    const creatorAccount = await ctx.db
+      .query("creatorAccounts")
+      .withIndex("by_userId", (query) => query.eq("userId", user._id))
+      .unique()
+
+    return {
+      hasCreatorAccount: Boolean(creatorAccount),
     }
   },
 })
