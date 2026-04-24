@@ -121,8 +121,8 @@ export function CreatorHomeView() {
             </div>
             <div className="flex flex-wrap gap-2">
               <Button asChild size="sm">
-                <Link href="/creator/tools/playing-with-viewers">
-                  Open playing with viewers
+                <Link href="/creator/connect/start">
+                  Complete creator onboarding
                 </Link>
               </Button>
               <Button asChild size="sm" variant="outline">
