@@ -15,9 +15,9 @@ import {
 import {
   buildWebhookSafeSummary,
   getWebhookObjectIds,
-} from "./lib/billingStripe"
+} from "./lib/stripe/billing"
 import { mapStripeConnectedAccountSnapshot } from "./lib/creatorProgram"
-import { getStripe } from "./lib/stripe"
+import { getStripe } from "./lib/stripe/client"
 import { getConvexEnv } from "./env"
 import { handleDiscordInteractions } from "./http/discord/interactions"
 

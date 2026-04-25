@@ -1,6 +1,6 @@
-import type { Id } from "../_generated/dataModel"
-import { getConvexEnv } from "../env"
-import { STRIPE_CATALOG_APP } from "./stripe"
+import type { Id } from "../../_generated/dataModel"
+import { getConvexEnv } from "../../env"
+import { STRIPE_CATALOG_APP } from "./client"
 
 export type StripeV2AccountLink = {
   account: string
@@ -93,8 +93,7 @@ async function callStripeV2Api<T>(args: {
     `${STRIPE_V2_API_BASE_URL}${args.path}${args.searchParams ? `?${args.searchParams.toString()}` : ""}`
   )
   const response = await fetch(url, {
-    body:
-      args.body === undefined ? undefined : JSON.stringify(args.body),
+    body: args.body === undefined ? undefined : JSON.stringify(args.body),
     headers: {
       Authorization: `Bearer ${getStripeSecretKey()}`,
       "Content-Type": "application/json",
@@ -107,14 +106,12 @@ async function callStripeV2Api<T>(args: {
   })
 
   if (!response.ok) {
-    const errorPayload = (await response.json().catch(() => null)) as
-      | {
-          error?: {
-            code?: string
-            message?: string
-          }
-        }
-      | null
+    const errorPayload = (await response.json().catch(() => null)) as {
+      error?: {
+        code?: string
+        message?: string
+      }
+    } | null
 
     throw new StripeV2ApiError(
       errorPayload?.error?.message ?? "Stripe Accounts v2 request failed.",

@@ -9,7 +9,7 @@ import {
   createStripeRecipientAccountV2,
   isStripeV2CompatibilityError,
   retrieveStripeAccountV2,
-} from "../../lib/creatorConnect"
+} from "../../lib/stripe/connect"
 import {
   buildCreatorCodeSeed,
   DEFAULT_CREATOR_PROGRAM_DEFAULTS,
@@ -20,7 +20,7 @@ import {
   normalizeCreatorCountry,
 } from "../../lib/creatorProgram"
 import { getClerkBackendClient } from "../../lib/clerk"
-import { getStripe } from "../../lib/stripe"
+import { getStripe } from "../../lib/stripe/client"
 
 const CONNECT_START_PATH = "/creator/connect/start"
 const CONNECT_RETURN_PATH = "/creator/connect/return"
@@ -231,7 +231,9 @@ async function syncCreatorStripeAccount(args: {
     }
 
     const stripe = getStripe()
-    const account = await stripe.accounts.retrieve(args.stripeConnectedAccountId)
+    const account = await stripe.accounts.retrieve(
+      args.stripeConnectedAccountId
+    )
     snapshot = {
       ...mapStripeConnectedAccountSnapshot(account),
       stripeConnectedAccountVersion: "v1" as const,
@@ -348,7 +350,8 @@ export const startHostedOnboarding = action({
         const snapshot = mapStripeConnectedAccountV2Snapshot(stripeAccount)
 
         await ctx.runMutation(
-          internal.mutations.creator.internal.applyStripeConnectedAccountSnapshot,
+          internal.mutations.creator.internal
+            .applyStripeConnectedAccountSnapshot,
           {
             ...snapshot,
             creatorAccountId: creatorAccount._id,
@@ -382,7 +385,8 @@ export const startHostedOnboarding = action({
         }
 
         await ctx.runMutation(
-          internal.mutations.creator.internal.applyStripeConnectedAccountSnapshot,
+          internal.mutations.creator.internal
+            .applyStripeConnectedAccountSnapshot,
           {
             ...snapshot,
             creatorAccountId: creatorAccount._id,

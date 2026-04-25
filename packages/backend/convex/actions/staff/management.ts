@@ -5,7 +5,7 @@ import { v } from "convex/values"
 
 import { internal } from "../../_generated/api"
 import { action } from "../../_generated/server"
-import { getStripeScheduleId } from "../../lib/billingStripe"
+import { getStripeScheduleId } from "../../lib/stripe/billing"
 import { getClerkBackendClient } from "../../lib/clerk"
 import { requireAuthorizedStaffAction } from "../../lib/staffActionAuth"
 import { isConfiguredSuperAdminDiscordId } from "../../lib/staffRoleConfig"
@@ -26,7 +26,7 @@ import type {
   StaffManagementUserRecord,
   StaffMutationResponse,
 } from "../../lib/staffTypes"
-import { getStripe } from "../../lib/stripe"
+import { getStripe } from "../../lib/stripe/client"
 
 type ClerkListUserRecord = Awaited<
   ReturnType<ReturnType<typeof getClerkBackendClient>["users"]["getUserList"]>
@@ -267,7 +267,9 @@ function getTargetStatsUserIds(args: {
   )
 }
 
-function isCancelableStripeSubscriptionStatus(status: Stripe.Subscription.Status) {
+function isCancelableStripeSubscriptionStatus(
+  status: Stripe.Subscription.Status
+) {
   return status !== "canceled" && status !== "incomplete_expired"
 }
 
@@ -408,8 +410,9 @@ export const getDashboard = action({
       currentActorClerkUserId: operator.actorClerkUserId,
       currentActorRole: operator.actorRole,
       generatedAt: Date.now(),
-      staffCount: users.filter((user) => user.convexRole && user.convexRole !== "user")
-        .length,
+      staffCount: users.filter(
+        (user) => user.convexRole && user.convexRole !== "user"
+      ).length,
       superAdminCount: users.filter((user) => user.convexRole === "super_admin")
         .length,
       users,
@@ -419,7 +422,11 @@ export const getDashboard = action({
 
 export const updateUserRole = action({
   args: {
-    nextRole: v.union(v.literal("user"), v.literal("staff"), v.literal("admin")),
+    nextRole: v.union(
+      v.literal("user"),
+      v.literal("staff"),
+      v.literal("admin")
+    ),
     targetClerkUserId: v.string(),
   },
   handler: async (ctx, args): Promise<StaffMutationResponse> => {
@@ -448,7 +455,9 @@ export const updateUserRole = action({
     }
 
     if (targetUser.isCurrentUser) {
-      throw new Error("You cannot change your own role from the staff dashboard.")
+      throw new Error(
+        "You cannot change your own role from the staff dashboard."
+      )
     }
 
     if (targetUser.isReservedSuperAdmin) {
@@ -472,7 +481,8 @@ export const updateUserRole = action({
 
     const alignedAdminCount = countAlignedAdmins(users)
     const targetIsAlignedAdmin =
-      targetUser.roleStatus === "matched" && isAdminCapableRole(targetUser.convexRole)
+      targetUser.roleStatus === "matched" &&
+      isAdminCapableRole(targetUser.convexRole)
 
     if (
       targetIsAlignedAdmin &&
@@ -494,7 +504,9 @@ export const updateUserRole = action({
     }
 
     const clerkClient = getClerkBackendClient()
-    const clerkUser = clerkUsers.find((user) => user.id === args.targetClerkUserId)
+    const clerkUser = clerkUsers.find(
+      (user) => user.id === args.targetClerkUserId
+    )
 
     if (!clerkUser) {
       throw new Error(`Unable to load Clerk user ${args.targetClerkUserId}`)
@@ -632,7 +644,9 @@ export const banUser = action({
       )
     }
 
-    const clerkUser = clerkUsers.find((user) => user.id === args.targetClerkUserId)
+    const clerkUser = clerkUsers.find(
+      (user) => user.id === args.targetClerkUserId
+    )
     const targetDbUser = await ctx.runQuery(
       internal.queries.staff.internal.getUserByClerkUserId,
       {
@@ -661,8 +675,12 @@ export const banUser = action({
       new Set(
         [
           billingContext?.customer?.stripeCustomerId,
-          ...localSubscriptions.map((subscription) => subscription.stripeCustomerId),
-          clerkUser ? getMetadataStripeCustomerId(clerkUser.publicMetadata) : undefined,
+          ...localSubscriptions.map(
+            (subscription) => subscription.stripeCustomerId
+          ),
+          clerkUser
+            ? getMetadataStripeCustomerId(clerkUser.publicMetadata)
+            : undefined,
         ].filter((value): value is string => Boolean(value))
       )
     )

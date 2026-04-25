@@ -26,12 +26,12 @@ import {
   getStripeSubscriptionInterval,
   getStripeSubscriptionItem,
   getSubscriptionItemCurrentPeriodEnd,
-} from "../../lib/billingStripe"
+} from "../../lib/stripe/billing"
 import {
   getClerkBackendClient,
   syncClerkCreatorAttributionMetadata,
 } from "../../lib/clerk"
-import { getStripe, STRIPE_CATALOG_APP } from "../../lib/stripe"
+import { getStripe, STRIPE_CATALOG_APP } from "../../lib/stripe/client"
 
 type BillingPlanRecord = Doc<"billingPlans">
 type PublicActionCtx = ActionCtx

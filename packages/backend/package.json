@@ -21,24 +21,24 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@clerk/backend": "^3.2.11",
-    "@clerk/nextjs": "^7.2.1",
-    "@modelcontextprotocol/ext-apps": "^1.6.0",
+    "@clerk/backend": "^3.4.1",
+    "@clerk/nextjs": "^7.2.7",
+    "@modelcontextprotocol/ext-apps": "^1.7.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "convex": "^1.35.1",
-    "discord-api-types": "^0.38.46",
+    "convex": "^1.36.1",
+    "discord-api-types": "^0.38.47",
     "next": "16.2.4",
     "redis": "^5.12.1",
-    "stripe": "^22.0.1",
-    "svix": "^1.90.0",
+    "stripe": "^22.1.0",
+    "svix": "^1.92.2",
     "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/node": "^25.6.0",
     "@workspace/eslint-config": "workspace:*",
     "@workspace/typescript-config": "workspace:*",
-    "eslint": "^10.2.0",
-    "typescript": "^6.0.2"
+    "eslint": "^10.2.1",
+    "typescript": "^6.0.3"
   },
   "exports": {
     "./lib/*": "./convex/lib/*.ts",
