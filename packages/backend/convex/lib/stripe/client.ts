@@ -1,7 +1,7 @@
 import Stripe from "stripe"
-import { getConvexEnv } from "../env"
+import { getConvexEnv } from "../../env"
 
-const STRIPE_API_VERSION = "2026-03-25.dahlia" as const
+const STRIPE_API_VERSION: typeof Stripe.API_VERSION = "2026-04-22.dahlia"
 
 export const STRIPE_CATALOG_APP = "cod-stats-tracker"
 

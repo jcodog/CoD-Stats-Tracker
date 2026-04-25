@@ -6,15 +6,15 @@ import type {
   BillingManagedGrantMode,
   BillingManagedGrantSource,
   BillingSubscriptionStatus,
-} from "./billing"
+} from "../billing"
 import {
   BILLING_MANAGED_GRANT_MODES,
   BILLING_MANAGED_GRANT_SOURCES,
   isBillingInterval,
   maskIdentifier,
   unixSecondsToMillis,
-} from "./billing"
-import { STRIPE_CATALOG_APP } from "./stripe"
+} from "../billing"
+import { STRIPE_CATALOG_APP } from "./client"
 
 function isExpandedObject<T extends { id: string }>(
   value: string | T | null | undefined
@@ -42,10 +42,14 @@ function getStripeMetadataValue(
   key: string
 ) {
   const value = metadata?.[key]
-  return typeof value === "string" && value.trim().length > 0 ? value : undefined
+  return typeof value === "string" && value.trim().length > 0
+    ? value
+    : undefined
 }
 
-export function getStripePriceId(price: string | Stripe.Price | null | undefined) {
+export function getStripePriceId(
+  price: string | Stripe.Price | null | undefined
+) {
   if (!price) {
     return undefined
   }
@@ -64,11 +68,7 @@ export function getStripeProductId(
 }
 
 export function getStripeScheduleId(
-  schedule:
-    | string
-    | Stripe.SubscriptionSchedule
-    | null
-    | undefined
+  schedule: string | Stripe.SubscriptionSchedule | null | undefined
 ) {
   if (!schedule) {
     return undefined
@@ -122,7 +122,8 @@ export function getStripeSubscriptionItem(subscription: Stripe.Subscription) {
 export function getStripeSubscriptionInterval(
   subscription: Stripe.Subscription
 ): BillingInterval {
-  const interval = getStripeSubscriptionItem(subscription).price.recurring?.interval
+  const interval =
+    getStripeSubscriptionItem(subscription).price.recurring?.interval
 
   if (!isBillingInterval(interval)) {
     throw new Error(
@@ -159,7 +160,9 @@ export function getStripeManagedGrantEndsAt(subscription: Stripe.Subscription) {
   const endsAt = getStripeMetadataValue(subscription.metadata, "grantEndsAt")
   const parsedValue = endsAt ? Number(endsAt) : NaN
 
-  return Number.isFinite(parsedValue) && parsedValue > 0 ? parsedValue : undefined
+  return Number.isFinite(parsedValue) && parsedValue > 0
+    ? parsedValue
+    : undefined
 }
 
 export function isStripeManagedCreatorGrantSubscription(args: {
@@ -179,13 +182,17 @@ export function isStripeManagedCreatorGrantSubscription(args: {
 export function getSubscriptionItemCurrentPeriodStart(
   subscription: Stripe.Subscription
 ) {
-  return unixSecondsToMillis(getStripeSubscriptionItem(subscription).current_period_start)
+  return unixSecondsToMillis(
+    getStripeSubscriptionItem(subscription).current_period_start
+  )
 }
 
 export function getSubscriptionItemCurrentPeriodEnd(
   subscription: Stripe.Subscription
 ) {
-  return unixSecondsToMillis(getStripeSubscriptionItem(subscription).current_period_end)
+  return unixSecondsToMillis(
+    getStripeSubscriptionItem(subscription).current_period_end
+  )
 }
 
 export function mapStripeSubscriptionStatus(
@@ -257,7 +264,9 @@ export function getInvoicePaymentIntentId(
     return undefined
   }
 
-  return getStripePaymentIntentId(invoice.payments?.data[0]?.payment.payment_intent)
+  return getStripePaymentIntentId(
+    invoice.payments?.data[0]?.payment.payment_intent
+  )
 }
 
 export function getExpandedStripeInvoice(
@@ -285,7 +294,9 @@ export function mapSubscriptionScheduleChange(args: {
   schedule: Stripe.SubscriptionSchedule | null
   subscription: Stripe.Subscription
 }) {
-  const currentPeriodEnd = getSubscriptionItemCurrentPeriodEnd(args.subscription)
+  const currentPeriodEnd = getSubscriptionItemCurrentPeriodEnd(
+    args.subscription
+  )
 
   if (!args.schedule) {
     if (args.subscription.cancel_at_period_end && currentPeriodEnd) {
@@ -322,7 +333,7 @@ export function mapSubscriptionScheduleChange(args: {
       ? nextPhase.items[0].price
       : undefined
   const scheduledPlan = nextPriceId
-    ? args.priceIdToPlan.get(nextPriceId) ?? null
+    ? (args.priceIdToPlan.get(nextPriceId) ?? null)
     : null
 
   if (!nextPhase || !scheduledPlan) {
@@ -353,9 +364,7 @@ export function mapSubscriptionScheduleChange(args: {
   }
 }
 
-function getInvoiceSubscriptionId(
-  object: Record<string, unknown> | null
-) {
+function getInvoiceSubscriptionId(object: Record<string, unknown> | null) {
   const directSubscriptionId = getObjectIdentifier(object?.subscription)
 
   if (directSubscriptionId) {
@@ -458,7 +467,9 @@ function extractWebhookObjectIds(event: Stripe.Event) {
   }
 }
 
-export function getWebhookObjectIdsFromPayloadJson(payloadJson: string | undefined) {
+export function getWebhookObjectIdsFromPayloadJson(
+  payloadJson: string | undefined
+) {
   if (!payloadJson) {
     return null
   }
@@ -479,7 +490,9 @@ export function buildWebhookSafeSummary(event: Stripe.Event) {
     customerId ? `customer=${maskIdentifier(customerId)}` : null,
     subscriptionId ? `subscription=${maskIdentifier(subscriptionId)}` : null,
     invoiceId ? `invoice=${maskIdentifier(invoiceId)}` : null,
-    paymentIntentId ? `payment_intent=${maskIdentifier(paymentIntentId)}` : null,
+    paymentIntentId
+      ? `payment_intent=${maskIdentifier(paymentIntentId)}`
+      : null,
   ]
     .filter(Boolean)
     .join(" ")

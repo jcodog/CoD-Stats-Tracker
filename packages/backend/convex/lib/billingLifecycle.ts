@@ -18,7 +18,7 @@ import {
   getStripeSubscriptionItem,
   mapStripeSubscriptionStatus,
   mapSubscriptionScheduleChange,
-} from "./billingStripe"
+} from "./stripe/billing"
 
 type BillingLifecycleCtx = Pick<ActionCtx, "runMutation" | "runQuery">
 
@@ -179,7 +179,7 @@ function resolveInvoicePaymentMethod(
   )
 
   return defaultPaymentMethodId
-    ? paymentMethodsById.get(defaultPaymentMethodId) ?? null
+    ? (paymentMethodsById.get(defaultPaymentMethodId) ?? null)
     : null
 }
 

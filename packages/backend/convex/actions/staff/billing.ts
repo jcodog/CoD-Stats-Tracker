@@ -14,7 +14,7 @@ import {
   maskIdentifier,
 } from "../../lib/billing"
 import { hasCreatorAccess, resolveAppPlanKey } from "../../lib/billingAccess"
-import { isStripeManagedCreatorGrantSubscription } from "../../lib/billingStripe"
+import { isStripeManagedCreatorGrantSubscription } from "../../lib/stripe/billing"
 import { getClerkBackendClient } from "../../lib/clerk"
 import { requireAuthorizedStaffAction } from "../../lib/staffActionAuth"
 import {
@@ -58,8 +58,8 @@ import {
   createStripeRecipientAccountV2,
   isStripeV2CompatibilityError,
   retrieveStripeAccountV2,
-} from "../../lib/creatorConnect"
-import { getStripe, STRIPE_CATALOG_APP } from "../../lib/stripe"
+} from "../../lib/stripe/connect"
+import { getStripe, STRIPE_CATALOG_APP } from "../../lib/stripe/client"
 import type { StripeCatalogSyncResult } from "../billing/syncCatalogToStripe"
 
 type SubscriptionStatus = "active" | "past_due" | "paused" | "trialing"

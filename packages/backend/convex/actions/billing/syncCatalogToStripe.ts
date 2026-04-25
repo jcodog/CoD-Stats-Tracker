@@ -4,7 +4,7 @@ import Stripe from "stripe"
 import { internal } from "../../_generated/api"
 import { internalAction } from "../../_generated/server"
 import { resolveBillingFeatureApplyMode } from "../../lib/staffRoles"
-import { STRIPE_CATALOG_APP, getStripe } from "../../lib/stripe"
+import { STRIPE_CATALOG_APP, getStripe } from "../../lib/stripe/client"
 import type {
   BillingCatalogPlan,
   BillingFeatureRecord,
@@ -129,7 +129,10 @@ function addWarning(warnings: SyncWarning[], warning: SyncWarning) {
   warnings.push(warning)
 }
 
-function mergeChanges(existing: string[] | undefined, next: string[] | undefined) {
+function mergeChanges(
+  existing: string[] | undefined,
+  next: string[] | undefined
+) {
   return Array.from(new Set([...(existing ?? []), ...(next ?? [])]))
 }
 
@@ -249,7 +252,9 @@ function metadataMatches(
   metadata: Stripe.Metadata,
   expected: Record<string, string>
 ) {
-  return Object.entries(expected).every(([key, value]) => metadata[key] === value)
+  return Object.entries(expected).every(
+    ([key, value]) => metadata[key] === value
+  )
 }
 
 function marketingFeaturesMatch(
@@ -261,7 +266,8 @@ function marketingFeaturesMatch(
   }
 
   return existing.every(
-    (marketingFeature, index) => (marketingFeature.name ?? "") === desired[index]?.name
+    (marketingFeature, index) =>
+      (marketingFeature.name ?? "") === desired[index]?.name
   )
 }
 
@@ -285,7 +291,8 @@ function productMatchesCatalogShape(
 ) {
   return (
     normalizeText(product.name) === normalizeText(getRequiredPlanName(plan)) &&
-    normalizeText(product.description) === normalizeText(getPlanDescription(plan))
+    normalizeText(product.description) ===
+      normalizeText(getPlanDescription(plan))
   )
 }
 
@@ -294,7 +301,8 @@ function featureMatchesCatalogName(
   feature: BillingFeatureRecord
 ) {
   return (
-    normalizeText(stripeFeature.name) === normalizeText(getRequiredFeatureName(feature))
+    normalizeText(stripeFeature.name) ===
+    normalizeText(getRequiredFeatureName(feature))
   )
 }
 
@@ -422,7 +430,9 @@ function selectUniqueCandidate<T extends { id: string }>(
     return candidates[0]
   }
 
-  throw new Error(`${message}: ${candidates.map((candidate) => candidate.id).join(", ")}`)
+  throw new Error(
+    `${message}: ${candidates.map((candidate) => candidate.id).join(", ")}`
+  )
 }
 
 function buildMarketingFeatures(
@@ -480,7 +490,8 @@ function buildProductCreateParams(
   return {
     active: plan.active,
     description: description || undefined,
-    marketing_features: marketingFeatures.length > 0 ? marketingFeatures : undefined,
+    marketing_features:
+      marketingFeatures.length > 0 ? marketingFeatures : undefined,
     metadata: planMetadata(plan),
     name: getRequiredPlanName(plan),
     type: "service",
@@ -625,7 +636,9 @@ function dedupeById<T extends { id: string }>(items: T[]) {
 }
 
 function isStripeNotFoundError(error: unknown) {
-  return error instanceof Error && "statusCode" in error && error.statusCode === 404
+  return (
+    error instanceof Error && "statusCode" in error && error.statusCode === 404
+  )
 }
 
 async function retrieveProductIfExists(params: {
@@ -985,7 +998,8 @@ async function resolveStripeProduct(params: {
 
   const nameCandidates = stripeProducts.filter(
     (product) =>
-      isSafeProductCandidate(product, plan) && productMatchesCatalogShape(product, plan)
+      isSafeProductCandidate(product, plan) &&
+      productMatchesCatalogShape(product, plan)
   )
   const nameMatch = selectUniqueCandidate(
     nameCandidates,
@@ -1299,7 +1313,11 @@ async function ensureRecurringPrice(params: {
           )
 
     return {
-      archiveCandidates: [...pricesToArchive, ...lookupKeyPrices, ...productPrices],
+      archiveCandidates: [
+        ...pricesToArchive,
+        ...lookupKeyPrices,
+        ...productPrices,
+      ],
       created: false,
       price: finalPrice,
       reactivated: !exactMatch.active && finalPrice.active,
@@ -1315,7 +1333,11 @@ async function ensureRecurringPrice(params: {
     })
 
     return {
-      archiveCandidates: [...pricesToArchive, ...lookupKeyPrices, ...productPrices],
+      archiveCandidates: [
+        ...pricesToArchive,
+        ...lookupKeyPrices,
+        ...productPrices,
+      ],
       created: false,
       price: null,
       reactivated: false,
@@ -1346,7 +1368,11 @@ async function ensureRecurringPrice(params: {
   })
 
   return {
-    archiveCandidates: [...pricesToArchive, ...lookupKeyPrices, ...productPrices],
+    archiveCandidates: [
+      ...pricesToArchive,
+      ...lookupKeyPrices,
+      ...productPrices,
+    ],
     created: true,
     price: createdPrice,
     reactivated: false,
@@ -1462,11 +1488,13 @@ export const syncCatalogToStripe = internalAction({
   handler: async (ctx): Promise<StripeCatalogSyncResult> => {
     const stripe = getStripe()
 
-    const [features, pricingCatalog]: [BillingFeatureRecord[], BillingCatalogPlan[]] =
-      await Promise.all([
-        ctx.runQuery(internal.queries.billing.catalog.getBillingFeatures, {}),
-        ctx.runQuery(internal.queries.billing.catalog.getPricingCatalog, {}),
-      ])
+    const [features, pricingCatalog]: [
+      BillingFeatureRecord[],
+      BillingCatalogPlan[],
+    ] = await Promise.all([
+      ctx.runQuery(internal.queries.billing.catalog.getBillingFeatures, {}),
+      ctx.runQuery(internal.queries.billing.catalog.getPricingCatalog, {}),
+    ])
 
     const [stripeProducts, activeStripeFeatures, archivedStripeFeatures] =
       await Promise.all([
@@ -1541,10 +1569,13 @@ export const syncCatalogToStripe = internalAction({
 
       featureIdByKey.set(feature.key, featureResult.feature.id)
 
-      await ctx.runMutation(internal.mutations.billing.catalog.updateFeatureStripeId, {
-        featureKey: feature.key,
-        stripeFeatureId: featureResult.feature.id,
-      })
+      await ctx.runMutation(
+        internal.mutations.billing.catalog.updateFeatureStripeId,
+        {
+          featureKey: feature.key,
+          stripeFeatureId: featureResult.feature.id,
+        }
+      )
 
       if (featureResult.created) {
         featuresCreated.set(feature.key, {
@@ -1570,11 +1601,7 @@ export const syncCatalogToStripe = internalAction({
       if (plan.planType === "free") {
         freePlansSkipped.push(plan.key)
 
-        if (
-          plan.stripeProductId ||
-          plan.monthlyPriceId ||
-          plan.yearlyPriceId
-        ) {
+        if (plan.stripeProductId || plan.monthlyPriceId || plan.yearlyPriceId) {
           addWarning(warnings, {
             code: "plan_has_stripe_ids_but_is_free",
             message: `Free billing plan ${plan.key} still has stored Stripe IDs; the sync leaves free plans app-only and will not mutate those Stripe objects`,
@@ -1692,9 +1719,12 @@ export const syncCatalogToStripe = internalAction({
         const currentDefaultPriceId = getDefaultPriceId(syncedProduct)
 
         if (currentDefaultPriceId !== monthlyPrice.price.id) {
-          const updatedProduct = await stripe.products.update(syncedProduct.id, {
-            default_price: monthlyPrice.price.id,
-          })
+          const updatedProduct = await stripe.products.update(
+            syncedProduct.id,
+            {
+              default_price: monthlyPrice.price.id,
+            }
+          )
           syncedProduct = updatedProduct
 
           upsertItemById(stripeProducts, updatedProduct)
@@ -1710,9 +1740,9 @@ export const syncCatalogToStripe = internalAction({
         }
       }
 
-      const protectedPriceIds = [
-        getDefaultPriceId(syncedProduct),
-      ].filter((priceId): priceId is string => Boolean(priceId))
+      const protectedPriceIds = [getDefaultPriceId(syncedProduct)].filter(
+        (priceId): priceId is string => Boolean(priceId)
+      )
       const archivedMonthlyPrices = await archivePrices({
         interval: "month",
         keepPriceId: monthlyPrice.price?.id ?? "",
@@ -1734,7 +1764,10 @@ export const syncCatalogToStripe = internalAction({
         warnings,
       })
 
-      for (const archivedPrice of [...archivedMonthlyPrices, ...archivedYearlyPrices]) {
+      for (const archivedPrice of [
+        ...archivedMonthlyPrices,
+        ...archivedYearlyPrices,
+      ]) {
         const archivedInterval =
           archivedPrice.recurring?.interval === "year" ? "year" : "month"
 
@@ -1747,12 +1780,15 @@ export const syncCatalogToStripe = internalAction({
         })
       }
 
-      await ctx.runMutation(internal.mutations.billing.catalog.updatePlanStripeIds, {
-        monthlyPriceId: monthlyPrice.price?.id,
-        planKey: plan.key,
-        stripeProductId: syncedProduct.id,
-        yearlyPriceId: yearlyPrice.price?.id,
-      })
+      await ctx.runMutation(
+        internal.mutations.billing.catalog.updatePlanStripeIds,
+        {
+          monthlyPriceId: monthlyPrice.price?.id,
+          planKey: plan.key,
+          stripeProductId: syncedProduct.id,
+          yearlyPriceId: yearlyPrice.price?.id,
+        }
+      )
     }
 
     for (const plan of pricingCatalog) {
@@ -1795,8 +1831,9 @@ export const syncCatalogToStripe = internalAction({
       syncedAt: Date.now(),
       featuresProcessed: features.length,
       plansProcessed: pricingCatalog.length,
-      paidPlansProcessed: pricingCatalog.filter((plan) => plan.planType === "paid")
-        .length,
+      paidPlansProcessed: pricingCatalog.filter(
+        (plan) => plan.planType === "paid"
+      ).length,
       freePlansSkipped,
       featuresCreated: Array.from(featuresCreated.values()),
       featuresUpdated: Array.from(featuresUpdated.values()),
