@@ -5,7 +5,7 @@ import {
   normalizeStoredQueueParticipant,
   queueNotificationMethodValidator,
   type QueuePlatform,
-} from "../../../lib/playingWithViewers"
+} from "../../../../src/lib/playingWithViewers"
 
 type NotificationMutationCtx = MutationCtx
 type QueueRoundSelectedUser = Doc<"viewerQueueRounds">["selectedUsers"][number]
@@ -22,7 +22,9 @@ type NormalizedQueueRoundSelectedUser = QueueRoundSelectedUser & {
 function normalizeRoundSelectedUser(
   user: QueueRoundSelectedUser
 ): NormalizedQueueRoundSelectedUser {
-  return normalizeStoredQueueParticipant(user) as NormalizedQueueRoundSelectedUser
+  return normalizeStoredQueueParticipant(
+    user
+  ) as NormalizedQueueRoundSelectedUser
 }
 
 function getDefaultNotificationMethodForPlatform(
@@ -257,7 +259,8 @@ export const recordNotificationResult = internalMutation({
     }
 
     const now = Date.now()
-    const nextFailureReason = args.notificationFailureReason?.trim() || undefined
+    const nextFailureReason =
+      args.notificationFailureReason?.trim() || undefined
 
     await ctx.db.patch(args.notificationId, {
       attemptCount: notification.attemptCount + 1,
@@ -308,7 +311,8 @@ export const deferNotification = internalMutation({
 
     const now = Date.now()
     const nextAttemptAt = Math.max(args.nextAttemptAt, now)
-    const nextFailureReason = args.notificationFailureReason?.trim() || undefined
+    const nextFailureReason =
+      args.notificationFailureReason?.trim() || undefined
 
     await ctx.db.patch(args.notificationId, {
       attemptCount: notification.attemptCount + 1,

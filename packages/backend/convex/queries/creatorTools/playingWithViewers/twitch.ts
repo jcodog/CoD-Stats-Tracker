@@ -4,14 +4,14 @@ import { internalQuery, query } from "../../../_generated/server"
 import {
   getQueuePositionForIdentity,
   normalizePlatformUserId,
-} from "../../../lib/playingWithViewersIdentity"
-import { queuePlatformValidator } from "../../../lib/playingWithViewers"
+} from "../../../../src/lib/playingWithViewersIdentity"
+import { queuePlatformValidator } from "../../../../src/lib/playingWithViewers"
 import {
   hasEnabledPlayWithViewersTwitchContext,
   isPlayWithViewersTwitchEnabled,
   normalizePlayWithViewersTwitchContext,
-} from "../../../lib/creatorToolsConfig"
-import { requireValidTwitchWorkerSecret } from "../../../lib/workerAuth"
+} from "../../../../src/lib/creatorToolsConfig"
+import { requireValidTwitchWorkerSecret } from "../../../../src/lib/workerAuth"
 
 export const getEnabledTwitchQueues = internalQuery({
   args: {},

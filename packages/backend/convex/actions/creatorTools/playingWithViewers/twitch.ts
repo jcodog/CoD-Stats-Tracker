@@ -6,9 +6,9 @@ import { action } from "../../../_generated/server"
 import {
   participantQueueRankValidator,
   queueNotificationMethodValidator,
-} from "../../../lib/playingWithViewers"
-import { isPlayWithViewersTwitchEnabled } from "../../../lib/creatorToolsConfig"
-import { requireValidTwitchWorkerSecret } from "../../../lib/workerAuth"
+} from "../../../../src/lib/playingWithViewers"
+import { isPlayWithViewersTwitchEnabled } from "../../../../src/lib/creatorToolsConfig"
+import { requireValidTwitchWorkerSecret } from "../../../../src/lib/workerAuth"
 
 function requirePlayWithViewersTwitchEnabled() {
   if (!isPlayWithViewersTwitchEnabled()) {
@@ -31,7 +31,8 @@ export const enqueueViewerFromWorker = action({
     requirePlayWithViewersTwitchEnabled()
 
     const result = await ctx.runMutation(
-      internal.mutations.creatorTools.playingWithViewers.queue.enqueueViewerFromPlatform,
+      internal.mutations.creatorTools.playingWithViewers.queue
+        .enqueueViewerFromPlatform,
       {
         avatarUrl: args.avatarUrl,
         displayName: args.displayName,
@@ -45,7 +46,8 @@ export const enqueueViewerFromWorker = action({
 
     if (result.status === "enqueued") {
       await ctx.runAction(
-        internal.actions.creatorTools.playingWithViewers.discord.syncQueueMessageAfterViewerInteraction,
+        internal.actions.creatorTools.playingWithViewers.discord
+          .syncQueueMessageAfterViewerInteraction,
         {
           queueId: args.queueId,
         }
@@ -67,7 +69,8 @@ export const leaveViewerFromWorker = action({
     requirePlayWithViewersTwitchEnabled()
 
     const result = await ctx.runMutation(
-      internal.mutations.creatorTools.playingWithViewers.queue.leaveQueueFromPlatform,
+      internal.mutations.creatorTools.playingWithViewers.queue
+        .leaveQueueFromPlatform,
       {
         platform: "twitch",
         platformUserId: args.twitchUserId,
@@ -76,7 +79,8 @@ export const leaveViewerFromWorker = action({
     )
 
     await ctx.runAction(
-      internal.actions.creatorTools.playingWithViewers.discord.syncQueueMessageAfterViewerInteraction,
+      internal.actions.creatorTools.playingWithViewers.discord
+        .syncQueueMessageAfterViewerInteraction,
       {
         queueId: args.queueId,
       }
@@ -99,7 +103,8 @@ export const recordNotificationResultFromWorker = action({
     requirePlayWithViewersTwitchEnabled()
 
     return await ctx.runMutation(
-      internal.mutations.creatorTools.playingWithViewers.notifications.recordNotificationResult,
+      internal.mutations.creatorTools.playingWithViewers.notifications
+        .recordNotificationResult,
       {
         notificationFailureReason: args.notificationFailureReason,
         notificationId: args.notificationId,
@@ -122,7 +127,8 @@ export const deferNotificationFromWorker = action({
     requirePlayWithViewersTwitchEnabled()
 
     return await ctx.runMutation(
-      internal.mutations.creatorTools.playingWithViewers.notifications.deferNotification,
+      internal.mutations.creatorTools.playingWithViewers.notifications
+        .deferNotification,
       {
         nextAttemptAt: args.nextAttemptAt,
         notificationFailureReason: args.notificationFailureReason,

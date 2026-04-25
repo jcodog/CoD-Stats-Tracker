@@ -12,9 +12,9 @@ import {
   hasManagedCreatorGrantSubscriptionAccess,
   type BillingAccessSource,
   type BillingAttentionStatus,
-} from "../../lib/billing"
-import { resolveAppPlanKey } from "../../lib/billingAccess"
-import { resolveBillingFeatureApplyMode } from "../../lib/staffRoles"
+} from "../../../src/lib/billing"
+import { resolveAppPlanKey } from "../../../src/lib/billingAccess"
+import { resolveBillingFeatureApplyMode } from "../../../src/lib/staffRoles"
 import {
   selectCurrentBillingAccessGrant,
   selectCurrentManagedCreatorGrantSubscription,
@@ -26,10 +26,7 @@ type BillingEntitlementRecord = Doc<"billingEntitlements">
 type BillingSubscriptionRecord = Doc<"billingSubscriptions">
 type UserRecord = Doc<"users">
 
-function sortFeatures(
-  left: BillingFeatureRecord,
-  right: BillingFeatureRecord
-) {
+function sortFeatures(left: BillingFeatureRecord, right: BillingFeatureRecord) {
   if (left.sortOrder !== right.sortOrder) {
     return left.sortOrder - right.sortOrder
   }
@@ -186,10 +183,9 @@ export async function buildResolvedBillingState(
     (paidSubscriptionEligible ? subscription?.planKey : undefined) ??
     (hasLegacyPlanFallback ? user.plan : undefined) ??
     null
-  const accessSource: BillingAccessSource =
-    managedGrantEligible
-      ? "managed_grant_subscription"
-      : accessGrant !== null
+  const accessSource: BillingAccessSource = managedGrantEligible
+    ? "managed_grant_subscription"
+    : accessGrant !== null
       ? "creator_grant"
       : paidSubscriptionEligible
         ? "paid_subscription"
@@ -245,7 +241,9 @@ export async function buildResolvedBillingState(
   const effectivePlan =
     (effectivePlanKey ? plansByKey.get(effectivePlanKey) : null) ?? null
   const creatorGrant =
-    accessGrant && accessGrant.source === "creator_approval" ? accessGrant : null
+    accessGrant && accessGrant.source === "creator_approval"
+      ? accessGrant
+      : null
   const appPlanKey = resolveAppPlanKey({
     accessSource,
     effectivePlan,
@@ -270,7 +268,9 @@ export async function buildResolvedBillingState(
     effectivePlanKey,
     hasActiveAccess: appPlanKey !== "free",
     hasCreatorAccess,
-    subscription: managedGrantEligible ? managedGrantSubscription : subscription,
+    subscription: managedGrantEligible
+      ? managedGrantSubscription
+      : subscription,
     upcomingChange: deriveUpcomingChange(
       managedGrantEligible ? managedGrantSubscription : subscription
     ),
@@ -319,7 +319,9 @@ export const getCurrentUserResolvedBillingState = query({
 
     const user = await ctx.db
       .query("users")
-      .withIndex("by_clerkUserId", (query) => query.eq("clerkUserId", identity.subject))
+      .withIndex("by_clerkUserId", (query) =>
+        query.eq("clerkUserId", identity.subject)
+      )
       .unique()
 
     if (!user) {

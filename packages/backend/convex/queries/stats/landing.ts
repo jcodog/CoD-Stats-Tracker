@@ -1,18 +1,18 @@
-import type { Doc } from "../../_generated/dataModel";
-import { query, type QueryCtx } from "../../_generated/server";
+import type { Doc } from "../../_generated/dataModel"
+import { query, type QueryCtx } from "../../_generated/server"
 import {
   getGlobalLandingCounters,
   getUserLandingCounters,
   toWinRate,
-} from "../../lib/landingMetrics";
-import { getStatsUserIdCandidatesForIdentity } from "../../lib/userIds";
+} from "../../../src/lib/landingMetrics"
+import { getStatsUserIdCandidatesForIdentity } from "../../../src/lib/userIds"
 
 async function getLatestUserGameForCandidates(
   ctx: QueryCtx,
-  userIdCandidates: string[],
+  userIdCandidates: string[]
 ) {
   if (userIdCandidates.length === 0) {
-    return null;
+    return null
   }
 
   const latestGames = await Promise.all(
@@ -21,57 +21,54 @@ async function getLatestUserGameForCandidates(
         .query("games")
         .withIndex("by_user_createdat", (q) => q.eq("userId", candidate))
         .order("desc")
-        .first(),
-    ),
-  );
+        .first()
+    )
+  )
 
   return latestGames.reduce<Doc<"games"> | null>((latest, game) => {
     if (!game) {
-      return latest;
+      return latest
     }
 
     if (!latest || game.createdAt > latest.createdAt) {
-      return game;
+      return game
     }
 
-    return latest;
-  }, null);
+    return latest
+  }, null)
 }
 
 export const getLandingMetrics = query({
   args: {},
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    const canReadPersonal = Boolean(identity?.subject);
-    const userIdCandidatesPromise = canReadPersonal && identity
-      ? getStatsUserIdCandidatesForIdentity(ctx, identity)
-      : Promise.resolve([]);
+    const identity = await ctx.auth.getUserIdentity()
+    const canReadPersonal = Boolean(identity?.subject)
+    const userIdCandidatesPromise =
+      canReadPersonal && identity
+        ? getStatsUserIdCandidatesForIdentity(ctx, identity)
+        : Promise.resolve([])
 
-    const globalCountersPromise = getGlobalLandingCounters(ctx);
+    const globalCountersPromise = getGlobalLandingCounters(ctx)
     const latestGlobalGamePromise = ctx.db
       .query("games")
       .withIndex("by_createdat")
       .order("desc")
-      .first();
-    const userIdCandidates = await userIdCandidatesPromise;
+      .first()
+    const userIdCandidates = await userIdCandidatesPromise
     const personalCountersPromise = canReadPersonal
       ? getUserLandingCounters(ctx, userIdCandidates)
-      : Promise.resolve(null);
+      : Promise.resolve(null)
     const latestUserGamePromise = canReadPersonal
       ? getLatestUserGameForCandidates(ctx, userIdCandidates)
-      : Promise.resolve(null);
+      : Promise.resolve(null)
 
-    const [
-      globalCounters,
-      latestGlobalGame,
-      personalCounters,
-      latestUserGame,
-    ] = await Promise.all([
-      globalCountersPromise,
-      latestGlobalGamePromise,
-      personalCountersPromise,
-      latestUserGamePromise,
-    ]);
+    const [globalCounters, latestGlobalGame, personalCounters, latestUserGame] =
+      await Promise.all([
+        globalCountersPromise,
+        latestGlobalGamePromise,
+        personalCountersPromise,
+        latestUserGamePromise,
+      ])
 
     const personal = personalCounters
       ? {
@@ -81,7 +78,7 @@ export const getLandingMetrics = query({
           latestIngestedAt: latestUserGame?.createdAt ?? null,
           winRate: toWinRate(personalCounters.wins, personalCounters.losses),
         }
-      : null;
+      : null
 
     return {
       global: {
@@ -92,6 +89,6 @@ export const getLandingMetrics = query({
         winRate: toWinRate(globalCounters.wins, globalCounters.losses),
       },
       personal,
-    };
+    }
   },
-});
+})

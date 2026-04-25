@@ -7,7 +7,7 @@ import { usePathname } from "next/navigation"
 import {
   roleMeetsRequirement,
   type UserRole,
-} from "@workspace/backend/convex/lib/staffRoles"
+} from "@workspace/backend/lib/staffRoles"
 import {
   Avatar,
   AvatarFallback,

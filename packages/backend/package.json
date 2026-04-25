@@ -15,7 +15,7 @@
     "migrate:viewer-queue-invite-mode": "convex run actions/migrations/playingWithViewers:runViewerQueueInviteModeMigration '{\"confirm\":\"migrate_viewer_queue_invite_modes\"}'",
     "migrate:viewer-queue-invite-mode:dry": "convex run actions/migrations/playingWithViewers:runViewerQueueInviteModeMigration '{\"confirm\":\"migrate_viewer_queue_invite_modes\",\"dryRun\":true}'",
     "test": "bun run test:env && bun run test:server && bun run test:convex",
-    "test:convex": "bun test \"convex/__tests__\" \"convex/lib/__tests__\" \"convex/mutations/__tests__\"",
+    "test:convex": "bun test \"convex/__tests__\" \"lib/__tests__\" \"convex/mutations/__tests__\"",
     "test:env": "bun test \"convex/__tests__/env.test.mjs\"",
     "test:server": "bun test \"src/server/__tests__\"",
     "typecheck": "tsc --noEmit"
@@ -41,7 +41,7 @@
     "typescript": "^6.0.3"
   },
   "exports": {
-    "./lib/*": "./convex/lib/*.ts",
+    "./lib/*": "./lib/*.ts",
     "./convex/*": "./convex/*",
     "./landing/*": "./src/landing/*.ts",
     "./server/*": "./src/server/*.ts"

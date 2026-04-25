@@ -2,7 +2,7 @@
 
 import { internal } from "../../_generated/api"
 import { internalAction } from "../../_generated/server"
-import { getConvexEnv } from "../../env"
+import { getConvexEnv } from "../../../src/env"
 
 type VercelFlagListItem = {
   id?: string

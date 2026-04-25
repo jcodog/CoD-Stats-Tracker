@@ -4,7 +4,7 @@ import {
   getParticipantRankLabel,
   parseCompetitiveRank,
   type CompetitiveRank,
-} from "@workspace/backend/convex/lib/rankValidator"
+} from "@workspace/backend/lib/rankValidator"
 import { ConvexService } from "@/convex/ConvexService"
 import { TwitchApiService } from "@/twitch/TwitchApiService"
 

@@ -1,8 +1,8 @@
 import type { Doc } from "../../_generated/dataModel"
 import { internalQuery } from "../../_generated/server"
 import { v } from "convex/values"
-import { getWebhookObjectIdsFromPayloadJson } from "../../lib/stripe/billing"
-import { resolveConfiguredUserRole } from "../../lib/staffRoleConfig"
+import { getWebhookObjectIdsFromPayloadJson } from "../../../src/lib/stripe/billing"
+import { resolveConfiguredUserRole } from "../../../src/lib/staffRoleConfig"
 
 type UserRecord = Doc<"users">
 type BillingPlanRecord = Doc<"billingPlans">

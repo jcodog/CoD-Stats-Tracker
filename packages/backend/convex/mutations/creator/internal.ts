@@ -1,7 +1,7 @@
 import { v } from "convex/values"
 
 import { internalMutation } from "../../_generated/server"
-import { CREATOR_PROGRAM_DEFAULTS_KEY } from "../../lib/creatorProgram"
+import { CREATOR_PROGRAM_DEFAULTS_KEY } from "../../../src/lib/creatorProgram"
 
 export const upsertCreatorProgramDefaults = internalMutation({
   args: {

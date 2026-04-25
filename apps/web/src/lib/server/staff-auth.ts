@@ -6,14 +6,14 @@ import { fetchQuery } from "convex/nextjs"
 import { redirect } from "next/navigation"
 
 import { api } from "@workspace/backend/convex/_generated/api"
-import { syncClerkPublicMetadataRole } from "@workspace/backend/convex/lib/clerk"
-import type { StaffAccessViewState } from "@workspace/backend/convex/lib/staffTypes"
+import { syncClerkPublicMetadataRole } from "@workspace/backend/lib/clerk"
+import type { StaffAccessViewState } from "@workspace/backend/lib/staffTypes"
 import {
   getParsedUserRoleState,
   roleMeetsRequirement,
   type RequiredStaffRole,
   type UserRole,
-} from "@workspace/backend/convex/lib/staffRoles"
+} from "@workspace/backend/lib/staffRoles"
 
 type AuthorizedStaffContext = Extract<StaffAccessViewState, { ok: true }> & {
   convexToken: string
@@ -63,7 +63,10 @@ function buildRestrictedContext(args: {
   reason: RestrictedStaffContext["reason"]
   requiredRole: RequiredStaffRole
 }): RestrictedStaffContext {
-  const supportMessageByReason: Record<RestrictedStaffContext["reason"], string> = {
+  const supportMessageByReason: Record<
+    RestrictedStaffContext["reason"],
+    string
+  > = {
     insufficient_role:
       "This staff area is restricted to a higher role than the one currently assigned to your account.",
     invalid_clerk_role:
@@ -95,137 +98,143 @@ function buildRestrictedContext(args: {
   }
 }
 
-const getStaffAccessContext = cache(async (
-  requiredRole: RequiredStaffRole
-): Promise<AuthorizedStaffContext | RestrictedStaffContext> => {
-  const { userId, getToken } = await auth()
+const getStaffAccessContext = cache(
+  async (
+    requiredRole: RequiredStaffRole
+  ): Promise<AuthorizedStaffContext | RestrictedStaffContext> => {
+    const { userId, getToken } = await auth()
 
-  if (!userId) {
-    redirect("/sign-in")
-  }
+    if (!userId) {
+      redirect("/sign-in")
+    }
 
-  const [clerkUser, convexToken] = await Promise.all([
-    currentUser(),
-    getToken({ template: "convex" }).catch(() => null),
-  ])
-  const displayName = getDisplayName(clerkUser)
-  const email = getEmail(clerkUser)
-  const clerkRoleState = getParsedUserRoleState(clerkUser?.publicMetadata?.role)
+    const [clerkUser, convexToken] = await Promise.all([
+      currentUser(),
+      getToken({ template: "convex" }).catch(() => null),
+    ])
+    const displayName = getDisplayName(clerkUser)
+    const email = getEmail(clerkUser)
+    const clerkRoleState = getParsedUserRoleState(
+      clerkUser?.publicMetadata?.role
+    )
 
-  if (!convexToken) {
-    return buildRestrictedContext({
-      clerkRole: clerkRoleState.role,
-      clerkUserId: userId,
-      convexRole: null,
-      displayName,
-      email,
-      reason: "missing_convex_token",
-      requiredRole,
-    })
-  }
-
-  const dbUser = await fetchQuery(api.queries.users.current, {}, { token: convexToken })
-  const convexRoleState = getParsedUserRoleState(dbUser?.role)
-  const convexRole = convexRoleState.role
-
-  if (!dbUser) {
-    return buildRestrictedContext({
-      clerkRole: clerkRoleState.role,
-      clerkUserId: userId,
-      convexRole: null,
-      displayName,
-      email,
-      reason: "missing_convex_user",
-      requiredRole,
-    })
-  }
-
-  let resolvedClerkRole = clerkRoleState.role
-
-  if (
-    clerkUser &&
-    convexRole &&
-    resolvedClerkRole !== convexRole
-  ) {
-    try {
-      await syncClerkPublicMetadataRole({
+    if (!convexToken) {
+      return buildRestrictedContext({
+        clerkRole: clerkRoleState.role,
         clerkUserId: userId,
-        currentPublicMetadata: clerkUser.publicMetadata,
-        role: convexRole,
+        convexRole: null,
+        displayName,
+        email,
+        reason: "missing_convex_token",
+        requiredRole,
       })
-      resolvedClerkRole = convexRole
-    } catch {
-      resolvedClerkRole = clerkRoleState.role
+    }
+
+    const dbUser = await fetchQuery(
+      api.queries.users.current,
+      {},
+      { token: convexToken }
+    )
+    const convexRoleState = getParsedUserRoleState(dbUser?.role)
+    const convexRole = convexRoleState.role
+
+    if (!dbUser) {
+      return buildRestrictedContext({
+        clerkRole: clerkRoleState.role,
+        clerkUserId: userId,
+        convexRole: null,
+        displayName,
+        email,
+        reason: "missing_convex_user",
+        requiredRole,
+      })
+    }
+
+    let resolvedClerkRole = clerkRoleState.role
+
+    if (clerkUser && convexRole && resolvedClerkRole !== convexRole) {
+      try {
+        await syncClerkPublicMetadataRole({
+          clerkUserId: userId,
+          currentPublicMetadata: clerkUser.publicMetadata,
+          role: convexRole,
+        })
+        resolvedClerkRole = convexRole
+      } catch {
+        resolvedClerkRole = clerkRoleState.role
+      }
+    }
+
+    if (!resolvedClerkRole) {
+      return buildRestrictedContext({
+        clerkRole: null,
+        clerkUserId: userId,
+        convexRole,
+        displayName,
+        email,
+        reason:
+          clerkRoleState.issue === "invalid"
+            ? "invalid_clerk_role"
+            : "missing_clerk_role",
+        requiredRole,
+      })
+    }
+
+    if (!convexRole) {
+      return buildRestrictedContext({
+        clerkRole: resolvedClerkRole,
+        clerkUserId: userId,
+        convexRole: null,
+        displayName,
+        email,
+        reason:
+          convexRoleState.issue === "invalid"
+            ? "invalid_convex_role"
+            : "missing_convex_role",
+        requiredRole,
+      })
+    }
+
+    if (resolvedClerkRole !== convexRole) {
+      return buildRestrictedContext({
+        clerkRole: resolvedClerkRole,
+        clerkUserId: userId,
+        convexRole,
+        displayName,
+        email,
+        reason: "role_mismatch",
+        requiredRole,
+      })
+    }
+
+    if (!roleMeetsRequirement(convexRole, requiredRole)) {
+      return buildRestrictedContext({
+        clerkRole: resolvedClerkRole,
+        clerkUserId: userId,
+        convexRole,
+        displayName,
+        email,
+        reason: "insufficient_role",
+        requiredRole,
+      })
+    }
+
+    return {
+      clerkRole: resolvedClerkRole,
+      clerkUserId: userId,
+      convexRole,
+      convexToken,
+      displayName,
+      email,
+      ok: true,
+      requiredRole,
     }
   }
+)
 
-  if (!resolvedClerkRole) {
-    return buildRestrictedContext({
-      clerkRole: null,
-      clerkUserId: userId,
-      convexRole,
-      displayName,
-      email,
-      reason:
-        clerkRoleState.issue === "invalid"
-          ? "invalid_clerk_role"
-          : "missing_clerk_role",
-      requiredRole,
-    })
-  }
-
-  if (!convexRole) {
-    return buildRestrictedContext({
-      clerkRole: resolvedClerkRole,
-      clerkUserId: userId,
-      convexRole: null,
-      displayName,
-      email,
-      reason:
-        convexRoleState.issue === "invalid"
-          ? "invalid_convex_role"
-          : "missing_convex_role",
-      requiredRole,
-    })
-  }
-
-  if (resolvedClerkRole !== convexRole) {
-    return buildRestrictedContext({
-      clerkRole: resolvedClerkRole,
-      clerkUserId: userId,
-      convexRole,
-      displayName,
-      email,
-      reason: "role_mismatch",
-      requiredRole,
-    })
-  }
-
-  if (!roleMeetsRequirement(convexRole, requiredRole)) {
-    return buildRestrictedContext({
-      clerkRole: resolvedClerkRole,
-      clerkUserId: userId,
-      convexRole,
-      displayName,
-      email,
-      reason: "insufficient_role",
-      requiredRole,
-    })
-  }
-
-  return {
-    clerkRole: resolvedClerkRole,
-    clerkUserId: userId,
-    convexRole,
-    convexToken,
-    displayName,
-    email,
-    ok: true,
-    requiredRole,
-  }
-})
-
-export async function getAuthorizedStaffContext(requiredRole: RequiredStaffRole) {
+export async function getAuthorizedStaffContext(
+  requiredRole: RequiredStaffRole
+) {
   return getStaffAccessContext(requiredRole)
 }
 

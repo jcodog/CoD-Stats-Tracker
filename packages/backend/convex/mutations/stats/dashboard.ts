@@ -6,7 +6,7 @@ import { mutation, type MutationCtx } from "../../_generated/server"
 import {
   applyGlobalLandingStatsDelta,
   applyUserLandingStatsDelta,
-} from "../../lib/landingMetrics"
+} from "../../../src/lib/landingMetrics"
 import {
   buildTitleSeasonKey,
   collectOwnedSessions,
@@ -17,13 +17,13 @@ import {
   requireAuthenticatedStatsActor,
   sessionMatchesRankedConfig,
   trimOptionalText,
-} from "../../lib/statsDashboard"
+} from "../../../src/lib/statsDashboard"
 import {
   assertStartSr,
   clampOptionalNonNegativeInteger,
   validateSrChangeAndComputeNextSr,
-} from "../../lib/statsInputValidation"
-import { getStatsUserIdCandidatesForInvalidation } from "../../lib/userIds"
+} from "../../../src/lib/statsInputValidation"
+import { getStatsUserIdCandidatesForInvalidation } from "../../../src/lib/userIds"
 
 const NOTES_MAX_LENGTH = 280
 

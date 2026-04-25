@@ -10,7 +10,7 @@ import {
   roleMeetsRequirement,
   type RequiredStaffRole,
   type UserRole,
-} from "@workspace/backend/convex/lib/staffRoles"
+} from "@workspace/backend/lib/staffRoles"
 
 import type {
   StaffBillingSectionConfig,

@@ -6,7 +6,7 @@ import {
   hasManagedCreatorGrantSubscriptionAccess,
   isManageableBillingSubscription,
   type BillingSubscriptionStatus,
-} from "../../lib/billing"
+} from "../../../src/lib/billing"
 
 type BillingSubscriptionRecord = Doc<"billingSubscriptions">
 type BillingAccessGrantRecord = Doc<"billingAccessGrants">
@@ -36,33 +36,40 @@ export function selectCurrentBillingSubscription(
   subscriptions: BillingSubscriptionRecord[],
   now = Date.now()
 ) {
-  return subscriptions
-    .filter((subscription) => isManageableBillingSubscription(subscription, now))
-    .sort((left, right) => {
-      const leftManagedGrant = hasManagedCreatorGrantSubscriptionAccess(left, now)
-      const rightManagedGrant = hasManagedCreatorGrantSubscriptionAccess(
-        right,
-        now
+  return (
+    subscriptions
+      .filter((subscription) =>
+        isManageableBillingSubscription(subscription, now)
       )
+      .sort((left, right) => {
+        const leftManagedGrant = hasManagedCreatorGrantSubscriptionAccess(
+          left,
+          now
+        )
+        const rightManagedGrant = hasManagedCreatorGrantSubscriptionAccess(
+          right,
+          now
+        )
 
-      if (leftManagedGrant !== rightManagedGrant) {
-        return rightManagedGrant ? 1 : -1
-      }
+        if (leftManagedGrant !== rightManagedGrant) {
+          return rightManagedGrant ? 1 : -1
+        }
 
-      const priorityDifference =
-        getSubscriptionPriority(right.status) -
-        getSubscriptionPriority(left.status)
+        const priorityDifference =
+          getSubscriptionPriority(right.status) -
+          getSubscriptionPriority(left.status)
 
-      if (priorityDifference !== 0) {
-        return priorityDifference
-      }
+        if (priorityDifference !== 0) {
+          return priorityDifference
+        }
 
-      if ((right.updatedAt ?? 0) !== (left.updatedAt ?? 0)) {
-        return (right.updatedAt ?? 0) - (left.updatedAt ?? 0)
-      }
+        if ((right.updatedAt ?? 0) !== (left.updatedAt ?? 0)) {
+          return (right.updatedAt ?? 0) - (left.updatedAt ?? 0)
+        }
 
-      return right._creationTime - left._creationTime
-    })[0] ?? null
+        return right._creationTime - left._creationTime
+      })[0] ?? null
+  )
 }
 
 export function selectCurrentManagedCreatorGrantSubscription(
@@ -126,25 +133,30 @@ export function selectCurrentBillingAccessGrant(
   grants: BillingAccessGrantRecord[],
   now = Date.now()
 ) {
-  return [...grants]
-    .filter((grant) => isBillingAccessGrantActive(grant, now))
-    .sort((left, right) => {
-      const priorityDifference =
-        getGrantPriority(right.source) - getGrantPriority(left.source)
+  return (
+    [...grants]
+      .filter((grant) => isBillingAccessGrantActive(grant, now))
+      .sort((left, right) => {
+        const priorityDifference =
+          getGrantPriority(right.source) - getGrantPriority(left.source)
 
-      if (priorityDifference !== 0) {
-        return priorityDifference
-      }
+        if (priorityDifference !== 0) {
+          return priorityDifference
+        }
 
-      if ((right.updatedAt ?? 0) !== (left.updatedAt ?? 0)) {
-        return (right.updatedAt ?? 0) - (left.updatedAt ?? 0)
-      }
+        if ((right.updatedAt ?? 0) !== (left.updatedAt ?? 0)) {
+          return (right.updatedAt ?? 0) - (left.updatedAt ?? 0)
+        }
 
-      return right._creationTime - left._creationTime
-    })[0] ?? null
+        return right._creationTime - left._creationTime
+      })[0] ?? null
+  )
 }
 
-async function getBillingCustomerByUserId(ctx: QueryCtx, userId: Doc<"users">["_id"]) {
+async function getBillingCustomerByUserId(
+  ctx: QueryCtx,
+  userId: Doc<"users">["_id"]
+) {
   return await ctx.db
     .query("billingCustomers")
     .withIndex("by_userId", (query) => query.eq("userId", userId))
@@ -207,7 +219,9 @@ export const getUserBillingContextByClerkUserId = internalQuery({
   handler: async (ctx, args) => {
     const user = await ctx.db
       .query("users")
-      .withIndex("by_clerkUserId", (query) => query.eq("clerkUserId", args.clerkUserId))
+      .withIndex("by_clerkUserId", (query) =>
+        query.eq("clerkUserId", args.clerkUserId)
+      )
       .unique()
 
     if (!user) {
@@ -291,23 +305,24 @@ export const listBillingSubscriptionsByUserId = internalQuery({
   },
 })
 
-export const getBillingSubscriptionByStripeSubscriptionIdForUser = internalQuery({
-  args: {
-    stripeSubscriptionId: v.string(),
-    userId: v.id("users"),
-  },
-  handler: async (ctx, args) => {
-    const subscription = await ctx.db
-      .query("billingSubscriptions")
-      .withIndex("by_stripeSubscriptionId", (query) =>
-        query.eq("stripeSubscriptionId", args.stripeSubscriptionId)
-      )
-      .unique()
+export const getBillingSubscriptionByStripeSubscriptionIdForUser =
+  internalQuery({
+    args: {
+      stripeSubscriptionId: v.string(),
+      userId: v.id("users"),
+    },
+    handler: async (ctx, args) => {
+      const subscription = await ctx.db
+        .query("billingSubscriptions")
+        .withIndex("by_stripeSubscriptionId", (query) =>
+          query.eq("stripeSubscriptionId", args.stripeSubscriptionId)
+        )
+        .unique()
 
-    if (!subscription || subscription.userId !== args.userId) {
-      return null
-    }
+      if (!subscription || subscription.userId !== args.userId) {
+        return null
+      }
 
-    return subscription
-  },
-})
+      return subscription
+    },
+  })

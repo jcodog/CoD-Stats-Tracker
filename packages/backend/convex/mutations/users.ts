@@ -2,13 +2,13 @@ import { v, Validator } from "convex/values"
 import { internalMutation, MutationCtx } from "../_generated/server"
 import type { UserJSON } from "@clerk/nextjs/server"
 import { DataModel } from "../_generated/dataModel"
-import { parseUserRole } from "../lib/staffRoles"
-import { resolveConfiguredUserRole } from "../lib/staffRoleConfig"
+import { parseUserRole } from "../../src/lib/staffRoles"
+import { resolveConfiguredUserRole } from "../../src/lib/staffRoleConfig"
 import {
   getConnectedAccountsFromClerkUser,
   getDiscordIdFromClerkUser,
   resolveProvisionedUserRoleFromClerk,
-} from "../lib/clerkUsers"
+} from "../../src/lib/clerkUsers"
 
 export const upsertFromClerk = internalMutation({
   args: { data: v.any() as Validator<UserJSON> },
@@ -271,7 +271,9 @@ async function syncConnectedAccountsForUserRecords(
 
     const patch: Partial<DataModel["connectedAccounts"]["document"]> = {}
 
-    if (existingAccount.providerUserId !== desiredAccount.providerUserId.trim()) {
+    if (
+      existingAccount.providerUserId !== desiredAccount.providerUserId.trim()
+    ) {
       patch.providerUserId = desiredAccount.providerUserId.trim()
     }
 

@@ -7,10 +7,13 @@ import { action } from "../../_generated/server"
 import {
   getClerkBackendClient,
   syncClerkCreatorAttributionMetadata,
-} from "../../lib/clerk"
+} from "../../../src/lib/clerk"
 
 function normalizeCreatorCode(value: string) {
-  const normalizedCode = value.trim().toUpperCase().replace(/[^A-Z0-9]/g, "")
+  const normalizedCode = value
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "")
 
   if (!/^[A-Z0-9]{3,24}$/.test(normalizedCode)) {
     return null
@@ -42,9 +45,12 @@ export const applyCreatorCode = action({
     }
 
     const [creatorAccount, user] = await Promise.all([
-      ctx.runQuery(internal.queries.creator.internal.getCreatorAccountByNormalizedCode, {
-        normalizedCode,
-      }),
+      ctx.runQuery(
+        internal.queries.creator.internal.getCreatorAccountByNormalizedCode,
+        {
+          normalizedCode,
+        }
+      ),
       ctx.runQuery(internal.queries.creator.internal.getUserByClerkUserId, {
         clerkUserId: identity.subject,
       }),

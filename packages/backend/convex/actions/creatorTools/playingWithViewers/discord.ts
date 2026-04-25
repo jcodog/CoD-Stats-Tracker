@@ -3,21 +3,25 @@
 import { v } from "convex/values"
 import { internal } from "../../../_generated/api"
 import type { Doc, Id } from "../../../_generated/dataModel"
-import { action, internalAction, type ActionCtx } from "../../../_generated/server"
-import { getClerkBackendClient } from "../../../lib/clerk"
-import { getConvexEnv } from "../../../env"
+import {
+  action,
+  internalAction,
+  type ActionCtx,
+} from "../../../_generated/server"
+import { getClerkBackendClient } from "../../../../src/lib/clerk"
+import { getConvexEnv } from "../../../../src/env"
 import {
   getInviteCodeTypeLabel,
   inviteModeValidator,
   queueConfigRankValidator,
   renderInviteCodeInstructions,
   type InviteCodeType,
-} from "../../../lib/playingWithViewers"
-import { getDisabledPlayWithViewersTwitchContext } from "../../../lib/creatorToolsConfig"
+} from "../../../../src/lib/playingWithViewers"
+import { getDisabledPlayWithViewersTwitchContext } from "../../../../src/lib/creatorToolsConfig"
 import {
   requireCreatorToolsActionAccess,
   requireOwnedQueueActionAccess,
-} from "../../../lib/creatorToolsActionAuth"
+} from "../../../../src/lib/creatorToolsActionAuth"
 import {
   ButtonStyle,
   ChannelType,
@@ -228,11 +232,15 @@ function hasPermission(permissionBits: bigint, permission: bigint) {
 
 function getPermissionLabel(permission: bigint) {
   return (
-    DISCORD_PERMISSION_LABELS.get(permission) ?? `Permission ${permission.toString()}`
+    DISCORD_PERMISSION_LABELS.get(permission) ??
+    `Permission ${permission.toString()}`
   )
 }
 
-async function readDiscordApiErrorDetails(response: Response, fallback: string) {
+async function readDiscordApiErrorDetails(
+  response: Response,
+  fallback: string
+) {
   const responseText = await response.text()
 
   if (!responseText.trim()) {
@@ -296,7 +304,9 @@ async function getBotGuildPermissionContext(
       "Failed to load the bot's Discord member record."
     )
 
-    throw new Error(`Failed to inspect the bot's Discord membership: ${errorText}`)
+    throw new Error(
+      `Failed to inspect the bot's Discord membership: ${errorText}`
+    )
   }
 
   const roles = (await rolesResponse.json()) as DiscordGuildRole[]
@@ -329,7 +339,9 @@ async function getDiscordChannelDetails(channelId: string) {
       return null
     }
 
-    throw new Error(`Failed to load Discord channel details: ${errorDetails.message}`)
+    throw new Error(
+      `Failed to load Discord channel details: ${errorDetails.message}`
+    )
   }
 
   return (await channelResponse.json()) as DiscordGuildChannelDetails
@@ -349,15 +361,17 @@ async function getDiscordGuildSummary(guildId: string) {
   return (await guildResponse.json()) as DiscordGuildSummary
 }
 
-async function getBotQueueChannelPermissionStatus(
-  args: {
-    guildId: string
-  }
-): Promise<QueueChannelBotPermissionStatus> {
-  const guildPermissionContext = await getBotGuildPermissionContext(args.guildId)
-  const missingPermissionLabels = PLAY_WITH_VIEWERS_REQUIRED_SERVER_PERMISSION_FLAGS
-    .filter((permission) => !hasPermission(guildPermissionContext.guildPermissionBits, permission))
-    .map(getPermissionLabel)
+async function getBotQueueChannelPermissionStatus(args: {
+  guildId: string
+}): Promise<QueueChannelBotPermissionStatus> {
+  const guildPermissionContext = await getBotGuildPermissionContext(
+    args.guildId
+  )
+  const missingPermissionLabels =
+    PLAY_WITH_VIEWERS_REQUIRED_SERVER_PERMISSION_FLAGS.filter(
+      (permission) =>
+        !hasPermission(guildPermissionContext.guildPermissionBits, permission)
+    ).map(getPermissionLabel)
 
   return {
     canUpdateChannelPermissions: missingPermissionLabels.length === 0,
@@ -443,15 +457,20 @@ function hasExpectedQueueChannelPermissions(args: {
     return false
   }
 
-  const expectedEveryoneAllow = parsePermissionBits(expectedEveryoneOverwrite.allow)
-  const expectedEveryoneDeny = parsePermissionBits(expectedEveryoneOverwrite.deny)
+  const expectedEveryoneAllow = parsePermissionBits(
+    expectedEveryoneOverwrite.allow
+  )
+  const expectedEveryoneDeny = parsePermissionBits(
+    expectedEveryoneOverwrite.deny
+  )
   const expectedBotAllow = parsePermissionBits(expectedBotOverwrite.allow)
   const expectedBotDeny = parsePermissionBits(expectedBotOverwrite.deny)
 
   const everyoneAllowMatches =
     actualEveryoneOverwrite.allow === expectedEveryoneAllow
   const everyoneDenyCoversRequiredBits =
-    (actualEveryoneOverwrite.deny & expectedEveryoneDeny) === expectedEveryoneDeny
+    (actualEveryoneOverwrite.deny & expectedEveryoneDeny) ===
+    expectedEveryoneDeny
   const everyoneDenyDoesNotBlockRequiredAllowBits =
     (actualEveryoneOverwrite.deny & expectedEveryoneAllow) === 0n
   const botAllowCoversRequiredBits =
@@ -519,7 +538,10 @@ async function applyQueueChannelPermissions(args: {
         "Discord rejected the channel permissions update."
       )
 
-      if (response.status === 403 && errorDetails.message === "Missing Permissions") {
+      if (
+        response.status === 403 &&
+        errorDetails.message === "Missing Permissions"
+      ) {
         throw new Error(
           "Discord is still blocking the Play With Viewers channel overwrite update. The bot has the required server permissions, so check whether this channel or its parent category is locked against overwrite edits."
         )
@@ -688,13 +710,15 @@ function buildGuildIconUrl(guild: DiscordUserGuild) {
 }
 
 async function getDiscordOauthAccessToken(clerkUserId: string) {
-  const oauthTokens = await getClerkBackendClient().users.getUserOauthAccessToken(
-    clerkUserId,
-    "discord"
-  )
+  const oauthTokens =
+    await getClerkBackendClient().users.getUserOauthAccessToken(
+      clerkUserId,
+      "discord"
+    )
   const oauthToken =
-    oauthTokens.data.find((candidate) => candidate.scopes?.includes("guilds")) ??
-    oauthTokens.data[0]
+    oauthTokens.data.find((candidate) =>
+      candidate.scopes?.includes("guilds")
+    ) ?? oauthTokens.data[0]
 
   if (!oauthToken?.token) {
     throw new Error("Connect Discord to this account before creating a queue.")
@@ -754,9 +778,12 @@ async function listOwnedGuildsWithBot(clerkUserId: string) {
 }
 
 async function getOrCreateQueueChannel(guildId: string) {
-  const listChannelsResponse = await discordBotRequest(`/guilds/${guildId}/channels`, {
-    method: "GET",
-  })
+  const listChannelsResponse = await discordBotRequest(
+    `/guilds/${guildId}/channels`,
+    {
+      method: "GET",
+    }
+  )
 
   if (!listChannelsResponse.ok) {
     const errorText = await listChannelsResponse.text()
@@ -775,21 +802,27 @@ async function getOrCreateQueueChannel(guildId: string) {
   let channelId = existingChannel?.id ?? null
 
   if (!channelId) {
-    const createChannelResponse = await discordBotRequest(`/guilds/${guildId}/channels`, {
-      method: "POST",
-      body: JSON.stringify({
-        name: PLAY_WITH_VIEWERS_CHANNEL_NAME,
-        type: ChannelType.GuildText,
-      }),
-    })
+    const createChannelResponse = await discordBotRequest(
+      `/guilds/${guildId}/channels`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          name: PLAY_WITH_VIEWERS_CHANNEL_NAME,
+          type: ChannelType.GuildText,
+        }),
+      }
+    )
 
     if (!createChannelResponse.ok) {
       const errorText = await createChannelResponse.text()
 
-      throw new Error(`Failed to create the Play With Viewers channel: ${errorText}`)
+      throw new Error(
+        `Failed to create the Play With Viewers channel: ${errorText}`
+      )
     }
 
-    const createdChannel = (await createChannelResponse.json()) as DiscordGuildChannel
+    const createdChannel =
+      (await createChannelResponse.json()) as DiscordGuildChannel
     channelId = createdChannel.id
   }
 
@@ -822,7 +855,8 @@ async function ensureQueueDiscordChannel(
   const channel = await getOrCreateQueueChannel(queue.guildId)
 
   await ctx.runMutation(
-    internal.mutations.creatorTools.playingWithViewers.queue.setQueueDiscordContext,
+    internal.mutations.creatorTools.playingWithViewers.queue
+      .setQueueDiscordContext,
     {
       channelId: channel.channelId,
       channelName: channel.channelName,
@@ -853,7 +887,8 @@ async function getReinviteRequiredQueueContext(args: {
 
   return {
     botPermissionStatus: args.botPermissionStatus,
-    channelName: args.queue.channelName?.trim() || PLAY_WITH_VIEWERS_CHANNEL_NAME,
+    channelName:
+      args.queue.channelName?.trim() || PLAY_WITH_VIEWERS_CHANNEL_NAME,
     channelPermsCorrect: false,
     guildName: guild.name,
   }
@@ -915,10 +950,13 @@ async function publishQueueMessageForQueue(
       queueSize: entries.length,
     }) as RESTPostAPIChannelMessageJSONBody
 
-    const response = await discordBotRequest(`/channels/${queue.channelId}/messages`, {
-      method: "POST",
-      body: JSON.stringify(payload),
-    })
+    const response = await discordBotRequest(
+      `/channels/${queue.channelId}/messages`,
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }
+    )
 
     if (!response.ok) {
       const errorDetails = await readDiscordApiErrorDetails(
@@ -936,7 +974,9 @@ async function publishQueueMessageForQueue(
         return await publishQueueMessageForQueue(ctx, queueId, true)
       }
 
-      throw new Error(`Failed to publish queue message: ${errorDetails.message}`)
+      throw new Error(
+        `Failed to publish queue message: ${errorDetails.message}`
+      )
     }
 
     const createdMessage = (await response.json()) as { id: string }
@@ -967,7 +1007,8 @@ async function publishQueueMessageForQueue(
     }
 
     await ctx.runMutation(
-      internal.mutations.creatorTools.playingWithViewers.queue.setQueueMessageMeta,
+      internal.mutations.creatorTools.playingWithViewers.queue
+        .setQueueMessageMeta,
       {
         queueId,
         messageId: createdMessage.id,
@@ -979,7 +1020,10 @@ async function publishQueueMessageForQueue(
       ok: true,
     }
   } catch (error) {
-    const errorMessage = toErrorMessage(error, "Failed to publish queue message.")
+    const errorMessage = toErrorMessage(
+      error,
+      "Failed to publish queue message."
+    )
 
     console.error("Play With Viewers publishQueueMessage failed", {
       channelId: queue.channelId,
@@ -988,7 +1032,8 @@ async function publishQueueMessageForQueue(
     })
 
     await ctx.runMutation(
-      internal.mutations.creatorTools.playingWithViewers.queue.setQueueMessageSyncError,
+      internal.mutations.creatorTools.playingWithViewers.queue
+        .setQueueMessageSyncError,
       {
         queueId,
         error: errorMessage,
@@ -1057,7 +1102,8 @@ async function updateQueueMessageForQueue(
 
       if (response.status === 404 && errorDetails.code === 10008) {
         await ctx.runMutation(
-          internal.mutations.creatorTools.playingWithViewers.queue.clearQueueMessageMeta,
+          internal.mutations.creatorTools.playingWithViewers.queue
+            .clearQueueMessageMeta,
           {
             queueId,
           }
@@ -1070,7 +1116,8 @@ async function updateQueueMessageForQueue(
     }
 
     await ctx.runMutation(
-      internal.mutations.creatorTools.playingWithViewers.queue.clearQueueMessageSyncError,
+      internal.mutations.creatorTools.playingWithViewers.queue
+        .clearQueueMessageSyncError,
       {
         queueId,
       }
@@ -1080,7 +1127,10 @@ async function updateQueueMessageForQueue(
       ok: true,
     }
   } catch (error) {
-    const errorMessage = toErrorMessage(error, "Failed to update queue message.")
+    const errorMessage = toErrorMessage(
+      error,
+      "Failed to update queue message."
+    )
 
     console.error("Play With Viewers updateQueueMessage failed", {
       channelId: queue.channelId,
@@ -1090,7 +1140,8 @@ async function updateQueueMessageForQueue(
     })
 
     await ctx.runMutation(
-      internal.mutations.creatorTools.playingWithViewers.queue.setQueueMessageSyncError,
+      internal.mutations.creatorTools.playingWithViewers.queue
+        .setQueueMessageSyncError,
       {
         queueId,
         error: errorMessage,
@@ -1150,7 +1201,8 @@ function renderDirectMessagePayload(args: {
     embeds: [
       {
         color: 0x0f766e,
-        description: "You have been selected for the next Play With Viewers lobby.",
+        description:
+          "You have been selected for the next Play With Viewers lobby.",
         fields,
         title: `You're in for ${args.title}`,
       },
@@ -1224,11 +1276,14 @@ async function deliverDiscordRoundNotifications(args: {
   const inviteCode = round.lobbyCode?.trim()
 
   if (!inviteCode || !round.inviteCodeType) {
-    throw new Error("Invite code and invite code type are required for bot_dm mode.")
+    throw new Error(
+      "Invite code and invite code type are required for bot_dm mode."
+    )
   }
 
   const notifications = await args.ctx.runQuery(
-    internal.queries.creatorTools.playingWithViewers.notifications.getRoundNotifications,
+    internal.queries.creatorTools.playingWithViewers.notifications
+      .getRoundNotifications,
     {
       roundId: args.roundId,
     }
@@ -1266,7 +1321,8 @@ async function deliverDiscordRoundNotifications(args: {
       })
 
       await args.ctx.runMutation(
-        internal.mutations.creatorTools.playingWithViewers.notifications.recordNotificationResult,
+        internal.mutations.creatorTools.playingWithViewers.notifications
+          .recordNotificationResult,
         {
           notificationId: notification._id,
           notificationMethod: "discord_dm",
@@ -1285,7 +1341,8 @@ async function deliverDiscordRoundNotifications(args: {
       })
 
       await args.ctx.runMutation(
-        internal.mutations.creatorTools.playingWithViewers.notifications.recordNotificationResult,
+        internal.mutations.creatorTools.playingWithViewers.notifications
+          .recordNotificationResult,
         {
           notificationFailureReason: failureReason,
           notificationId: notification._id,
@@ -1342,14 +1399,17 @@ export const createQueueInOwnedGuild = action({
         }
       : getDisabledPlayWithViewersTwitchContext()
     const existingQueue = await ctx.runQuery(
-      internal.queries.creatorTools.playingWithViewers.queue.getQueueByCreatorUserId,
+      internal.queries.creatorTools.playingWithViewers.queue
+        .getQueueByCreatorUserId,
       {
         creatorUserId: user._id,
       }
     )
 
     if (existingQueue) {
-      throw new Error("A Play With Viewers queue is already configured for this account.")
+      throw new Error(
+        "A Play With Viewers queue is already configured for this account."
+      )
     }
 
     const availableGuilds = await listOwnedGuildsWithBot(clerkUserId)
@@ -1439,7 +1499,8 @@ export const syncQueueDiscordContext = action({
       })
 
       await ctx.runMutation(
-        internal.mutations.creatorTools.playingWithViewers.queue.setQueueDiscordContext,
+        internal.mutations.creatorTools.playingWithViewers.queue
+          .setQueueDiscordContext,
         {
           channelName: discordContext.channelName,
           channelPermsCorrect: discordContext.channelPermsCorrect,
@@ -1460,7 +1521,8 @@ export const syncQueueDiscordContext = action({
     })
 
     await ctx.runMutation(
-      internal.mutations.creatorTools.playingWithViewers.queue.setQueueDiscordContext,
+      internal.mutations.creatorTools.playingWithViewers.queue
+        .setQueueDiscordContext,
       {
         channelName: discordContext.channelName,
         channelPermsCorrect: discordContext.channelPermsCorrect,
@@ -1490,7 +1552,8 @@ export const fixQueueChannelPermissions = action({
       })
 
       await ctx.runMutation(
-        internal.mutations.creatorTools.playingWithViewers.queue.setQueueDiscordContext,
+        internal.mutations.creatorTools.playingWithViewers.queue
+          .setQueueDiscordContext,
         {
           channelName: discordContext.channelName,
           channelPermsCorrect: discordContext.channelPermsCorrect,
@@ -1519,7 +1582,8 @@ export const fixQueueChannelPermissions = action({
     })
 
     await ctx.runMutation(
-      internal.mutations.creatorTools.playingWithViewers.queue.setQueueDiscordContext,
+      internal.mutations.creatorTools.playingWithViewers.queue
+        .setQueueDiscordContext,
       {
         channelName: discordContext.channelName,
         channelPermsCorrect: discordContext.channelPermsCorrect,

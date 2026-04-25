@@ -6,7 +6,7 @@ import {
   billingAddressValidator,
   billingTaxExemptValidator,
   billingTaxIdValidator,
-} from "../../db/tables/billing/shared"
+} from "../../../src/db/tables/billing/shared"
 import { buildResolvedBillingState } from "../../queries/billing/resolution"
 
 const billingIntervalValidator = v.union(v.literal("month"), v.literal("year"))
@@ -162,7 +162,10 @@ async function getExistingWebhookEventRecord(args: {
     .unique()
 }
 
-async function syncUserBillingPlan(ctx: MutationCtx, userId: Doc<"users">["_id"]) {
+async function syncUserBillingPlan(
+  ctx: MutationCtx,
+  userId: Doc<"users">["_id"]
+) {
   const user = await ctx.db.get(userId)
 
   if (!user) {
@@ -251,12 +254,15 @@ export const upsertBillingCustomer = internalMutation({
     ) {
       patch.defaultPaymentMethodId = args.defaultPaymentMethodId
     }
-    if ((existingCustomer.email ?? undefined) !== args.email) patch.email = args.email
+    if ((existingCustomer.email ?? undefined) !== args.email)
+      patch.email = args.email
     if ((existingCustomer.lastSyncedAt ?? undefined) !== args.lastSyncedAt) {
       patch.lastSyncedAt = args.lastSyncedAt
     }
-    if ((existingCustomer.name ?? undefined) !== args.name) patch.name = args.name
-    if ((existingCustomer.phone ?? undefined) !== args.phone) patch.phone = args.phone
+    if ((existingCustomer.name ?? undefined) !== args.name)
+      patch.name = args.name
+    if ((existingCustomer.phone ?? undefined) !== args.phone)
+      patch.phone = args.phone
     if (existingCustomer.stripeCustomerId !== args.stripeCustomerId) {
       patch.stripeCustomerId = args.stripeCustomerId
     }
@@ -428,7 +434,8 @@ export const upsertBillingSubscription = internalMutation({
     if ((existingSubscription.endedAt ?? undefined) !== args.endedAt) {
       patch.endedAt = args.endedAt
     }
-    if (existingSubscription.interval !== args.interval) patch.interval = args.interval
+    if (existingSubscription.interval !== args.interval)
+      patch.interval = args.interval
     if (
       (existingSubscription.lastStripeEventId ?? undefined) !==
       args.lastStripeEventId
@@ -453,7 +460,8 @@ export const upsertBillingSubscription = internalMutation({
     ) {
       patch.managedGrantSource = args.managedGrantSource
     }
-    if (existingSubscription.planKey !== args.planKey) patch.planKey = args.planKey
+    if (existingSubscription.planKey !== args.planKey)
+      patch.planKey = args.planKey
     if ((existingSubscription.quantity ?? undefined) !== args.quantity) {
       patch.quantity = args.quantity
     }
@@ -467,7 +475,8 @@ export const upsertBillingSubscription = internalMutation({
       (existingSubscription.scheduledChangeRequestedAt ?? undefined) !==
       scheduledFields.scheduledChangeRequestedAt
     ) {
-      patch.scheduledChangeRequestedAt = scheduledFields.scheduledChangeRequestedAt
+      patch.scheduledChangeRequestedAt =
+        scheduledFields.scheduledChangeRequestedAt
     }
     if (
       (existingSubscription.scheduledChangeType ?? undefined) !==
@@ -507,16 +516,20 @@ export const upsertBillingSubscription = internalMutation({
       patch.stripePriceId = args.stripePriceId
     }
     if (
-      (existingSubscription.stripeProductId ?? undefined) !== args.stripeProductId
+      (existingSubscription.stripeProductId ?? undefined) !==
+      args.stripeProductId
     ) {
       patch.stripeProductId = args.stripeProductId
     }
     if (
-      (existingSubscription.stripeScheduleId ?? undefined) !== args.stripeScheduleId
+      (existingSubscription.stripeScheduleId ?? undefined) !==
+      args.stripeScheduleId
     ) {
       patch.stripeScheduleId = args.stripeScheduleId
     }
-    if (existingSubscription.stripeSubscriptionId !== args.stripeSubscriptionId) {
+    if (
+      existingSubscription.stripeSubscriptionId !== args.stripeSubscriptionId
+    ) {
       patch.stripeSubscriptionId = args.stripeSubscriptionId
     }
     if (
@@ -585,7 +598,8 @@ export const syncBillingPaymentMethods = internalMutation({
         clerkUserId: args.clerkUserId,
         expMonth: paymentMethod.expMonth,
         expYear: paymentMethod.expYear,
-        isDefault: args.defaultPaymentMethodId === paymentMethod.stripePaymentMethodId,
+        isDefault:
+          args.defaultPaymentMethodId === paymentMethod.stripePaymentMethodId,
         last4: paymentMethod.last4,
         stripeCustomerId: args.stripeCustomerId,
         stripePaymentMethodId: paymentMethod.stripePaymentMethodId,
@@ -604,17 +618,23 @@ export const syncBillingPaymentMethods = internalMutation({
 
       const patch: Partial<Doc<"billingPaymentMethods">> = {}
 
-      if (existingRecord.active !== nextValues.active) patch.active = nextValues.active
+      if (existingRecord.active !== nextValues.active)
+        patch.active = nextValues.active
       if ((existingRecord.bankName ?? undefined) !== nextValues.bankName) {
         patch.bankName = nextValues.bankName
       }
-      if (hasJsonChanged(existingRecord.billingAddress, nextValues.billingAddress)) {
+      if (
+        hasJsonChanged(existingRecord.billingAddress, nextValues.billingAddress)
+      ) {
         patch.billingAddress = nextValues.billingAddress
       }
       if ((existingRecord.brand ?? undefined) !== nextValues.brand) {
         patch.brand = nextValues.brand
       }
-      if ((existingRecord.cardholderName ?? undefined) !== nextValues.cardholderName) {
+      if (
+        (existingRecord.cardholderName ?? undefined) !==
+        nextValues.cardholderName
+      ) {
         patch.cardholderName = nextValues.cardholderName
       }
       if (existingRecord.clerkUserId !== nextValues.clerkUserId) {
@@ -686,7 +706,9 @@ export const syncBillingInvoices = internalMutation({
     )
 
     for (const invoice of args.invoices) {
-      const existingRecord = existingByStripeInvoiceId.get(invoice.stripeInvoiceId)
+      const existingRecord = existingByStripeInvoiceId.get(
+        invoice.stripeInvoiceId
+      )
       const nextValues = {
         amountDue: invoice.amountDue,
         amountPaid: invoice.amountPaid,
@@ -738,17 +760,22 @@ export const syncBillingInvoices = internalMutation({
         patch.description = nextValues.description
       }
       if (
-        (existingRecord.hostedInvoiceUrl ?? undefined) !== nextValues.hostedInvoiceUrl
+        (existingRecord.hostedInvoiceUrl ?? undefined) !==
+        nextValues.hostedInvoiceUrl
       ) {
         patch.hostedInvoiceUrl = nextValues.hostedInvoiceUrl
       }
       if (existingRecord.invoiceIssuedAt !== nextValues.invoiceIssuedAt) {
         patch.invoiceIssuedAt = nextValues.invoiceIssuedAt
       }
-      if ((existingRecord.invoiceNumber ?? undefined) !== nextValues.invoiceNumber) {
+      if (
+        (existingRecord.invoiceNumber ?? undefined) !== nextValues.invoiceNumber
+      ) {
         patch.invoiceNumber = nextValues.invoiceNumber
       }
-      if ((existingRecord.invoicePdfUrl ?? undefined) !== nextValues.invoicePdfUrl) {
+      if (
+        (existingRecord.invoicePdfUrl ?? undefined) !== nextValues.invoicePdfUrl
+      ) {
         patch.invoicePdfUrl = nextValues.invoicePdfUrl
       }
       if (
@@ -935,10 +962,16 @@ export const recordWebhookEventReceived = internalMutation({
         patch.payloadUnavailableReason = undefined
       }
 
-      if (existingEvent.customerId === undefined && args.customerId !== undefined) {
+      if (
+        existingEvent.customerId === undefined &&
+        args.customerId !== undefined
+      ) {
         patch.customerId = args.customerId
       }
-      if (existingEvent.invoiceId === undefined && args.invoiceId !== undefined) {
+      if (
+        existingEvent.invoiceId === undefined &&
+        args.invoiceId !== undefined
+      ) {
         patch.invoiceId = args.invoiceId
       }
       if (

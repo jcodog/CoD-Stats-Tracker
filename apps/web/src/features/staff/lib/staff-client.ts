@@ -13,7 +13,7 @@ import type {
   StaffRankedDashboard,
   StaffWebhookEventDetail,
   StaffWebhookLedgerDashboard,
-} from "@workspace/backend/convex/lib/staffTypes"
+} from "@workspace/backend/lib/staffTypes"
 
 import type {
   BillingActionRequest,

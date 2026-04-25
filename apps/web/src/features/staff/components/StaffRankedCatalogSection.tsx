@@ -6,7 +6,7 @@ import type {
   StaffRankedMapRecord,
   StaffRankedModeRecord,
   StaffRankedTitleRecord,
-} from "@workspace/backend/convex/lib/staffTypes"
+} from "@workspace/backend/lib/staffTypes"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import {

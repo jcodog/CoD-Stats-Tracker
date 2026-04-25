@@ -5,7 +5,7 @@ import type { MutationCtx } from "../../../_generated/server"
 import {
   findQueueEntryForIdentity,
   resolveQueueIdentity,
-} from "../../../lib/playingWithViewersIdentity"
+} from "../../../../src/lib/playingWithViewersIdentity"
 import {
   DEFAULT_INVITE_CODE_TYPE,
   inviteCodeTypeValidator,
@@ -22,12 +22,12 @@ import {
   type ParticipantRankValue,
   type QueueConfigRankValue,
   type QueuePlatform,
-} from "../../../lib/playingWithViewers"
+} from "../../../../src/lib/playingWithViewers"
 import {
   getDisabledPlayWithViewersTwitchContext,
   type PlayWithViewersStoredTwitchContextLike,
   isPlayWithViewersTwitchEnabled,
-} from "../../../lib/creatorToolsConfig"
+} from "../../../../src/lib/creatorToolsConfig"
 
 const selectedQueueUserValidator = v.object({
   platform: queuePlatformValidator,
@@ -111,7 +111,9 @@ function resolveStoredTwitchContext(args: {
       "twitchBroadcasterLogin"
     ),
     twitchCommandsEnabled:
-      args.twitchCommandsEnabled ?? args.currentQueue?.twitchCommandsEnabled ?? true,
+      args.twitchCommandsEnabled ??
+      args.currentQueue?.twitchCommandsEnabled ??
+      true,
   }
 }
 

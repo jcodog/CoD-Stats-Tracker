@@ -2,14 +2,17 @@
 
 import { action } from "../../_generated/server"
 import { internal } from "../../_generated/api"
-import { requireAuthorizedStaffAction } from "../../lib/staffActionAuth"
-import { roleMeetsRequirement, type UserRole } from "../../lib/staffRoles"
+import { requireAuthorizedStaffAction } from "../../../src/lib/staffActionAuth"
+import {
+  roleMeetsRequirement,
+  type UserRole,
+} from "../../../src/lib/staffRoles"
 import type {
   StaffAuditLogEntry,
   StaffBillingSyncSummary,
   StaffOverviewDashboard,
   StaffOverviewTimelinePoint,
-} from "../../lib/staffTypes"
+} from "../../../src/lib/staffTypes"
 
 type OverviewSubscriptionStatus = "active" | "past_due" | "paused" | "trialing"
 type OverviewAuditLogRecord = {
@@ -174,11 +177,15 @@ export const getDashboard = action({
       internal.queries.staff.internal.getOverviewRecords,
       {}
     )) as OverviewRecords
-    const canReviewManagement = roleMeetsRequirement(operator.actorRole, "admin")
-    const accessibleAuditLogs = records.auditLogs.filter((log: OverviewAuditLogRecord) =>
-      log.entityType.startsWith("billing")
-        ? true
-        : canReviewManagement && log.entityType === "user"
+    const canReviewManagement = roleMeetsRequirement(
+      operator.actorRole,
+      "admin"
+    )
+    const accessibleAuditLogs = records.auditLogs.filter(
+      (log: OverviewAuditLogRecord) =>
+        log.entityType.startsWith("billing")
+          ? true
+          : canReviewManagement && log.entityType === "user"
     )
     const subscriptions = records.subscriptions.filter(
       (
@@ -198,14 +205,18 @@ export const getDashboard = action({
         subscription.cancelAtPeriodEnd
     ).length
     const cancelAtPeriodEndCount = subscriptions.filter(
-      (subscription: OverviewSubscriptionRecord) => subscription.cancelAtPeriodEnd
+      (subscription: OverviewSubscriptionRecord) =>
+        subscription.cancelAtPeriodEnd
     ).length
-    const subscriptionStatusCounts = OVERVIEW_SUBSCRIPTION_STATUSES.map((status) => ({
-      count: subscriptions.filter(
-        (subscription: OverviewSubscriptionRecord) => subscription.status === status
-      ).length,
-      status,
-    }))
+    const subscriptionStatusCounts = OVERVIEW_SUBSCRIPTION_STATUSES.map(
+      (status) => ({
+        count: subscriptions.filter(
+          (subscription: OverviewSubscriptionRecord) =>
+            subscription.status === status
+        ).length,
+        status,
+      })
+    )
     const lastSync = parseSyncSummary(
       accessibleAuditLogs.find(
         (log: OverviewAuditLogRecord) => log.action === "billing.catalog.sync"
@@ -218,13 +229,15 @@ export const getDashboard = action({
       cancelAtPeriodEndCount,
       counts: {
         activeSubscriptions: activeSubscriptionCount,
-        adminUsers: records.users.filter((user: OverviewUserRecord) => user.role === "admin")
-          .length,
+        adminUsers: records.users.filter(
+          (user: OverviewUserRecord) => user.role === "admin"
+        ).length,
         attentionSubscriptions: attentionSubscriptionCount,
         billingFeatures: records.features.length,
         billingPlans: records.plans.length,
-        staffUsers: records.users.filter((user: OverviewUserRecord) => user.role === "staff")
-          .length,
+        staffUsers: records.users.filter(
+          (user: OverviewUserRecord) => user.role === "staff"
+        ).length,
         superAdminUsers: records.users.filter(
           (user: OverviewUserRecord) => user.role === "super_admin"
         ).length,

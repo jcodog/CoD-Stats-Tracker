@@ -4,7 +4,7 @@ import {
   hasBillingSubscriptionPeriodRemaining,
   hasManagedCreatorGrantSubscriptionAccess,
   isManageableBillingSubscription,
-} from "../../lib/billing"
+} from "../../../src/lib/billing"
 
 type BillingCustomerRecord = Doc<"billingCustomers">
 type BillingInvoiceRecord = Doc<"billingInvoices">
