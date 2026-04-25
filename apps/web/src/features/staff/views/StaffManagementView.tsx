@@ -9,17 +9,17 @@ import {
 import {
   isAdminCapableRole,
   type AssignableUserRole,
-} from "@workspace/backend/convex/lib/staffRoles"
+} from "@workspace/backend/lib/staffRoles"
 import {
   canActorBanManagementUser,
   getAllowedRoleOptionsForManagementUser,
   getBanRestrictionMessageForManagementUser,
-} from "@workspace/backend/convex/lib/staffManagementPermissions"
+} from "@workspace/backend/lib/staffManagementPermissions"
 import type {
   StaffManagementDashboard,
   StaffManagementUserRecord,
   StaffMutationResponse,
-} from "@workspace/backend/convex/lib/staffTypes"
+} from "@workspace/backend/lib/staffTypes"
 import {
   Alert,
   AlertDescription,

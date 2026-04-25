@@ -3,14 +3,18 @@
 import { v } from "convex/values"
 import { action } from "../../_generated/server"
 import { internal } from "../../_generated/api"
-import { requireAuthorizedStaffAction } from "../../lib/staffActionAuth"
-import { isRankedSessionWritesEnabled } from "../../lib/statsDashboard"
+import { requireAuthorizedStaffAction } from "../../../src/lib/staffActionAuth"
+import { isRankedSessionWritesEnabled } from "../../../src/lib/statsDashboard"
 import type {
   StaffMutationResponse,
   StaffRankedDashboard,
-} from "../../lib/staffTypes"
+} from "../../../src/lib/staffTypes"
 
-function formatPlural(value: number, singular: string, plural = `${singular}s`) {
+function formatPlural(
+  value: number,
+  singular: string,
+  plural = `${singular}s`
+) {
   return `${value} ${value === 1 ? singular : plural}`
 }
 
@@ -18,7 +22,10 @@ export const getDashboard = action({
   args: {},
   handler: async (ctx): Promise<StaffRankedDashboard> => {
     const operator = await requireAuthorizedStaffAction(ctx, "staff")
-    const records = await ctx.runQuery(internal.queries.staff.internal.getRankedRecords, {})
+    const records = await ctx.runQuery(
+      internal.queries.staff.internal.getRankedRecords,
+      {}
+    )
     const titles = records.titles as Array<{
       isActive: boolean
       key: string

@@ -8,20 +8,23 @@ import { internal } from "../../_generated/api"
 import {
   reconcileBillingCustomer,
   reconcileStripeSubscription,
-} from "../../lib/billingLifecycle"
+} from "../../../src/lib/billingLifecycle"
 import {
   hasManagedCreatorGrantSubscriptionAccess,
   maskIdentifier,
-} from "../../lib/billing"
-import { hasCreatorAccess, resolveAppPlanKey } from "../../lib/billingAccess"
-import { isStripeManagedCreatorGrantSubscription } from "../../lib/stripe/billing"
-import { getClerkBackendClient } from "../../lib/clerk"
-import { requireAuthorizedStaffAction } from "../../lib/staffActionAuth"
+} from "../../../src/lib/billing"
+import {
+  hasCreatorAccess,
+  resolveAppPlanKey,
+} from "../../../src/lib/billingAccess"
+import { isStripeManagedCreatorGrantSubscription } from "../../../src/lib/stripe/billing"
+import { getClerkBackendClient } from "../../../src/lib/clerk"
+import { requireAuthorizedStaffAction } from "../../../src/lib/staffActionAuth"
 import {
   resolveBillingFeatureApplyMode,
   roleMeetsRequirement,
   type UserRole,
-} from "../../lib/staffRoles"
+} from "../../../src/lib/staffRoles"
 import type {
   StaffAuditLogEntry,
   StaffBillingCustomerRecord,
@@ -42,7 +45,7 @@ import type {
   StaffWebhookLedgerRecord,
   StaffWebhookMetrics,
   StaffWebhookTimelinePoint,
-} from "../../lib/staffTypes"
+} from "../../../src/lib/staffTypes"
 import {
   buildCreatorCodeSeed,
   DEFAULT_CREATOR_PROGRAM_DEFAULTS,
@@ -52,14 +55,14 @@ import {
   normalizeCreatorCode,
   normalizeCreatorCountry,
   validateCreatorPercent,
-} from "../../lib/creatorProgram"
+} from "../../../src/lib/creatorProgram"
 import {
   buildCreatorConnectedAccountCreateParams,
   createStripeRecipientAccountV2,
   isStripeV2CompatibilityError,
   retrieveStripeAccountV2,
-} from "../../lib/stripe/connect"
-import { getStripe, STRIPE_CATALOG_APP } from "../../lib/stripe/client"
+} from "../../../src/lib/stripe/connect"
+import { getStripe, STRIPE_CATALOG_APP } from "../../../src/lib/stripe/client"
 import type { StripeCatalogSyncResult } from "../billing/syncCatalogToStripe"
 
 type SubscriptionStatus = "active" | "past_due" | "paused" | "trialing"

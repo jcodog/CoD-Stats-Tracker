@@ -1,5 +1,5 @@
-import { AuthConfig } from "convex/server";
-import { getConvexAuthEnv } from "./env";
+import { AuthConfig } from "convex/server"
+import { getConvexAuthEnv } from "../src/env"
 
 export default {
   providers: [
@@ -10,4 +10,4 @@ export default {
       applicationID: "convex",
     },
   ],
-} satisfies AuthConfig;
+} satisfies AuthConfig

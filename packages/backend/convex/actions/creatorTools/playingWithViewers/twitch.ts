@@ -33,7 +33,10 @@ function getDiscordBotToken() {
   return token
 }
 
-async function discordBotRequest<T>(path: string, init: RequestInit): Promise<T> {
+async function discordBotRequest<T>(
+  path: string,
+  init: RequestInit
+): Promise<T> {
   const response = await fetch(`${DISCORD_API_BASE}${path}`, {
     ...init,
     headers: {
@@ -59,10 +62,7 @@ function getDiscordChannelUrl(args: { channelId: string; guildId: string }) {
   return `https://discord.com/channels/${args.guildId}/${args.channelId}`
 }
 
-async function getQueueForWorker(
-  ctx: ActionCtx,
-  queueId: Id<"viewerQueues">
-) {
+async function getQueueForWorker(ctx: ActionCtx, queueId: Id<"viewerQueues">) {
   return await ctx.runQuery(
     internal.queries.creatorTools.playingWithViewers.queue.getQueueById,
     {
@@ -101,7 +101,8 @@ export const enqueueViewerFromWorker = action({
     await requireTwitchCommandsEnabledForQueue(ctx, args.queueId)
 
     const result = await ctx.runMutation(
-      internal.mutations.creatorTools.playingWithViewers.queue.enqueueViewerFromPlatform,
+      internal.mutations.creatorTools.playingWithViewers.queue
+        .enqueueViewerFromPlatform,
       {
         avatarUrl: args.avatarUrl,
         displayName: args.displayName,
@@ -115,7 +116,8 @@ export const enqueueViewerFromWorker = action({
 
     if (result.status === "enqueued") {
       await ctx.runAction(
-        internal.actions.creatorTools.playingWithViewers.discord.syncQueueMessageAfterViewerInteraction,
+        internal.actions.creatorTools.playingWithViewers.discord
+          .syncQueueMessageAfterViewerInteraction,
         {
           queueId: args.queueId,
         }
@@ -138,7 +140,8 @@ export const leaveViewerFromWorker = action({
     await requireTwitchCommandsEnabledForQueue(ctx, args.queueId)
 
     const result = await ctx.runMutation(
-      internal.mutations.creatorTools.playingWithViewers.queue.leaveQueueFromPlatform,
+      internal.mutations.creatorTools.playingWithViewers.queue
+        .leaveQueueFromPlatform,
       {
         platform: "twitch",
         platformUserId: args.twitchUserId,
@@ -147,7 +150,8 @@ export const leaveViewerFromWorker = action({
     )
 
     await ctx.runAction(
-      internal.actions.creatorTools.playingWithViewers.discord.syncQueueMessageAfterViewerInteraction,
+      internal.actions.creatorTools.playingWithViewers.discord
+        .syncQueueMessageAfterViewerInteraction,
       {
         queueId: args.queueId,
       }
@@ -170,7 +174,8 @@ export const recordNotificationResultFromWorker = action({
     requirePlayWithViewersTwitchEnabled()
 
     return await ctx.runMutation(
-      internal.mutations.creatorTools.playingWithViewers.notifications.recordNotificationResult,
+      internal.mutations.creatorTools.playingWithViewers.notifications
+        .recordNotificationResult,
       {
         notificationFailureReason: args.notificationFailureReason,
         notificationId: args.notificationId,
@@ -193,7 +198,8 @@ export const deferNotificationFromWorker = action({
     requirePlayWithViewersTwitchEnabled()
 
     return await ctx.runMutation(
-      internal.mutations.creatorTools.playingWithViewers.notifications.deferNotification,
+      internal.mutations.creatorTools.playingWithViewers.notifications
+        .deferNotification,
       {
         nextAttemptAt: args.nextAttemptAt,
         notificationFailureReason: args.notificationFailureReason,

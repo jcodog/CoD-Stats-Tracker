@@ -24,7 +24,7 @@ import {
   STAFF_CONSOLE_TITLE,
 } from "@/features/staff/lib/staff-navigation"
 import { Badge } from "@workspace/ui/components/badge"
-import { UserRole } from "@workspace/backend/convex/lib/staffRoles"
+import { UserRole } from "@workspace/backend/lib/staffRoles"
 
 function StaffConsoleBreadcrumb({
   items,

@@ -5,12 +5,12 @@ import { v, type Validator } from "convex/values"
 
 import { internal } from "../_generated/api"
 import { internalAction } from "../_generated/server"
-import { syncClerkPublicMetadataRole } from "../lib/clerk"
+import { syncClerkPublicMetadataRole } from "../../src/lib/clerk"
 import {
   getConnectedAccountsFromClerkUser,
   resolveProvisionedUserRoleFromClerk,
-} from "../lib/clerkUsers"
-import { getClerkBackendClient } from "../lib/clerk"
+} from "../../src/lib/clerkUsers"
+import { getClerkBackendClient } from "../../src/lib/clerk"
 
 export const syncProvisionedClerkRole = internalAction({
   args: { data: v.any() as Validator<UserJSON> },
@@ -28,7 +28,10 @@ export const backfillConnectedAccountsFromClerk = internalAction({
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const users = await ctx.runQuery(internal.queries.staff.internal.listUsers, {})
+    const users = await ctx.runQuery(
+      internal.queries.staff.internal.listUsers,
+      {}
+    )
     const targetUsers =
       typeof args.limit === "number" ? users.slice(0, args.limit) : users
     const clerk = getClerkBackendClient()
@@ -40,10 +43,13 @@ export const backfillConnectedAccountsFromClerk = internalAction({
       }
 
       const clerkUser = await clerk.users.getUser(user.clerkUserId)
-      await ctx.runMutation(internal.mutations.users.syncConnectedAccountsForUser, {
-        accounts: getConnectedAccountsFromClerkUser(clerkUser),
-        userId: user._id,
-      })
+      await ctx.runMutation(
+        internal.mutations.users.syncConnectedAccountsForUser,
+        {
+          accounts: getConnectedAccountsFromClerkUser(clerkUser),
+          userId: user._id,
+        }
+      )
       syncedCount += 1
     }
 

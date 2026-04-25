@@ -5,8 +5,8 @@ import { vercelAdapter } from "@flags-sdk/vercel"
 import { auth, currentUser } from "@clerk/nextjs/server"
 import { fetchQuery } from "convex/nextjs"
 import { api } from "@workspace/backend/convex/_generated/api"
-import { resolveAppPlanKeyFromState } from "@workspace/backend/convex/lib/billingAccess"
-import type { UserRole } from "@workspace/backend/convex/lib/staffRoles"
+import { resolveAppPlanKeyFromState } from "@workspace/backend/lib/billingAccess"
+import type { UserRole } from "@workspace/backend/lib/staffRoles"
 
 export type Plan = "free" | "premium" | "creator"
 export type Role = UserRole

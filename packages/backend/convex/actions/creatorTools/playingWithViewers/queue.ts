@@ -8,12 +8,12 @@ import {
   inviteCodeTypeValidator,
   inviteModeValidator,
   queueConfigRankValidator,
-} from "../../../lib/playingWithViewers"
-import { getDisabledPlayWithViewersTwitchContext } from "../../../lib/creatorToolsConfig"
+} from "../../../../src/lib/playingWithViewers"
+import { getDisabledPlayWithViewersTwitchContext } from "../../../../src/lib/creatorToolsConfig"
 import {
   requireOwnedQueueActionAccess,
   requireOwnedQueueEntryActionAccess,
-} from "../../../lib/creatorToolsActionAuth"
+} from "../../../../src/lib/creatorToolsActionAuth"
 
 async function getUpdatedRoundResult(
   ctx: ActionCtx,
@@ -72,7 +72,8 @@ export const updateQueueSettings = action({
       : getDisabledPlayWithViewersTwitchContext()
 
     return await ctx.runMutation(
-      internal.mutations.creatorTools.playingWithViewers.queue.updateQueueSettings,
+      internal.mutations.creatorTools.playingWithViewers.queue
+        .updateQueueSettings,
       {
         ...args,
         ...twitchContext,
@@ -115,14 +116,18 @@ export const removeQueueEntry = action({
     entryId: v.id("viewerQueueEntries"),
   },
   handler: async (ctx, args) => {
-    const { queue } = await requireOwnedQueueEntryActionAccess(ctx, args.entryId)
+    const { queue } = await requireOwnedQueueEntryActionAccess(
+      ctx,
+      args.entryId
+    )
     const result = await ctx.runMutation(
       internal.mutations.creatorTools.playingWithViewers.queue.removeQueueEntry,
       args
     )
 
     await ctx.runAction(
-      internal.actions.creatorTools.playingWithViewers.discord.syncQueueMessageAfterViewerInteraction,
+      internal.actions.creatorTools.playingWithViewers.discord
+        .syncQueueMessageAfterViewerInteraction,
       {
         queueId: queue._id,
       }
@@ -147,7 +152,8 @@ export const selectNextBatchAndNotify = action({
     )
 
     await ctx.runMutation(
-      internal.mutations.creatorTools.playingWithViewers.notifications.initializeRoundNotifications,
+      internal.mutations.creatorTools.playingWithViewers.notifications
+        .initializeRoundNotifications,
       {
         roundId: result.roundId,
       }
@@ -155,7 +161,8 @@ export const selectNextBatchAndNotify = action({
 
     if (result.mode === "bot_dm") {
       await ctx.runAction(
-        internal.actions.creatorTools.playingWithViewers.discord.deliverDiscordNotificationsForRound,
+        internal.actions.creatorTools.playingWithViewers.discord
+          .deliverDiscordNotificationsForRound,
         {
           roundId: result.roundId,
         }
@@ -182,12 +189,14 @@ export const inviteQueueEntryNowAndNotify = action({
     await requireOwnedQueueEntryActionAccess(ctx, args.entryId)
 
     const result = await ctx.runMutation(
-      internal.mutations.creatorTools.playingWithViewers.queue.inviteQueueEntryNow,
+      internal.mutations.creatorTools.playingWithViewers.queue
+        .inviteQueueEntryNow,
       args
     )
 
     await ctx.runMutation(
-      internal.mutations.creatorTools.playingWithViewers.notifications.initializeRoundNotifications,
+      internal.mutations.creatorTools.playingWithViewers.notifications
+        .initializeRoundNotifications,
       {
         roundId: result.roundId,
       }
@@ -195,7 +204,8 @@ export const inviteQueueEntryNowAndNotify = action({
 
     if (result.mode === "bot_dm") {
       await ctx.runAction(
-        internal.actions.creatorTools.playingWithViewers.discord.deliverDiscordNotificationsForRound,
+        internal.actions.creatorTools.playingWithViewers.discord
+          .deliverDiscordNotificationsForRound,
         {
           roundId: result.roundId,
         }

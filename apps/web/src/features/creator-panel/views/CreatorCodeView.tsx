@@ -16,7 +16,7 @@ import {
 } from "@tabler/icons-react"
 
 import { api } from "@workspace/backend/convex/_generated/api"
-import { formatCreatorRequirementLabel } from "@workspace/backend/convex/lib/creatorProgram"
+import { formatCreatorRequirementLabel } from "@workspace/backend/lib/creatorProgram"
 import { CreatorConsoleHeader } from "@/features/creator-panel/components/CreatorConsoleHeader"
 import {
   formatCreatorProgramSummary,

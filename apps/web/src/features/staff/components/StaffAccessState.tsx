@@ -1,7 +1,11 @@
 import Link from "next/link"
 
-import type { StaffAccessViewState } from "@workspace/backend/convex/lib/staffTypes"
-import { Alert, AlertDescription, AlertTitle } from "@workspace/ui/components/alert"
+import type { StaffAccessViewState } from "@workspace/backend/lib/staffTypes"
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+} from "@workspace/ui/components/alert"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import {
@@ -21,7 +25,9 @@ export function StaffAccessState({
   const repairHint =
     access.convexRole && !access.clerkRole
       ? `Convex already reports ${access.convexRole}. Clerk public metadata still needs to match it.`
-      : access.convexRole && access.clerkRole && access.convexRole !== access.clerkRole
+      : access.convexRole &&
+          access.clerkRole &&
+          access.convexRole !== access.clerkRole
         ? `Convex is ${access.convexRole}, while Clerk is ${access.clerkRole}. Clerk metadata needs to be synchronized.`
         : null
 

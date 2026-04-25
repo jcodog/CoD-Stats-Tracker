@@ -1,5 +1,5 @@
-import type { AuditLogResult } from "@workspace/backend/convex/lib/staffRoles"
-import type { StaffOverviewDashboard } from "@workspace/backend/convex/lib/staffTypes"
+import type { AuditLogResult } from "@workspace/backend/lib/staffRoles"
+import type { StaffOverviewDashboard } from "@workspace/backend/lib/staffTypes"
 import { Badge } from "@workspace/ui/components/badge"
 import {
   Table,

@@ -13,7 +13,7 @@ import {
   getSessionUsernameLabel,
   requireAuthenticatedStatsActor,
   sessionMatchesRankedConfig,
-} from "../../lib/statsDashboard"
+} from "../../../src/lib/statsDashboard"
 
 function getNumericValue(value: number | null | undefined) {
   return typeof value === "number" && Number.isFinite(value) ? value : 0

@@ -3,7 +3,7 @@ import { currentUser } from "@clerk/nextjs/server"
 import {
   getParsedUserRoleState,
   roleMeetsRequirement,
-} from "@workspace/backend/convex/lib/staffRoles"
+} from "@workspace/backend/lib/staffRoles"
 import { getCreatorToolsAccessState } from "@/lib/server/creator-tools-access"
 import { AppShellFrame } from "@/components/app-shell/AppShellFrame"
 import { isFlagEnabled } from "@/lib/flags"

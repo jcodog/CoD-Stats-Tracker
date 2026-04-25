@@ -1,4 +1,4 @@
-import { buildInviteMessagePreview } from "@workspace/backend/convex/lib/playingWithViewers"
+import { buildInviteMessagePreview } from "@workspace/backend/lib/playingWithViewers"
 import { ConvexService } from "@/convex/ConvexService"
 import { TwitchApiService } from "@/twitch/TwitchApiService"
 
@@ -50,12 +50,15 @@ export class TwitchNotificationService {
     }
   }
 
-  private async processNotification(notification: Awaited<
-    ReturnType<ConvexService["getPendingNotifications"]>
-  >[number]) {
+  private async processNotification(
+    notification: Awaited<
+      ReturnType<ConvexService["getPendingNotifications"]>
+    >[number]
+  ) {
     if (!notification.inviteCode || !notification.inviteCodeType) {
       await this.convexService.recordNotificationResult({
-        notificationFailureReason: "Missing invite details for Twitch delivery.",
+        notificationFailureReason:
+          "Missing invite details for Twitch delivery.",
         notificationId: notification.notificationId,
         notificationMethod: "twitch_whisper",
         notificationStatus: "failed",
@@ -72,7 +75,10 @@ export class TwitchNotificationService {
     })
 
     try {
-      await this.apiService.sendWhisper(notification.platformUserId, inviteMessage)
+      await this.apiService.sendWhisper(
+        notification.platformUserId,
+        inviteMessage
+      )
       await this.convexService.recordNotificationResult({
         notificationId: notification.notificationId,
         notificationMethod: "twitch_whisper",
@@ -83,7 +89,8 @@ export class TwitchNotificationService {
       if (isRateLimitError(error)) {
         await this.convexService.deferNotification({
           nextAttemptAt: Date.now() + RATE_LIMIT_RETRY_MS,
-          notificationFailureReason: "Twitch whisper rate limited. Retrying soon.",
+          notificationFailureReason:
+            "Twitch whisper rate limited. Retrying soon.",
           notificationId: notification.notificationId,
         })
         return
@@ -104,7 +111,8 @@ export class TwitchNotificationService {
       if (isRateLimitError(error)) {
         await this.convexService.deferNotification({
           nextAttemptAt: Date.now() + RATE_LIMIT_RETRY_MS,
-          notificationFailureReason: "Twitch chat fallback rate limited. Retrying soon.",
+          notificationFailureReason:
+            "Twitch chat fallback rate limited. Retrying soon.",
           notificationId: notification.notificationId,
         })
         return

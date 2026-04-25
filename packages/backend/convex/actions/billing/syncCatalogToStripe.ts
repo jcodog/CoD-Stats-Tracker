@@ -3,8 +3,8 @@
 import Stripe from "stripe"
 import { internal } from "../../_generated/api"
 import { internalAction } from "../../_generated/server"
-import { resolveBillingFeatureApplyMode } from "../../lib/staffRoles"
-import { STRIPE_CATALOG_APP, getStripe } from "../../lib/stripe/client"
+import { resolveBillingFeatureApplyMode } from "../../../src/lib/staffRoles"
+import { STRIPE_CATALOG_APP, getStripe } from "../../../src/lib/stripe/client"
 import type {
   BillingCatalogPlan,
   BillingFeatureRecord,

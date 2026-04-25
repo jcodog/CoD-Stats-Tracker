@@ -1,19 +1,19 @@
-import { v } from "convex/values";
-import { internal } from "../../_generated/api";
-import { mutation } from "../../_generated/server";
+import { v } from "convex/values"
+import { internal } from "../../_generated/api"
+import { mutation } from "../../_generated/server"
 import {
   applyGlobalLandingStatsDelta,
   applyUserLandingStatsDelta,
-} from "../../lib/landingMetrics";
+} from "../../../src/lib/landingMetrics"
 import {
   assertNonNegativeInteger,
   clampOptionalNonNegativeInteger,
   validateSrChangeAndComputeNextSr,
-} from "../../lib/statsInputValidation";
-import { getStatsUserIdCandidatesForInvalidation } from "../../lib/userIds";
+} from "../../../src/lib/statsInputValidation"
+import { getStatsUserIdCandidatesForInvalidation } from "../../../src/lib/userIds"
 
-export type Outcome = "win" | "loss";
-export type Mode = "hardpoint" | "snd" | "overload";
+export type Outcome = "win" | "loss"
+export type Mode = "hardpoint" | "snd" | "overload"
 
 export const logMatch = mutation({
   args: {
@@ -21,7 +21,7 @@ export const logMatch = mutation({
     mode: v.union(
       v.literal("hardpoint"),
       v.literal("snd"),
-      v.literal("overload"),
+      v.literal("overload")
     ),
     outcome: v.union(v.literal("win"), v.literal("loss")),
     kills: v.number(),
@@ -36,39 +36,35 @@ export const logMatch = mutation({
     overloads: v.optional(v.union(v.null(), v.number())),
   },
   handler: async (ctx, args) => {
-    const {
-      sessionUuid,
-      mode,
-      outcome,
-      srChange,
-      lossProtected,
-    } = args;
+    const { sessionUuid, mode, outcome, srChange, lossProtected } = args
     // 1. Fetch the session document to get current aggregates
     const session = await ctx.db
       .query("sessions")
       .withIndex("by_uuid", (q) => q.eq("uuid", sessionUuid))
       .filter((q) => q.eq(q.field("endedAt"), null))
-      .first();
+      .first()
     if (!session) {
-      throw new Error("Session not found in Convex");
+      throw new Error("Session not found in Convex")
     }
-    const kills = assertNonNegativeInteger(args.kills, "Kills");
-    const deaths = assertNonNegativeInteger(args.deaths, "Deaths");
-    const teamScore = clampOptionalNonNegativeInteger(args.teamScore);
-    const enemyScore = clampOptionalNonNegativeInteger(args.enemyScore);
-    const hillTimeSeconds = clampOptionalNonNegativeInteger(args.hillTimeSeconds);
-    const plants = clampOptionalNonNegativeInteger(args.plants);
-    const defuses = clampOptionalNonNegativeInteger(args.defuses);
-    const overloads = clampOptionalNonNegativeInteger(args.overloads);
+    const kills = assertNonNegativeInteger(args.kills, "Kills")
+    const deaths = assertNonNegativeInteger(args.deaths, "Deaths")
+    const teamScore = clampOptionalNonNegativeInteger(args.teamScore)
+    const enemyScore = clampOptionalNonNegativeInteger(args.enemyScore)
+    const hillTimeSeconds = clampOptionalNonNegativeInteger(
+      args.hillTimeSeconds
+    )
+    const plants = clampOptionalNonNegativeInteger(args.plants)
+    const defuses = clampOptionalNonNegativeInteger(args.defuses)
+    const overloads = clampOptionalNonNegativeInteger(args.overloads)
     // 2. Compute new aggregate values (replicate logic from Prisma)
     const newCurrentSr = validateSrChangeAndComputeNextSr({
       currentSr: session.currentSr,
       srChange,
-    });
-    const newStreak = outcome === "win" ? session.streak + 1 : 0;
+    })
+    const newStreak = outcome === "win" ? session.streak + 1 : 0
     const newBestStreak =
-      newStreak > session.bestStreak ? newStreak : session.bestStreak;
-    const now = Date.now();
+      newStreak > session.bestStreak ? newStreak : session.bestStreak
+    const now = Date.now()
     // 3. Insert the new game document
     await ctx.db.insert("games", {
       sessionId: sessionUuid,
@@ -86,7 +82,7 @@ export const logMatch = mutation({
       defuses,
       overloads,
       createdAt: now,
-    });
+    })
     // 4. Update the session document aggregates
     await ctx.db.patch(session._id, {
       // Use patch to increment and set fields atomically
@@ -97,20 +93,20 @@ export const logMatch = mutation({
       currentSr: newCurrentSr,
       streak: newStreak,
       bestStreak: newBestStreak,
-    });
+    })
 
     const statsDelta = {
       matchesIndexed: 1,
       wins: outcome === "win" ? 1 : 0,
       losses: outcome === "loss" ? 1 : 0,
-    };
-    await applyGlobalLandingStatsDelta(ctx, statsDelta);
-    await applyUserLandingStatsDelta(ctx, session.userId, statsDelta);
+    }
+    await applyGlobalLandingStatsDelta(ctx, statsDelta)
+    await applyUserLandingStatsDelta(ctx, session.userId, statsDelta)
 
     const invalidationUserIds = await getStatsUserIdCandidatesForInvalidation(
       ctx,
-      session.userId,
-    );
+      session.userId
+    )
 
     await Promise.all(
       invalidationUserIds.map((invalidationUserId) =>
@@ -119,9 +115,9 @@ export const logMatch = mutation({
           internal.actions.stats.cache.invalidateLandingMetricsCache,
           {
             userId: invalidationUserId,
-          },
+          }
         )
-      ),
-    );
+      )
+    )
   },
-});
+})

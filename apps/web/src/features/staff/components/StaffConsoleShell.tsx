@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react"
 
-import type { UserRole } from "@workspace/backend/convex/lib/staffRoles"
+import type { UserRole } from "@workspace/backend/lib/staffRoles"
 import { SidebarInset, SidebarProvider } from "@workspace/ui/components/sidebar"
 
 import { StaffConsoleHeader } from "@/features/staff/components/StaffConsoleHeader"

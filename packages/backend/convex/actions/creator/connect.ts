@@ -3,13 +3,13 @@
 import { internal } from "../../_generated/api"
 import type { Doc, Id } from "../../_generated/dataModel"
 import { action, type ActionCtx } from "../../_generated/server"
-import { getConvexEnv } from "../../env"
+import { getConvexEnv } from "../../../src/env"
 import {
   createStripeAccountLinkV2,
   createStripeRecipientAccountV2,
   isStripeV2CompatibilityError,
   retrieveStripeAccountV2,
-} from "../../lib/stripe/connect"
+} from "../../../src/lib/stripe/connect"
 import {
   buildCreatorCodeSeed,
   DEFAULT_CREATOR_PROGRAM_DEFAULTS,
@@ -18,9 +18,9 @@ import {
   mapStripeConnectedAccountSnapshot,
   normalizeCreatorCode,
   normalizeCreatorCountry,
-} from "../../lib/creatorProgram"
-import { getClerkBackendClient } from "../../lib/clerk"
-import { getStripe } from "../../lib/stripe/client"
+} from "../../../src/lib/creatorProgram"
+import { getClerkBackendClient } from "../../../src/lib/clerk"
+import { getStripe } from "../../../src/lib/stripe/client"
 
 const CONNECT_START_PATH = "/creator/connect/start"
 const CONNECT_RETURN_PATH = "/creator/connect/return"

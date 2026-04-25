@@ -11,7 +11,7 @@ import {
   type Icon,
 } from "@tabler/icons-react"
 
-import type { RequiredStaffRole } from "@workspace/backend/convex/lib/staffRoles"
+import type { RequiredStaffRole } from "@workspace/backend/lib/staffRoles"
 
 export type StaffBreadcrumbItem = {
   href?: string

@@ -15,14 +15,14 @@ import type {
   StaffCreatorProgramDefaultsRecord,
   StaffImpactPreview,
   StaffMutationResponse,
-} from "@workspace/backend/convex/lib/staffTypes"
+} from "@workspace/backend/lib/staffTypes"
 import {
   buildCreatorCodeSeed,
   DEFAULT_CREATOR_PROGRAM_DEFAULTS,
   formatCreatorRequirementLabel,
-} from "@workspace/backend/convex/lib/creatorProgram"
-import { resolveAppPlanKey } from "@workspace/backend/convex/lib/billingAccess"
-import type { UserRole } from "@workspace/backend/convex/lib/staffRoles"
+} from "@workspace/backend/lib/creatorProgram"
+import { resolveAppPlanKey } from "@workspace/backend/lib/billingAccess"
+import type { UserRole } from "@workspace/backend/lib/staffRoles"
 import { AppSelect } from "@/components/AppSelect"
 import { getCreatorConnectPresentation } from "@/features/creator-panel/lib/creator-panel"
 import {

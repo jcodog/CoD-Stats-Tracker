@@ -1,9 +1,9 @@
 {
   "$schema": "./node_modules/convex/schemas/convex.schema.json",
   "functions": "convex",
+  "typescriptCompiler": "tsgo",
   "codegen": {
-    "staticApi": true,
-    "staticDataModel": true
-  },
-  "typescriptCompiler": "tsgo"
+    "staticApi": false,
+    "staticDataModel": false
+  }
 }

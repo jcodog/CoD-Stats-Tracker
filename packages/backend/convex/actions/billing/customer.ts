@@ -6,18 +6,18 @@ import { v } from "convex/values"
 import type { Doc } from "../../_generated/dataModel"
 import { api, internal } from "../../_generated/api"
 import { action, type ActionCtx } from "../../_generated/server"
-import { getConvexEnv } from "../../env"
+import { getConvexEnv } from "../../../src/env"
 import {
   reconcileBillingCustomer,
   reconcileStripeSubscription,
   syncBillingInvoicesForCustomer,
   syncBillingPaymentMethodsForCustomer,
-} from "../../lib/billingLifecycle"
+} from "../../../src/lib/billingLifecycle"
 import {
   hasManagedCreatorGrantSubscriptionAccess,
   isManageableBillingSubscription,
-} from "../../lib/billing"
-import { hasCreatorAccess } from "../../lib/billingAccess"
+} from "../../../src/lib/billing"
+import { hasCreatorAccess } from "../../../src/lib/billingAccess"
 import {
   getExpandedStripeInvoice,
   getInvoiceConfirmationSecret,
@@ -26,12 +26,12 @@ import {
   getStripeSubscriptionInterval,
   getStripeSubscriptionItem,
   getSubscriptionItemCurrentPeriodEnd,
-} from "../../lib/stripe/billing"
+} from "../../../src/lib/stripe/billing"
 import {
   getClerkBackendClient,
   syncClerkCreatorAttributionMetadata,
-} from "../../lib/clerk"
-import { getStripe, STRIPE_CATALOG_APP } from "../../lib/stripe/client"
+} from "../../../src/lib/clerk"
+import { getStripe, STRIPE_CATALOG_APP } from "../../../src/lib/stripe/client"
 
 type BillingPlanRecord = Doc<"billingPlans">
 type PublicActionCtx = ActionCtx

@@ -2,11 +2,11 @@
 
 import type { Dispatch, SetStateAction } from "react"
 import { useState } from "react"
-import type { UserRole } from "@workspace/backend/convex/lib/staffRoles"
+import type { UserRole } from "@workspace/backend/lib/staffRoles"
 import type {
   StaffMutationResponse,
   StaffRankedDashboard,
-} from "@workspace/backend/convex/lib/staffTypes"
+} from "@workspace/backend/lib/staffTypes"
 import { toast } from "sonner"
 
 import { StaffRankedCatalogSection } from "@/features/staff/components/StaffRankedCatalogSection"

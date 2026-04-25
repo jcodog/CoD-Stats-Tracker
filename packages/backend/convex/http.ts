@@ -11,15 +11,15 @@ import {
   reconcileStripeSubscription,
   syncBillingInvoicesForCustomer,
   syncBillingPaymentMethodsForCustomer,
-} from "./lib/billingLifecycle"
+} from "../src/lib/billingLifecycle"
 import {
   buildWebhookSafeSummary,
   getWebhookObjectIds,
-} from "./lib/stripe/billing"
-import { mapStripeConnectedAccountSnapshot } from "./lib/creatorProgram"
-import { getStripe } from "./lib/stripe/client"
-import { getConvexEnv } from "./env"
-import { handleDiscordInteractions } from "./http/discord/interactions"
+} from "../src/lib/stripe/billing"
+import { mapStripeConnectedAccountSnapshot } from "../src/lib/creatorProgram"
+import { getStripe } from "../src/lib/stripe/client"
+import { getConvexEnv } from "../src/env"
+import { handleDiscordInteractions } from "../src/httpRoutes/discord/interactions"
 
 const http = httpRouter()
 

@@ -2,7 +2,7 @@ import { query } from "../../_generated/server"
 import {
   getCreatorConnectPendingActions,
   getCreatorConnectState,
-} from "../../lib/creatorProgram"
+} from "../../../src/lib/creatorProgram"
 
 const PAID_CONVERSION_STATUSES = new Set([
   "active",

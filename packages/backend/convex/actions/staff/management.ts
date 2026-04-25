@@ -5,28 +5,28 @@ import { v } from "convex/values"
 
 import { internal } from "../../_generated/api"
 import { action } from "../../_generated/server"
-import { getStripeScheduleId } from "../../lib/stripe/billing"
-import { getClerkBackendClient } from "../../lib/clerk"
-import { requireAuthorizedStaffAction } from "../../lib/staffActionAuth"
-import { isConfiguredSuperAdminDiscordId } from "../../lib/staffRoleConfig"
+import { getStripeScheduleId } from "../../../src/lib/stripe/billing"
+import { getClerkBackendClient } from "../../../src/lib/clerk"
+import { requireAuthorizedStaffAction } from "../../../src/lib/staffActionAuth"
+import { isConfiguredSuperAdminDiscordId } from "../../../src/lib/staffRoleConfig"
 import {
   isAdminCapableRole,
   parseUserRole,
   type AssignableUserRole,
   type UserRole,
-} from "../../lib/staffRoles"
+} from "../../../src/lib/staffRoles"
 import {
   canActorBanManagementUser,
   getAllowedRoleOptionsForManagementUser,
   getBanRestrictionMessageForManagementUser,
-} from "../../lib/staffManagementPermissions"
+} from "../../../src/lib/staffManagementPermissions"
 import type {
   StaffAuditLogEntry,
   StaffManagementDashboard,
   StaffManagementUserRecord,
   StaffMutationResponse,
-} from "../../lib/staffTypes"
-import { getStripe } from "../../lib/stripe/client"
+} from "../../../src/lib/staffTypes"
+import { getStripe } from "../../../src/lib/stripe/client"
 
 type ClerkListUserRecord = Awaited<
   ReturnType<ReturnType<typeof getClerkBackendClient>["users"]["getUserList"]>

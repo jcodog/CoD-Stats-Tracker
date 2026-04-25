@@ -4,11 +4,11 @@ import { internalMutation } from "../../_generated/server"
 import {
   getDisabledPlayWithViewersTwitchContext,
   normalizePlayWithViewersTwitchContext,
-} from "../../lib/creatorToolsConfig"
+} from "../../../src/lib/creatorToolsConfig"
 import {
   normalizeStoredQueueParticipant,
   normalizeStoredInviteMode,
-} from "../../lib/playingWithViewers"
+} from "../../../src/lib/playingWithViewers"
 
 const LEGACY_INVITE_MODE = "discord_dm"
 const CURRENT_BOT_DM_INVITE_MODE = "bot_dm"
@@ -40,7 +40,8 @@ export const migrateLegacyViewerQueueSchema = internalMutation({
       }
 
       if (queue.twitchCommandsEnabled === undefined) {
-        patch.twitchCommandsEnabled = disabledTwitchContext.twitchCommandsEnabled
+        patch.twitchCommandsEnabled =
+          disabledTwitchContext.twitchCommandsEnabled
       }
 
       if (queue.twitchBroadcasterId === undefined) {
@@ -205,7 +206,8 @@ export const disableViewerQueueTwitchIntegration = internalMutation({
           disabledTwitchContext.twitchBotAnnouncementsEnabled ||
         queue.twitchCommandsEnabled !==
           disabledTwitchContext.twitchCommandsEnabled ||
-        queue.twitchBroadcasterId !== disabledTwitchContext.twitchBroadcasterId ||
+        queue.twitchBroadcasterId !==
+          disabledTwitchContext.twitchBroadcasterId ||
         queue.twitchBroadcasterLogin !==
           disabledTwitchContext.twitchBroadcasterLogin
     )

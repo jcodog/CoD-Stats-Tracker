@@ -5,8 +5,8 @@ import { v } from "convex/values"
 import {
   applyGlobalLandingStatsDelta,
   applyUserLandingStatsDelta,
-} from "../../lib/landingMetrics"
-import { normalizeStatsLookupValue } from "../../lib/statsDashboard"
+} from "../../../src/lib/landingMetrics"
+import { normalizeStatsLookupValue } from "../../../src/lib/statsDashboard"
 
 const roleValidator = v.union(
   v.literal("user"),
@@ -78,7 +78,9 @@ function normalizeLabel(value: string, fieldLabel: string, maxLength = 120) {
   const normalizedValue = value.trim().replace(/\s+/g, " ")
 
   if (normalizedValue.length === 0 || normalizedValue.length > maxLength) {
-    throw new Error(`${fieldLabel} must be between 1 and ${maxLength} characters.`)
+    throw new Error(
+      `${fieldLabel} must be between 1 and ${maxLength} characters.`
+    )
   }
 
   return normalizedValue
@@ -134,20 +136,26 @@ async function resolveSupportedRankedModes(args: {
     throw new Error("Select at least one active ranked mode for this map.")
   }
 
-  const modes = await Promise.all(uniqueModeIds.map((modeId) => args.ctx.db.get(modeId)))
+  const modes = await Promise.all(
+    uniqueModeIds.map((modeId) => args.ctx.db.get(modeId))
+  )
 
   if (modes.some((mode) => mode === null)) {
     throw new Error("One or more selected ranked modes could not be found.")
   }
 
-  const resolvedModes = modes.filter((mode): mode is Doc<"rankedModes"> => mode !== null)
+  const resolvedModes = modes.filter(
+    (mode): mode is Doc<"rankedModes"> => mode !== null
+  )
 
   if (
     resolvedModes.some(
       (mode) => !mode.isActive || mode.titleKey !== args.titleKey
     )
   ) {
-    throw new Error("Maps can only use active ranked modes from the selected title.")
+    throw new Error(
+      "Maps can only use active ranked modes from the selected title."
+    )
   }
 
   return resolvedModes
@@ -197,7 +205,10 @@ async function syncPlanFeatureAssignmentsByPlan(args: {
   }
 
   for (const existingAssignment of existingAssignments) {
-    if (!existingAssignment.enabled || desiredFeatureKeys.has(existingAssignment.featureKey)) {
+    if (
+      !existingAssignment.enabled ||
+      desiredFeatureKeys.has(existingAssignment.featureKey)
+    ) {
       continue
     }
 
@@ -221,7 +232,9 @@ async function syncPlanFeatureAssignmentsByFeature(args: {
 }) {
   const existingAssignments = await args.ctx.db
     .query("billingPlanFeatures")
-    .withIndex("by_featureKey", (query) => query.eq("featureKey", args.featureKey))
+    .withIndex("by_featureKey", (query) =>
+      query.eq("featureKey", args.featureKey)
+    )
     .collect()
   const desiredPlanKeys = new Set(uniqueKeys(args.planKeys))
   const existingAssignmentsByPlanKey = new Map(
@@ -258,7 +271,10 @@ async function syncPlanFeatureAssignmentsByFeature(args: {
   }
 
   for (const existingAssignment of existingAssignments) {
-    if (!existingAssignment.enabled || desiredPlanKeys.has(existingAssignment.planKey)) {
+    if (
+      !existingAssignment.enabled ||
+      desiredPlanKeys.has(existingAssignment.planKey)
+    ) {
       continue
     }
 
@@ -285,7 +301,11 @@ export const insertAuditLog = internalMutation({
     entityId: v.string(),
     entityLabel: v.optional(v.string()),
     entityType: v.string(),
-    result: v.union(v.literal("success"), v.literal("warning"), v.literal("error")),
+    result: v.union(
+      v.literal("success"),
+      v.literal("warning"),
+      v.literal("error")
+    ),
     summary: v.string(),
   },
   handler: async (ctx, args) => {
@@ -384,7 +404,8 @@ export const upsertPlan = internalMutation({
     }
     if (existingPlan.name !== args.name) patch.name = args.name
     if (existingPlan.planType !== args.planType) patch.planType = args.planType
-    if (existingPlan.sortOrder !== args.sortOrder) patch.sortOrder = args.sortOrder
+    if (existingPlan.sortOrder !== args.sortOrder)
+      patch.sortOrder = args.sortOrder
     if (existingPlan.yearlyPriceAmount !== args.yearlyPriceAmount) {
       patch.yearlyPriceAmount = args.yearlyPriceAmount
     }
@@ -478,7 +499,8 @@ export const upsertFeature = internalMutation({
       patch.description = args.description
     }
     if (existingFeature.name !== args.name) patch.name = args.name
-    if (existingFeature.sortOrder !== args.sortOrder) patch.sortOrder = args.sortOrder
+    if (existingFeature.sortOrder !== args.sortOrder)
+      patch.sortOrder = args.sortOrder
 
     if (Object.keys(patch).length === 0) {
       return existingFeature._id
@@ -678,7 +700,8 @@ export const upsertRankedTitle = internalMutation({
 
     if (existingTitle.isActive !== args.isActive) patch.isActive = args.isActive
     if (existingTitle.label !== label) patch.label = label
-    if (existingTitle.sortOrder !== args.sortOrder) patch.sortOrder = args.sortOrder
+    if (existingTitle.sortOrder !== args.sortOrder)
+      patch.sortOrder = args.sortOrder
 
     if (Object.keys(patch).length > 0) {
       patch.updatedAt = now
@@ -755,9 +778,11 @@ export const upsertRankedMode = internalMutation({
 
       const patch: Partial<Doc<"rankedModes">> = {}
 
-      if (existingByKey.isActive !== args.isActive) patch.isActive = args.isActive
+      if (existingByKey.isActive !== args.isActive)
+        patch.isActive = args.isActive
       if (existingByKey.label !== label) patch.label = label
-      if (existingByKey.sortOrder !== args.sortOrder) patch.sortOrder = args.sortOrder
+      if (existingByKey.sortOrder !== args.sortOrder)
+        patch.sortOrder = args.sortOrder
 
       if (Object.keys(patch).length > 0) {
         patch.updatedAt = now
@@ -782,7 +807,9 @@ export const upsertRankedMode = internalMutation({
     }
 
     if (existingByKey && existingByKey._id !== existingMode._id) {
-      throw new Error(`A ranked mode with key "${key}" already exists for ${title.label}.`)
+      throw new Error(
+        `A ranked mode with key "${key}" already exists for ${title.label}.`
+      )
     }
 
     const patch: Partial<Doc<"rankedModes">> = {}
@@ -790,7 +817,8 @@ export const upsertRankedMode = internalMutation({
     if (existingMode.isActive !== args.isActive) patch.isActive = args.isActive
     if (existingMode.key !== key) patch.key = key
     if (existingMode.label !== label) patch.label = label
-    if (existingMode.sortOrder !== args.sortOrder) patch.sortOrder = args.sortOrder
+    if (existingMode.sortOrder !== args.sortOrder)
+      patch.sortOrder = args.sortOrder
     if (existingMode.titleKey !== titleKey) patch.titleKey = titleKey
 
     if (Object.keys(patch).length > 0) {
@@ -879,9 +907,11 @@ export const upsertRankedMap = internalMutation({
 
       const patch: Partial<Doc<"rankedMaps">> = {}
 
-      if (existingByName.isActive !== args.isActive) patch.isActive = args.isActive
+      if (existingByName.isActive !== args.isActive)
+        patch.isActive = args.isActive
       if (existingByName.name !== name) patch.name = name
-      if (existingByName.sortOrder !== args.sortOrder) patch.sortOrder = args.sortOrder
+      if (existingByName.sortOrder !== args.sortOrder)
+        patch.sortOrder = args.sortOrder
       if (
         JSON.stringify(existingByName.supportedModeIds ?? []) !==
         JSON.stringify(supportedModeIds)
@@ -899,7 +929,8 @@ export const upsertRankedMap = internalMutation({
         isActive: patch.isActive ?? existingByName.isActive,
         isNew: false,
         name: patch.name ?? existingByName.name,
-        supportedModeIds: patch.supportedModeIds ?? existingByName.supportedModeIds ?? [],
+        supportedModeIds:
+          patch.supportedModeIds ?? existingByName.supportedModeIds ?? [],
         supportedModeLabels: supportedModes.map((mode) => mode.label),
         titleKey,
         titleLabel: title.label,
@@ -925,7 +956,8 @@ export const upsertRankedMap = internalMutation({
     if (existingMap.normalizedName !== normalizedName) {
       patch.normalizedName = normalizedName
     }
-    if (existingMap.sortOrder !== args.sortOrder) patch.sortOrder = args.sortOrder
+    if (existingMap.sortOrder !== args.sortOrder)
+      patch.sortOrder = args.sortOrder
     if (
       JSON.stringify(existingMap.supportedModeIds ?? []) !==
       JSON.stringify(supportedModeIds)
@@ -944,7 +976,8 @@ export const upsertRankedMap = internalMutation({
       isActive: patch.isActive ?? existingMap.isActive,
       isNew: false,
       name: patch.name ?? existingMap.name,
-      supportedModeIds: patch.supportedModeIds ?? existingMap.supportedModeIds ?? [],
+      supportedModeIds:
+        patch.supportedModeIds ?? existingMap.supportedModeIds ?? [],
       supportedModeLabels: supportedModes.map((mode) => mode.label),
       titleKey,
       titleLabel: title.label,
@@ -978,7 +1011,9 @@ export const setCurrentRankedConfig = internalMutation({
     }
 
     if (!title.isActive) {
-      throw new Error("Only active ranked titles can be selected as the current title.")
+      throw new Error(
+        "Only active ranked titles can be selected as the current title."
+      )
     }
 
     const now = Date.now()
@@ -1010,8 +1045,10 @@ export const setCurrentRankedConfig = internalMutation({
 
     const titleChanged = currentConfig.activeTitleKey !== activeTitleKey
     const seasonChanged = currentConfig.activeSeason !== activeSeason
-    const currentSessionWritesEnabled = currentConfig.sessionWritesEnabled !== false
-    const writesChanged = currentSessionWritesEnabled !== args.sessionWritesEnabled
+    const currentSessionWritesEnabled =
+      currentConfig.sessionWritesEnabled !== false
+    const writesChanged =
+      currentSessionWritesEnabled !== args.sessionWritesEnabled
 
     if (!titleChanged && !seasonChanged && !writesChanged) {
       return {
