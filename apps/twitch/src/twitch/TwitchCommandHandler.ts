@@ -15,6 +15,7 @@ type HandleChatMessageInput = {
   chatterDisplayName: string
   messageText: string
   queueId: Id<"viewerQueues">
+  twitchCommandsEnabled: boolean
 }
 
 export class TwitchCommandHandler {
@@ -26,6 +27,11 @@ export class TwitchCommandHandler {
   public async handleChatMessage(input: HandleChatMessageInput): Promise<void> {
     const command = this.parseCommand(input.messageText)
     if (!command) return
+
+    if (command.kind !== "test" && !input.twitchCommandsEnabled) {
+      await this.replyWithDiscordQueueInstructions(input)
+      return
+    }
 
     switch (command.kind) {
       case "join":
@@ -78,6 +84,27 @@ export class TwitchCommandHandler {
 
   private async reply(input: HandleChatMessageInput, message: string) {
     await this.apiService.sendChatMessage(input.broadcasterId, message)
+  }
+
+  private async replyWithDiscordQueueInstructions(
+    input: HandleChatMessageInput
+  ): Promise<void> {
+    try {
+      const invite = await this.convexService.getDiscordQueueInvite({
+        queueId: input.queueId,
+      })
+
+      await this.reply(
+        input,
+        `@${input.chatterLogin} Twitch queue commands are off. Join through Discord instead: ${invite.discordInviteUrl} then open #${invite.channelName} and click Join Queue.`
+      )
+    } catch (error) {
+      console.error("Failed to resolve Discord queue invite", error)
+      await this.reply(
+        input,
+        `@${input.chatterLogin} Twitch queue commands are off. Join the Discord server, open the Play With Viewers channel, and click Join Queue.`
+      )
+    }
   }
 
   private async handleJoin(
@@ -168,16 +195,6 @@ export class TwitchCommandHandler {
         queueId: input.queueId,
         twitchUserId: input.chatterUserId,
       })
-      const preview = snapshot.entries
-        .slice(0, 3)
-        .map(
-          (
-            entry: Awaited<
-              ReturnType<ConvexService["getQueueSnapshot"]>
-            >["entries"][number]
-          ) => `@${entry.username}`
-        )
-        .join(", ")
       const queueStatus = snapshot.isActive ? "open" : "closed"
       const positionText =
         snapshot.yourPosition === null
@@ -186,7 +203,7 @@ export class TwitchCommandHandler {
 
       await this.reply(
         input,
-        `Queue is ${queueStatus} with ${snapshot.size} waiting. ${positionText}${preview ? ` Up next: ${preview}.` : ""}`
+        `Queue is ${queueStatus} with ${snapshot.size} waiting. ${positionText}`
       )
     } catch (error) {
       await this.reply(

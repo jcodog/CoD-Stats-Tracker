@@ -185,6 +185,7 @@ export declare const api: {
               playersPerBatch: number;
               rulesText?: string;
               title: string;
+              twitchBotEnabled?: boolean;
             },
             any
           >;
@@ -289,6 +290,7 @@ export declare const api: {
               queueId: Id<"viewerQueues">;
               rulesText?: string;
               title: string;
+              twitchBotEnabled?: boolean;
             },
             any
           >;
@@ -326,6 +328,12 @@ export declare const api: {
               twitchUserId: string;
               workerSecret: string;
             },
+            any
+          >;
+          getDiscordQueueInviteForWorker: FunctionReference<
+            "action",
+            "public",
+            { queueId: Id<"viewerQueues">; workerSecret: string },
             any
           >;
           leaveViewerFromWorker: FunctionReference<

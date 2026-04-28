@@ -53,6 +53,16 @@ export function hasEnabledPlayWithViewersTwitchContext(
 
   return (
     normalizedContext.twitchCommandsEnabled &&
+    hasLinkedPlayWithViewersTwitchContext(normalizedContext)
+  )
+}
+
+export function hasLinkedPlayWithViewersTwitchContext(
+  context?: PlayWithViewersStoredTwitchContextLike | null
+) {
+  const normalizedContext = normalizePlayWithViewersTwitchContext(context)
+
+  return (
     normalizedContext.twitchBroadcasterId.length > 0 &&
     normalizedContext.twitchBroadcasterLogin.length > 0
   )

@@ -8,6 +8,7 @@ import {
 import { queuePlatformValidator } from "../../../lib/playingWithViewers"
 import {
   hasEnabledPlayWithViewersTwitchContext,
+  hasLinkedPlayWithViewersTwitchContext,
   isPlayWithViewersTwitchEnabled,
   normalizePlayWithViewersTwitchContext,
 } from "../../../lib/creatorToolsConfig"
@@ -104,7 +105,7 @@ export const getEnabledQueuesForWorker = query({
       .collect()
 
     return activeQueues
-      .filter((queue) => hasEnabledPlayWithViewersTwitchContext(queue))
+      .filter((queue) => hasLinkedPlayWithViewersTwitchContext(queue))
       .map((queue) => {
         const twitchContext = normalizePlayWithViewersTwitchContext(queue)
 
@@ -116,6 +117,7 @@ export const getEnabledQueuesForWorker = query({
             twitchContext.twitchBotAnnouncementsEnabled,
           twitchBroadcasterId: twitchContext.twitchBroadcasterId,
           twitchBroadcasterLogin: twitchContext.twitchBroadcasterLogin,
+          twitchCommandsEnabled: twitchContext.twitchCommandsEnabled,
         }
       })
   },
@@ -128,6 +130,7 @@ export type EnabledWorkerQueue = {
   twitchBotAnnouncementsEnabled: boolean
   twitchBroadcasterId: string
   twitchBroadcasterLogin: string
+  twitchCommandsEnabled: boolean
 }
 
 export const getQueueSnapshotForWorker = query({
@@ -216,6 +219,10 @@ export const getPendingNotificationsForWorker = query({
         }
 
         const twitchContext = normalizePlayWithViewersTwitchContext(queue)
+
+        if (!twitchContext.twitchBotAnnouncementsEnabled) {
+          return null
+        }
 
         return {
           attemptCount: notification.attemptCount,

@@ -42,6 +42,23 @@ export class ConvexService {
     )
   }
 
+  public async getDiscordQueueInvite(args: {
+    queueId: Id<"viewerQueues">
+  }): Promise<
+    FunctionReturnType<
+      typeof api.actions.creatorTools.playingWithViewers.twitch.getDiscordQueueInviteForWorker
+    >
+  > {
+    return this.client.action(
+      api.actions.creatorTools.playingWithViewers.twitch
+        .getDiscordQueueInviteForWorker,
+      {
+        queueId: args.queueId,
+        workerSecret: env.TWITCH_CONVEX_ADMIN_KEY,
+      }
+    )
+  }
+
   public async joinQueueFromTwitch(
     args: Omit<
       FunctionArgs<

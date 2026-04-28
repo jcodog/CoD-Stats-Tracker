@@ -51,18 +51,23 @@ export const updateQueueSettings = action({
     queueId: v.id("viewerQueues"),
     rulesText: v.optional(v.string()),
     title: v.string(),
+    twitchBotEnabled: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const access = await requireOwnedQueueActionAccess(ctx, args.queueId)
+    const twitchBotEnabled =
+      args.twitchBotEnabled ??
+      (access.queue.twitchCommandsEnabled ||
+        access.queue.twitchBotAnnouncementsEnabled)
     const twitchContext = access.hasTwitchLinked
       ? {
-          twitchBotAnnouncementsEnabled: true,
+          twitchBotAnnouncementsEnabled: twitchBotEnabled,
           twitchBroadcasterId: access.twitchAccount.providerUserId,
           twitchBroadcasterLogin:
             access.twitchAccount.providerLogin ??
             access.twitchAccount.displayName ??
             "",
-          twitchCommandsEnabled: true,
+          twitchCommandsEnabled: twitchBotEnabled,
         }
       : getDisabledPlayWithViewersTwitchContext()
 

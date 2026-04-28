@@ -1326,19 +1326,21 @@ export const createQueueInOwnedGuild = action({
     playersPerBatch: v.number(),
     rulesText: v.optional(v.string()),
     title: v.string(),
+    twitchBotEnabled: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const access = await requireCreatorToolsActionAccess(ctx)
     const { clerkUserId, user } = access
+    const twitchBotEnabled = args.twitchBotEnabled ?? true
     const twitchContext = access.hasTwitchLinked
       ? {
-          twitchBotAnnouncementsEnabled: true,
+          twitchBotAnnouncementsEnabled: twitchBotEnabled,
           twitchBroadcasterId: access.twitchAccount.providerUserId,
           twitchBroadcasterLogin:
             access.twitchAccount.providerLogin ??
             access.twitchAccount.displayName ??
             "",
-          twitchCommandsEnabled: true,
+          twitchCommandsEnabled: twitchBotEnabled,
         }
       : getDisabledPlayWithViewersTwitchContext()
     const existingQueue = await ctx.runQuery(

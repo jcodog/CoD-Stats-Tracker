@@ -36,6 +36,7 @@ export class TwitchSubscriptionManager {
             chatterDisplayName: event.chatterDisplayName,
             messageText: event.messageText,
             queueId: queue.queueId,
+            twitchCommandsEnabled: queue.twitchCommandsEnabled,
           })
         }
       )

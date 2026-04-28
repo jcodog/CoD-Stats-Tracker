@@ -93,7 +93,7 @@ export class TwitchNotificationService {
     try {
       await this.apiService.sendChatMessage(
         notification.twitchBroadcasterId,
-        `@${notification.username} ${notification.creatorDisplayName} selected you. Check stream chat with the creator for your invite code: ${notification.inviteCode}.`
+        `@${notification.username} ${notification.creatorDisplayName} selected you, but I couldn't send the Twitch whisper. Please ask the creator for the invite details.`
       )
       await this.convexService.recordNotificationResult({
         notificationId: notification.notificationId,

@@ -98,6 +98,7 @@ import {
 } from "@workspace/ui/components/empty"
 import {
   Field,
+  FieldContent,
   FieldDescription,
   FieldGroup,
   FieldLabel,
@@ -155,6 +156,7 @@ type QueueFormState = {
   playersPerBatch: string
   rulesText: string
   title: string
+  twitchBotEnabled: boolean
 }
 
 type SelectionDialogState =
@@ -231,6 +233,7 @@ function getDefaultQueueFormState(name: string): QueueFormState {
     playersPerBatch: "3",
     rulesText: defaultRulesText,
     title: `Play with ${resolvedName}`,
+    twitchBotEnabled: true,
   }
 }
 
@@ -248,6 +251,9 @@ function toQueueFormState(queue: ViewerQueue): QueueFormState {
     playersPerBatch: String(queue.playersPerBatch),
     rulesText: queue.rulesText ?? "",
     title: queue.title,
+    twitchBotEnabled: Boolean(
+      queue.twitchCommandsEnabled || queue.twitchBotAnnouncementsEnabled
+    ),
   }
 }
 
@@ -1227,6 +1233,7 @@ export function PlayWithViewersDashboardView({
         playersPerBatch: Number(createFormState.playersPerBatch),
         rulesText: createFormState.rulesText.trim() || undefined,
         title: createFormState.title.trim(),
+        twitchBotEnabled: createFormState.twitchBotEnabled,
       })
 
       setCreateFormDraft(null)
@@ -1274,6 +1281,7 @@ export function PlayWithViewersDashboardView({
         queueId: queue._id,
         rulesText: settingsFormState.rulesText.trim() || undefined,
         title: settingsFormState.title.trim(),
+        twitchBotEnabled: settingsFormState.twitchBotEnabled,
       })
 
       await syncQueueMessageIfPublished(queue._id)
@@ -2471,6 +2479,44 @@ export function PlayWithViewersDashboardView({
                         : "Bot DM mode requires a lobby code when selecting viewers."}
                     </FieldDescription>
                   </Field>
+
+                  {twitchEnabled ? (
+                    <Field
+                      data-disabled={!hasTwitchLinked}
+                      orientation="horizontal"
+                    >
+                      <FieldContent>
+                        <FieldLabel htmlFor="pwv-twitch-bot-enabled">
+                          Twitch bot
+                        </FieldLabel>
+                        <FieldDescription>
+                          {hasTwitchLinked
+                            ? "When off, Twitch chat commands point viewers to the Discord queue instead. Discord stays active."
+                            : "Link Twitch before enabling Twitch chat commands and whispers."}
+                        </FieldDescription>
+                      </FieldContent>
+                      <Switch
+                        checked={
+                          queue
+                            ? settingsFormState.twitchBotEnabled
+                            : createFormState.twitchBotEnabled
+                        }
+                        disabled={!hasTwitchLinked}
+                        id="pwv-twitch-bot-enabled"
+                        onCheckedChange={(checked) =>
+                          queue
+                            ? setSettingsFormState((current) => ({
+                                ...current,
+                                twitchBotEnabled: checked,
+                              }))
+                            : setCreateFormState((current) => ({
+                                ...current,
+                                twitchBotEnabled: checked,
+                              }))
+                        }
+                      />
+                    </Field>
+                  ) : null}
                 </div>
               </FieldGroup>
             </div>

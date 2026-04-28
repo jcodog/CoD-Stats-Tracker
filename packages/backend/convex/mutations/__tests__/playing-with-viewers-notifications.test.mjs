@@ -87,6 +87,61 @@ describe("playing with viewers notification persistence", () => {
     ])
   })
 
+  it("keeps Discord delivery on and skips Twitch notifications when the Twitch bot is disabled", async () => {
+    const queueId = "viewerQueues:1"
+    const roundId = "viewerQueueRounds:1"
+    const ctx = createMutationCtx({
+      viewerQueueRounds: [
+        createQueueRound({
+          _id: roundId,
+          queueId,
+          selectedUsers: [
+            createSelectedUser({
+              platform: "discord",
+              platformUserId: "discord-1",
+            }),
+            createSelectedUser({
+              platform: "twitch",
+              platformUserId: "twitch-1",
+              rank: "unknown",
+              username: "viewer_tv",
+            }),
+          ],
+        }),
+      ],
+      viewerQueues: [
+        createQueue({
+          _id: queueId,
+          twitchBotAnnouncementsEnabled: false,
+          twitchCommandsEnabled: false,
+        }),
+      ],
+    })
+
+    const result = await withMockedNow(5_000, () =>
+      initializeRoundNotifications._handler(ctx, { roundId })
+    )
+
+    expect(result.createdNotificationCount).toBe(1)
+    expect(ctx.db.tables.viewerQueueNotifications).toHaveLength(1)
+    expect(ctx.db.tables.viewerQueueNotifications[0]).toMatchObject({
+      notificationMethod: "discord_dm",
+      platform: "discord",
+    })
+    expect(ctx.db.tables.viewerQueueRounds[0].selectedUsers).toEqual([
+      expect.objectContaining({
+        notificationMethod: "discord_dm",
+        notificationStatus: "pending",
+        platform: "discord",
+      }),
+      expect.objectContaining({
+        notificationMethod: "manual_creator_contact",
+        notificationStatus: undefined,
+        platform: "twitch",
+      }),
+    ])
+  })
+
   it("records Twitch whisper delivery idempotently and mirrors the round snapshot", async () => {
     const roundId = "viewerQueueRounds:1"
     const ctx = createMutationCtx({

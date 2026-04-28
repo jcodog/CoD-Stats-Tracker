@@ -6,6 +6,7 @@ import {
   queueNotificationMethodValidator,
   type QueuePlatform,
 } from "../../../lib/playingWithViewers"
+import { normalizePlayWithViewersTwitchContext } from "../../../lib/creatorToolsConfig"
 
 type NotificationMutationCtx = MutationCtx
 type QueueRoundSelectedUser = Doc<"viewerQueueRounds">["selectedUsers"][number]
@@ -165,12 +166,32 @@ export const initializeRoundNotifications = internalMutation({
       }
     }
 
+    const queue = await ctx.db.get(round.queueId)
+    const twitchContext = queue
+      ? normalizePlayWithViewersTwitchContext(queue)
+      : { twitchBotAnnouncementsEnabled: true }
+
     const now = Date.now()
     const selectedUsers: QueueRoundSelectedUser[] = []
     let createdNotificationCount = 0
 
     for (const storedUser of round.selectedUsers) {
       const user = normalizeRoundSelectedUser(storedUser)
+
+      if (
+        user.platform === "twitch" &&
+        !twitchContext.twitchBotAnnouncementsEnabled
+      ) {
+        selectedUsers.push(
+          applyNotificationStateToSelectedUser(user, {
+            notificationFailureReason: undefined,
+            notificationMethod: "manual_creator_contact",
+            notificationStatus: undefined,
+          })
+        )
+        continue
+      }
+
       const notificationMethod = getDefaultNotificationMethodForPlatform(
         user.platform
       )
