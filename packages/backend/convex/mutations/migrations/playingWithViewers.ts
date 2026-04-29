@@ -1,5 +1,6 @@
 import { v } from "convex/values"
 
+import type { Id } from "../../_generated/dataModel"
 import { internalMutation } from "../../_generated/server"
 import {
   getDisabledPlayWithViewersTwitchContext,
@@ -13,11 +14,39 @@ import {
 const LEGACY_INVITE_MODE = "discord_dm"
 const CURRENT_BOT_DM_INVITE_MODE = "bot_dm"
 
+export type LegacyViewerQueueSchemaMigrationResult = {
+  dryRun: boolean
+  updatedEntryCount: number
+  updatedEntryIds: Id<"viewerQueueEntries">[]
+  updatedQueueCount: number
+  updatedQueueIds: Id<"viewerQueues">[]
+  updatedRoundCount: number
+  updatedRoundIds: Id<"viewerQueueRounds">[]
+}
+
+export type ViewerQueueInviteModeMigrationResult = {
+  dryRun: boolean
+  legacyQueueIds: Id<"viewerQueues">[]
+  legacyRoundIds: Id<"viewerQueueRounds">[]
+  updatedQueueCount: number
+  updatedRoundCount: number
+}
+
+export type ViewerQueueTwitchDisableMigrationResult = {
+  dryRun: boolean
+  queueIds: Id<"viewerQueues">[]
+  updatedQueueCount: number
+}
+
+
 export const migrateLegacyViewerQueueSchema = internalMutation({
   args: {
     dryRun: v.optional(v.boolean()),
   },
-  handler: async (ctx, args) => {
+  handler: async (
+    ctx,
+    args
+  ): Promise<LegacyViewerQueueSchemaMigrationResult> => {
     const [queues, entries, rounds] = await Promise.all([
       ctx.db.query("viewerQueues").collect(),
       ctx.db.query("viewerQueueEntries").collect(),
@@ -153,7 +182,10 @@ export const migrateLegacyViewerQueueInviteModes = internalMutation({
   args: {
     dryRun: v.optional(v.boolean()),
   },
-  handler: async (ctx, args) => {
+  handler: async (
+    ctx,
+    args
+  ): Promise<ViewerQueueInviteModeMigrationResult> => {
     const [queues, rounds] = await Promise.all([
       ctx.db.query("viewerQueues").collect(),
       ctx.db.query("viewerQueueRounds").collect(),
@@ -197,7 +229,10 @@ export const disableViewerQueueTwitchIntegration = internalMutation({
   args: {
     dryRun: v.optional(v.boolean()),
   },
-  handler: async (ctx, args) => {
+  handler: async (
+    ctx,
+    args
+  ): Promise<ViewerQueueTwitchDisableMigrationResult> => {
     const queues = await ctx.db.query("viewerQueues").collect()
     const disabledTwitchContext = getDisabledPlayWithViewersTwitchContext()
     const queuesToUpdate = queues.filter(

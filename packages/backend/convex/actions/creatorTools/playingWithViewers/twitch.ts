@@ -8,12 +8,20 @@ import { getConvexEnv } from "../../../env"
 import {
   participantQueueRankValidator,
   queueNotificationMethodValidator,
-} from "../../../lib/playingWithViewers"
+} from "../../../../src/lib/playingWithViewers"
 import {
   isPlayWithViewersTwitchEnabled,
   normalizePlayWithViewersTwitchContext,
-} from "../../../lib/creatorToolsConfig"
-import { requireValidTwitchWorkerSecret } from "../../../lib/workerAuth"
+} from "../../../../src/lib/creatorToolsConfig"
+import { requireValidTwitchWorkerSecret } from "../../../../src/lib/workerAuth"
+import type {
+  QueueJoinResult,
+  QueueLeaveResult,
+} from "../../../mutations/creatorTools/playingWithViewers/queue"
+import type {
+  DeferNotificationResult,
+  RecordNotificationResult,
+} from "../../../mutations/creatorTools/playingWithViewers/notifications"
 
 const DISCORD_API_BASE = "https://discord.com/api/v10"
 
@@ -95,12 +103,12 @@ export const enqueueViewerFromWorker = action({
     twitchUserId: v.string(),
     workerSecret: v.string(),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<QueueJoinResult> => {
     requireValidTwitchWorkerSecret(args.workerSecret)
     requirePlayWithViewersTwitchEnabled()
     await requireTwitchCommandsEnabledForQueue(ctx, args.queueId)
 
-    const result = await ctx.runMutation(
+    const result: QueueJoinResult = await ctx.runMutation(
       internal.mutations.creatorTools.playingWithViewers.queue
         .enqueueViewerFromPlatform,
       {
@@ -134,12 +142,12 @@ export const leaveViewerFromWorker = action({
     twitchUserId: v.string(),
     workerSecret: v.string(),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<QueueLeaveResult> => {
     requireValidTwitchWorkerSecret(args.workerSecret)
     requirePlayWithViewersTwitchEnabled()
     await requireTwitchCommandsEnabledForQueue(ctx, args.queueId)
 
-    const result = await ctx.runMutation(
+    const result: QueueLeaveResult = await ctx.runMutation(
       internal.mutations.creatorTools.playingWithViewers.queue
         .leaveQueueFromPlatform,
       {
@@ -169,11 +177,11 @@ export const recordNotificationResultFromWorker = action({
     notificationStatus: v.union(v.literal("sent"), v.literal("failed")),
     workerSecret: v.string(),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<RecordNotificationResult> => {
     requireValidTwitchWorkerSecret(args.workerSecret)
     requirePlayWithViewersTwitchEnabled()
 
-    return await ctx.runMutation(
+    const result: RecordNotificationResult = await ctx.runMutation(
       internal.mutations.creatorTools.playingWithViewers.notifications
         .recordNotificationResult,
       {
@@ -183,6 +191,8 @@ export const recordNotificationResultFromWorker = action({
         notificationStatus: args.notificationStatus,
       }
     )
+
+    return result
   },
 })
 
@@ -193,11 +203,11 @@ export const deferNotificationFromWorker = action({
     notificationId: v.id("viewerQueueNotifications"),
     workerSecret: v.string(),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<DeferNotificationResult> => {
     requireValidTwitchWorkerSecret(args.workerSecret)
     requirePlayWithViewersTwitchEnabled()
 
-    return await ctx.runMutation(
+    const result: DeferNotificationResult = await ctx.runMutation(
       internal.mutations.creatorTools.playingWithViewers.notifications
         .deferNotification,
       {
@@ -206,6 +216,8 @@ export const deferNotificationFromWorker = action({
         notificationId: args.notificationId,
       }
     )
+
+    return result
   },
 })
 

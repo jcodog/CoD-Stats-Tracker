@@ -1,17 +1,23 @@
 "use node"
 
 import { internal } from "../../convex/_generated/api"
-import type { Id } from "../../convex/_generated/dataModel"
+import type { Doc, Id } from "../../convex/_generated/dataModel"
 import type { ActionCtx } from "../../convex/_generated/server"
+import type { BillingStatePlanLike } from "./billingAccess"
 import { getClerkBackendClient } from "./clerk"
 import { getTwitchAccountFromClerkUser } from "./clerkUsers"
 import { hasCreatorWorkspaceAccess } from "./creatorProgram"
 import { isPlayWithViewersTwitchEnabled } from "./creatorToolsConfig"
 
-type CreatorActionActor = Awaited<ReturnType<typeof getCreatorActionActor>>
 type TwitchAccount = NonNullable<
   ReturnType<typeof getTwitchAccountFromClerkUser>
 >
+
+type CreatorActionActor = {
+  billingState: BillingStatePlanLike | null
+  clerkUserId: string
+  user: Doc<"users">
+}
 
 type CreatorToolsActionAccess =
   | (CreatorActionActor & {
@@ -23,14 +29,25 @@ type CreatorToolsActionAccess =
       twitchAccount?: never
     })
 
-async function getCreatorActionActor(ctx: ActionCtx) {
+type OwnedQueueActionAccess = CreatorToolsActionAccess & {
+  queue: Doc<"viewerQueues">
+}
+
+type OwnedQueueEntryActionAccess = CreatorToolsActionAccess & {
+  entry: Doc<"viewerQueueEntries">
+  queue: Doc<"viewerQueues">
+}
+
+async function getCreatorActionActor(
+  ctx: ActionCtx
+): Promise<CreatorActionActor> {
   const identity = await ctx.auth.getUserIdentity()
 
   if (!identity) {
     throw new Error("You must be signed in to manage Play With Viewers.")
   }
 
-  const user = await ctx.runQuery(
+  const user: Doc<"users"> | null = await ctx.runQuery(
     internal.queries.staff.internal.getUserByClerkUserId,
     {
       clerkUserId: identity.subject,
@@ -41,7 +58,10 @@ async function getCreatorActionActor(ctx: ActionCtx) {
     throw new Error("Unable to resolve your creator account.")
   }
 
-  const [billingState, creatorAccount] = await Promise.all([
+  const [billingState, creatorAccount]: [
+    BillingStatePlanLike | null,
+    Doc<"creatorAccounts"> | null,
+  ] = await Promise.all([
     ctx.runQuery(internal.queries.billing.resolution.resolveUserPlanState, {
       userId: user._id,
     }),
@@ -114,9 +134,9 @@ export async function requireCreatorToolsActionAccess(
 export async function requireOwnedQueueActionAccess(
   ctx: ActionCtx,
   queueId: Id<"viewerQueues">
-) {
+): Promise<OwnedQueueActionAccess> {
   const actor = await requireCreatorToolsActionAccess(ctx)
-  const queue = await ctx.runQuery(
+  const queue: Doc<"viewerQueues"> = await ctx.runQuery(
     internal.queries.creatorTools.playingWithViewers.queue.getQueueById,
     {
       queueId,
@@ -136,9 +156,9 @@ export async function requireOwnedQueueActionAccess(
 export async function requireOwnedQueueEntryActionAccess(
   ctx: ActionCtx,
   entryId: Id<"viewerQueueEntries">
-) {
+): Promise<OwnedQueueEntryActionAccess> {
   const actor = await requireCreatorToolsActionAccess(ctx)
-  const entry = await ctx.runQuery(
+  const entry: Doc<"viewerQueueEntries"> | null = await ctx.runQuery(
     internal.queries.creatorTools.playingWithViewers.queue.getQueueEntryById,
     {
       entryId,
@@ -149,7 +169,7 @@ export async function requireOwnedQueueEntryActionAccess(
     throw new Error("Queue entry not found")
   }
 
-  const queue = await ctx.runQuery(
+  const queue: Doc<"viewerQueues"> = await ctx.runQuery(
     internal.queries.creatorTools.playingWithViewers.queue.getQueueById,
     {
       queueId: entry.queueId,

@@ -11,6 +11,13 @@ import {
 type BillingSubscriptionRecord = Doc<"billingSubscriptions">
 type BillingAccessGrantRecord = Doc<"billingAccessGrants">
 
+export type UserBillingContext = {
+  accessGrant: BillingAccessGrantRecord | null
+  customer: Doc<"billingCustomers"> | null
+  subscription: BillingSubscriptionRecord | null
+  user: Doc<"users">
+}
+
 function getSubscriptionPriority(status: BillingSubscriptionStatus) {
   switch (status) {
     case "active":
@@ -216,7 +223,7 @@ export const getUserBillingContextByClerkUserId = internalQuery({
   args: {
     clerkUserId: v.string(),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<UserBillingContext | null> => {
     const user = await ctx.db
       .query("users")
       .withIndex("by_clerkUserId", (query) =>
@@ -248,7 +255,7 @@ export const getBillingContextByStripeCustomerId = internalQuery({
   args: {
     stripeCustomerId: v.string(),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<UserBillingContext | null> => {
     const customer = await ctx.db
       .query("billingCustomers")
       .withIndex("by_stripeCustomerId", (query) =>

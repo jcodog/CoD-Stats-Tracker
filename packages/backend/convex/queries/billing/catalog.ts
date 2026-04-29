@@ -15,9 +15,19 @@ export type BillingCatalogPlan = BillingPlanRecord & {
 
 const SUPPORTED_CURRENCIES = ["GBP", "USD", "CAD", "EUR"] as const
 
-type SupportedCurrency = (typeof SUPPORTED_CURRENCIES)[number]
+export type SupportedCurrency = (typeof SUPPORTED_CURRENCIES)[number]
 
-type PricingCatalogEntry = {
+
+export type PricingCatalog = {
+  availableCurrencies: SupportedCurrency[]
+  currentInterval: "month" | "year" | null | undefined
+  currentPlanKey: string | null
+  currencyNotice: string | null
+  plans: PricingCatalogEntry[]
+  selectedCurrency: SupportedCurrency
+}
+
+export type PricingCatalogEntry = {
   active: boolean
   description: string
   features: Array<{
@@ -451,7 +461,7 @@ export const getCustomerPricingCatalog = query({
   args: {
     preferredCurrency: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<PricingCatalog> => {
     const [plans, planFeatures, features, identity] = await Promise.all([
       listBillingPlans(ctx),
       ctx.db.query("billingPlanFeatures").collect(),
@@ -496,7 +506,7 @@ export const getPublicPricingCatalog = query({
   args: {
     preferredCurrency: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<PricingCatalog> => {
     const [plans, planFeatures, features] = await Promise.all([
       listBillingPlans(ctx),
       ctx.db.query("billingPlanFeatures").collect(),

@@ -2,6 +2,18 @@ import { v } from "convex/values"
 
 import { internalMutation } from "../../_generated/server"
 
+export type EnsureCanonicalAttributionResult =
+  | {
+      status: "applied"
+    }
+  | {
+      status: "confirmed_existing"
+    }
+  | {
+      existingCode: string
+      status: "conflict_locked"
+    }
+
 export const ensureCanonicalAttribution = internalMutation({
   args: {
     clerkUserId: v.string(),
@@ -11,7 +23,7 @@ export const ensureCanonicalAttribution = internalMutation({
     source: v.union(v.literal("cookie"), v.literal("manual"), v.literal("staff")),
     userId: v.id("users"),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<EnsureCanonicalAttributionResult> => {
     const existingAttribution = await ctx.db
       .query("creatorAttributions")
       .withIndex("by_userId_active", (query) =>
@@ -35,19 +47,19 @@ export const ensureCanonicalAttribution = internalMutation({
       })
 
       return {
-        status: "applied" as const,
+        status: "applied",
       }
     }
 
     if (existingAttribution.normalizedCode === args.normalizedCode) {
       return {
-        status: "confirmed_existing" as const,
+        status: "confirmed_existing",
       }
     }
 
     return {
       existingCode: existingAttribution.creatorCode,
-      status: "conflict_locked" as const,
+      status: "conflict_locked",
     }
   },
 })

@@ -1,6 +1,6 @@
 import { v } from "convex/values"
 import { internalMutation } from "../../../_generated/server"
-import type { Id } from "../../../_generated/dataModel"
+import type { Doc, Id } from "../../../_generated/dataModel"
 import type { MutationCtx } from "../../../_generated/server"
 import {
   findQueueEntryForIdentity,
@@ -53,7 +53,7 @@ const JOIN_COOLDOWN_MS = 10 * 60 * 1000
 
 type QueueMutationCtx = MutationCtx
 
-type QueueJoinResult =
+export type QueueJoinResult =
   | {
       entryId: Id<"viewerQueueEntries">
       status: "enqueued" | "already_joined"
@@ -216,6 +216,33 @@ function mapEntryToSelectedUser(entry: {
   }
 }
 
+export type QueueSelectedUser = ReturnType<typeof mapEntryToSelectedUser>
+export type QueueIdResult = {
+  queueId: Id<"viewerQueues">
+}
+export type QueueLeaveResult = {
+  entryId: Id<"viewerQueueEntries">
+  removed: true
+}
+export type QueueRemoveEntryResult = QueueLeaveResult & {
+  queueId: Id<"viewerQueues">
+}
+export type QueueClearResult = {
+  clearedCount: number
+  queueId: Id<"viewerQueues">
+}
+export type QueueSetActiveResult = {
+  isActive: boolean
+  queueId: Id<"viewerQueues">
+}
+export type QueueSelectionResult = {
+  mode: Doc<"viewerQueueRounds">["mode"]
+  queueId: Id<"viewerQueues">
+  roundId: Id<"viewerQueueRounds">
+  selectedCount: number
+  selectedUsers: QueueSelectedUser[]
+}
+
 async function enqueueViewerFromPlatformCore(
   ctx: QueueMutationCtx,
   args: {
@@ -311,7 +338,7 @@ async function leaveQueueFromPlatformCore(
     platformUserId: string
     queueId: Id<"viewerQueues">
   }
-): Promise<{ entryId: Id<"viewerQueueEntries">; removed: true }> {
+): Promise<QueueLeaveResult> {
   const queue = await ctx.db.get(args.queueId)
 
   if (!queue) {
@@ -364,7 +391,7 @@ export const createQueue = internalMutation({
     twitchBroadcasterLogin: v.string(),
     twitchCommandsEnabled: v.optional(v.boolean()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<QueueIdResult> => {
     validateQueueVolumeSettings(args)
 
     if (!isRankRangeValid(args.minRank, args.maxRank)) {
@@ -434,7 +461,7 @@ export const enqueueViewer = internalMutation({
     rank: participantQueueRankValidator,
     username: v.string(),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<QueueJoinResult> => {
     const result = await enqueueViewerFromPlatformCore(ctx, {
       avatarUrl: args.avatarUrl,
       displayName: args.displayName,
@@ -463,7 +490,7 @@ export const enqueueViewerFromPlatform = internalMutation({
     rank: participantQueueRankValidator,
     username: v.string(),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<QueueJoinResult> => {
     return await enqueueViewerFromPlatformCore(ctx, args)
   },
 })
@@ -474,7 +501,7 @@ export const selectNextBatch = internalMutation({
     inviteCodeType: v.optional(inviteCodeTypeValidator),
     queueId: v.id("viewerQueues"),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<QueueSelectionResult> => {
     const queue = await ctx.db.get(args.queueId)
 
     if (!queue) {
@@ -552,7 +579,7 @@ export const inviteQueueEntryNow = internalMutation({
     inviteCode: v.optional(v.string()),
     inviteCodeType: v.optional(inviteCodeTypeValidator),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<QueueSelectionResult> => {
     const entry = await ctx.db.get(args.entryId)
 
     if (!entry) {
@@ -612,7 +639,7 @@ export const setQueueActive = internalMutation({
     isActive: v.boolean(),
     queueId: v.id("viewerQueues"),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<QueueSetActiveResult> => {
     const queue = await ctx.db.get(args.queueId)
 
     if (!queue) {
@@ -636,7 +663,7 @@ export const leaveQueue = internalMutation({
     discordUserId: v.string(),
     queueId: v.id("viewerQueues"),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<QueueLeaveResult> => {
     return await leaveQueueFromPlatformCore(ctx, {
       platform: "discord",
       platformUserId: args.discordUserId,
@@ -651,7 +678,7 @@ export const leaveQueueFromPlatform = internalMutation({
     platformUserId: v.string(),
     queueId: v.id("viewerQueues"),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<QueueLeaveResult> => {
     return await leaveQueueFromPlatformCore(ctx, args)
   },
 })
@@ -660,7 +687,7 @@ export const removeQueueEntry = internalMutation({
   args: {
     entryId: v.id("viewerQueueEntries"),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<QueueRemoveEntryResult> => {
     const entry = await ctx.db.get(args.entryId)
 
     if (!entry) {
@@ -681,7 +708,7 @@ export const clearQueue = internalMutation({
   args: {
     queueId: v.id("viewerQueues"),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<QueueClearResult> => {
     const queue = await ctx.db.get(args.queueId)
 
     if (!queue) {
@@ -726,7 +753,7 @@ export const updateQueueSettings = internalMutation({
     twitchBroadcasterLogin: v.optional(v.string()),
     twitchCommandsEnabled: v.optional(v.boolean()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<QueueIdResult> => {
     const queue = await ctx.db.get(args.queueId)
 
     if (!queue) {

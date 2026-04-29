@@ -20,6 +20,19 @@ type NormalizedQueueRoundSelectedUser = QueueRoundSelectedUser & {
   platformUserId: string
 }
 
+export type InitializeRoundNotificationsResult = {
+  createdNotificationCount: number
+  roundId: Id<"viewerQueueRounds">
+  selectedUsers: QueueRoundSelectedUser[]
+}
+export type RecordNotificationResult = {
+  notificationId: Id<"viewerQueueNotifications">
+  notificationStatus: NotificationStatus
+}
+export type DeferNotificationResult = RecordNotificationResult & {
+  nextAttemptAt?: number
+}
+
 function normalizeRoundSelectedUser(
   user: QueueRoundSelectedUser
 ): NormalizedQueueRoundSelectedUser {
@@ -140,7 +153,7 @@ export const initializeRoundNotifications = internalMutation({
   args: {
     roundId: v.id("viewerQueueRounds"),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<InitializeRoundNotificationsResult> => {
     const round = await ctx.db.get(args.roundId)
 
     if (!round) {
@@ -265,7 +278,7 @@ export const recordNotificationResult = internalMutation({
     notificationMethod: queueNotificationMethodValidator,
     notificationStatus: v.union(v.literal("sent"), v.literal("failed")),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<RecordNotificationResult> => {
     const notification = await ctx.db.get(args.notificationId)
 
     if (!notification) {
@@ -315,7 +328,7 @@ export const deferNotification = internalMutation({
     notificationFailureReason: v.optional(v.string()),
     notificationId: v.id("viewerQueueNotifications"),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<DeferNotificationResult> => {
     const notification = await ctx.db.get(args.notificationId)
 
     if (!notification) {

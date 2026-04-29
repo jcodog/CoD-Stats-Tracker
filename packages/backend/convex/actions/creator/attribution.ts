@@ -4,10 +4,32 @@ import { v } from "convex/values"
 
 import { internal } from "../../_generated/api"
 import { action } from "../../_generated/server"
+import type { EnsureCanonicalAttributionResult } from "../../mutations/creator/attribution"
 import {
   getClerkBackendClient,
   syncClerkCreatorAttributionMetadata,
 } from "../../../src/lib/clerk"
+
+type ApplyCreatorCodeResult =
+  | {
+      status: "unauthenticated"
+    }
+  | {
+      status: "invalid_code"
+    }
+  | {
+      status: "missing_user"
+    }
+  | {
+      status: "code_inactive"
+    }
+  | {
+      status: "self_code_not_allowed"
+    }
+  | ({
+      code: string
+      discountPercent: number
+    } & EnsureCanonicalAttributionResult)
 
 function normalizeCreatorCode(value: string) {
   const normalizedCode = value
@@ -27,12 +49,12 @@ export const applyCreatorCode = action({
     code: v.string(),
     source: v.union(v.literal("cookie"), v.literal("manual")),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<ApplyCreatorCodeResult> => {
     const identity = await ctx.auth.getUserIdentity()
 
     if (!identity) {
       return {
-        status: "unauthenticated" as const,
+        status: "unauthenticated",
       }
     }
 
@@ -40,7 +62,7 @@ export const applyCreatorCode = action({
 
     if (!normalizedCode) {
       return {
-        status: "invalid_code" as const,
+        status: "invalid_code",
       }
     }
 
@@ -58,33 +80,34 @@ export const applyCreatorCode = action({
 
     if (!user) {
       return {
-        status: "missing_user" as const,
+        status: "missing_user",
       }
     }
 
     if (!creatorAccount || !creatorAccount.codeActive) {
       return {
-        status: "code_inactive" as const,
+        status: "code_inactive",
       }
     }
 
     if (creatorAccount.userId === user._id) {
       return {
-        status: "self_code_not_allowed" as const,
+        status: "self_code_not_allowed",
       }
     }
 
-    const attributionResult = await ctx.runMutation(
-      internal.mutations.creator.attribution.ensureCanonicalAttribution,
-      {
-        clerkUserId: user.clerkUserId,
-        creatorAccountId: creatorAccount._id,
-        creatorCode: creatorAccount.code,
-        normalizedCode,
-        source: args.source,
-        userId: user._id,
-      }
-    )
+    const attributionResult: EnsureCanonicalAttributionResult =
+      await ctx.runMutation(
+        internal.mutations.creator.attribution.ensureCanonicalAttribution,
+        {
+          clerkUserId: user.clerkUserId,
+          creatorAccountId: creatorAccount._id,
+          creatorCode: creatorAccount.code,
+          normalizedCode,
+          source: args.source,
+          userId: user._id,
+        }
+      )
 
     if (attributionResult.status === "applied") {
       const clerkUser = await getClerkBackendClient().users.getUser(

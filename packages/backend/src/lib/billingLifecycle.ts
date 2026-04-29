@@ -2,6 +2,7 @@ import Stripe from "stripe"
 
 import { internal } from "../../convex/_generated/api"
 import type { ActionCtx } from "../../convex/_generated/server"
+import type { UserBillingContext } from "../../convex/queries/billing/internal"
 import {
   deriveAttentionStatus,
   getExpandedStripeCustomer,
@@ -22,10 +23,27 @@ import {
 
 type BillingLifecycleCtx = Pick<ActionCtx, "runMutation" | "runQuery">
 
+export type ReconciledBillingCustomerResult = {
+  billingContext: UserBillingContext
+  stripeCustomer: Stripe.Customer | null
+} | null
+
+export type ReconciledStripeSubscriptionResult = {
+  planKey: string
+  status: Stripe.Subscription.Status
+  stripeCustomerId: string
+  subscriptionId: string
+} | null
+
+export type SyncedBillingCollectionResult = {
+  count: number
+  stripeCustomerId: string
+} | null
+
 async function getStripeCustomerIfAvailable(args: {
   customer: string | Stripe.Customer | Stripe.DeletedCustomer | null | undefined
   stripe: Stripe
-}) {
+}): Promise<Stripe.Customer | null> {
   const expandedCustomer = getExpandedStripeCustomer(args.customer)
 
   if (expandedCustomer) {
@@ -263,8 +281,8 @@ export async function reconcileBillingCustomer(args: {
   ctx: BillingLifecycleCtx
   stripe: Stripe
   stripeCustomerId: string
-}) {
-  const billingContext = await args.ctx.runQuery(
+}): Promise<ReconciledBillingCustomerResult> {
+  const billingContext: UserBillingContext | null = await args.ctx.runQuery(
     internal.queries.billing.internal.getBillingContextByStripeCustomerId,
     {
       stripeCustomerId: args.stripeCustomerId,
@@ -332,12 +350,12 @@ export async function reconcileStripeSubscription(args: {
   lastStripeEventId?: string
   stripe: Stripe
   subscription: Stripe.Subscription
-}) {
+}): Promise<ReconciledStripeSubscriptionResult> {
   const stripeCustomerId =
     typeof args.subscription.customer === "string"
       ? args.subscription.customer
       : args.subscription.customer.id
-  const billingContext = await args.ctx.runQuery(
+  const billingContext: UserBillingContext | null = await args.ctx.runQuery(
     internal.queries.billing.internal.getBillingContextByStripeCustomerId,
     {
       stripeCustomerId,
@@ -509,7 +527,7 @@ export async function reconcileStripeInvoice(args: {
   invoice: Stripe.Invoice
   lastStripeEventId?: string
   stripe: Stripe
-}) {
+}): Promise<ReconciledStripeSubscriptionResult> {
   const stripeCustomerId =
     typeof args.invoice.customer === "string"
       ? args.invoice.customer
@@ -565,8 +583,8 @@ export async function syncBillingPaymentMethodsForCustomer(args: {
   ctx: BillingLifecycleCtx
   stripe: Stripe
   stripeCustomerId: string
-}) {
-  const billingContext = await args.ctx.runQuery(
+}): Promise<SyncedBillingCollectionResult> {
+  const billingContext: UserBillingContext | null = await args.ctx.runQuery(
     internal.queries.billing.internal.getBillingContextByStripeCustomerId,
     {
       stripeCustomerId: args.stripeCustomerId,
@@ -634,8 +652,8 @@ export async function syncBillingInvoicesForCustomer(args: {
   limit?: number
   stripe: Stripe
   stripeCustomerId: string
-}) {
-  const billingContext = await args.ctx.runQuery(
+}): Promise<SyncedBillingCollectionResult> {
+  const billingContext: UserBillingContext | null = await args.ctx.runQuery(
     internal.queries.billing.internal.getBillingContextByStripeCustomerId,
     {
       stripeCustomerId: args.stripeCustomerId,

@@ -6,6 +6,8 @@ import { v } from "convex/values"
 import type { Doc } from "../../_generated/dataModel"
 import { api, internal } from "../../_generated/api"
 import { action, type ActionCtx } from "../../_generated/server"
+import type { PricingCatalog } from "../../queries/billing/catalog"
+import type { UserBillingContext } from "../../queries/billing/internal"
 import { getConvexEnv } from "../../../src/env"
 import {
   reconcileBillingCustomer,
@@ -41,6 +43,11 @@ type CheckoutCreatorEntryState =
   | "eligible_but_not_entered"
   | "not_eligible"
   | "rejected"
+type BillingUserContext = UserBillingContext & {
+  actorName: string
+  email?: string
+  metadataStripeCustomerId?: string
+}
 
 const billingIntervalValidator = v.union(v.literal("month"), v.literal("year"))
 const supportedPricingCurrencyValidator = v.union(
@@ -228,7 +235,9 @@ function getMetadataStripeCustomerId(value: unknown) {
   return undefined
 }
 
-async function requireBillingUser(ctx: PublicActionCtx) {
+async function requireBillingUser(
+  ctx: PublicActionCtx
+): Promise<BillingUserContext> {
   const identity = await ctx.auth.getUserIdentity()
 
   if (!identity) {
@@ -239,7 +248,7 @@ async function requireBillingUser(ctx: PublicActionCtx) {
     )
   }
 
-  const billingContext = await ctx.runQuery(
+  const billingContext: UserBillingContext | null = await ctx.runQuery(
     internal.queries.billing.internal.getUserBillingContextByClerkUserId,
     {
       clerkUserId: identity.subject,
@@ -298,7 +307,7 @@ async function assertCheckoutEnabled(ctx: PublicActionCtx) {
 }
 
 function hasActiveCreatorGrant(
-  userContext: Awaited<ReturnType<typeof requireBillingUser>>
+  userContext: BillingUserContext
 ) {
   return (
     hasCreatorAccess({
@@ -311,7 +320,7 @@ function hasActiveCreatorGrant(
 }
 
 function getCreatorGrantAccessWindow(
-  userContext: Awaited<ReturnType<typeof requireBillingUser>>
+  userContext: BillingUserContext
 ) {
   if (userContext.subscription?.managedGrantEndsAt) {
     return ` until ${new Date(userContext.subscription.managedGrantEndsAt).toISOString()}`
@@ -326,7 +335,7 @@ function getCreatorGrantAccessWindow(
 
 function assertCreatorGrantAllowsSelfServeBilling(args: {
   action: "cancellation" | "checkout" | "plan_change" | "reactivation"
-  userContext: Awaited<ReturnType<typeof requireBillingUser>>
+  userContext: BillingUserContext
 }) {
   if (!hasActiveCreatorGrant(args.userContext)) {
     return
@@ -357,7 +366,7 @@ async function recordBillingAuditLog(args: {
   entityLabel?: string
   result: "error" | "success" | "warning"
   summary: string
-  user: Awaited<ReturnType<typeof requireBillingUser>>["user"]
+  user: BillingUserContext["user"]
   userName: string
 }) {
   await args.ctx.runMutation(internal.mutations.staff.internal.insertAuditLog, {
@@ -665,7 +674,7 @@ async function finalizeCreatorAttribution(args: {
   creatorAccount: Doc<"creatorAccounts">
   ctx: PublicActionCtx
   normalizedCode: string
-  userContext: Awaited<ReturnType<typeof requireBillingUser>>
+  userContext: BillingUserContext
 }) {
   const attributionResult = await args.ctx.runMutation(
     internal.mutations.creator.attribution.ensureCanonicalAttribution,
@@ -700,7 +709,7 @@ async function resolveCheckoutCreatorDiscount(args: {
   creatorCode?: string
   ctx: PublicActionCtx
   finalizeCodeEntry?: boolean
-  userContext: Awaited<ReturnType<typeof requireBillingUser>>
+  userContext: BillingUserContext
 }) {
   const activeAttribution = await args.ctx.runQuery(
     internal.queries.creator.internal.getActiveAttributionByUserId,
@@ -913,7 +922,7 @@ async function ensureStripeCustomer(args: {
   ctx: PublicActionCtx
   email?: string
   stripe: Stripe
-  userContext: Awaited<ReturnType<typeof requireBillingUser>>
+  userContext: BillingUserContext
 }) {
   if (args.userContext.customer?.stripeCustomerId) {
     await args.ctx.runMutation(
@@ -1140,7 +1149,7 @@ async function getExpandedSubscription(args: {
 async function getTargetSubscription(args: {
   ctx: PublicActionCtx
   stripeSubscriptionId?: string
-  userContext: Awaited<ReturnType<typeof requireBillingUser>>
+  userContext: BillingUserContext
 }) {
   if (!args.stripeSubscriptionId) {
     if (!args.userContext.subscription) {
@@ -1790,7 +1799,7 @@ async function cancelIncompleteSubscription(args: {
   reason: "checkout_abandoned" | "replaced_before_confirmation"
   stripe: Stripe
   subscription: Stripe.Subscription
-  userContext: Awaited<ReturnType<typeof requireBillingUser>>
+  userContext: BillingUserContext
 }) {
   const cancelledSubscription = await args.stripe.subscriptions.cancel(
     args.subscription.id,
@@ -2035,9 +2044,9 @@ export const getPublicPricingCatalog = action({
   args: {
     preferredCurrency: v.optional(supportedPricingCurrencyValidator),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<PricingCatalog> => {
     try {
-      const baseCatalog = await ctx.runQuery(
+      const baseCatalog: PricingCatalog = await ctx.runQuery(
         api.queries.billing.catalog.getPublicPricingCatalog,
         args.preferredCurrency
           ? { preferredCurrency: args.preferredCurrency }
