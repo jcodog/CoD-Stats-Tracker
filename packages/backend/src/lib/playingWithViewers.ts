@@ -1,5 +1,4 @@
 import { v } from "convex/values"
-import type { Doc } from "../../convex/_generated/dataModel"
 import {
   COMPETITIVE_RANK_VALUES,
   getParticipantRankLabel,
@@ -50,8 +49,8 @@ export const queueNotificationStatusValidator = v.union(
   v.literal("failed")
 )
 
-export type QueueConfigRankValue = Doc<"viewerQueues">["minRank"]
-export type ParticipantRankValue = Doc<"viewerQueueEntries">["rank"]
+export type QueueConfigRankValue = CompetitiveRank
+export type ParticipantRankValue = ParticipantRank
 export type RankValue = QueueConfigRankValue
 export type InviteMode = "bot_dm" | "manual_creator_contact"
 export type StoredInviteMode = InviteMode | "discord_dm"

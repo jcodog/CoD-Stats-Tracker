@@ -1,8 +1,14 @@
 "use node"
 
-import { action } from "../../_generated/server"
+import { action, type ActionCtx } from "../../_generated/server"
 import { internal } from "../../_generated/api"
-import { requireAuthorizedStaffAction } from "../../../src/lib/staffActionAuth"
+import { getClerkBackendClient } from "../../../src/lib/clerk"
+import {
+  StaffAuthorizationError,
+  resolveAuthorizedStaffAction,
+  type AuthorizedStaffActionContext,
+  type RequiredStaffRole,
+} from "../../../src/lib/staffActionAuth"
 import {
   roleMeetsRequirement,
   type UserRole,
@@ -251,3 +257,33 @@ export const getDashboard = action({
     }
   },
 })
+
+
+async function requireAuthorizedStaffAction(
+  ctx: ActionCtx,
+  requiredRole: RequiredStaffRole
+): Promise<AuthorizedStaffActionContext> {
+  const identity = await ctx.auth.getUserIdentity()
+
+  if (!identity) {
+    throw new StaffAuthorizationError(
+      "unauthenticated",
+      "A signed-in session is required to access this staff action.",
+      401
+    )
+  }
+
+  const [clerkUser, dbUser] = await Promise.all([
+    getClerkBackendClient().users.getUser(identity.subject),
+    ctx.runQuery(internal.queries.staff.internal.getUserByClerkUserId, {
+      clerkUserId: identity.subject,
+    }),
+  ])
+
+  return await resolveAuthorizedStaffAction({
+    clerkUser,
+    clerkUserId: identity.subject,
+    dbUser,
+    requiredRole,
+  })
+}

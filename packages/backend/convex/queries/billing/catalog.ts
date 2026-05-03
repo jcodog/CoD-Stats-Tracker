@@ -502,6 +502,38 @@ export const getCustomerPricingCatalog = query({
   },
 })
 
+export const getPublicPricingCatalogInternal = internalQuery({
+  args: {
+    preferredCurrency: v.optional(v.string()),
+  },
+  handler: async (ctx, args): Promise<PricingCatalog> => {
+    const [plans, planFeatures, features] = await Promise.all([
+      listBillingPlans(ctx),
+      ctx.db.query("billingPlanFeatures").collect(),
+      listBillingFeatures(ctx),
+    ])
+    const pricingCurrency = resolvePricingCurrency({
+      plans,
+      preferredCurrency: args.preferredCurrency,
+    })
+
+    return {
+      availableCurrencies: pricingCurrency.availableCurrencies,
+      currentInterval: null,
+      currentPlanKey: null,
+      currencyNotice: pricingCurrency.currencyNotice,
+      plans: buildPricingCatalog({
+        currentPlan: null,
+        features,
+        planFeatures,
+        plans,
+        selectedCurrency: pricingCurrency.selectedCurrency,
+      }),
+      selectedCurrency: pricingCurrency.selectedCurrency,
+    }
+  },
+})
+
 export const getPublicPricingCatalog = query({
   args: {
     preferredCurrency: v.optional(v.string()),

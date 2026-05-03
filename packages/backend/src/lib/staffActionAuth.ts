@@ -1,16 +1,15 @@
 "use node"
 
-import type { Id } from "../../convex/_generated/dataModel"
-import { internal } from "../../convex/_generated/api"
-import type { ActionCtx } from "../../convex/_generated/server"
-import { getClerkBackendClient, syncClerkPublicMetadataRole } from "./clerk"
+import { syncClerkPublicMetadataRole } from "./clerk"
 import { resolveConfiguredUserRole } from "./staffRoleConfig"
 import {
   getParsedUserRoleState,
   roleMeetsRequirement,
-  type RequiredStaffRole,
+  type RequiredStaffRole as StaffRoleRequirement,
   type UserRole,
 } from "./staffRoles"
+
+export type RequiredStaffRole = StaffRoleRequirement
 
 export class StaffAuthorizationError extends Error {
   code: string
@@ -21,6 +20,22 @@ export class StaffAuthorizationError extends Error {
     this.code = code
     this.status = status
   }
+}
+
+type ClerkStaffUserLike = {
+  emailAddresses?: Array<{ emailAddress?: string | null }> | null
+  firstName?: string | null
+  lastName?: string | null
+  primaryEmailAddress?: { emailAddress?: string | null } | null
+  publicMetadata?: { role?: unknown } | null
+  username?: string | null
+}
+
+type ConvexStaffUserLike = {
+  _id: string
+  clerkUserId: string
+  discordId?: string
+  role?: string
 }
 
 function getPrimaryEmail(clerkUser: {
@@ -51,45 +66,27 @@ export type AuthorizedStaffActionContext = {
   actorDisplayName: string
   actorEmail?: string
   actorRole: UserRole
-  actorUserId: Id<"users">
+  actorUserId: string
 }
 
-export async function requireAuthorizedStaffAction(
-  ctx: ActionCtx,
+export async function resolveAuthorizedStaffAction(args: {
+  clerkUser: ClerkStaffUserLike
+  clerkUserId: string
+  dbUser: ConvexStaffUserLike | null
   requiredRole: RequiredStaffRole
-): Promise<AuthorizedStaffActionContext> {
-  const identity = await ctx.auth.getUserIdentity()
+}): Promise<AuthorizedStaffActionContext> {
+  const clerkRoleState = getParsedUserRoleState(args.clerkUser.publicMetadata?.role)
 
-  if (!identity) {
-    throw new StaffAuthorizationError(
-      "unauthenticated",
-      "A signed-in session is required to access this staff action.",
-      401
-    )
-  }
-
-  const clerkUser = await getClerkBackendClient().users.getUser(
-    identity.subject
-  )
-  const clerkRoleState = getParsedUserRoleState(clerkUser.publicMetadata?.role)
-
-  const dbUser = await ctx.runQuery(
-    internal.queries.staff.internal.getUserByClerkUserId,
-    {
-      clerkUserId: identity.subject,
-    }
-  )
-
-  if (!dbUser) {
+  if (!args.dbUser) {
     throw new StaffAuthorizationError(
       "missing_convex_user",
       "Your Convex user record could not be found. Staff access is denied until it is repaired."
     )
   }
 
-  const convexRoleState = getParsedUserRoleState(dbUser.role)
+  const convexRoleState = getParsedUserRoleState(args.dbUser.role)
   const convexRole = resolveConfiguredUserRole({
-    discordId: dbUser.discordId,
+    discordId: args.dbUser.discordId,
     role: convexRoleState.role,
   })
 
@@ -107,8 +104,8 @@ export async function requireAuthorizedStaffAction(
   if (resolvedClerkRole !== convexRole) {
     try {
       await syncClerkPublicMetadataRole({
-        clerkUserId: identity.subject,
-        currentPublicMetadata: clerkUser.publicMetadata,
+        clerkUserId: args.clerkUserId,
+        currentPublicMetadata: args.clerkUser.publicMetadata,
         role: convexRole,
       })
       resolvedClerkRole = convexRole
@@ -133,7 +130,7 @@ export async function requireAuthorizedStaffAction(
     )
   }
 
-  if (!roleMeetsRequirement(convexRole, requiredRole)) {
+  if (!roleMeetsRequirement(convexRole, args.requiredRole)) {
     throw new StaffAuthorizationError(
       "insufficient_role",
       "You do not have the required staff role to perform this action."
@@ -141,10 +138,10 @@ export async function requireAuthorizedStaffAction(
   }
 
   return {
-    actorClerkUserId: dbUser.clerkUserId,
-    actorDisplayName: getDisplayName(clerkUser),
-    actorEmail: getPrimaryEmail(clerkUser),
+    actorClerkUserId: args.dbUser.clerkUserId,
+    actorDisplayName: getDisplayName(args.clerkUser),
+    actorEmail: getPrimaryEmail(args.clerkUser),
     actorRole: convexRole,
-    actorUserId: dbUser._id,
+    actorUserId: args.dbUser._id,
   }
 }

@@ -4,10 +4,15 @@ import Stripe from "stripe"
 import { v } from "convex/values"
 
 import { internal } from "../../_generated/api"
-import { action } from "../../_generated/server"
+import { action, type ActionCtx } from "../../_generated/server"
 import { getStripeScheduleId } from "../../../src/lib/stripe/billing"
 import { getClerkBackendClient } from "../../../src/lib/clerk"
-import { requireAuthorizedStaffAction } from "../../../src/lib/staffActionAuth"
+import {
+  StaffAuthorizationError,
+  resolveAuthorizedStaffAction,
+  type AuthorizedStaffActionContext,
+  type RequiredStaffRole,
+} from "../../../src/lib/staffActionAuth"
 import { isConfiguredSuperAdminDiscordId } from "../../../src/lib/staffRoleConfig"
 import {
   isAdminCapableRole,
@@ -187,6 +192,11 @@ function buildManagementUsers(args: {
       left.displayName.localeCompare(right.displayName) ||
       left.clerkUserId.localeCompare(right.clerkUserId)
   )
+}
+
+type ManagementRecords = {
+  roleAuditLogs: Array<Parameters<typeof mapAuditLogEntry>[0]>
+  users: Parameters<typeof buildManagementUsers>[0]["convexUsers"]
 }
 
 function buildRoleChangeDetails(args: {
@@ -394,8 +404,12 @@ export const getDashboard = action({
   args: {},
   handler: async (ctx): Promise<StaffManagementDashboard> => {
     const operator = await requireAuthorizedStaffAction(ctx, "staff")
+    const recordsPromise: Promise<ManagementRecords> = ctx.runQuery(
+      internal.queries.staff.internal.getManagementRecords,
+      {}
+    )
     const [records, clerkUsers] = await Promise.all([
-      ctx.runQuery(internal.queries.staff.internal.getManagementRecords, {}),
+      recordsPromise,
       listAllClerkUsers(),
     ])
     const users = buildManagementUsers({
@@ -431,8 +445,12 @@ export const updateUserRole = action({
   },
   handler: async (ctx, args): Promise<StaffMutationResponse> => {
     const operator = await requireAuthorizedStaffAction(ctx, "admin")
+    const recordsPromise: Promise<ManagementRecords> = ctx.runQuery(
+      internal.queries.staff.internal.getManagementRecords,
+      {}
+    )
     const [records, clerkUsers] = await Promise.all([
-      ctx.runQuery(internal.queries.staff.internal.getManagementRecords, {}),
+      recordsPromise,
       listAllClerkUsers(),
     ])
     const users = buildManagementUsers({
@@ -613,8 +631,12 @@ export const banUser = action({
   },
   handler: async (ctx, args): Promise<StaffMutationResponse> => {
     const operator = await requireAuthorizedStaffAction(ctx, "staff")
+    const recordsPromise: Promise<ManagementRecords> = ctx.runQuery(
+      internal.queries.staff.internal.getManagementRecords,
+      {}
+    )
     const [records, clerkUsers] = await Promise.all([
-      ctx.runQuery(internal.queries.staff.internal.getManagementRecords, {}),
+      recordsPromise,
       listAllClerkUsers(),
     ])
     const users = buildManagementUsers({
@@ -793,3 +815,33 @@ export const banUser = action({
     }
   },
 })
+
+
+async function requireAuthorizedStaffAction(
+  ctx: ActionCtx,
+  requiredRole: RequiredStaffRole
+): Promise<AuthorizedStaffActionContext> {
+  const identity = await ctx.auth.getUserIdentity()
+
+  if (!identity) {
+    throw new StaffAuthorizationError(
+      "unauthenticated",
+      "A signed-in session is required to access this staff action.",
+      401
+    )
+  }
+
+  const [clerkUser, dbUser] = await Promise.all([
+    getClerkBackendClient().users.getUser(identity.subject),
+    ctx.runQuery(internal.queries.staff.internal.getUserByClerkUserId, {
+      clerkUserId: identity.subject,
+    }),
+  ])
+
+  return await resolveAuthorizedStaffAction({
+    clerkUser,
+    clerkUserId: identity.subject,
+    dbUser,
+    requiredRole,
+  })
+}

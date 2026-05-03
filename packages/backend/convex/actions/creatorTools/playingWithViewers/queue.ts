@@ -2,31 +2,105 @@
 
 import { v } from "convex/values"
 import { internal } from "../../../_generated/api"
-import type { Doc, Id } from "../../../_generated/dataModel"
+import type { Id } from "../../../_generated/dataModel"
 import { action, type ActionCtx } from "../../../_generated/server"
+import type { BillingStatePlanLike } from "../../../../src/lib/billingAccess"
+import { getClerkBackendClient } from "../../../../src/lib/clerk"
+import { getTwitchAccountFromClerkUser } from "../../../../src/lib/clerkUsers"
 import {
   inviteCodeTypeValidator,
   inviteModeValidator,
   queueConfigRankValidator,
+  type InviteMode,
+  type ParticipantRankValue,
+  type QueuePlatform,
+  type StoredInviteMode,
 } from "../../../../src/lib/playingWithViewers"
-import { getDisabledPlayWithViewersTwitchContext } from "../../../../src/lib/creatorToolsConfig"
 import {
-  requireOwnedQueueActionAccess,
-  requireOwnedQueueEntryActionAccess,
+  getDisabledPlayWithViewersTwitchContext,
+  isPlayWithViewersTwitchEnabled,
+} from "../../../../src/lib/creatorToolsConfig"
+import {
+  assertOwnedQueueActionAccess,
+  assertOwnedQueueEntryActionAccess,
+  resolveCreatorToolsActionAccess,
+  type CreatorActionActor,
 } from "../../../../src/lib/creatorToolsActionAuth"
-import type {
-  QueueClearResult,
-  QueueIdResult,
-  QueueRemoveEntryResult,
-  QueueSelectionResult,
-  QueueSetActiveResult,
-} from "../../../mutations/creatorTools/playingWithViewers/queue"
+
+type QueueIdResult = {
+  queueId: string
+}
+
+type QueueSetActiveResult = {
+  isActive: boolean
+  queueId: string
+}
+
+type QueueClearResult = {
+  clearedCount: number
+  queueId: string
+}
+
+type QueueRemoveEntryResult = {
+  entryId: string
+  queueId: string
+  removed: true
+}
+
+type QueueSelectedUser = {
+  avatarUrl?: string
+  displayName: string
+  discordUserId?: string
+  dmFailureReason?: string
+  dmStatus?: "failed" | "sent"
+  linkedUserId?: string
+  notificationFailureReason?: string
+  notificationMethod?:
+    | "discord_dm"
+    | "manual_creator_contact"
+    | "twitch_chat_fallback"
+    | "twitch_whisper"
+  notificationStatus?: "failed" | "pending" | "sent"
+  platform: QueuePlatform
+  platformUserId: string
+  rank: ParticipantRankValue
+  username: string
+}
+
+type QueueSelectionResult = {
+  mode: StoredInviteMode
+  queueId: string
+  roundId: string
+  selectedCount: number
+  selectedUsers: QueueSelectedUser[]
+}
+
+type CreatorAccountRecord = {
+  _id: string
+}
+
+type ViewerQueueRecord = {
+  _id: string
+  creatorUserId: string
+}
+
+type ViewerQueueEntryRecord = {
+  _id: string
+  queueId: string
+}
+
+type ViewerQueueRoundRecord = {
+  _id: string
+  createdAt: number
+  selectedCount: number
+  selectedUsers: QueueSelectedUser[]
+}
 
 type UpdatedRoundResult = {
   createdAt: number
-  roundId: Id<"viewerQueueRounds">
+  roundId: string
   selectedCount: number
-  selectedUsers: Doc<"viewerQueueRounds">["selectedUsers"]
+  selectedUsers: QueueSelectedUser[]
 }
 
 type SelectNextBatchAndNotifyResult = UpdatedRoundResult & {
@@ -43,7 +117,7 @@ async function getUpdatedRoundResult(
   ctx: ActionCtx,
   roundId: Id<"viewerQueueRounds">
 ): Promise<UpdatedRoundResult> {
-  const round: Doc<"viewerQueueRounds"> | null = await ctx.runQuery(
+  const round: ViewerQueueRoundRecord | null = await ctx.runQuery(
     internal.queries.creatorTools.playingWithViewers.queue.getRoundById,
     {
       roundId,
@@ -159,7 +233,7 @@ export const removeQueueEntry = action({
       internal.actions.creatorTools.playingWithViewers.discord
         .syncQueueMessageAfterViewerInteraction,
       {
-        queueId: queue._id,
+        queueId: queue._id as Id<"viewerQueues">,
       }
     )
 
@@ -185,7 +259,7 @@ export const selectNextBatchAndNotify = action({
       internal.mutations.creatorTools.playingWithViewers.notifications
         .initializeRoundNotifications,
       {
-        roundId: result.roundId,
+        roundId: result.roundId as Id<"viewerQueueRounds">,
       }
     )
 
@@ -194,12 +268,15 @@ export const selectNextBatchAndNotify = action({
         internal.actions.creatorTools.playingWithViewers.discord
           .deliverDiscordNotificationsForRound,
         {
-          roundId: result.roundId,
+          roundId: result.roundId as Id<"viewerQueueRounds">,
         }
       )
     }
 
-    const updatedRound = await getUpdatedRoundResult(ctx, result.roundId)
+    const updatedRound = await getUpdatedRoundResult(
+      ctx,
+      result.roundId as Id<"viewerQueueRounds">
+    )
 
     return {
       ...updatedRound,
@@ -231,7 +308,7 @@ export const inviteQueueEntryNowAndNotify = action({
       internal.mutations.creatorTools.playingWithViewers.notifications
         .initializeRoundNotifications,
       {
-        roundId: result.roundId,
+        roundId: result.roundId as Id<"viewerQueueRounds">,
       }
     )
 
@@ -240,12 +317,15 @@ export const inviteQueueEntryNowAndNotify = action({
         internal.actions.creatorTools.playingWithViewers.discord
           .deliverDiscordNotificationsForRound,
         {
-          roundId: result.roundId,
+          roundId: result.roundId as Id<"viewerQueueRounds">,
         }
       )
     }
 
-    const updatedRound = await getUpdatedRoundResult(ctx, result.roundId)
+    const updatedRound = await getUpdatedRoundResult(
+      ctx,
+      result.roundId as Id<"viewerQueueRounds">
+    )
 
     return {
       ...updatedRound,
@@ -254,3 +334,96 @@ export const inviteQueueEntryNowAndNotify = action({
     }
   },
 })
+
+
+async function requireCreatorToolsActionAccess(
+  ctx: ActionCtx,
+  options?: { requireTwitchLinked?: boolean }
+) {
+  const identity = await ctx.auth.getUserIdentity()
+
+  if (!identity) {
+    throw new Error("You must be signed in to manage Play With Viewers.")
+  }
+
+  const user: CreatorActionActor["user"] | null = await ctx.runQuery(
+    internal.queries.staff.internal.getUserByClerkUserId,
+    {
+      clerkUserId: identity.subject,
+    }
+  )
+
+  if (!user) {
+    throw new Error("Unable to resolve your creator account.")
+  }
+
+  const userId = user._id as Id<"users">
+  const [billingState, creatorAccount]: [
+    BillingStatePlanLike | null,
+    CreatorAccountRecord | null,
+  ] = await Promise.all([
+    ctx.runQuery(internal.queries.billing.resolution.resolveUserPlanState, {
+      userId,
+    }),
+    ctx.runQuery(internal.queries.creator.internal.getCreatorAccountByUserId, {
+      userId,
+    }),
+  ])
+  const shouldLoadTwitchAccount =
+    (options?.requireTwitchLinked ?? true) && isPlayWithViewersTwitchEnabled()
+  const twitchAccount = shouldLoadTwitchAccount
+    ? getTwitchAccountFromClerkUser(
+        await getClerkBackendClient().users.getUser(identity.subject)
+      )
+    : null
+
+  return await resolveCreatorToolsActionAccess({
+    billingState,
+    clerkUserId: identity.subject,
+    creatorAccount,
+    requireTwitchLinked: options?.requireTwitchLinked,
+    twitchAccount,
+    user,
+  })
+}
+
+async function requireOwnedQueueActionAccess(
+  ctx: ActionCtx,
+  queueId: Id<"viewerQueues">
+) {
+  const actor = await requireCreatorToolsActionAccess(ctx)
+  const queue: ViewerQueueRecord = await ctx.runQuery(
+    internal.queries.creatorTools.playingWithViewers.queue.getQueueById,
+    {
+      queueId,
+    }
+  )
+
+  return assertOwnedQueueActionAccess(actor, queue)
+}
+
+async function requireOwnedQueueEntryActionAccess(
+  ctx: ActionCtx,
+  entryId: Id<"viewerQueueEntries">
+) {
+  const actor = await requireCreatorToolsActionAccess(ctx)
+  const entry: ViewerQueueEntryRecord | null = await ctx.runQuery(
+    internal.queries.creatorTools.playingWithViewers.queue.getQueueEntryById,
+    {
+      entryId,
+    }
+  )
+
+  if (!entry) {
+    throw new Error("Queue entry not found")
+  }
+
+  const queue: ViewerQueueRecord = await ctx.runQuery(
+    internal.queries.creatorTools.playingWithViewers.queue.getQueueById,
+    {
+      queueId: entry.queueId as Id<"viewerQueues">,
+    }
+  )
+
+  return assertOwnedQueueEntryActionAccess(actor, entry, queue)
+}

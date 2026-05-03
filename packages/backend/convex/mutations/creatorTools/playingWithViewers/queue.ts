@@ -472,11 +472,7 @@ export const enqueueViewer = internalMutation({
       username: args.username,
     })
 
-    return {
-      cooldownRemainingMs: result.cooldownRemainingMs,
-      entryId: result.entryId,
-      status: result.status,
-    }
+    return result
   },
 })
 

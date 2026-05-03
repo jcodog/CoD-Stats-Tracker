@@ -2,25 +2,35 @@
 
 import { v } from "convex/values"
 import { internal } from "../../../_generated/api"
-import type { Doc, Id } from "../../../_generated/dataModel"
+import type { Id } from "../../../_generated/dataModel"
 import {
   action,
   internalAction,
   type ActionCtx,
 } from "../../../_generated/server"
+import type { BillingStatePlanLike } from "../../../../src/lib/billingAccess"
 import { getClerkBackendClient } from "../../../../src/lib/clerk"
+import { getTwitchAccountFromClerkUser } from "../../../../src/lib/clerkUsers"
 import { getConvexEnv } from "../../../../src/env"
 import {
   getInviteCodeTypeLabel,
   inviteModeValidator,
   queueConfigRankValidator,
   renderInviteCodeInstructions,
+  type InviteMode,
   type InviteCodeType,
+  type ParticipantRankValue,
+  type QueuePlatform,
 } from "../../../../src/lib/playingWithViewers"
-import { getDisabledPlayWithViewersTwitchContext } from "../../../../src/lib/creatorToolsConfig"
 import {
-  requireCreatorToolsActionAccess,
-  requireOwnedQueueActionAccess,
+  getDisabledPlayWithViewersTwitchContext,
+  isPlayWithViewersTwitchEnabled,
+} from "../../../../src/lib/creatorToolsConfig"
+import {
+  assertOwnedQueueActionAccess,
+  assertOwnedQueueEntryActionAccess,
+  resolveCreatorToolsActionAccess,
+  type CreatorActionActor,
 } from "../../../../src/lib/creatorToolsActionAuth"
 import {
   ButtonStyle,
@@ -79,6 +89,107 @@ type AvailableDiscordGuild = {
   iconUrl: string | null
   id: string
   name: string
+}
+
+type QueueSelectedUser = {
+  avatarUrl?: string
+  displayName: string
+  discordUserId?: string
+  dmFailureReason?: string
+  dmStatus?: "failed" | "sent"
+  linkedUserId?: string
+  notificationFailureReason?: string
+  notificationMethod?:
+    | "discord_dm"
+    | "manual_creator_contact"
+    | "twitch_chat_fallback"
+    | "twitch_whisper"
+  notificationStatus?: "failed" | "pending" | "sent"
+  platform: QueuePlatform
+  platformUserId: string
+  rank: ParticipantRankValue
+  username: string
+}
+
+type CreatorAccountRecord = {
+  _id: string
+}
+
+type ViewerQueueRecord = {
+  _id: string
+  channelId: string
+  channelName?: string
+  channelPermsCorrect?: boolean
+  creatorDisplayName: string
+  creatorMessage?: string
+  creatorUserId: string
+  gameLabel: string
+  guildId: string
+  guildName?: string
+  inviteMode: InviteMode
+  isActive: boolean
+  matchesPerViewer: number
+  maxRank: string
+  messageId?: string
+  minRank: string
+  rulesText?: string
+  title: string
+}
+
+type ViewerQueueEntryRecord = {
+  _id: string
+  queueId: string
+}
+
+type ViewerQueueRoundRecord = {
+  _id: string
+  createdAt: number
+  inviteCodeType?: InviteCodeType
+  lobbyCode?: string
+  mode: InviteMode
+  queueId: string
+  selectedCount: number
+  selectedUsers: QueueSelectedUser[]
+}
+
+type ViewerQueueNotificationRecord = {
+  _id: string
+  notificationStatus: "failed" | "pending" | "sent"
+  platform: QueuePlatform
+  platformUserId: string
+}
+
+type QueueDiscordContext = {
+  botPermissionStatus: QueueChannelBotPermissionStatus
+  channelName: string
+  channelPermsCorrect: boolean
+  guildName: string
+}
+
+type QueueMessageSyncResult = {
+  messageId?: string
+  ok: true
+}
+
+type DiscordNotificationDeliveryResult = {
+  deliveredCount: number
+  failedCount: number
+  roundId: string
+}
+
+type CreateQueueInOwnedGuildResult = {
+  channelId: string
+  channelName: string
+  guildId: string
+  guildName: string
+  messagePublished: boolean
+  publishError: string | null
+  queueId: string
+  reusedChannel: boolean
+}
+
+type QueuePermissionsUpdateResult = QueueDiscordContext & {
+  permissionsUpdated: boolean
 }
 
 type DiscordGuildPermissionContext = {
@@ -841,8 +952,8 @@ async function getOrCreateQueueChannel(guildId: string) {
 
 async function ensureQueueDiscordChannel(
   ctx: ActionCtx,
-  queue: Doc<"viewerQueues">
-) {
+  queue: ViewerQueueRecord
+): Promise<{ queue: ViewerQueueRecord; recreatedChannel: boolean }> {
   const existingChannel = await getDiscordChannelDetails(queue.channelId)
 
   if (existingChannel) {
@@ -861,15 +972,15 @@ async function ensureQueueDiscordChannel(
       channelId: channel.channelId,
       channelName: channel.channelName,
       channelPermsCorrect: channel.channelPermsCorrect,
-      queueId: queue._id,
+      queueId: queue._id as Id<"viewerQueues">,
       resetMessageState: true,
     }
   )
 
-  const nextQueue = await ctx.runQuery(
+  const nextQueue: ViewerQueueRecord = await ctx.runQuery(
     internal.queries.creatorTools.playingWithViewers.queue.getQueueById,
     {
-      queueId: queue._id,
+      queueId: queue._id as Id<"viewerQueues">,
     }
   )
 
@@ -881,8 +992,8 @@ async function ensureQueueDiscordChannel(
 
 async function getReinviteRequiredQueueContext(args: {
   botPermissionStatus: QueueChannelBotPermissionStatus
-  queue: Pick<Doc<"viewerQueues">, "channelName" | "guildId">
-}) {
+  queue: Pick<ViewerQueueRecord, "channelName" | "guildId">
+}): Promise<QueueDiscordContext> {
   const guild = await getDiscordGuildSummary(args.queue.guildId)
 
   return {
@@ -898,7 +1009,7 @@ async function getDiscordQueueContext(args: {
   botPermissionStatus?: QueueChannelBotPermissionStatus
   channelId: string
   guildId: string
-}) {
+}): Promise<QueueDiscordContext> {
   const [guild, channelState, botPermissionStatus] = await Promise.all([
     getDiscordGuildSummary(args.guildId),
     getQueueChannelPermissionState(args),
@@ -921,8 +1032,8 @@ async function publishQueueMessageForQueue(
   ctx: ActionCtx,
   queueId: Id<"viewerQueues">,
   retriedAfterMissingChannel = false
-) {
-  let queue = await ctx.runQuery(
+): Promise<QueueMessageSyncResult> {
+  let queue: ViewerQueueRecord = await ctx.runQuery(
     internal.queries.creatorTools.playingWithViewers.queue.getQueueById,
     { queueId }
   )
@@ -940,7 +1051,7 @@ async function publishQueueMessageForQueue(
       )
     }
 
-    const entries = await ctx.runQuery(
+    const entries: unknown[] = await ctx.runQuery(
       internal.queries.creatorTools.playingWithViewers.queue.getQueueEntries,
       { queueId }
     )
@@ -980,7 +1091,7 @@ async function publishQueueMessageForQueue(
     }
 
     const createdMessage = (await response.json()) as { id: string }
-    const latestQueue = await ctx.runQuery(
+    const latestQueue: Pick<ViewerQueueRecord, "messageId"> = await ctx.runQuery(
       internal.queries.creatorTools.playingWithViewers.queue.getQueueById,
       { queueId }
     )
@@ -1053,8 +1164,8 @@ function getCreatorFacingDirectMessageFailureMessage() {
 async function updateQueueMessageForQueue(
   ctx: ActionCtx,
   queueId: Id<"viewerQueues">
-) {
-  let queue = await ctx.runQuery(
+): Promise<QueueMessageSyncResult> {
+  let queue: ViewerQueueRecord = await ctx.runQuery(
     internal.queries.creatorTools.playingWithViewers.queue.getQueueById,
     { queueId }
   )
@@ -1070,7 +1181,7 @@ async function updateQueueMessageForQueue(
       return await publishQueueMessageForQueue(ctx, queueId)
     }
 
-    const entries = await ctx.runQuery(
+    const entries: unknown[] = await ctx.runQuery(
       internal.queries.creatorTools.playingWithViewers.queue.getQueueEntries,
       { queueId }
     )
@@ -1246,8 +1357,8 @@ async function sendDirectMessageToViewer(args: {
 async function deliverDiscordRoundNotifications(args: {
   ctx: ActionCtx
   roundId: Id<"viewerQueueRounds">
-}) {
-  const round = await args.ctx.runQuery(
+}): Promise<DiscordNotificationDeliveryResult> {
+  const round: ViewerQueueRoundRecord | null = await args.ctx.runQuery(
     internal.queries.creatorTools.playingWithViewers.queue.getRoundById,
     {
       roundId: args.roundId,
@@ -1258,10 +1369,10 @@ async function deliverDiscordRoundNotifications(args: {
     throw new Error("Queue round not found")
   }
 
-  const queue = await args.ctx.runQuery(
+  const queue: ViewerQueueRecord = await args.ctx.runQuery(
     internal.queries.creatorTools.playingWithViewers.queue.getQueueById,
     {
-      queueId: round.queueId,
+      queueId: round.queueId as Id<"viewerQueues">,
     }
   )
 
@@ -1281,7 +1392,7 @@ async function deliverDiscordRoundNotifications(args: {
     )
   }
 
-  const notifications = await args.ctx.runQuery(
+  const notifications: ViewerQueueNotificationRecord[] = await args.ctx.runQuery(
     internal.queries.creatorTools.playingWithViewers.notifications
       .getRoundNotifications,
     {
@@ -1289,7 +1400,7 @@ async function deliverDiscordRoundNotifications(args: {
     }
   )
   const discordNotifications = notifications.filter(
-    (notification: (typeof notifications)[number]) =>
+    (notification) =>
       notification.platform === "discord" &&
       notification.notificationStatus === "pending"
   )
@@ -1324,7 +1435,7 @@ async function deliverDiscordRoundNotifications(args: {
         internal.mutations.creatorTools.playingWithViewers.notifications
           .recordNotificationResult,
         {
-          notificationId: notification._id,
+          notificationId: notification._id as Id<"viewerQueueNotifications">,
           notificationMethod: "discord_dm",
           notificationStatus: "sent",
         }
@@ -1345,7 +1456,7 @@ async function deliverDiscordRoundNotifications(args: {
           .recordNotificationResult,
         {
           notificationFailureReason: failureReason,
-          notificationId: notification._id,
+          notificationId: notification._id as Id<"viewerQueueNotifications">,
           notificationMethod: "discord_dm",
           notificationStatus: "failed",
         }
@@ -1363,7 +1474,7 @@ async function deliverDiscordRoundNotifications(args: {
 
 export const listAvailableDiscordGuilds = action({
   args: {},
-  handler: async (ctx) => {
+  handler: async (ctx): Promise<AvailableDiscordGuild[]> => {
     const { clerkUserId } = await requireCreatorToolsActionAccess(ctx)
 
     return await listOwnedGuildsWithBot(clerkUserId)
@@ -1385,10 +1496,11 @@ export const createQueueInOwnedGuild = action({
     title: v.string(),
     twitchBotEnabled: v.optional(v.boolean()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<CreateQueueInOwnedGuildResult> => {
     const access = await requireCreatorToolsActionAccess(ctx)
     const { clerkUserId, user } = access
     const twitchBotEnabled = args.twitchBotEnabled ?? true
+    const userId = user._id as Id<"users">
     const twitchContext = access.hasTwitchLinked
       ? {
           twitchBotAnnouncementsEnabled: twitchBotEnabled,
@@ -1400,13 +1512,14 @@ export const createQueueInOwnedGuild = action({
           twitchCommandsEnabled: twitchBotEnabled,
         }
       : getDisabledPlayWithViewersTwitchContext()
-    const existingQueue = await ctx.runQuery(
-      internal.queries.creatorTools.playingWithViewers.queue
-        .getQueueByCreatorUserId,
-      {
-        creatorUserId: user._id,
-      }
-    )
+    const existingQueue: Pick<ViewerQueueRecord, "_id"> | null =
+      await ctx.runQuery(
+        internal.queries.creatorTools.playingWithViewers.queue
+          .getQueueByCreatorUserId,
+        {
+          creatorUserId: userId,
+        }
+      )
 
     if (existingQueue) {
       throw new Error(
@@ -1425,7 +1538,7 @@ export const createQueueInOwnedGuild = action({
     }
 
     const channel = await getOrCreateQueueChannel(guildId)
-    const queueResult = await ctx.runMutation(
+    const queueResult: { queueId: string } = await ctx.runMutation(
       internal.mutations.creatorTools.playingWithViewers.queue.createQueue,
       {
         channelId: channel.channelId,
@@ -1433,7 +1546,7 @@ export const createQueueInOwnedGuild = action({
         channelPermsCorrect: channel.channelPermsCorrect,
         creatorDisplayName: args.creatorDisplayName.trim(),
         creatorMessage: args.creatorMessage?.trim() || undefined,
-        creatorUserId: user._id,
+        creatorUserId: userId,
         gameLabel: args.gameLabel.trim(),
         guildId,
         guildName: selectedGuild.name,
@@ -1451,7 +1564,10 @@ export const createQueueInOwnedGuild = action({
     let publishError: string | null = null
 
     try {
-      await publishQueueMessageForQueue(ctx, queueResult.queueId)
+      await publishQueueMessageForQueue(
+        ctx,
+        queueResult.queueId as Id<"viewerQueues">
+      )
     } catch (error) {
       publishError = toErrorMessage(
         error,
@@ -1476,7 +1592,7 @@ export const deliverDiscordNotificationsForRound = internalAction({
   args: {
     roundId: v.id("viewerQueueRounds"),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<DiscordNotificationDeliveryResult> => {
     return await deliverDiscordRoundNotifications({
       ctx,
       roundId: args.roundId,
@@ -1488,7 +1604,7 @@ export const syncQueueDiscordContext = action({
   args: {
     queueId: v.id("viewerQueues"),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<QueueDiscordContext> => {
     let { queue } = await requireOwnedQueueActionAccess(ctx, args.queueId)
     const botPermissionStatus = await getBotQueueChannelPermissionStatus({
       guildId: queue.guildId,
@@ -1541,7 +1657,7 @@ export const fixQueueChannelPermissions = action({
   args: {
     queueId: v.id("viewerQueues"),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<QueuePermissionsUpdateResult> => {
     const { queue } = await requireOwnedQueueActionAccess(ctx, args.queueId)
     const botPermissionStatus = await getBotQueueChannelPermissionStatus({
       guildId: queue.guildId,
@@ -1605,7 +1721,7 @@ export const publishQueueMessage = action({
   args: {
     queueId: v.id("viewerQueues"),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<QueueMessageSyncResult> => {
     await requireOwnedQueueActionAccess(ctx, args.queueId)
 
     return await publishQueueMessageForQueue(ctx, args.queueId)
@@ -1616,7 +1732,7 @@ export const updateQueueMessage = action({
   args: {
     queueId: v.id("viewerQueues"),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<QueueMessageSyncResult> => {
     await requireOwnedQueueActionAccess(ctx, args.queueId)
 
     return await updateQueueMessageForQueue(ctx, args.queueId)
@@ -1627,7 +1743,100 @@ export const syncQueueMessageAfterViewerInteraction = internalAction({
   args: {
     queueId: v.id("viewerQueues"),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<QueueMessageSyncResult> => {
     return await updateQueueMessageForQueue(ctx, args.queueId)
   },
 })
+
+
+async function requireCreatorToolsActionAccess(
+  ctx: ActionCtx,
+  options?: { requireTwitchLinked?: boolean }
+) {
+  const identity = await ctx.auth.getUserIdentity()
+
+  if (!identity) {
+    throw new Error("You must be signed in to manage Play With Viewers.")
+  }
+
+  const user: CreatorActionActor["user"] | null = await ctx.runQuery(
+    internal.queries.staff.internal.getUserByClerkUserId,
+    {
+      clerkUserId: identity.subject,
+    }
+  )
+
+  if (!user) {
+    throw new Error("Unable to resolve your creator account.")
+  }
+
+  const userId = user._id as Id<"users">
+  const [billingState, creatorAccount]: [
+    BillingStatePlanLike | null,
+    CreatorAccountRecord | null,
+  ] = await Promise.all([
+    ctx.runQuery(internal.queries.billing.resolution.resolveUserPlanState, {
+      userId,
+    }),
+    ctx.runQuery(internal.queries.creator.internal.getCreatorAccountByUserId, {
+      userId,
+    }),
+  ])
+  const shouldLoadTwitchAccount =
+    (options?.requireTwitchLinked ?? true) && isPlayWithViewersTwitchEnabled()
+  const twitchAccount = shouldLoadTwitchAccount
+    ? getTwitchAccountFromClerkUser(
+        await getClerkBackendClient().users.getUser(identity.subject)
+      )
+    : null
+
+  return await resolveCreatorToolsActionAccess({
+    billingState,
+    clerkUserId: identity.subject,
+    creatorAccount,
+    requireTwitchLinked: options?.requireTwitchLinked,
+    twitchAccount,
+    user,
+  })
+}
+
+async function requireOwnedQueueActionAccess(
+  ctx: ActionCtx,
+  queueId: Id<"viewerQueues">
+) {
+  const actor = await requireCreatorToolsActionAccess(ctx)
+  const queue: ViewerQueueRecord = await ctx.runQuery(
+    internal.queries.creatorTools.playingWithViewers.queue.getQueueById,
+    {
+      queueId,
+    }
+  )
+
+  return assertOwnedQueueActionAccess(actor, queue)
+}
+
+async function requireOwnedQueueEntryActionAccess(
+  ctx: ActionCtx,
+  entryId: Id<"viewerQueueEntries">
+) {
+  const actor = await requireCreatorToolsActionAccess(ctx)
+  const entry: ViewerQueueEntryRecord | null = await ctx.runQuery(
+    internal.queries.creatorTools.playingWithViewers.queue.getQueueEntryById,
+    {
+      entryId,
+    }
+  )
+
+  if (!entry) {
+    throw new Error("Queue entry not found")
+  }
+
+  const queue: ViewerQueueRecord = await ctx.runQuery(
+    internal.queries.creatorTools.playingWithViewers.queue.getQueueById,
+    {
+      queueId: entry.queueId as Id<"viewerQueues">,
+    }
+  )
+
+  return assertOwnedQueueEntryActionAccess(actor, entry, queue)
+}

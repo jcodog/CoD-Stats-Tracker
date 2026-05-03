@@ -20,6 +20,6 @@
     "isolatedModules": true,
     "noEmit": true
   },
-  "include": ["./**/*", "../src/lib", "../src/env.ts"],
+  "include": ["./**/*"],
   "exclude": ["./_generated"]
 }

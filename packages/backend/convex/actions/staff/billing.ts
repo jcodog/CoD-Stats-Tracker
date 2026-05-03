@@ -2,12 +2,13 @@
 
 import type Stripe from "stripe"
 import { v } from "convex/values"
-import { action } from "../../_generated/server"
+import { action, type ActionCtx } from "../../_generated/server"
 import type { Id } from "../../_generated/dataModel"
 import { internal } from "../../_generated/api"
 import {
   reconcileBillingCustomer,
   reconcileStripeSubscription,
+  type BillingLifecycleOps,
 } from "../../../src/lib/billingLifecycle"
 import {
   hasManagedCreatorGrantSubscriptionAccess,
@@ -19,7 +20,12 @@ import {
 } from "../../../src/lib/billingAccess"
 import { isStripeManagedCreatorGrantSubscription } from "../../../src/lib/stripe/billing"
 import { getClerkBackendClient } from "../../../src/lib/clerk"
-import { requireAuthorizedStaffAction } from "../../../src/lib/staffActionAuth"
+import {
+  StaffAuthorizationError,
+  resolveAuthorizedStaffAction,
+  type AuthorizedStaffActionContext,
+  type RequiredStaffRole,
+} from "../../../src/lib/staffActionAuth"
 import {
   resolveBillingFeatureApplyMode,
   roleMeetsRequirement,
@@ -57,13 +63,18 @@ import {
   validateCreatorPercent,
 } from "../../../src/lib/creatorProgram"
 import {
-  buildCreatorConnectedAccountCreateParams,
   createStripeRecipientAccountV2,
   isStripeV2CompatibilityError,
   retrieveStripeAccountV2,
 } from "../../../src/lib/stripe/connect"
 import { getStripe, STRIPE_CATALOG_APP } from "../../../src/lib/stripe/client"
 import type { StripeCatalogSyncResult } from "../billing/syncCatalogToStripe"
+
+type CreatorConnectedAccountSnapshot =
+  | ReturnType<typeof mapStripeConnectedAccountV2Snapshot>
+  | (ReturnType<typeof mapStripeConnectedAccountSnapshot> & {
+      stripeConnectedAccountVersion: "v1"
+    })
 
 type SubscriptionStatus = "active" | "past_due" | "paused" | "trialing"
 type BillingSubscriptionStatus =
@@ -759,7 +770,7 @@ function serializeStripeEventPayload(event: Stripe.Event) {
 }
 
 async function backfillWebhookEventPayload(args: {
-  ctx: Parameters<typeof requireAuthorizedStaffAction>[0]
+  ctx: ActionCtx
   stripeEventId: string
 }) {
   const stripe = getStripe()
@@ -1119,7 +1130,7 @@ function buildCreatorCodeCandidate(baseCode: string, suffix: number) {
 }
 
 async function resolveCreatorProgramCode(args: {
-  ctx: Parameters<typeof requireAuthorizedStaffAction>[0]
+  ctx: ActionCtx
   existingCreatorAccountId?: Id<"creatorAccounts">
   requestedCode?: string
   user: {
@@ -1189,12 +1200,10 @@ async function resolveCreatorProgramCode(args: {
 
 async function syncCreatorProgramConnectAccount(args: {
   creatorAccountId: Id<"creatorAccounts">
-  ctx: Parameters<typeof requireAuthorizedStaffAction>[0]
+  ctx: ActionCtx
   stripeConnectedAccountId: string
 }) {
-  let snapshot:
-    | ReturnType<typeof mapStripeConnectedAccountSnapshot>
-    | ReturnType<typeof mapStripeConnectedAccountV2Snapshot>
+  let snapshot: CreatorConnectedAccountSnapshot
 
   try {
     const account = await retrieveStripeAccountV2(args.stripeConnectedAccountId)
@@ -1230,7 +1239,7 @@ async function recordAuditLog(args: {
   actorClerkUserId: string
   actorName: string
   actorRole: UserRole
-  ctx: Parameters<typeof requireAuthorizedStaffAction>[0]
+  ctx: ActionCtx
   details?: string
   entityId: string
   entityLabel?: string
@@ -1253,10 +1262,10 @@ async function recordAuditLog(args: {
 }
 
 async function attemptCatalogSync(args: {
-  ctx: Parameters<typeof requireAuthorizedStaffAction>[0]
+  ctx: ActionCtx
   entityId: string
   entityLabel?: string
-  operator: Awaited<ReturnType<typeof requireAuthorizedStaffAction>>
+  operator: AuthorizedStaffActionContext
   summaryLabel: string
 }) {
   try {
@@ -1712,7 +1721,7 @@ function buildBillingDashboard(
 }
 
 async function cancelSubscriptionsAtPeriodEnd(args: {
-  ctx: Parameters<typeof requireAuthorizedStaffAction>[0]
+  ctx: ActionCtx
   subscriptions: StaffSubscriptionImpactRow[]
 }) {
   const stripe = getStripe()
@@ -3148,19 +3157,19 @@ async function getExpandedCreatorGrantSubscription(args: {
 }
 
 async function syncCreatorGrantStripeState(args: {
-  ctx: Parameters<typeof requireAuthorizedStaffAction>[0]
+  ctx: ActionCtx
   stripe: Stripe
   stripeCustomerId: string
   subscription: Stripe.Subscription
 }) {
   await reconcileBillingCustomer({
     active: true,
-    ctx: args.ctx,
+    ctx: createBillingLifecycleOps(args.ctx),
     stripe: args.stripe,
     stripeCustomerId: args.stripeCustomerId,
   })
   await reconcileStripeSubscription({
-    ctx: args.ctx,
+    ctx: createBillingLifecycleOps(args.ctx),
     stripe: args.stripe,
     subscription: args.subscription,
   })
@@ -3171,7 +3180,7 @@ async function resolveExistingCreatorGrantStripeCustomer(args: {
   clerkUser: {
     publicMetadata: unknown
   }
-  ctx: Parameters<typeof requireAuthorizedStaffAction>[0]
+  ctx: ActionCtx
   stripe: Stripe
   targetUser: {
     _id: Id<"users">
@@ -3235,7 +3244,7 @@ async function ensureCreatorGrantStripeCustomer(args: {
     primaryEmailAddress?: { emailAddress?: string } | null
     publicMetadata: unknown
   }
-  ctx: Parameters<typeof requireAuthorizedStaffAction>[0]
+  ctx: ActionCtx
   stripe: Stripe
   targetUser: {
     _id: Id<"users">
@@ -3346,7 +3355,7 @@ async function ensureTimedCreatorStripeGrant(args: {
     primaryEmailAddress?: { emailAddress?: string } | null
     publicMetadata: unknown
   }
-  ctx: Parameters<typeof requireAuthorizedStaffAction>[0]
+  ctx: ActionCtx
   endsAt: number
   plan: {
     key: string
@@ -3496,7 +3505,7 @@ async function ensureIndefiniteCreatorStripeGrant(args: {
     primaryEmailAddress?: { emailAddress?: string } | null
     publicMetadata: unknown
   }
-  ctx: Parameters<typeof requireAuthorizedStaffAction>[0]
+  ctx: ActionCtx
   plan: {
     key: string
     monthlyPriceId?: string
@@ -3636,7 +3645,7 @@ async function ensureCreatorStripeGrant(args: {
     primaryEmailAddress?: { emailAddress?: string } | null
     publicMetadata: unknown
   }
-  ctx: Parameters<typeof requireAuthorizedStaffAction>[0]
+  ctx: ActionCtx
   endsAt?: number
   plan: {
     key: string
@@ -3666,7 +3675,7 @@ async function cancelCreatorStripeGrant(args: {
   clerkUser: {
     publicMetadata: unknown
   }
-  ctx: Parameters<typeof requireAuthorizedStaffAction>[0]
+  ctx: ActionCtx
   planKey: string
   stripe: Stripe
   targetUser: {
@@ -3969,9 +3978,7 @@ export const prepareCreatorProgramConnectAccount = action({
       )
     }
 
-    let snapshot:
-      | ReturnType<typeof mapStripeConnectedAccountSnapshot>
-      | ReturnType<typeof mapStripeConnectedAccountV2Snapshot>
+    let snapshot: CreatorConnectedAccountSnapshot
 
     if (!creatorAccount.stripeConnectedAccountId) {
       const account = await createStripeRecipientAccountV2({
@@ -4488,3 +4495,85 @@ export const runCatalogSync = action({
     })
   },
 })
+
+
+async function requireAuthorizedStaffAction(
+  ctx: ActionCtx,
+  requiredRole: RequiredStaffRole
+): Promise<AuthorizedStaffActionContext> {
+  const identity = await ctx.auth.getUserIdentity()
+
+  if (!identity) {
+    throw new StaffAuthorizationError(
+      "unauthenticated",
+      "A signed-in session is required to access this staff action.",
+      401
+    )
+  }
+
+  const [clerkUser, dbUser] = await Promise.all([
+    getClerkBackendClient().users.getUser(identity.subject),
+    ctx.runQuery(internal.queries.staff.internal.getUserByClerkUserId, {
+      clerkUserId: identity.subject,
+    }),
+  ])
+
+  return await resolveAuthorizedStaffAction({
+    clerkUser,
+    clerkUserId: identity.subject,
+    dbUser,
+    requiredRole,
+  })
+}
+
+
+function createBillingLifecycleOps(
+  ctx: Pick<ActionCtx, "runMutation" | "runQuery">
+): BillingLifecycleOps {
+  return {
+    getBillingContextByStripeCustomerId: (args) =>
+      ctx.runQuery(
+        internal.queries.billing.internal.getBillingContextByStripeCustomerId,
+        args
+      ),
+    getBillingPlans: (args) =>
+      ctx.runQuery(internal.queries.billing.catalog.getBillingPlans, args),
+    getPlanByStripePriceId: (args) =>
+      ctx.runQuery(
+        internal.queries.billing.internal.getPlanByStripePriceId,
+        args
+      ),
+    syncBillingInvoices: (args) =>
+      ctx.runMutation(
+        internal.mutations.billing.state.syncBillingInvoices,
+        {
+          ...args,
+          userId: args.userId as Id<"users">,
+        }
+      ),
+    syncBillingPaymentMethods: (args) =>
+      ctx.runMutation(
+        internal.mutations.billing.state.syncBillingPaymentMethods,
+        {
+          ...args,
+          userId: args.userId as Id<"users">,
+        }
+      ),
+    upsertBillingCustomer: (args) =>
+      ctx.runMutation(
+        internal.mutations.billing.state.upsertBillingCustomer,
+        {
+          ...args,
+          userId: args.userId as Id<"users">,
+        }
+      ),
+    upsertBillingSubscription: (args) =>
+      ctx.runMutation(
+        internal.mutations.billing.state.upsertBillingSubscription,
+        {
+          ...args,
+          userId: args.userId as Id<"users">,
+        }
+      ),
+  }
+}

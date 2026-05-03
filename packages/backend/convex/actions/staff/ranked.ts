@@ -1,9 +1,16 @@
 "use node"
 
 import { v } from "convex/values"
-import { action } from "../../_generated/server"
+import { action, type ActionCtx } from "../../_generated/server"
 import { internal } from "../../_generated/api"
-import { requireAuthorizedStaffAction } from "../../../src/lib/staffActionAuth"
+import type { Id } from "../../_generated/dataModel"
+import { getClerkBackendClient } from "../../../src/lib/clerk"
+import {
+  StaffAuthorizationError,
+  resolveAuthorizedStaffAction,
+  type AuthorizedStaffActionContext,
+  type RequiredStaffRole,
+} from "../../../src/lib/staffActionAuth"
 import { isRankedSessionWritesEnabled } from "../../../src/lib/statsDashboard"
 import type {
   StaffMutationResponse,
@@ -131,7 +138,7 @@ export const setCurrentRankedConfig = action({
         activeSeason: args.activeSeason,
         activeTitleKey: args.activeTitleKey,
         sessionWritesEnabled: args.sessionWritesEnabled,
-        updatedByUserId: operator.actorUserId,
+        updatedByUserId: operator.actorUserId as Id<"users">,
       }
     )
     const writesStateLabel = result.sessionWritesEnabled ? "enabled" : "paused"
@@ -318,3 +325,33 @@ export const upsertRankedMode = action({
     return { summary }
   },
 })
+
+
+async function requireAuthorizedStaffAction(
+  ctx: ActionCtx,
+  requiredRole: RequiredStaffRole
+): Promise<AuthorizedStaffActionContext> {
+  const identity = await ctx.auth.getUserIdentity()
+
+  if (!identity) {
+    throw new StaffAuthorizationError(
+      "unauthenticated",
+      "A signed-in session is required to access this staff action.",
+      401
+    )
+  }
+
+  const [clerkUser, dbUser] = await Promise.all([
+    getClerkBackendClient().users.getUser(identity.subject),
+    ctx.runQuery(internal.queries.staff.internal.getUserByClerkUserId, {
+      clerkUserId: identity.subject,
+    }),
+  ])
+
+  return await resolveAuthorizedStaffAction({
+    clerkUser,
+    clerkUserId: identity.subject,
+    dbUser,
+    requiredRole,
+  })
+}

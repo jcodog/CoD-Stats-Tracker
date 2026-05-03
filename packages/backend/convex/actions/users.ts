@@ -4,6 +4,7 @@ import type { UserJSON } from "@clerk/nextjs/server"
 import { v, type Validator } from "convex/values"
 
 import { internal } from "../_generated/api"
+import type { Id } from "../_generated/dataModel"
 import { internalAction } from "../_generated/server"
 import { syncClerkPublicMetadataRole } from "../../src/lib/clerk"
 import {
@@ -27,8 +28,12 @@ export const backfillConnectedAccountsFromClerk = internalAction({
   args: {
     limit: v.optional(v.number()),
   },
-  handler: async (ctx, args) => {
-    const users = await ctx.runQuery(
+  handler: async (
+    ctx,
+    args
+  ): Promise<{ syncedCount: number; totalUsers: number }> => {
+    const users: Array<{ _id: string; clerkUserId?: string }> =
+      await ctx.runQuery(
       internal.queries.staff.internal.listUsers,
       {}
     )
@@ -47,7 +52,7 @@ export const backfillConnectedAccountsFromClerk = internalAction({
         internal.mutations.users.syncConnectedAccountsForUser,
         {
           accounts: getConnectedAccountsFromClerkUser(clerkUser),
-          userId: user._id,
+          userId: user._id as Id<"users">,
         }
       )
       syncedCount += 1

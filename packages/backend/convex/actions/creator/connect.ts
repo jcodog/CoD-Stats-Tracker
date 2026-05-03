@@ -22,6 +22,12 @@ import {
 import { getClerkBackendClient } from "../../../src/lib/clerk"
 import { getStripe } from "../../../src/lib/stripe/client"
 
+type CreatorConnectedAccountSnapshot =
+  | ReturnType<typeof mapStripeConnectedAccountV2Snapshot>
+  | (ReturnType<typeof mapStripeConnectedAccountSnapshot> & {
+      stripeConnectedAccountVersion: "v1"
+    })
+
 const CONNECT_START_PATH = "/creator/connect/start"
 const CONNECT_RETURN_PATH = "/creator/connect/return"
 
@@ -218,9 +224,7 @@ async function syncCreatorStripeAccount(args: {
   ctx: ActionCtx
   stripeConnectedAccountId: string
 }) {
-  let snapshot:
-    | ReturnType<typeof mapStripeConnectedAccountSnapshot>
-    | ReturnType<typeof mapStripeConnectedAccountV2Snapshot>
+  let snapshot: CreatorConnectedAccountSnapshot
 
   try {
     const account = await retrieveStripeAccountV2(args.stripeConnectedAccountId)
@@ -310,7 +314,7 @@ export const startHostedOnboarding = action({
 
     const refreshUrl = `${appOrigin}${CONNECT_START_PATH}?reason=refresh`
     const returnUrl = `${appOrigin}${CONNECT_RETURN_PATH}`
-    let onboardingUrl: string
+    let onboardingUrl: string | undefined
 
     if (!creatorAccount.stripeConnectedAccountId) {
       const stripeAccount = await createStripeRecipientAccountV2({
@@ -379,7 +383,7 @@ export const startHostedOnboarding = action({
 
       if (legacyAccountId) {
         const stripeAccount = await stripe.accounts.retrieve(legacyAccountId)
-        const snapshot = {
+        const snapshot: CreatorConnectedAccountSnapshot = {
           ...mapStripeConnectedAccountSnapshot(stripeAccount),
           stripeConnectedAccountVersion: "v1" as const,
         }
@@ -411,6 +415,10 @@ export const startHostedOnboarding = action({
 
         onboardingUrl = accountLink.url
       }
+    }
+
+    if (!onboardingUrl) {
+      throw new Error("Unable to create a Stripe onboarding link.")
     }
 
     return {

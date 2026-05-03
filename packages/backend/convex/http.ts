@@ -4,13 +4,15 @@ import { httpRouter } from "convex/server"
 import { Webhook } from "svix"
 
 import { internal } from "./_generated/api"
-import { httpAction } from "./_generated/server"
+import type { Id } from "./_generated/dataModel"
+import { httpAction, type ActionCtx } from "./_generated/server"
 import {
   reconcileBillingCustomer,
   reconcileStripeInvoice,
   reconcileStripeSubscription,
   syncBillingInvoicesForCustomer,
   syncBillingPaymentMethodsForCustomer,
+  type BillingLifecycleOps,
 } from "../src/lib/billingLifecycle"
 import {
   buildWebhookSafeSummary,
@@ -181,7 +183,7 @@ http.route({
         case "customer.subscription.updated":
         case "customer.subscription.deleted": {
           await reconcileStripeSubscription({
-            ctx,
+            ctx: createBillingLifecycleOps(ctx),
             lastStripeEventId: event.id,
             stripe,
             subscription: event.data.object as Stripe.Subscription,
@@ -200,7 +202,7 @@ http.route({
         case "invoice.payment_failed":
         case "invoice.payment_succeeded": {
           await reconcileStripeInvoice({
-            ctx,
+            ctx: createBillingLifecycleOps(ctx),
             eventType: event.type,
             invoice: event.data.object as Stripe.Invoice,
             lastStripeEventId: event.id,
@@ -227,7 +229,7 @@ http.route({
 
           if (stripeCustomerId) {
             await syncBillingInvoicesForCustomer({
-              ctx,
+              ctx: createBillingLifecycleOps(ctx),
               stripe,
               stripeCustomerId,
             })
@@ -248,7 +250,7 @@ http.route({
 
           await reconcileBillingCustomer({
             active: true,
-            ctx,
+            ctx: createBillingLifecycleOps(ctx),
             stripe,
             stripeCustomerId: stripeCustomer.id,
           })
@@ -269,7 +271,7 @@ http.route({
 
           if (typeof paymentMethod.customer === "string") {
             await syncBillingPaymentMethodsForCustomer({
-              ctx,
+              ctx: createBillingLifecycleOps(ctx),
               stripe,
               stripeCustomerId: paymentMethod.customer,
             })
@@ -289,7 +291,7 @@ http.route({
 
           if (typeof setupIntent.customer === "string") {
             await syncBillingPaymentMethodsForCustomer({
-              ctx,
+              ctx: createBillingLifecycleOps(ctx),
               stripe,
               stripeCustomerId: setupIntent.customer,
             })
@@ -443,3 +445,55 @@ http.route({
 })
 
 export default http
+
+
+function createBillingLifecycleOps(
+  ctx: Pick<ActionCtx, "runMutation" | "runQuery">
+): BillingLifecycleOps {
+  return {
+    getBillingContextByStripeCustomerId: (args) =>
+      ctx.runQuery(
+        internal.queries.billing.internal.getBillingContextByStripeCustomerId,
+        args
+      ),
+    getBillingPlans: (args) =>
+      ctx.runQuery(internal.queries.billing.catalog.getBillingPlans, args),
+    getPlanByStripePriceId: (args) =>
+      ctx.runQuery(
+        internal.queries.billing.internal.getPlanByStripePriceId,
+        args
+      ),
+    syncBillingInvoices: (args) =>
+      ctx.runMutation(
+        internal.mutations.billing.state.syncBillingInvoices,
+        {
+          ...args,
+          userId: args.userId as Id<"users">,
+        }
+      ),
+    syncBillingPaymentMethods: (args) =>
+      ctx.runMutation(
+        internal.mutations.billing.state.syncBillingPaymentMethods,
+        {
+          ...args,
+          userId: args.userId as Id<"users">,
+        }
+      ),
+    upsertBillingCustomer: (args) =>
+      ctx.runMutation(
+        internal.mutations.billing.state.upsertBillingCustomer,
+        {
+          ...args,
+          userId: args.userId as Id<"users">,
+        }
+      ),
+    upsertBillingSubscription: (args) =>
+      ctx.runMutation(
+        internal.mutations.billing.state.upsertBillingSubscription,
+        {
+          ...args,
+          userId: args.userId as Id<"users">,
+        }
+      ),
+  }
+}

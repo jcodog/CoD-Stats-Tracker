@@ -3,8 +3,8 @@
 import Stripe from "stripe"
 import { v } from "convex/values"
 
-import type { Doc } from "../../_generated/dataModel"
-import { api, internal } from "../../_generated/api"
+import type { Id } from "../../_generated/dataModel"
+import { internal } from "../../_generated/api"
 import { action, type ActionCtx } from "../../_generated/server"
 import type { PricingCatalog } from "../../queries/billing/catalog"
 import type { UserBillingContext } from "../../queries/billing/internal"
@@ -14,6 +14,7 @@ import {
   reconcileStripeSubscription,
   syncBillingInvoicesForCustomer,
   syncBillingPaymentMethodsForCustomer,
+  type BillingLifecycleOps,
 } from "../../../src/lib/billingLifecycle"
 import {
   hasManagedCreatorGrantSubscriptionAccess,
@@ -35,7 +36,137 @@ import {
 } from "../../../src/lib/clerk"
 import { getStripe, STRIPE_CATALOG_APP } from "../../../src/lib/stripe/client"
 
-type BillingPlanRecord = Doc<"billingPlans">
+type BillingPlanRecord = {
+  active: boolean
+  archivedAt?: number
+  currency: string
+  description: string
+  key: string
+  monthlyPriceAmount: number
+  monthlyPriceAmountCad?: number
+  monthlyPriceAmountEur?: number
+  monthlyPriceAmountUsd?: number
+  monthlyPriceId?: string
+  monthlyPriceIdCad?: string
+  monthlyPriceIdEur?: string
+  monthlyPriceIdUsd?: string
+  name: string
+  planType: "free" | "paid"
+  sortOrder: number
+  stripeProductId?: string
+  yearlyPriceAmount: number
+  yearlyPriceAmountCad?: number
+  yearlyPriceAmountEur?: number
+  yearlyPriceAmountUsd?: number
+  yearlyPriceId?: string
+  yearlyPriceIdCad?: string
+  yearlyPriceIdEur?: string
+  yearlyPriceIdUsd?: string
+}
+type BillingSubscriptionRecord = {
+  cancelAtPeriodEnd: boolean
+  currentPeriodEnd?: number
+  interval: "month" | "year"
+  managedGrantEndsAt?: number
+  planKey: string
+  status:
+    | "active"
+    | "canceled"
+    | "incomplete"
+    | "incomplete_expired"
+    | "past_due"
+    | "paused"
+    | "trialing"
+    | "unpaid"
+  stripeCustomerId: string
+  stripeSubscriptionId: string
+  stripeSubscriptionItemId?: string
+}
+type CreatorAccountRecord = {
+  _id: string
+  code: string
+  codeActive: boolean
+  discountPercent: number
+  userId: string
+}
+type CreatorAttributionRecord = {
+  creatorAccountId: string
+  creatorCode: string
+  normalizedCode: string
+  source: "cookie" | "manual" | "staff"
+}
+type CreatorAttributionResult =
+  | {
+      status: "applied"
+    }
+  | {
+      status: "confirmed_existing"
+    }
+  | {
+      existingCode: string
+      status: "conflict_locked"
+    }
+type CheckoutCreatorDiscount = {
+  amount: number
+  code: string
+  discountPercent: number
+  sourceLabel: string
+}
+type CheckoutCreatorDiscountResult = {
+  appliedDiscount: CheckoutCreatorDiscount | null
+  entryState: CheckoutCreatorEntryState
+  message: string
+}
+type CheckoutPlanPricingResult = {
+  amount: number
+  currency: SupportedPricingCurrency
+  currencyNotice: string | null
+  priceId: string
+}
+type PurchasablePlanResult = {
+  amount: CheckoutPlanPricingResult["amount"]
+  currency: CheckoutPlanPricingResult["currency"]
+  currencyNotice: CheckoutPlanPricingResult["currencyNotice"]
+  plan: BillingPlanRecord
+  priceId: CheckoutPlanPricingResult["priceId"]
+}
+type SubscriptionCheckoutSessionResult = {
+  clientSecret: string
+  creatorCode: string | null
+  currency: SupportedPricingCurrency
+  currencyNotice: string | null
+  interval: "month" | "year"
+  planKey: string
+  sessionId: string
+}
+type SubscriptionChangePreviewResult = {
+  amountDueNow: number
+  creditApplied: number
+  currentAmount: number
+  currentInterval: "month" | "year"
+  currentPlanKey: string
+  effectiveAt: number | null
+  interval: "month" | "year"
+  mode:
+    | "cancel_at_period_end"
+    | "immediate_change"
+    | "noop"
+    | "scheduled_change"
+  planKey: string
+  prorationBehavior: "always_invoice" | "none"
+  prorationDate: number | null
+  proratedCharge: number
+  summary: string
+  targetAmount: number
+}
+type CheckoutSessionCompletionSyncResult = {
+  paymentStatus: string | null
+  planKey: string | null
+  sessionId: string
+  status: string | null
+  subscriptionId: string | null
+  synced: boolean
+}
 type PublicActionCtx = ActionCtx
 type SupportedPricingCurrency = "GBP" | "USD" | "CAD" | "EUR"
 type CheckoutCreatorEntryState =
@@ -388,8 +519,8 @@ async function getPurchasablePlan(args: {
   interval: "month" | "year"
   planKey: string
   preferredCurrency?: SupportedPricingCurrency
-}) {
-  const plan = await args.ctx.runQuery(
+}): Promise<PurchasablePlanResult> {
+  const plan: BillingPlanRecord | null = await args.ctx.runQuery(
     internal.queries.billing.internal.getPlanByKey,
     {
       planKey: args.planKey,
@@ -484,7 +615,7 @@ function resolveCheckoutPlanPricing(args: {
   interval: "month" | "year"
   plan: BillingPlanRecord
   preferredCurrency?: SupportedPricingCurrency
-}) {
+}): CheckoutPlanPricingResult {
   const preferredCurrency = args.preferredCurrency ?? "GBP"
   const preferredAmount = getCheckoutPlanAmount({
     currency: preferredCurrency,
@@ -534,18 +665,22 @@ function resolveCheckoutPlanPricing(args: {
   }
 }
 
-async function getLiveStripePriceSnapshot(args: {
+async function getLiveStripePriceSnapshot<TInterval extends "month" | "year">(args: {
   fallbackPricing: {
     amount: number
     currency: string
-    interval: "month" | "year"
+    interval: TInterval
   } | null
-  interval: "month" | "year"
+  interval: TInterval
   plan: BillingPlanRecord | null
   preferredCurrency: SupportedPricingCurrency
   priceCache: Map<string, Promise<Stripe.Price | null>>
   stripe: Stripe
-}) {
+}): Promise<{
+  amount: number
+  currency: string
+  interval: TInterval
+} | null> {
   if (!args.fallbackPricing || !args.plan) {
     return args.fallbackPricing
   }
@@ -671,16 +806,16 @@ async function ensureCreatorDiscountCoupon(args: {
 }
 
 async function finalizeCreatorAttribution(args: {
-  creatorAccount: Doc<"creatorAccounts">
+  creatorAccount: CreatorAccountRecord
   ctx: PublicActionCtx
   normalizedCode: string
   userContext: BillingUserContext
 }) {
-  const attributionResult = await args.ctx.runMutation(
+  const attributionResult: CreatorAttributionResult = await args.ctx.runMutation(
     internal.mutations.creator.attribution.ensureCanonicalAttribution,
     {
       clerkUserId: args.userContext.user.clerkUserId,
-      creatorAccountId: args.creatorAccount._id,
+      creatorAccountId: args.creatorAccount._id as Id<"creatorAccounts">,
       creatorCode: args.creatorAccount.code,
       normalizedCode: args.normalizedCode,
       source: "manual",
@@ -710,8 +845,9 @@ async function resolveCheckoutCreatorDiscount(args: {
   ctx: PublicActionCtx
   finalizeCodeEntry?: boolean
   userContext: BillingUserContext
-}) {
-  const activeAttribution = await args.ctx.runQuery(
+}): Promise<CheckoutCreatorDiscountResult> {
+  const activeAttribution: CreatorAttributionRecord | null =
+    await args.ctx.runQuery(
     internal.queries.creator.internal.getActiveAttributionByUserId,
     {
       userId: args.userContext.user._id,
@@ -720,10 +856,11 @@ async function resolveCheckoutCreatorDiscount(args: {
   const normalizedEnteredCode = normalizeCreatorCodeInput(args.creatorCode)
 
   if (activeAttribution) {
-    const creatorAccount = await args.ctx.runQuery(
+    const creatorAccount: CreatorAccountRecord | null = await args.ctx.runQuery(
       internal.queries.creator.internal.getCreatorAccountById,
       {
-        creatorAccountId: activeAttribution.creatorAccountId,
+        creatorAccountId:
+          activeAttribution.creatorAccountId as Id<"creatorAccounts">,
       }
     )
     const hasActiveDiscount =
@@ -782,7 +919,7 @@ async function resolveCheckoutCreatorDiscount(args: {
     }
   }
 
-  const creatorAccount = await args.ctx.runQuery(
+  const creatorAccount: CreatorAccountRecord | null = await args.ctx.runQuery(
     internal.queries.creator.internal.getCreatorAccountByNormalizedCode,
     {
       normalizedCode: normalizedEnteredCode,
@@ -1009,19 +1146,19 @@ async function syncCustomerBillingSnapshot(args: {
 }) {
   await reconcileBillingCustomer({
     active: true,
-    ctx: args.ctx,
+    ctx: createBillingLifecycleOps(args.ctx),
     stripe: args.stripe,
     stripeCustomerId: args.stripeCustomerId,
   })
   await syncBillingPaymentMethodsForCustomer({
-    ctx: args.ctx,
+    ctx: createBillingLifecycleOps(args.ctx),
     stripe: args.stripe,
     stripeCustomerId: args.stripeCustomerId,
   })
 
   if (args.syncInvoices ?? true) {
     await syncBillingInvoicesForCustomer({
-      ctx: args.ctx,
+      ctx: createBillingLifecycleOps(args.ctx),
       stripe: args.stripe,
       stripeCustomerId: args.stripeCustomerId,
     })
@@ -1091,8 +1228,8 @@ function hasStripeSubscriptionEnded(
 
   if (
     subscription.cancel_at_period_end &&
-    typeof subscription.current_period_end === "number" &&
-    subscription.current_period_end * 1000 <= now
+    (getSubscriptionItemCurrentPeriodEnd(subscription) ?? Number.POSITIVE_INFINITY) <=
+      now
   ) {
     return true
   }
@@ -1150,7 +1287,7 @@ async function getTargetSubscription(args: {
   ctx: PublicActionCtx
   stripeSubscriptionId?: string
   userContext: BillingUserContext
-}) {
+}): Promise<BillingSubscriptionRecord> {
   if (!args.stripeSubscriptionId) {
     if (!args.userContext.subscription) {
       throw new BillingActionError(
@@ -1163,7 +1300,7 @@ async function getTargetSubscription(args: {
     return args.userContext.subscription
   }
 
-  const subscription = await args.ctx.runQuery(
+  const subscription: BillingSubscriptionRecord | null = await args.ctx.runQuery(
     internal.queries.billing.internal
       .getBillingSubscriptionByStripeSubscriptionIdForUser,
     {
@@ -1373,7 +1510,7 @@ export const syncBillingCenter = action({
         })
 
         await reconcileStripeSubscription({
-          ctx,
+          ctx: createBillingLifecycleOps(ctx),
           stripe,
           subscription: expandedSubscription,
         })
@@ -1391,7 +1528,7 @@ export const syncBillingCenter = action({
       )
 
       await syncBillingInvoicesForCustomer({
-        ctx,
+        ctx: createBillingLifecycleOps(ctx),
         stripe,
         stripeCustomerId: customerId,
       })
@@ -1414,7 +1551,7 @@ export const updateBillingProfile = action({
     name: v.optional(v.string()),
     phone: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<{ updated: true }> => {
     try {
       const userContext = await requireBillingUser(ctx)
       const stripe = getStripe()
@@ -1525,7 +1662,10 @@ export const setDefaultPaymentMethod = action({
   args: {
     paymentMethodId: v.string(),
   },
-  handler: async (ctx, args) => {
+  handler: async (
+    ctx,
+    args
+  ): Promise<{ defaultPaymentMethodId: string; updated: true }> => {
     try {
       const userContext = await requireBillingUser(ctx)
       const stripe = getStripe()
@@ -1589,7 +1729,7 @@ export const setDefaultPaymentMethod = action({
         )
 
         await reconcileStripeSubscription({
-          ctx,
+          ctx: createBillingLifecycleOps(ctx),
           stripe,
           subscription: updatedSubscription,
         })
@@ -1824,7 +1964,7 @@ async function cancelIncompleteSubscription(args: {
     latestInvoiceWasCleared || relatedInvoicesWereCleared
 
   await reconcileStripeSubscription({
-    ctx: args.ctx,
+    ctx: createBillingLifecycleOps(args.ctx),
     stripe: args.stripe,
     subscription: expandedCancelledSubscription,
   })
@@ -1865,7 +2005,7 @@ export const createSubscriptionCheckoutSession = action({
     planKey: v.string(),
     preferredCurrency: v.optional(supportedPricingCurrencyValidator),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<SubscriptionCheckoutSessionResult> => {
     try {
       await assertCheckoutEnabled(ctx)
 
@@ -1912,7 +2052,7 @@ export const createSubscriptionCheckoutSession = action({
 
         if (!subscriptionStillBlocksCheckout) {
           await reconcileStripeSubscription({
-            ctx,
+            ctx: createBillingLifecycleOps(ctx),
             stripe,
             subscription: expandedSubscription,
           })
@@ -1980,7 +2120,7 @@ export const createSubscriptionCheckoutSession = action({
           subscription_data: {
             metadata,
           },
-          ui_mode: "custom",
+          ui_mode: "custom" as unknown as "hosted_page",
         },
         {
           idempotencyKey: [
@@ -2047,7 +2187,7 @@ export const getPublicPricingCatalog = action({
   handler: async (ctx, args): Promise<PricingCatalog> => {
     try {
       const baseCatalog: PricingCatalog = await ctx.runQuery(
-        api.queries.billing.catalog.getPublicPricingCatalog,
+        internal.queries.billing.catalog.getPublicPricingCatalogInternal,
         args.preferredCurrency
           ? { preferredCurrency: args.preferredCurrency }
           : {}
@@ -2057,7 +2197,7 @@ export const getPublicPricingCatalog = action({
       const paidPlanKeys = baseCatalog.plans
         .filter((plan) => plan.planType === "paid")
         .map((plan) => plan.planKey)
-      const planRecords = await Promise.all(
+      const planRecords: Array<BillingPlanRecord | null> = await Promise.all(
         paidPlanKeys.map((planKey) =>
           ctx.runQuery(internal.queries.billing.internal.getPlanByKey, {
             planKey,
@@ -2106,7 +2246,10 @@ export const syncCheckoutSessionCompletion = action({
   args: {
     sessionId: v.string(),
   },
-  handler: async (ctx, args) => {
+  handler: async (
+    ctx,
+    args
+  ): Promise<CheckoutSessionCompletionSyncResult> => {
     try {
       const userContext = await requireBillingUser(ctx)
       const stripe = getStripe()
@@ -2156,7 +2299,7 @@ export const syncCheckoutSessionCompletion = action({
         })
 
         await reconcileStripeSubscription({
-          ctx,
+          ctx: createBillingLifecycleOps(ctx),
           stripe,
           subscription: expandedSubscription,
         })
@@ -2280,7 +2423,7 @@ export const abandonPendingCheckout = action({
 
       if (expandedSubscription.status !== "incomplete") {
         await reconcileStripeSubscription({
-          ctx,
+          ctx: createBillingLifecycleOps(ctx),
           stripe,
           subscription: expandedSubscription,
         })
@@ -2321,7 +2464,7 @@ export const previewSubscriptionChange = action({
     prorationDate: v.optional(v.number()),
     stripeSubscriptionId: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<SubscriptionChangePreviewResult> => {
     try {
       const userContext = await requireBillingUser(ctx)
       assertCreatorGrantAllowsSelfServeBilling({
@@ -2534,7 +2677,7 @@ export const changeSubscriptionPlan = action({
           })
 
         await reconcileStripeSubscription({
-          ctx,
+          ctx: createBillingLifecycleOps(ctx),
           stripe,
           subscription: expandedUpdatedSubscription,
         })
@@ -2713,7 +2856,7 @@ export const changeSubscriptionPlan = action({
       )
 
       await reconcileStripeSubscription({
-        ctx,
+        ctx: createBillingLifecycleOps(ctx),
         stripe,
         subscription: updatedSubscription,
       })
@@ -2797,7 +2940,7 @@ export const cancelCurrentSubscription = action({
             })
 
       await reconcileStripeSubscription({
-        ctx,
+        ctx: createBillingLifecycleOps(ctx),
         stripe,
         subscription: expandedUpdatedSubscription,
       })
@@ -2921,7 +3064,7 @@ export const reactivateCurrentSubscription = action({
       )
 
       await reconcileStripeSubscription({
-        ctx,
+        ctx: createBillingLifecycleOps(ctx),
         stripe,
         subscription: updatedSubscription,
       })
@@ -2957,3 +3100,55 @@ export const reactivateCurrentSubscription = action({
     }
   },
 })
+
+
+function createBillingLifecycleOps(
+  ctx: Pick<ActionCtx, "runMutation" | "runQuery">
+): BillingLifecycleOps {
+  return {
+    getBillingContextByStripeCustomerId: (args) =>
+      ctx.runQuery(
+        internal.queries.billing.internal.getBillingContextByStripeCustomerId,
+        args
+      ),
+    getBillingPlans: (args) =>
+      ctx.runQuery(internal.queries.billing.catalog.getBillingPlans, args),
+    getPlanByStripePriceId: (args) =>
+      ctx.runQuery(
+        internal.queries.billing.internal.getPlanByStripePriceId,
+        args
+      ),
+    syncBillingInvoices: (args) =>
+      ctx.runMutation(
+        internal.mutations.billing.state.syncBillingInvoices,
+        {
+          ...args,
+          userId: args.userId as Id<"users">,
+        }
+      ),
+    syncBillingPaymentMethods: (args) =>
+      ctx.runMutation(
+        internal.mutations.billing.state.syncBillingPaymentMethods,
+        {
+          ...args,
+          userId: args.userId as Id<"users">,
+        }
+      ),
+    upsertBillingCustomer: (args) =>
+      ctx.runMutation(
+        internal.mutations.billing.state.upsertBillingCustomer,
+        {
+          ...args,
+          userId: args.userId as Id<"users">,
+        }
+      ),
+    upsertBillingSubscription: (args) =>
+      ctx.runMutation(
+        internal.mutations.billing.state.upsertBillingSubscription,
+        {
+          ...args,
+          userId: args.userId as Id<"users">,
+        }
+      ),
+  }
+}
