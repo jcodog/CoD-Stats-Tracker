@@ -128,9 +128,14 @@ export function getCreatorConnectPresentation(connectState: string) {
 }
 
 export function getEstimatedPayoutPresentation(args: {
+  connectPayoutReady: boolean
   paidConversionCount: number
   payoutEligible: boolean
 }) {
+  const detail = args.connectPayoutReady
+    ? "This is an estimation of your next monthly payout."
+    : "This is an estimation of what you could be earning when you connect Stripe."
+
   if (!args.payoutEligible) {
     return {
       detail: "Payout eligibility is paused right now.",
@@ -140,13 +145,13 @@ export function getEstimatedPayoutPresentation(args: {
 
   if (args.paidConversionCount === 0) {
     return {
-      detail: "No eligible paid conversions yet.",
+      detail,
       value: "No estimate yet",
     }
   }
 
   return {
-    detail: "Final amount follows billing review before payout.",
+    detail,
     value: `${args.paidConversionCount} pending`,
   }
 }

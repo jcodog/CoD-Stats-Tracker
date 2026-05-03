@@ -24,7 +24,8 @@ function getPlanPriceLabel(args: {
   currency: string
   interval: "month" | "year"
 }) {
-  return `${formatCurrencyAmount(args.amount, args.currency)} / ${args.interval}`
+  const prefix = args.currency === "GBP" ? "" : "Est. "
+  return `${prefix}${formatCurrencyAmount(args.amount, args.currency)} / ${args.interval}`
 }
 
 function buildPricingFeatureRows(plans: PricingCatalogPlan[]) {
@@ -131,6 +132,10 @@ export function PricingIntro({
       {currencyNotice ? (
         <p className="text-sm leading-6 text-foreground/72">{currencyNotice}</p>
       ) : null}
+      <p className="max-w-[46rem] text-sm leading-6 text-foreground/72">
+        Estimates are approximate. Final currency, taxes, discounts, and total
+        are confirmed by Stripe Checkout, and exchange rates may shift.
+      </p>
     </section>
   )
 }

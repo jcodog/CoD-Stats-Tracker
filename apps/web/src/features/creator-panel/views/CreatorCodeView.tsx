@@ -178,30 +178,34 @@ export function CreatorCodeView() {
     )
   }
 
+  const creatorAccount = dashboard.creatorAccount
   const programSummary = formatCreatorProgramSummary({
-    discountPercent: dashboard.creatorAccount.discountPercent,
-    payoutPercent: dashboard.creatorAccount.payoutPercent,
+    discountPercent: creatorAccount.discountPercent,
+    payoutPercent: creatorAccount.payoutPercent,
   })
   const connectPresentation = getCreatorConnectPresentation(
-    dashboard.creatorAccount.connectState
+    creatorAccount.connectState
   )
   const estimatedPayout = getEstimatedPayoutPresentation({
+    connectPayoutReady:
+      creatorAccount.connectState === "ready" &&
+      creatorAccount.payoutsEnabled === true,
     paidConversionCount: dashboard.paidConversionCount,
-    payoutEligible: dashboard.creatorAccount.payoutEligible,
+    payoutEligible: creatorAccount.payoutEligible,
   })
-  const sharePath = dashboard.creatorAccount.sharePath
+  const sharePath = creatorAccount.sharePath
   const shareUrl = shareOrigin ? `${shareOrigin}${sharePath}` : sharePath
   const connectIntent = searchParams.get("connect")
   const connectMessage = searchParams.get("message")
   const connectActionLabel =
-    dashboard.creatorAccount.connectState === "not_started"
+    creatorAccount.connectState === "not_started"
       ? "Start Stripe onboarding"
-      : dashboard.creatorAccount.connectState === "ready"
+      : creatorAccount.connectState === "ready"
         ? "Review Stripe setup"
         : "Resume Stripe onboarding"
 
   async function handleCopyCode() {
-    await navigator.clipboard.writeText(dashboard.creatorAccount.code)
+    await navigator.clipboard.writeText(creatorAccount.code)
     toast.success("Creator code copied.")
   }
 
@@ -218,11 +222,11 @@ export function CreatorCodeView() {
     setIsSaving(true)
     startTransition(() => {
       setCodeActiveState({
-        codeActive: !dashboard.creatorAccount?.codeActive,
+        codeActive: !creatorAccount.codeActive,
       })
         .then(() => {
           toast.success(
-            dashboard.creatorAccount?.codeActive
+            creatorAccount.codeActive
               ? "Creator code disabled."
               : "Creator code enabled."
           )

@@ -234,12 +234,17 @@ export type BillingCenterInvoice = {
 }
 
 export type CheckoutSessionResult = {
-  clientSecret: string
+  checkoutUrl: string
   creatorCode?: string | null
   currency: SupportedPricingCurrency
   currencyNotice: string | null
   interval: BillingInterval
   planKey: string
+  sessionId: string
+}
+
+export type BillingPortalSessionResult = {
+  portalUrl: string
   sessionId: string
 }
 

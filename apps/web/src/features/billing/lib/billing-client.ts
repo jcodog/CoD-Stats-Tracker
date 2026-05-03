@@ -11,6 +11,7 @@ import type {
   BillingCenterSyncResult,
   BillingChangePreview,
   BillingChangeResult,
+  BillingPortalSessionResult,
   BillingProfileUpdateResult,
   BillingResolvedState,
   CancellationResult,
@@ -148,6 +149,17 @@ async function callCreateSubscriptionCheckoutSession(
       api.actions.billing.customer.createSubscriptionCheckoutSession,
       payload
     )) as CheckoutSessionResult
+  } catch (error) {
+    throw toBillingClientError(error)
+  }
+}
+
+async function callCreateBillingPortalSession(convex: ConvexReactClient) {
+  try {
+    return (await convex.action(
+      api.actions.billing.customer.createBillingPortalSession,
+      {}
+    )) as BillingPortalSessionResult
   } catch (error) {
     throw toBillingClientError(error)
   }
@@ -379,6 +391,14 @@ export function useCreateSubscriptionCheckoutSession() {
     onSuccess: async () => {
       await invalidateBilling.invalidateAll()
     },
+  })
+}
+
+export function useCreateBillingPortalSession() {
+  const convex = useConvex()
+
+  return useMutation({
+    mutationFn: () => callCreateBillingPortalSession(convex),
   })
 }
 

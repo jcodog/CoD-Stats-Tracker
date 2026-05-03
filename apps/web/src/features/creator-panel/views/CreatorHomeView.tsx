@@ -139,6 +139,9 @@ export function CreatorHomeView() {
     dashboard.creatorAccount.connectState
   )
   const estimatedPayout = getEstimatedPayoutPresentation({
+    connectPayoutReady:
+      dashboard.creatorAccount.connectState === "ready" &&
+      dashboard.creatorAccount.payoutsEnabled === true,
     paidConversionCount: dashboard.paidConversionCount,
     payoutEligible: dashboard.creatorAccount.payoutEligible,
   })

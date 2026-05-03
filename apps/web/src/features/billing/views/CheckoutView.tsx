@@ -1,21 +1,13 @@
 "use client"
 
 import Link from "next/link"
-import { useRouter } from "next/navigation"
-import { useEffect, useRef, useState } from "react"
-import {
-  CheckoutElementsProvider,
-  CurrencySelectorElement,
-  PaymentElement,
-  useCheckout,
-} from "@stripe/react-stripe-js/checkout"
+import { useState } from "react"
 import {
   IconArrowRight,
-  IconCreditCard,
+  IconExternalLink,
   IconLink,
   IconTicket,
 } from "@tabler/icons-react"
-import { useTheme } from "next-themes"
 import {
   Alert,
   AlertDescription,
@@ -39,15 +31,8 @@ import {
   useCreateSubscriptionCheckoutSession,
   usePricingCatalog,
 } from "@/features/billing/lib/billing-client"
-import {
-  getStripeElementsAppearance,
-  getStripePublishableKey,
-  stripePromise,
-} from "@/features/billing/lib/stripe"
 import type {
   BillingInterval,
-  CheckoutQuoteResult,
-  CheckoutSessionResult,
   PricingCatalogPlan,
   SupportedPricingCurrency,
 } from "@/features/billing/lib/billing-types"
@@ -74,10 +59,10 @@ function hasActivePaidSubscription(args: {
     | undefined
 }) {
   return (
-    (args.status === "active" ||
-      args.status === "trialing" ||
-      args.status === "past_due" ||
-      args.status === "paused")
+    args.status === "active" ||
+    args.status === "trialing" ||
+    args.status === "past_due" ||
+    args.status === "paused"
   )
 }
 
@@ -97,200 +82,12 @@ function getCreatorGrantCheckoutMessage(args: {
     : "This account already has Creator complimentary access with no expiry."
 }
 
-function CheckoutSessionLoadingState() {
+function CheckoutLoadingState() {
   return (
-    <div className="grid gap-8 xl:grid-cols-[minmax(0,0.92fr)_minmax(22rem,1.08fr)]">
-      <Skeleton className="h-72 rounded-xl" />
-      <Skeleton className="h-96 rounded-xl" />
-    </div>
-  )
-}
-
-function CheckoutElementsContent({
-  creatorCode,
-  creatorDiscount,
-  planName,
-}: {
-  creatorCode?: string | null
-  creatorDiscount: CheckoutQuoteResult["creatorDiscount"] | undefined
-  planName: string
-}) {
-  const router = useRouter()
-  const checkoutState = useCheckout()
-  const [confirmError, setConfirmError] = useState<string | null>(null)
-  const [isSubmitting, setIsSubmitting] = useState(false)
-
-  async function handleConfirm() {
-    if (checkoutState.type !== "success") {
-      return
-    }
-
-    setConfirmError(null)
-    setIsSubmitting(true)
-
-    try {
-      const result = await checkoutState.checkout.confirm({
-        redirect: "if_required",
-        returnUrl: new URL(
-          "/checkout/complete?session_id={CHECKOUT_SESSION_ID}",
-          window.location.origin
-        ).toString(),
-      })
-
-      if (result.type === "error") {
-        setConfirmError(result.error.message)
-        return
-      }
-
-      router.replace(
-        `/checkout/complete?session_id=${encodeURIComponent(result.session.id)}`
-      )
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
-
-  if (checkoutState.type === "loading") {
-    return <CheckoutSessionLoadingState />
-  }
-
-  if (checkoutState.type === "error") {
-    return (
-      <Alert variant="destructive">
-        <AlertTitle>Checkout failed to load</AlertTitle>
-        <AlertDescription>{checkoutState.error.message}</AlertDescription>
-      </Alert>
-    )
-  }
-
-  const checkout = checkoutState.checkout
-  const primaryLineItem = checkout.lineItems[0] ?? null
-  const localizedTotal = checkout.total.total.amount
-  const localizedSubtotal = checkout.total.subtotal.amount
-  const localizedDiscount = checkout.total.discount.amount
-  const localizedRenewal = checkout.recurring?.dueNext.total.amount ?? null
-  const currencyOptionsCount = checkout.currencyOptions?.length ?? 0
-
-  return (
-    <div className="grid gap-8 xl:grid-cols-[minmax(0,0.92fr)_minmax(22rem,1.08fr)]">
-      <section className="border-y border-border/70 py-5">
-        <div className="grid gap-5">
-          <div className="flex flex-col gap-2">
-            <div className="text-lg font-semibold tracking-tight">
-              Order summary
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Localized totals come from the live Stripe Checkout Session, not a
-              local price mirror.
-            </p>
-          </div>
-
-          <div className="grid gap-3 text-sm">
-            <div className="flex items-center justify-between gap-4 border-b border-border/60 pb-3">
-              <span className="text-muted-foreground">Plan</span>
-              <span className="font-medium text-foreground">
-                {primaryLineItem?.name || planName}
-              </span>
-            </div>
-            <div className="flex items-center justify-between gap-4 border-b border-border/60 pb-3">
-              <span className="text-muted-foreground">Subtotal</span>
-              <span className="font-medium text-foreground">
-                {localizedSubtotal}
-              </span>
-            </div>
-            <div className="flex items-center justify-between gap-4 border-b border-border/60 pb-3">
-              <span className="text-muted-foreground">Discount</span>
-              <span className="font-medium text-foreground">
-                {localizedDiscount}
-              </span>
-            </div>
-            <div className="flex items-center justify-between gap-4 border-b border-border/60 pb-3">
-              <span className="text-muted-foreground">Due today</span>
-              <span className="text-lg font-semibold tracking-tight text-foreground">
-                {localizedTotal}
-              </span>
-            </div>
-            <div className="flex items-center justify-between gap-4">
-              <span className="text-muted-foreground">Renews</span>
-              <span className="font-medium text-foreground">
-                {localizedRenewal ?? "Stripe will confirm after payment"}
-              </span>
-            </div>
-          </div>
-
-          {currencyOptionsCount > 1 ? (
-            <p className="text-sm text-muted-foreground">
-              Stripe currently offers {currencyOptionsCount} presentment
-              currencies for this session.
-            </p>
-          ) : null}
-
-          {creatorDiscount ? (
-            <div className="grid gap-1 text-sm">
-              <div className="font-medium text-foreground">Creator discount</div>
-              <div className="text-muted-foreground">
-                {creatorDiscount.message}
-              </div>
-              {creatorCode ? (
-                <div className="text-muted-foreground">
-                  Applied code:{" "}
-                  <span className="font-medium text-foreground">
-                    {creatorCode}
-                  </span>
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-        </div>
-      </section>
-
-      <section className="border-y border-border/70 py-5">
-        <div className="grid gap-5">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div className="grid gap-2">
-              <div className="text-lg font-semibold tracking-tight">
-                Payment
-              </div>
-              <p className="text-sm text-muted-foreground">
-                Stripe will localize currency when the session is eligible, and
-                the selector below controls presentment on this checkout.
-              </p>
-            </div>
-            {currencyOptionsCount > 1 ? (
-              <div className="min-w-[11rem]">
-                <CurrencySelectorElement />
-              </div>
-            ) : null}
-          </div>
-
-          <PaymentElement
-            options={{
-              layout: {
-                defaultCollapsed: false,
-                radios: "always",
-                spacedAccordionItems: false,
-                type: "accordion",
-              },
-            }}
-          />
-
-          {confirmError ? (
-            <Alert variant="destructive">
-              <AlertTitle>Payment failed</AlertTitle>
-              <AlertDescription>{confirmError}</AlertDescription>
-            </Alert>
-          ) : null}
-
-          <Button
-            className="w-full"
-            disabled={isSubmitting}
-            onClick={handleConfirm}
-          >
-            {isSubmitting ? "Confirming..." : "Complete subscription"}
-            {!isSubmitting ? <IconCreditCard data-icon="inline-end" /> : null}
-          </Button>
-        </div>
-      </section>
+    <div className="grid gap-5">
+      <Skeleton className="h-18 rounded-lg" />
+      <Skeleton className="h-48 rounded-lg" />
+      <Skeleton className="h-32 rounded-lg" />
     </div>
   )
 }
@@ -311,7 +108,6 @@ export function CheckoutView({
   viewport?: RequestViewport
 }) {
   const isMobileView = viewport === "mobile"
-  const { resolvedTheme } = useTheme()
   const catalogQuery = usePricingCatalog(preferredCurrency)
   const billingStateQuery = useBillingState()
   const createCheckoutSession = useCreateSubscriptionCheckoutSession()
@@ -321,13 +117,9 @@ export function CheckoutView({
   const [submittedCreatorCode, setSubmittedCreatorCode] = useState<
     string | undefined
   >(initialCreatorCode ?? undefined)
-  const [sessionNonce, setSessionNonce] = useState(0)
-  const [checkoutSession, setCheckoutSession] =
-    useState<CheckoutSessionResult | null>(null)
   const [checkoutSessionError, setCheckoutSessionError] = useState<
     string | null
   >(null)
-  const sessionRequestIdRef = useRef(0)
 
   const paidPlans =
     catalogQuery.data?.plans.filter(
@@ -356,77 +148,45 @@ export function CheckoutView({
       : null
   )
 
-  useEffect(() => {
-    if (
-      !checkoutEnabled ||
-      billingState === undefined ||
-      !selectedPlan ||
-      !getStripePublishableKey() ||
-      hasCreatorGrantAccess ||
-      hasPaidAccess
-    ) {
-      return
-    }
-
-    const requestId = sessionRequestIdRef.current + 1
-    sessionRequestIdRef.current = requestId
-    setCheckoutSession(null)
-    setCheckoutSessionError(null)
-
-    createCheckoutSession
-      .mutateAsync({
-        creatorCode: submittedCreatorCode,
-        interval: initialInterval,
-        planKey: selectedPlan.planKey,
-        preferredCurrency,
-      })
-      .then((result) => {
-        if (sessionRequestIdRef.current !== requestId) {
-          return
-        }
-
-        setCheckoutSession(result)
-      })
-      .catch((error) => {
-        if (sessionRequestIdRef.current !== requestId) {
-          return
-        }
-
-        setCheckoutSessionError(
-          error instanceof BillingClientError
-            ? error.message
-            : "Unable to start Stripe Checkout."
-        )
-      })
-  }, [
-    checkoutEnabled,
-    createCheckoutSession,
-    billingState,
-    hasCreatorGrantAccess,
-    hasPaidAccess,
-    initialInterval,
-    preferredCurrency,
-    selectedPlan,
-    sessionNonce,
-    submittedCreatorCode,
-  ])
-
   function handleApplyCreatorCode() {
     const nextCreatorCode =
       creatorCodeInput.trim().toUpperCase() || undefined
     setSubmittedCreatorCode(nextCreatorCode)
-    setSessionNonce((value) => value + 1)
   }
 
   function handleClearCreatorCode() {
     setCreatorCodeInput("")
     setSubmittedCreatorCode(undefined)
-    setSessionNonce((value) => value + 1)
   }
 
   async function handleCopyCode(code: string) {
     await navigator.clipboard.writeText(code)
     toast.success("Creator code copied.")
+  }
+
+  async function handleStartHostedCheckout() {
+    if (!selectedPlan) {
+      return
+    }
+
+    setCheckoutSessionError(null)
+
+    try {
+      const session = await createCheckoutSession.mutateAsync({
+        creatorCode: submittedCreatorCode,
+        interval: initialInterval,
+        planKey: selectedPlan.planKey,
+        preferredCurrency,
+      })
+
+      window.location.assign(session.checkoutUrl)
+    } catch (error) {
+      setCheckoutSessionError(
+        error instanceof BillingClientError
+          ? error.message
+          : "Unable to start Stripe Checkout."
+      )
+    }
   }
 
   if (!checkoutEnabled) {
@@ -452,13 +212,7 @@ export function CheckoutView({
   }
 
   if (catalogQuery.isPending || billingStateQuery.isPending) {
-    return (
-      <div className="grid gap-6">
-        <Skeleton className="h-18 rounded-xl" />
-        <Skeleton className="h-32 rounded-xl" />
-        <CheckoutSessionLoadingState />
-      </div>
-    )
+    return <CheckoutLoadingState />
   }
 
   if (catalogQuery.isError || billingStateQuery.isError) {
@@ -508,7 +262,7 @@ export function CheckoutView({
             </h1>
             <p className="text-sm text-muted-foreground">
               This account already has a live paid subscription. Open billing to
-              change plans or manage cancellation instead of starting a new
+              manage the subscription in Stripe instead of starting a duplicate
               checkout.
             </p>
           </div>
@@ -533,17 +287,6 @@ export function CheckoutView({
     )
   }
 
-  if (!getStripePublishableKey() || !stripePromise) {
-    return (
-      <Alert variant="destructive">
-        <AlertTitle>Stripe is not configured</AlertTitle>
-        <AlertDescription>
-          Missing `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`.
-        </AlertDescription>
-      </Alert>
-    )
-  }
-
   const creatorDiscount = checkoutQuoteQuery.data?.creatorDiscount
   const creatorState = creatorDiscount?.entryState ?? "eligible_but_not_entered"
 
@@ -562,9 +305,8 @@ export function CheckoutView({
               Checkout
             </h1>
             <p className="max-w-3xl text-sm text-muted-foreground sm:text-base">
-              This page only completes payment for the plan you already chose.
-              Pricing, currency localization, and creator discounts are all
-              resolved by Stripe on the live Checkout Session.
+              Continue to Stripe Checkout to confirm final currency, taxes,
+              discounts, and total.
             </p>
           </div>
 
@@ -602,8 +344,8 @@ export function CheckoutView({
               value={creatorCodeInput}
             />
             <FieldDescription>
-              Attribution and first-payment creator discount rules stay
-              server-trusted.
+              Creator-code discounts are applied server-side as a first-payment
+              Stripe coupon.
             </FieldDescription>
           </Field>
         </FieldGroup>
@@ -656,29 +398,27 @@ export function CheckoutView({
         </Alert>
       ) : null}
 
-      {checkoutSession ? (
-        <CheckoutElementsProvider
-          options={{
-            adaptivePricing: {
-              allowed: true,
-            },
-            clientSecret: checkoutSession.clientSecret,
-            elementsOptions: {
-              appearance: getStripeElementsAppearance(resolvedTheme),
-              loader: "auto",
-            },
-          }}
-          stripe={stripePromise}
+      <section className="flex flex-col gap-4 border-y border-border/70 py-5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="grid gap-1">
+          <div className="font-medium text-foreground">Stripe-hosted payment</div>
+          <p className="text-sm text-muted-foreground">
+            Adaptive Pricing may offer local presentment currencies when this
+            Checkout Session is eligible.
+          </p>
+        </div>
+        <Button
+          className={isMobileView ? "w-full justify-center" : undefined}
+          disabled={createCheckoutSession.isPending}
+          onClick={() => void handleStartHostedCheckout()}
         >
-          <CheckoutElementsContent
-            creatorCode={checkoutSession.creatorCode}
-            creatorDiscount={creatorDiscount}
-            planName={selectedPlan.name}
-          />
-        </CheckoutElementsProvider>
-      ) : (
-        <CheckoutSessionLoadingState />
-      )}
+          {createCheckoutSession.isPending
+            ? "Opening Stripe..."
+            : "Continue to Stripe"}
+          {!createCheckoutSession.isPending ? (
+            <IconExternalLink data-icon="inline-end" />
+          ) : null}
+        </Button>
+      </section>
     </div>
   )
 }

@@ -35,6 +35,21 @@ import {
   syncClerkCreatorAttributionMetadata,
 } from "../../../src/lib/clerk"
 import { getStripe, STRIPE_CATALOG_APP } from "../../../src/lib/stripe/client"
+import {
+  buildCheckoutCancelUrl,
+  buildCheckoutSuccessUrl,
+  createHostedSubscriptionCheckoutSession,
+  shouldBlockNewCheckout,
+} from "../../lib/stripe/helpers/checkout"
+import {
+  BillingActionError,
+  sanitizeBillingError,
+} from "../../lib/stripe/helpers/errors"
+import {
+  createGbpEstimateFxQuote,
+  estimateFromGbpMinorUnits,
+} from "../../lib/stripe/helpers/fxQuotes"
+import { createStripeBillingPortalSession } from "../../lib/stripe/helpers/portal"
 
 type BillingPlanRecord = {
   active: boolean
@@ -131,12 +146,16 @@ type PurchasablePlanResult = {
   priceId: CheckoutPlanPricingResult["priceId"]
 }
 type SubscriptionCheckoutSessionResult = {
-  clientSecret: string
+  checkoutUrl: string
   creatorCode: string | null
   currency: SupportedPricingCurrency
   currencyNotice: string | null
   interval: "month" | "year"
   planKey: string
+  sessionId: string
+}
+type BillingPortalSessionResult = {
+  portalUrl: string
   sessionId: string
 }
 type SubscriptionChangePreviewResult = {
@@ -160,10 +179,10 @@ type SubscriptionChangePreviewResult = {
   targetAmount: number
 }
 type CheckoutSessionCompletionSyncResult = {
-  paymentStatus: string | null
+  paymentStatus: "no_payment_required" | "paid" | "unpaid" | null
   planKey: string | null
   sessionId: string
-  status: string | null
+  status: "complete" | "expired" | "open"
   subscriptionId: string | null
   synced: boolean
 }
@@ -199,17 +218,6 @@ const billingProfileAddressValidator = v.object({
   postalCode: v.optional(v.string()),
   state: v.optional(v.string()),
 })
-
-class BillingActionError extends Error {
-  code: string
-  status: number
-
-  constructor(code: string, message: string, status = 400) {
-    super(message)
-    this.code = code
-    this.status = status
-  }
-}
 
 function getAppPublicOrigin() {
   const rawOrigin = getConvexEnv().APP_PUBLIC_ORIGIN?.trim()
@@ -252,28 +260,6 @@ function getStripeStatusPriority(status: Stripe.Subscription.Status) {
     case "incomplete_expired":
       return 0
   }
-}
-
-function sanitizeBillingError(error: unknown) {
-  if (error instanceof BillingActionError) {
-    return error
-  }
-
-  if (error instanceof Stripe.errors.StripeError) {
-    return new BillingActionError(
-      error.code ?? "stripe_error",
-      error.message || "Billing request failed.",
-      error.statusCode && error.statusCode >= 400 && error.statusCode < 500
-        ? error.statusCode
-        : 502
-    )
-  }
-
-  return new BillingActionError(
-    "billing_error",
-    "Unable to complete the billing request.",
-    500
-  )
 }
 
 function normalizeOptionalString(value: string | null | undefined) {
@@ -616,31 +602,6 @@ function resolveCheckoutPlanPricing(args: {
   plan: BillingPlanRecord
   preferredCurrency?: SupportedPricingCurrency
 }): CheckoutPlanPricingResult {
-  const preferredCurrency = args.preferredCurrency ?? "GBP"
-  const preferredAmount = getCheckoutPlanAmount({
-    currency: preferredCurrency,
-    interval: args.interval,
-    plan: args.plan,
-  })
-  const preferredPriceId = getCheckoutPlanPriceId({
-    currency: preferredCurrency,
-    interval: args.interval,
-    plan: args.plan,
-  })
-
-  if (
-    typeof preferredAmount === "number" &&
-    preferredPriceId &&
-    preferredCurrency !== "GBP"
-  ) {
-    return {
-      amount: preferredAmount,
-      currency: preferredCurrency,
-      currencyNotice: null,
-      priceId: preferredPriceId,
-    }
-  }
-
   const gbpPriceId =
     args.interval === "month"
       ? args.plan.monthlyPriceId
@@ -658,8 +619,8 @@ function resolveCheckoutPlanPricing(args: {
     amount: getPlanAmount(args.plan, args.interval),
     currency: "GBP" as const,
     currencyNotice:
-      preferredCurrency !== "GBP"
-        ? "This plan is billed in GBP for your current selection."
+      args.preferredCurrency && args.preferredCurrency !== "GBP"
+        ? "Stripe Checkout confirms final currency, taxes, discounts, and total. The app never uses estimate currency to choose the Stripe Price."
         : null,
     priceId: gbpPriceId,
   }
@@ -724,6 +685,29 @@ async function getLiveStripePriceSnapshot<TInterval extends "month" | "year">(ar
   }
 
   return args.fallbackPricing
+}
+
+function getEstimatedPricingSnapshot<TInterval extends "month" | "year">(args: {
+  estimateCurrency: SupportedPricingCurrency
+  fxRate: number | null
+  pricing: {
+    amount: number
+    currency: string
+    interval: TInterval
+  } | null
+}) {
+  if (!args.pricing || args.estimateCurrency === "GBP" || !args.fxRate) {
+    return args.pricing
+  }
+
+  return {
+    amount: estimateFromGbpMinorUnits({
+      amount: args.pricing.amount,
+      rate: args.fxRate,
+    }),
+    currency: args.estimateCurrency,
+    interval: args.pricing.interval,
+  }
 }
 
 function normalizeCreatorCodeInput(value: string | undefined) {
@@ -1192,62 +1176,6 @@ async function getExistingStripeSubscription(args: {
   )
 }
 
-function buildCheckoutReturnUrl(appOrigin: string) {
-  return `${appOrigin}/checkout/complete?session_id={CHECKOUT_SESSION_ID}`
-}
-
-function buildCheckoutCancelUrl(appOrigin: string) {
-  return `${appOrigin}/checkout/cancelled`
-}
-
-function hasStripeSubscriptionEnded(
-  subscription: Stripe.Subscription,
-  now = Date.now()
-) {
-  if (
-    subscription.status === "canceled" ||
-    subscription.status === "incomplete_expired" ||
-    subscription.status === "unpaid"
-  ) {
-    return true
-  }
-
-  if (
-    typeof subscription.ended_at === "number" &&
-    subscription.ended_at * 1000 <= now
-  ) {
-    return true
-  }
-
-  if (
-    typeof subscription.cancel_at === "number" &&
-    subscription.cancel_at * 1000 <= now
-  ) {
-    return true
-  }
-
-  if (
-    subscription.cancel_at_period_end &&
-    (getSubscriptionItemCurrentPeriodEnd(subscription) ?? Number.POSITIVE_INFINITY) <=
-      now
-  ) {
-    return true
-  }
-
-  return false
-}
-
-function shouldBlockNewCheckout(
-  subscription: Stripe.Subscription,
-  now = Date.now()
-) {
-  if (hasStripeSubscriptionEnded(subscription, now)) {
-    return false
-  }
-
-  return true
-}
-
 async function listStripeSubscriptionsForCustomer(args: {
   customerId: string
   stripe: Stripe
@@ -1467,6 +1395,14 @@ async function createCustomerSessionClientSecret(args: {
   }
 }
 
+function throwManagedInCustomerPortal(): void {
+  throw new BillingActionError(
+    "managed_in_stripe_customer_portal",
+    "This billing operation is managed in Stripe Customer Portal.",
+    409
+  )
+}
+
 export const syncBillingCenter = action({
   args: {},
   handler: async (ctx) => {
@@ -1543,6 +1479,54 @@ export const syncBillingCenter = action({
   },
 })
 
+export const createBillingPortalSession = action({
+  args: {},
+  handler: async (ctx): Promise<BillingPortalSessionResult> => {
+    try {
+      const userContext = await requireBillingUser(ctx)
+      const stripe = getStripe()
+      const appOrigin = getAppPublicOrigin()
+      const customerId = await ensureStripeCustomer({
+        ctx,
+        email: userContext.email,
+        stripe,
+        userContext,
+      })
+
+      await syncCustomerBillingSnapshot({
+        ctx,
+        stripe,
+        stripeCustomerId: customerId,
+        syncInvoices: false,
+      })
+
+      const session = await createStripeBillingPortalSession({
+        customerId,
+        returnUrl: `${appOrigin}/settings/billing`,
+        stripe,
+      })
+
+      await recordBillingAuditLog({
+        action: "billing.portal.session_started",
+        ctx,
+        entityId: session.id,
+        entityLabel: customerId,
+        result: "success",
+        summary: "Started Stripe Customer Portal session.",
+        user: userContext.user,
+        userName: userContext.actorName,
+      })
+
+      return {
+        portalUrl: session.url,
+        sessionId: session.id,
+      }
+    } catch (error) {
+      throw sanitizeBillingError(error)
+    }
+  },
+})
+
 export const updateBillingProfile = action({
   args: {
     address: v.optional(billingProfileAddressValidator),
@@ -1553,6 +1537,7 @@ export const updateBillingProfile = action({
   },
   handler: async (ctx, args): Promise<{ updated: true }> => {
     try {
+      throwManagedInCustomerPortal()
       const userContext = await requireBillingUser(ctx)
       const stripe = getStripe()
       const customerId = await ensureStripeCustomer({
@@ -1612,6 +1597,7 @@ export const createPaymentMethodSetupIntent = action({
   args: {},
   handler: async (ctx) => {
     try {
+      throwManagedInCustomerPortal()
       const userContext = await requireBillingUser(ctx)
       const stripe = getStripe()
       const customerId = await ensureStripeCustomer({
@@ -1667,6 +1653,7 @@ export const setDefaultPaymentMethod = action({
     args
   ): Promise<{ defaultPaymentMethodId: string; updated: true }> => {
     try {
+      throwManagedInCustomerPortal()
       const userContext = await requireBillingUser(ctx)
       const stripe = getStripe()
       const customerId = await ensureStripeCustomer({
@@ -1770,6 +1757,7 @@ export const removePaymentMethod = action({
   },
   handler: async (ctx, args) => {
     try {
+      throwManagedInCustomerPortal()
       const userContext = await requireBillingUser(ctx)
       const stripe = getStripe()
       const customerId = await ensureStripeCustomer({
@@ -2102,28 +2090,11 @@ export const createSubscriptionCheckoutSession = action({
         pricingCurrency: currency,
         userId: userContext.user._id,
       }
-      const session = await stripe.checkout.sessions.create(
-        {
-          adaptive_pricing: {
-            enabled: true,
-          },
-          cancel_url: buildCheckoutCancelUrl(appOrigin),
-          client_reference_id: userContext.user._id,
-          customer: customerId,
-          discounts: discountCouponId
-            ? [{ coupon: discountCouponId }]
-            : undefined,
-          line_items: [{ price: priceId, quantity: 1 }],
-          metadata,
-          mode: "subscription",
-          return_url: buildCheckoutReturnUrl(appOrigin),
-          subscription_data: {
-            metadata,
-          },
-          ui_mode: "custom" as unknown as "hosted_page",
-        },
-        {
-          idempotencyKey: [
+      const session = await createHostedSubscriptionCheckoutSession({
+        cancelUrl: buildCheckoutCancelUrl(appOrigin),
+        customerId,
+        discountCouponId,
+        idempotencyKey: [
             "billing",
             "checkout-session",
             userContext.user._id,
@@ -2132,13 +2103,17 @@ export const createSubscriptionCheckoutSession = action({
             creatorDiscount.appliedDiscount?.code ?? "no-code",
             currency,
           ].join(":"),
-        }
-      )
+        lineItemPriceId: priceId,
+        metadata,
+        stripe,
+        successUrl: buildCheckoutSuccessUrl(appOrigin),
+        userId: userContext.user._id,
+      })
 
-      if (!session.client_secret) {
+      if (!session.url) {
         throw new BillingActionError(
-          "missing_client_secret",
-          "Stripe did not return a Checkout Session client secret.",
+          "missing_checkout_url",
+          "Stripe did not return a hosted Checkout URL.",
           502
         )
       }
@@ -2166,7 +2141,7 @@ export const createSubscriptionCheckoutSession = action({
       })
 
       return {
-        clientSecret: session.client_secret,
+        checkoutUrl: session.url,
         creatorCode: creatorDiscount.appliedDiscount?.code ?? null,
         currency,
         currencyNotice,
@@ -2186,14 +2161,19 @@ export const getPublicPricingCatalog = action({
   },
   handler: async (ctx, args): Promise<PricingCatalog> => {
     try {
+      const estimateCurrency = args.preferredCurrency ?? "GBP"
       const baseCatalog: PricingCatalog = await ctx.runQuery(
         internal.queries.billing.catalog.getPublicPricingCatalogInternal,
-        args.preferredCurrency
-          ? { preferredCurrency: args.preferredCurrency }
-          : {}
+        {}
       )
       const stripe = getStripe()
       const priceCache = new Map<string, Promise<Stripe.Price | null>>()
+      const fxQuote =
+        estimateCurrency === "GBP"
+          ? null
+          : await createGbpEstimateFxQuote({
+              estimateCurrency,
+            }).catch(() => null)
       const paidPlanKeys = baseCatalog.plans
         .filter((plan) => plan.planType === "paid")
         .map((plan) => plan.planKey)
@@ -2216,25 +2196,40 @@ export const getPublicPricingCatalog = action({
           baseCatalog.plans.map(async (plan) => ({
             ...plan,
             pricing: {
-              month: await getLiveStripePriceSnapshot({
+              month: await getEstimatedPricingSnapshot({
+                estimateCurrency,
+                fxRate: fxQuote?.rate ?? null,
+                pricing: await getLiveStripePriceSnapshot({
                 fallbackPricing: plan.pricing.month,
                 interval: "month",
                 plan: plansByKey.get(plan.planKey) ?? null,
-                preferredCurrency: baseCatalog.selectedCurrency,
+                  preferredCurrency: "GBP",
                 priceCache,
                 stripe,
               }),
-              year: await getLiveStripePriceSnapshot({
+              }),
+              year: await getEstimatedPricingSnapshot({
+                estimateCurrency,
+                fxRate: fxQuote?.rate ?? null,
+                pricing: await getLiveStripePriceSnapshot({
                 fallbackPricing: plan.pricing.year,
                 interval: "year",
                 plan: plansByKey.get(plan.planKey) ?? null,
-                preferredCurrency: baseCatalog.selectedCurrency,
+                  preferredCurrency: "GBP",
                 priceCache,
                 stripe,
+              }),
               }),
             },
           }))
         ),
+        currencyNotice:
+          estimateCurrency === "GBP"
+            ? "Plans are billed from the GBP catalog. Stripe Checkout confirms final currency, taxes, discounts, and total."
+            : fxQuote
+              ? `Showing approximate ${estimateCurrency} estimates from Stripe FX Quotes. Final currency, taxes, discounts, and total are confirmed by Stripe Checkout, and exchange rates may shift.`
+              : `Stripe ${estimateCurrency} estimates are unavailable right now, so prices are shown in GBP. Final currency, taxes, discounts, and total are confirmed by Stripe Checkout, and exchange rates may shift.`,
+        selectedCurrency: estimateCurrency,
       }
     } catch (error) {
       throw sanitizeBillingError(error)
@@ -2317,7 +2312,7 @@ export const syncCheckoutSessionCompletion = action({
         paymentStatus: session.payment_status,
         planKey: session.metadata?.planKey ?? null,
         sessionId: session.id,
-        status: session.status,
+        status: session.status ?? "open",
         subscriptionId: sessionSubscriptionId,
         synced: Boolean(sessionCustomerId || sessionSubscriptionId),
       }
@@ -2466,6 +2461,7 @@ export const previewSubscriptionChange = action({
   },
   handler: async (ctx, args): Promise<SubscriptionChangePreviewResult> => {
     try {
+      throwManagedInCustomerPortal()
       const userContext = await requireBillingUser(ctx)
       assertCreatorGrantAllowsSelfServeBilling({
         action: "plan_change",
@@ -2635,6 +2631,7 @@ export const changeSubscriptionPlan = action({
   },
   handler: async (ctx, args) => {
     try {
+      throwManagedInCustomerPortal()
       await assertCheckoutEnabled(ctx)
 
       const userContext = await requireBillingUser(ctx)
@@ -2916,6 +2913,7 @@ export const cancelCurrentSubscription = action({
   },
   handler: async (ctx, args) => {
     try {
+      throwManagedInCustomerPortal()
       const userContext = await requireBillingUser(ctx)
       assertCreatorGrantAllowsSelfServeBilling({
         action: "cancellation",
@@ -3026,6 +3024,7 @@ export const reactivateCurrentSubscription = action({
   },
   handler: async (ctx, args) => {
     try {
+      throwManagedInCustomerPortal()
       await assertCheckoutEnabled(ctx)
 
       const userContext = await requireBillingUser(ctx)
