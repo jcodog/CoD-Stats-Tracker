@@ -176,6 +176,33 @@ async function callBillingAction<T>(
           api.actions.staff.billing.backfillCreatorGrantStripeSubscriptions,
           {}
         )) as T
+      case "cancelCreatorPayoutRun":
+        return (await convex.action(
+          api.actions.staff.billing.cancelCreatorPayoutRun,
+          {
+            payoutRunId: action.input
+              .payoutRunId as Id<"creatorPayoutRuns">,
+          }
+        )) as T
+      case "createCreatorPayoutRun":
+        return (await convex.action(
+          api.actions.staff.billing.createCreatorPayoutRun,
+          {
+            ledgerEntryIds: action.input.ledgerEntryIds as
+              | Id<"creatorEarningLedger">[]
+              | undefined,
+            periodEnd: action.input.periodEnd,
+            periodStart: action.input.periodStart,
+          }
+        )) as T
+      case "executeCreatorPayoutRun":
+        return (await convex.action(
+          api.actions.staff.billing.executeCreatorPayoutRun,
+          {
+            payoutRunId: action.input
+              .payoutRunId as Id<"creatorPayoutRuns">,
+          }
+        )) as T
       case "prepareCreatorProgramConnectAccount":
         return (await convex.action(
           api.actions.staff.billing.prepareCreatorProgramConnectAccount,
@@ -238,6 +265,14 @@ async function callBillingAction<T>(
           {
             ...action.input,
             targetUserId: action.input.targetUserId as Id<"users">,
+          }
+        )) as T
+      case "retryCreatorPayoutTransfer":
+        return (await convex.action(
+          api.actions.staff.billing.retryCreatorPayoutTransfer,
+          {
+            payoutTransferId: action.input
+              .payoutTransferId as Id<"creatorPayoutTransfers">,
           }
         )) as T
       case "replacePlanPrice":

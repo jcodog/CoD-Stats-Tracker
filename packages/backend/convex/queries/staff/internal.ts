@@ -137,6 +137,9 @@ export const getBillingRecords = internalQuery({
       auditLogs,
       creatorAccounts,
       creatorAttributions,
+      creatorEarningLedger,
+      creatorPayoutRuns,
+      creatorPayoutTransfers,
       creatorProgramDefaults,
     ] = await Promise.all([
       ctx.db.query("billingPlans").collect(),
@@ -158,6 +161,13 @@ export const getBillingRecords = internalQuery({
         .take(200),
       ctx.db.query("creatorAccounts").collect(),
       ctx.db.query("creatorAttributions").collect(),
+      ctx.db.query("creatorEarningLedger").collect(),
+      ctx.db
+        .query("creatorPayoutRuns")
+        .withIndex("by_createdAt")
+        .order("desc")
+        .take(25),
+      ctx.db.query("creatorPayoutTransfers").collect(),
       ctx.db
         .query("creatorProgramDefaults")
         .withIndex("by_key", (query) => query.eq("key", "global"))
@@ -171,6 +181,9 @@ export const getBillingRecords = internalQuery({
       accessGrants,
       creatorAccounts,
       creatorAttributions,
+      creatorEarningLedger,
+      creatorPayoutRuns,
+      creatorPayoutTransfers,
       creatorProgramDefaults,
       customers,
       features: features.sort(sortBySortOrderAndKey),
@@ -182,6 +195,38 @@ export const getBillingRecords = internalQuery({
       users: users.sort(sortUsers),
       webhookEvents,
     }
+  },
+})
+
+export const getCreatorPayoutRunById = internalQuery({
+  args: {
+    payoutRunId: v.id("creatorPayoutRuns"),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.payoutRunId)
+  },
+})
+
+export const getCreatorPayoutTransferById = internalQuery({
+  args: {
+    payoutTransferId: v.id("creatorPayoutTransfers"),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.payoutTransferId)
+  },
+})
+
+export const listCreatorPayoutTransfersByRunId = internalQuery({
+  args: {
+    payoutRunId: v.id("creatorPayoutRuns"),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("creatorPayoutTransfers")
+      .withIndex("by_payoutRunId", (query) =>
+        query.eq("payoutRunId", args.payoutRunId)
+      )
+      .collect()
   },
 })
 

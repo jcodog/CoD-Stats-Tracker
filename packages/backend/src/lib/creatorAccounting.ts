@@ -6,6 +6,10 @@ export type CreatorEarningLedgerStatus =
   | "void"
   | "reversed"
   | "future_transfer_pending"
+  | "reserved"
+  | "transferred"
+  | "transfer_failed"
+  | "transfer_requires_review"
 
 export function addUtcMonthsClamped(timestamp: number, months: number) {
   const source = new Date(timestamp)

@@ -31,8 +31,26 @@ export const creatorEarningLedger = defineTable({
     v.literal("eligible"),
     v.literal("void"),
     v.literal("reversed"),
-    v.literal("future_transfer_pending")
+    v.literal("future_transfer_pending"),
+    v.literal("reserved"),
+    v.literal("transferred"),
+    v.literal("transfer_failed"),
+    v.literal("transfer_requires_review")
   ),
+  payoutRunId: v.optional(v.id("creatorPayoutRuns")),
+  payoutTransferId: v.optional(v.id("creatorPayoutTransfers")),
+  stripeTransferId: v.optional(v.string()),
+  transferStatus: v.optional(
+    v.union(
+      v.literal("cancelled"),
+      v.literal("draft"),
+      v.literal("failed"),
+      v.literal("requires_review"),
+      v.literal("transferred"),
+      v.literal("transferring")
+    )
+  ),
+  transferredAt: v.optional(v.number()),
 
   lastSyncedAt: v.number(),
   createdAt: v.number(),
@@ -44,3 +62,5 @@ export const creatorEarningLedger = defineTable({
   .index("by_creatorAccountId", ["creatorAccountId"])
   .index("by_usageLockId", ["usageLockId"])
   .index("by_status", ["status"])
+  .index("by_payoutRunId", ["payoutRunId"])
+  .index("by_payoutTransferId", ["payoutTransferId"])

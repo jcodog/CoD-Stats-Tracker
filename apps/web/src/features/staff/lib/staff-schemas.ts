@@ -55,6 +55,29 @@ export const billingActionSchema = z.discriminatedUnion("action", [
     input: z.object({}).optional().default({}),
   }),
   z.object({
+    action: z.literal("cancelCreatorPayoutRun"),
+    input: z.object({
+      payoutRunId: z.string().min(1),
+    }),
+  }),
+  z.object({
+    action: z.literal("createCreatorPayoutRun"),
+    input: z
+      .object({
+        ledgerEntryIds: z.array(z.string().min(1)).optional(),
+        periodEnd: z.number().int().positive().optional(),
+        periodStart: z.number().int().positive().optional(),
+      })
+      .optional()
+      .default({}),
+  }),
+  z.object({
+    action: z.literal("executeCreatorPayoutRun"),
+    input: z.object({
+      payoutRunId: z.string().min(1),
+    }),
+  }),
+  z.object({
     action: z.literal("prepareCreatorProgramConnectAccount"),
     input: z.object({
       targetUserId: z.string().min(1),
@@ -105,6 +128,12 @@ export const billingActionSchema = z.discriminatedUnion("action", [
     action: z.literal("refreshCreatorProgramConnectStatus"),
     input: z.object({
       targetUserId: z.string().min(1),
+    }),
+  }),
+  z.object({
+    action: z.literal("retryCreatorPayoutTransfer"),
+    input: z.object({
+      payoutTransferId: z.string().min(1),
     }),
   }),
   z.object({

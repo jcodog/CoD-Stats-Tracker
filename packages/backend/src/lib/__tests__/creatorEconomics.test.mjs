@@ -452,7 +452,6 @@ describe("creator checkout and dashboard presentation", () => {
       cancelUrl: "https://example.test/cancel",
       customerId: "cus_1",
       discountCouponId: "coupon_1",
-      idempotencyKey: "checkout-key",
       lineItemPriceId: "price_1",
       metadata: {
         creatorCode: "ALPHA",
@@ -478,7 +477,43 @@ describe("creator checkout and dashboard presentation", () => {
       mode: "subscription",
       ui_mode: "hosted",
     })
-    expect(calls[0].options).toEqual({ idempotencyKey: "checkout-key" })
+    expect(calls[0].options).toBeUndefined()
+  })
+
+  it("creates a fresh hosted Checkout Session for repeat attempts", async () => {
+    const calls = []
+    const stripe = {
+      checkout: {
+        sessions: {
+          create(params, options) {
+            calls.push({ options, params })
+            return {
+              id: `cs_${calls.length}`,
+              url: `https://checkout.stripe.test/${calls.length}`,
+            }
+          },
+        },
+      },
+    }
+    const baseArgs = {
+      cancelUrl: "https://example.test/cancel",
+      customerId: "cus_1",
+      lineItemPriceId: "price_1",
+      metadata: {
+        creatorCode: "",
+      },
+      stripe,
+      successUrl: "https://example.test/success",
+      userId: "users:subscriber",
+    }
+
+    const first = await createHostedSubscriptionCheckoutSession(baseArgs)
+    const second = await createHostedSubscriptionCheckoutSession(baseArgs)
+
+    expect(first.id).toBe("cs_1")
+    expect(second.id).toBe("cs_2")
+    expect(calls).toHaveLength(2)
+    expect(calls.every((call) => call.options === undefined)).toBe(true)
   })
 
   it("changes creator dashboard estimate wording based on Connect payout readiness", () => {

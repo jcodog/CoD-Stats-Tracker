@@ -42,6 +42,12 @@ const billingScheduledChangeTypeValidator = v.union(
   v.literal("plan_change")
 )
 const webhookProcessingLeaseMs = 10 * 60 * 1000
+const creatorTransferLockedStatuses = new Set([
+  "reserved",
+  "transferred",
+  "transfer_failed",
+  "transfer_requires_review",
+])
 
 const billingPaymentMethodSnapshotValidator = v.object({
   bankName: v.optional(v.string()),
@@ -730,16 +736,42 @@ async function voidCreatorEarningLedgerRow(args: {
   }
   now: number
 }) {
-  await args.ctx.db.patch(args.existingRow._id, {
-    earningAmount: 0,
+  const basePatch = {
     invoiceAmountPaid: args.invoice.amountPaid,
     invoiceAmountTotal: args.invoice.amountTotal,
     invoiceIssuedAt: args.invoice.invoiceIssuedAt,
     invoiceStatus: args.invoice.status,
     lastSyncedAt: args.now,
-    status: "void",
     stripePaymentIntentId: args.invoice.stripePaymentIntentId,
     updatedAt: args.now,
+  }
+
+  if (args.existingRow.stripeTransferId || args.existingRow.transferredAt) {
+    await args.ctx.db.patch(args.existingRow._id, {
+      ...basePatch,
+      status: "transfer_requires_review",
+      transferStatus: "requires_review",
+    })
+    return
+  }
+
+  if (
+    args.existingRow.payoutRunId ||
+    args.existingRow.payoutTransferId ||
+    creatorTransferLockedStatuses.has(args.existingRow.status)
+  ) {
+    await args.ctx.db.patch(args.existingRow._id, {
+      ...basePatch,
+      status: "transfer_requires_review",
+      transferStatus: "requires_review",
+    })
+    return
+  }
+
+  await args.ctx.db.patch(args.existingRow._id, {
+    ...basePatch,
+    earningAmount: 0,
+    status: "void",
   })
 }
 
@@ -869,6 +901,21 @@ async function syncCreatorEarningLedgerForInvoice(args: {
 
     if (existingRow[typedKey] !== value) {
       Object.assign(patch, { [typedKey]: value })
+    }
+  }
+
+  if (creatorTransferLockedStatuses.has(existingRow.status)) {
+    delete patch.status
+
+    if (
+      !existingRow.stripeTransferId &&
+      !existingRow.transferredAt &&
+      (existingRow.earningAmount !== earningAmount ||
+        existingRow.invoiceAmountPaid !== args.invoice.amountPaid ||
+        existingRow.currency !== args.invoice.currency)
+    ) {
+      patch.status = "transfer_requires_review"
+      patch.transferStatus = "requires_review"
     }
   }
 

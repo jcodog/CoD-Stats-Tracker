@@ -62,7 +62,6 @@ export async function createHostedSubscriptionCheckoutSession(args: {
   cancelUrl: string
   customerId: string
   discountCouponId?: string
-  idempotencyKey: string
   lineItemPriceId: string
   metadata: Stripe.MetadataParam
   stripe: Stripe
@@ -88,9 +87,6 @@ export async function createHostedSubscriptionCheckoutSession(args: {
       },
       success_url: args.successUrl,
       ui_mode: "hosted" as unknown as StripeCheckoutSessionCreateParams["ui_mode"],
-    },
-    {
-      idempotencyKey: args.idempotencyKey,
     }
   )
 }

@@ -1,6 +1,11 @@
 import type { AppPlanKey } from "./billingAccess"
 import type { CreatorConnectState } from "./creatorProgram"
 import type {
+  CreatorPayoutPreview,
+  CreatorPayoutRunStatus,
+  CreatorPayoutTransferStatus,
+} from "./creatorTransfers"
+import type {
   AuditLogResult,
   BillingFeatureApplyMode,
   RequiredStaffRole,
@@ -239,6 +244,41 @@ export type StaffCreatorProgramAccountRecord = {
   userName: string
 }
 
+export type StaffCreatorPayoutRunRecord = {
+  createdAt: number
+  createdByClerkUserId: string
+  createdByName?: string
+  creatorCount: number
+  currencyTotals: Array<{ amount: number; currency: string }>
+  executedAt?: number
+  failureSummary?: string
+  id: string
+  periodEnd?: number
+  periodStart?: number
+  status: CreatorPayoutRunStatus
+  transferCount: number
+  updatedAt: number
+}
+
+export type StaffCreatorPayoutTransferRecord = {
+  amount: number
+  createdAt: number
+  creatorAccountId: string
+  creatorCode: string
+  currency: string
+  failureCode?: string
+  failureMessage?: string
+  id: string
+  idempotencyKey: string
+  ledgerEntryCount: number
+  payoutRunId: string
+  status: CreatorPayoutTransferStatus
+  stripeConnectedAccountId: string
+  stripeTransferId?: string
+  transferredAt?: number
+  updatedAt: number
+}
+
 export type StaffWebhookEventRecord = {
   customerId?: string
   errorMessage?: string
@@ -327,6 +367,9 @@ export type StaffBillingDashboard = {
   assignments: StaffBillingAssignmentRecord[]
   auditLogs: StaffAuditLogEntry[]
   creatorGrants: StaffCreatorGrantRecord[]
+  creatorPayoutPreview: CreatorPayoutPreview | null
+  creatorPayoutRuns: StaffCreatorPayoutRunRecord[]
+  creatorPayoutTransfers: StaffCreatorPayoutTransferRecord[]
   creatorProgramAccounts: StaffCreatorProgramAccountRecord[]
   creatorProgramDefaults: StaffCreatorProgramDefaultsRecord | null
   customers: StaffBillingCustomerRecord[]

@@ -40,6 +40,8 @@ import { creatorAccounts } from "../src/db/tables/creatorAccounts"
 import { creatorAttributions } from "../src/db/tables/creatorAttributions"
 import { creatorCodeUsageLocks } from "../src/db/tables/creatorCodeUsageLocks"
 import { creatorEarningLedger } from "../src/db/tables/creatorEarningLedger"
+import { creatorPayoutRuns } from "../src/db/tables/creatorPayoutRuns"
+import { creatorPayoutTransfers } from "../src/db/tables/creatorPayoutTransfers"
 import { creatorProgramDefaults } from "../src/db/tables/creatorProgramDefaults"
 
 export default defineSchema({
@@ -80,5 +82,7 @@ export default defineSchema({
   creatorAttributions,
   creatorCodeUsageLocks,
   creatorEarningLedger,
+  creatorPayoutRuns,
+  creatorPayoutTransfers,
   creatorProgramDefaults,
 })

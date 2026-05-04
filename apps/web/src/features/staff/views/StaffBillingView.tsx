@@ -11,6 +11,8 @@ import type {
   StaffBillingPlanRecord,
   StaffBillingUserLookupRecord,
   StaffCreatorGrantRecord,
+  StaffCreatorPayoutRunRecord,
+  StaffCreatorPayoutTransferRecord,
   StaffCreatorProgramAccountRecord,
   StaffCreatorProgramDefaultsRecord,
   StaffImpactPreview,
@@ -246,6 +248,18 @@ function formatCurrencyAmount(amount: number, currency: string) {
   }).format(amount / 100)
 }
 
+function formatCurrencyTotals(
+  totals: Array<{ amount: number; currency: string }>
+) {
+  if (totals.length === 0) {
+    return "None"
+  }
+
+  return totals
+    .map((total) => formatCurrencyAmount(total.amount, total.currency))
+    .join(", ")
+}
+
 function formatDateTime(value: number) {
   if (!Number.isFinite(value)) {
     return "Not set"
@@ -288,6 +302,10 @@ function diffKeys(args: { next: string[]; previous: string[] }) {
 
 function formatPercent(value: number) {
   return `${value}%`
+}
+
+function formatCreatorTransferStatus(value: string) {
+  return value.replaceAll("_", " ")
 }
 
 function buildCreatorProgramDefaultsFormState(
@@ -737,6 +755,9 @@ export function StaffBillingView({
     useState(false)
   const [isBackfillingCreatorGrants, setIsBackfillingCreatorGrants] =
     useState(false)
+  const [creatorPayoutActionId, setCreatorPayoutActionId] = useState<
+    string | null
+  >(null)
   const billingMutation = useStaffMutation<
     BillingActionRequest,
     StaffMutationResponse
@@ -1393,6 +1414,167 @@ export function StaffBillingView({
       id: "actions",
     },
   ]
+  const creatorPayoutRunColumns: Array<ColumnDef<StaffCreatorPayoutRunRecord>> =
+    [
+      {
+        accessorKey: "createdAt",
+        cell: ({ row }) => (
+          <div className="flex flex-col gap-1">
+            <span className="font-medium">
+              {formatDateTime(row.original.createdAt)}
+            </span>
+            <span className="text-xs text-muted-foreground">
+              {row.original.createdByName ?? row.original.createdByClerkUserId}
+            </span>
+          </div>
+        ),
+        header: "Created",
+      },
+      {
+        accessorKey: "status",
+        cell: ({ row }) => (
+          <span className="capitalize">
+            {formatCreatorTransferStatus(row.original.status)}
+          </span>
+        ),
+        header: "Status",
+      },
+      {
+        cell: ({ row }) => (
+          <div className="flex flex-col gap-1">
+            <span className="font-medium">
+              {formatCurrencyTotals(row.original.currencyTotals)}
+            </span>
+            <span className="text-xs text-muted-foreground">
+              {row.original.creatorCount} creator(s),{" "}
+              {row.original.transferCount} transfer(s)
+            </span>
+          </div>
+        ),
+        header: "Totals",
+        id: "totals",
+      },
+      {
+        cell: ({ row }) => (
+          <span className="text-sm text-muted-foreground">
+            {row.original.executedAt
+              ? formatDateTime(row.original.executedAt)
+              : "Not executed"}
+          </span>
+        ),
+        header: "Executed",
+        id: "executed",
+      },
+      {
+        cell: ({ row }) => (
+          <span className="text-sm text-muted-foreground">
+            {row.original.failureSummary ?? "None"}
+          </span>
+        ),
+        header: "Failure summary",
+        id: "failureSummary",
+      },
+      {
+        cell: ({ row }) => {
+          const isWorking = creatorPayoutActionId === row.original.id
+
+          return (
+            <div className="flex justify-end gap-2">
+              <Button
+                disabled={isWorking || row.original.status !== "draft"}
+                onClick={() => void executeCreatorPayoutRun(row.original.id)}
+                size="sm"
+                variant="outline"
+              >
+                Execute
+              </Button>
+              <Button
+                disabled={isWorking || row.original.status !== "draft"}
+                onClick={() => void cancelCreatorPayoutRun(row.original.id)}
+                size="sm"
+                variant="ghost"
+              >
+                Cancel
+              </Button>
+            </div>
+          )
+        },
+        enableGlobalFilter: false,
+        header: "",
+        id: "actions",
+      },
+    ]
+  const creatorPayoutTransferColumns: Array<
+    ColumnDef<StaffCreatorPayoutTransferRecord>
+  > = [
+    {
+      accessorKey: "creatorCode",
+      cell: ({ row }) => (
+        <div className="flex flex-col gap-1">
+          <span className="font-medium">{row.original.creatorCode}</span>
+          <span className="text-xs text-muted-foreground">
+            {row.original.ledgerEntryCount} ledger row(s)
+          </span>
+        </div>
+      ),
+      header: "Creator",
+    },
+    {
+      cell: ({ row }) => (
+        <span className="font-medium">
+          {formatCurrencyAmount(row.original.amount, row.original.currency)}
+        </span>
+      ),
+      header: "Amount",
+      id: "amount",
+    },
+    {
+      accessorKey: "status",
+      cell: ({ row }) => (
+        <span className="capitalize">
+          {formatCreatorTransferStatus(row.original.status)}
+        </span>
+      ),
+      header: "Status",
+    },
+    {
+      cell: ({ row }) => (
+        <div className="flex max-w-sm flex-col gap-1">
+          <span className="truncate text-xs text-muted-foreground">
+            {row.original.stripeTransferId ?? "No Stripe transfer yet"}
+          </span>
+          <span className="truncate text-xs text-muted-foreground">
+            {row.original.failureMessage ?? row.original.idempotencyKey}
+          </span>
+        </div>
+      ),
+      header: "Stripe",
+      id: "stripe",
+    },
+    {
+      cell: ({ row }) => {
+        const canRetry =
+          row.original.status === "failed" ||
+          row.original.status === "requires_review"
+
+        return (
+          <div className="flex justify-end">
+            <Button
+              disabled={creatorPayoutActionId === row.original.id || !canRetry}
+              onClick={() => void retryCreatorPayoutTransfer(row.original.id)}
+              size="sm"
+              variant="outline"
+            >
+              Retry
+            </Button>
+          </div>
+        )
+      },
+      enableGlobalFilter: false,
+      header: "",
+      id: "actions",
+    },
+  ]
   const catalogAuditColumns: Array<ColumnDef<StaffAuditLogEntry>> = [
     {
       accessorKey: "createdAt",
@@ -1605,6 +1787,64 @@ export function StaffBillingView({
           : "Unable to refresh Stripe Connect status."
       )
     }
+  }
+
+  async function runCreatorPayoutAction(
+    actionId: string,
+    request: BillingActionRequest
+  ) {
+    setCreatorPayoutActionId(actionId)
+
+    try {
+      const result =
+        await billingClient.runAction<StaffMutationResponse>(request)
+      await invalidateStaffQueries.invalidateBilling()
+      await handleMutationResult(result)
+    } catch (error) {
+      toast.error(
+        error instanceof StaffClientError
+          ? error.message
+          : "Creator transfer action failed."
+      )
+    } finally {
+      setCreatorPayoutActionId(null)
+    }
+  }
+
+  async function createCreatorPayoutRun() {
+    await runCreatorPayoutAction("create-run", {
+      action: "createCreatorPayoutRun",
+      input: {
+        ledgerEntryIds: data.creatorPayoutPreview?.selectedLedgerEntryIds,
+      },
+    })
+  }
+
+  async function executeCreatorPayoutRun(payoutRunId: string) {
+    await runCreatorPayoutAction(payoutRunId, {
+      action: "executeCreatorPayoutRun",
+      input: {
+        payoutRunId,
+      },
+    })
+  }
+
+  async function cancelCreatorPayoutRun(payoutRunId: string) {
+    await runCreatorPayoutAction(payoutRunId, {
+      action: "cancelCreatorPayoutRun",
+      input: {
+        payoutRunId,
+      },
+    })
+  }
+
+  async function retryCreatorPayoutTransfer(payoutTransferId: string) {
+    await runCreatorPayoutAction(payoutTransferId, {
+      action: "retryCreatorPayoutTransfer",
+      input: {
+        payoutTransferId,
+      },
+    })
   }
 
   function openGrantCreatorAccessDialog() {
@@ -2049,6 +2289,33 @@ export function StaffBillingView({
                   value: creatorProgramPaidConversionCount,
                 },
               ]
+            : section === "subscriptions-creator-transfers"
+              ? [
+                  {
+                    label: "Ready creators",
+                    value: data.creatorPayoutPreview?.readyCreatorCount ?? 0,
+                  },
+                  {
+                    label: "Transfer groups",
+                    value: data.creatorPayoutPreview?.transferCount ?? 0,
+                  },
+                  {
+                    label: "Ready totals",
+                    value: formatCurrencyTotals(
+                      data.creatorPayoutPreview?.currencyTotals ?? []
+                    ),
+                  },
+                  {
+                    label: "Blocked groups",
+                    value: data.creatorPayoutPreview?.blockedGroups.length ?? 0,
+                  },
+                  {
+                    label: "Draft runs",
+                    value: data.creatorPayoutRuns.filter(
+                      (run) => run.status === "draft"
+                    ).length,
+                  },
+                ]
             : [
                 { label: "Plans", value: data.plans.length },
                 { label: "Features", value: data.features.length },
@@ -3083,6 +3350,173 @@ export function StaffBillingView({
               emptyTitle="No creator accounts yet"
               getRowId={(row) => row.id}
               searchPlaceholder="Search creators"
+            />
+          </StaffSection>
+        </div>
+      ) : null}
+
+      {section === "subscriptions-creator-transfers" ? (
+        <div className="grid gap-6">
+          <StaffSection
+            action={
+              <Button
+                disabled={
+                  creatorPayoutActionId !== null ||
+                  !data.creatorPayoutPreview ||
+                  data.creatorPayoutPreview.selectedLedgerEntryIds.length === 0
+                }
+                onClick={() => void createCreatorPayoutRun()}
+                size="sm"
+              >
+                Create review run
+              </Button>
+            }
+            contentClassName="grid gap-5"
+            description="Preview uses local ledger and Stripe Connect readiness snapshots. Execution refreshes Stripe before creating transfers."
+            title="Transfer preview"
+          >
+            <StaffKeyValueGrid
+              columnsClassName="md:grid-cols-4"
+              rows={[
+                {
+                  label: "Ready creators",
+                  value: data.creatorPayoutPreview?.readyCreatorCount ?? 0,
+                },
+                {
+                  label: "Transfers",
+                  value: data.creatorPayoutPreview?.transferCount ?? 0,
+                },
+                {
+                  label: "Ready totals",
+                  value: formatCurrencyTotals(
+                    data.creatorPayoutPreview?.currencyTotals ?? []
+                  ),
+                },
+                {
+                  label: "Excluded rows",
+                  value: data.creatorPayoutPreview?.excludedCount ?? 0,
+                },
+              ]}
+            />
+
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Creator</TableHead>
+                    <TableHead>Currency</TableHead>
+                    <TableHead>Amount</TableHead>
+                    <TableHead>Ledger rows</TableHead>
+                    <TableHead>Connect</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(data.creatorPayoutPreview?.readyGroups ?? []).map(
+                    (group) => (
+                      <TableRow
+                        key={`${group.creatorAccountId}:${group.currency}`}
+                      >
+                        <TableCell className="font-medium">
+                          {group.creatorCode}
+                        </TableCell>
+                        <TableCell>{group.currency.toUpperCase()}</TableCell>
+                        <TableCell>
+                          {formatCurrencyAmount(group.amount, group.currency)}
+                        </TableCell>
+                        <TableCell>{group.ledgerEntryCount}</TableCell>
+                        <TableCell className="text-muted-foreground">
+                          Ready
+                        </TableCell>
+                      </TableRow>
+                    )
+                  )}
+                  {(data.creatorPayoutPreview?.readyGroups.length ?? 0) ===
+                  0 ? (
+                    <TableRow>
+                      <TableCell
+                        className="py-6 text-sm text-muted-foreground"
+                        colSpan={5}
+                      >
+                        No eligible creator earnings are ready to transfer.
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
+                </TableBody>
+              </Table>
+            </div>
+
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Blocked creator</TableHead>
+                    <TableHead>Currency</TableHead>
+                    <TableHead>Amount</TableHead>
+                    <TableHead>Blockers</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(data.creatorPayoutPreview?.blockedGroups ?? []).map(
+                    (group) => (
+                      <TableRow
+                        key={`${group.creatorAccountId}:${group.currency}`}
+                      >
+                        <TableCell className="font-medium">
+                          {group.creatorCode}
+                        </TableCell>
+                        <TableCell>{group.currency.toUpperCase()}</TableCell>
+                        <TableCell>
+                          {formatCurrencyAmount(group.amount, group.currency)}
+                        </TableCell>
+                        <TableCell className="max-w-xl whitespace-normal text-muted-foreground">
+                          {group.blockers
+                            .map((blocker) => blocker.message)
+                            .join(" ")}
+                        </TableCell>
+                      </TableRow>
+                    )
+                  )}
+                  {(data.creatorPayoutPreview?.blockedGroups.length ?? 0) ===
+                  0 ? (
+                    <TableRow>
+                      <TableCell
+                        className="py-6 text-sm text-muted-foreground"
+                        colSpan={4}
+                      >
+                        No blocked creator transfer groups.
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
+                </TableBody>
+              </Table>
+            </div>
+          </StaffSection>
+
+          <StaffSection
+            description="Draft runs reserve ledger rows until they are executed or cancelled."
+            title="Run history"
+          >
+            <StaffDataTable
+              columns={creatorPayoutRunColumns}
+              data={data.creatorPayoutRuns}
+              emptyDescription="Create a review run from eligible creator earnings before executing Stripe transfers."
+              emptyTitle="No creator transfer runs"
+              getRowId={(row) => row.id}
+              searchPlaceholder="Search transfer runs"
+            />
+          </StaffSection>
+
+          <StaffSection
+            description="Each row maps to one Stripe Transfer for one creator account and one currency."
+            title="Transfer history"
+          >
+            <StaffDataTable
+              columns={creatorPayoutTransferColumns}
+              data={data.creatorPayoutTransfers}
+              emptyDescription="Transfer rows appear here after a review run is created."
+              emptyTitle="No transfer rows"
+              getRowId={(row) => row.id}
+              searchPlaceholder="Search transfers"
             />
           </StaffSection>
         </div>
