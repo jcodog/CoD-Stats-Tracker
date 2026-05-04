@@ -190,6 +190,7 @@ export function CreatorCodeView() {
     connectPayoutReady:
       creatorAccount.connectState === "ready" &&
       creatorAccount.payoutsEnabled === true,
+    estimatedEarningsByCurrency: dashboard.estimatedEarningsByCurrency,
     paidConversionCount: dashboard.paidConversionCount,
     payoutEligible: creatorAccount.payoutEligible,
   })
@@ -352,7 +353,7 @@ export function CreatorCodeView() {
               </Field>
             </FieldGroup>
 
-            <div className="grid gap-0 border-y border-border/60 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-0 border-y border-border/60 sm:grid-cols-2 xl:grid-cols-5">
               {[
                 {
                   detail:
@@ -377,6 +378,12 @@ export function CreatorCodeView() {
                 },
                 {
                   detail: estimatedPayout.detail,
+                  icon: IconArrowRight,
+                  label: "Estimated earnings",
+                  value: estimatedPayout.value,
+                },
+                {
+                  detail: "Attributed users with a paid subscription.",
                   icon: IconArrowRight,
                   label: "Paid conversions",
                   value: String(dashboard.paidConversionCount),

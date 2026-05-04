@@ -89,6 +89,7 @@ type BillingInvoiceSnapshot = {
   paymentMethodType?: string
   status: string
   stripeInvoiceId: string
+  stripePaymentIntentId?: string
   stripeSubscriptionId?: string
 }
 
@@ -109,7 +110,12 @@ export type UpsertBillingCustomerInput = {
 }
 
 export type UpsertBillingSubscriptionInput = {
-  attentionStatus: "none" | "payment_failed" | "past_due" | "requires_action" | "paused"
+  attentionStatus:
+    | "none"
+    | "payment_failed"
+    | "past_due"
+    | "requires_action"
+    | "paused"
   attentionUpdatedAt?: number
   cancelAt?: number
   cancelAtPeriodEnd: boolean
@@ -171,17 +177,36 @@ export type SyncBillingInvoicesInput = {
 }
 
 export type BillingLifecycleOps = {
+  bindCreatorCodeUsageLock?(args: {
+    clerkUserId: string
+    creatorCode?: string
+    creatorDiscountPercent?: number
+    creatorPayoutPercent?: number
+    creatorUsageLockId?: string
+    normalizedCode?: string
+    source?: "cookie" | "manual" | "staff"
+    stripeCustomerId: string
+    stripeSubscriptionId: string
+    subscriptionStartedAt: number
+    userId: string
+  }): Promise<unknown>
   getBillingContextByStripeCustomerId(args: {
     stripeCustomerId: string
   }): Promise<UserBillingContext | null>
-  getBillingPlans(args: Record<string, never>): Promise<BillingPlanScheduleLookup[]>
+  getBillingPlans(
+    args: Record<string, never>
+  ): Promise<BillingPlanScheduleLookup[]>
   getPlanByStripePriceId(args: {
     stripePriceId: string
   }): Promise<BillingPlanPriceLookup | null>
   syncBillingInvoices(args: SyncBillingInvoicesInput): Promise<unknown>
-  syncBillingPaymentMethods(args: SyncBillingPaymentMethodsInput): Promise<unknown>
+  syncBillingPaymentMethods(
+    args: SyncBillingPaymentMethodsInput
+  ): Promise<unknown>
   upsertBillingCustomer(args: UpsertBillingCustomerInput): Promise<unknown>
-  upsertBillingSubscription(args: UpsertBillingSubscriptionInput): Promise<unknown>
+  upsertBillingSubscription(
+    args: UpsertBillingSubscriptionInput
+  ): Promise<unknown>
 }
 
 type BillingLifecycleCtx = BillingLifecycleOps
@@ -249,6 +274,37 @@ function normalizeBillingAddress(address: Stripe.Address | null | undefined) {
     postalCode: address.postal_code ?? undefined,
     state: address.state ?? undefined,
   }
+}
+
+function getStripeMetadataValue(
+  metadata: Stripe.Metadata | null | undefined,
+  key: string
+) {
+  const value = metadata?.[key]
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : undefined
+}
+
+function getStripeMetadataNumber(
+  metadata: Stripe.Metadata | null | undefined,
+  key: string
+) {
+  const value = getStripeMetadataValue(metadata, key)
+  const parsedValue = value ? Number(value) : NaN
+
+  return Number.isFinite(parsedValue) ? parsedValue : undefined
+}
+
+function normalizeCreatorCodeFromMetadata(value: string | undefined) {
+  const normalizedCode = value
+    ?.trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "")
+
+  return normalizedCode && /^[A-Z0-9]{3,24}$/.test(normalizedCode)
+    ? normalizedCode
+    : undefined
 }
 
 function getStripeCustomerBusinessName(customer: Stripe.Customer | null) {
@@ -445,11 +501,10 @@ export async function reconcileBillingCustomer(args: {
   stripe: Stripe
   stripeCustomerId: string
 }): Promise<ReconciledBillingCustomerResult> {
-  const billingContext: UserBillingContext | null = await args.ctx.getBillingContextByStripeCustomerId(
-    {
+  const billingContext: UserBillingContext | null =
+    await args.ctx.getBillingContextByStripeCustomerId({
       stripeCustomerId: args.stripeCustomerId,
-    }
-  )
+    })
 
   if (!billingContext) {
     return null
@@ -466,35 +521,32 @@ export async function reconcileBillingCustomer(args: {
       })
     : []
 
-  await args.ctx.upsertBillingCustomer(
-    {
-      active: args.active ?? billingContext.customer?.active ?? true,
-      billingAddress: normalizeBillingAddress(stripeCustomer?.address ?? null),
-      businessName:
-        getStripeCustomerBusinessName(stripeCustomer) ??
-        billingContext.customer?.businessName ??
-        undefined,
-      clerkUserId: billingContext.user.clerkUserId,
-      defaultPaymentMethodId: getStripeDefaultPaymentMethodId(
-        stripeCustomer?.invoice_settings.default_payment_method
-      ),
-      email:
-        stripeCustomer?.email ?? billingContext.customer?.email ?? undefined,
-      lastSyncedAt: Date.now(),
-      name:
-        stripeCustomer?.name ??
-        billingContext.customer?.name ??
-        billingContext.user.name,
-      phone:
-        getStripeCustomerPhone(stripeCustomer) ??
-        billingContext.customer?.phone ??
-        undefined,
-      stripeCustomerId: args.stripeCustomerId,
-      taxExempt: stripeCustomer?.tax_exempt ?? undefined,
-      taxIds,
-      userId: billingContext.user._id,
-    }
-  )
+  await args.ctx.upsertBillingCustomer({
+    active: args.active ?? billingContext.customer?.active ?? true,
+    billingAddress: normalizeBillingAddress(stripeCustomer?.address ?? null),
+    businessName:
+      getStripeCustomerBusinessName(stripeCustomer) ??
+      billingContext.customer?.businessName ??
+      undefined,
+    clerkUserId: billingContext.user.clerkUserId,
+    defaultPaymentMethodId: getStripeDefaultPaymentMethodId(
+      stripeCustomer?.invoice_settings.default_payment_method
+    ),
+    email: stripeCustomer?.email ?? billingContext.customer?.email ?? undefined,
+    lastSyncedAt: Date.now(),
+    name:
+      stripeCustomer?.name ??
+      billingContext.customer?.name ??
+      billingContext.user.name,
+    phone:
+      getStripeCustomerPhone(stripeCustomer) ??
+      billingContext.customer?.phone ??
+      undefined,
+    stripeCustomerId: args.stripeCustomerId,
+    taxExempt: stripeCustomer?.tax_exempt ?? undefined,
+    taxIds,
+    userId: billingContext.user._id,
+  })
 
   return {
     billingContext,
@@ -516,11 +568,10 @@ export async function reconcileStripeSubscription(args: {
     typeof args.subscription.customer === "string"
       ? args.subscription.customer
       : args.subscription.customer.id
-  const billingContext: UserBillingContext | null = await args.ctx.getBillingContextByStripeCustomerId(
-    {
+  const billingContext: UserBillingContext | null =
+    await args.ctx.getBillingContextByStripeCustomerId({
       stripeCustomerId,
-    }
-  )
+    })
 
   if (!billingContext) {
     return null
@@ -528,11 +579,9 @@ export async function reconcileStripeSubscription(args: {
 
   const item = getStripeSubscriptionItem(args.subscription)
   const priceId = item.price.id
-  const plan = await args.ctx.getPlanByStripePriceId(
-    {
-      stripePriceId: priceId,
-    }
-  )
+  const plan = await args.ctx.getPlanByStripePriceId({
+    stripePriceId: priceId,
+  })
 
   if (!plan) {
     throw new Error(
@@ -545,20 +594,17 @@ export async function reconcileStripeSubscription(args: {
     stripe: args.stripe,
   })
 
-  await args.ctx.upsertBillingCustomer(
-    {
-      active: true,
-      clerkUserId: billingContext.user.clerkUserId,
-      email:
-        stripeCustomer?.email ?? billingContext.customer?.email ?? undefined,
-      name:
-        stripeCustomer?.name ??
-        billingContext.customer?.name ??
-        billingContext.user.name,
-      stripeCustomerId,
-      userId: billingContext.user._id,
-    }
-  )
+  await args.ctx.upsertBillingCustomer({
+    active: true,
+    clerkUserId: billingContext.user.clerkUserId,
+    email: stripeCustomer?.email ?? billingContext.customer?.email ?? undefined,
+    name:
+      stripeCustomer?.name ??
+      billingContext.customer?.name ??
+      billingContext.user.name,
+    stripeCustomerId,
+    userId: billingContext.user._id,
+  })
 
   const scheduleId = getStripeScheduleId(args.subscription.schedule)
   const schedule = scheduleId
@@ -568,9 +614,7 @@ export async function reconcileStripeSubscription(args: {
     string,
     { interval: "month" | "year"; planKey: string }
   >()
-  const plans = await args.ctx.getBillingPlans(
-    {}
-  )
+  const plans = await args.ctx.getBillingPlans({})
 
   for (const currentPlan of plans) {
     if (currentPlan.monthlyPriceId) {
@@ -594,77 +638,112 @@ export async function reconcileStripeSubscription(args: {
     subscription: args.subscription,
   })
 
-  await args.ctx.upsertBillingSubscription(
-    {
-      attentionStatus: deriveAttentionStatus({
-        invoiceEventType: args.invoiceEventType,
-        subscription: args.subscription,
-      }),
-      attentionUpdatedAt: Date.now(),
-      cancelAt:
-        typeof args.subscription.cancel_at === "number"
-          ? args.subscription.cancel_at * 1000
-          : undefined,
-      cancelAtPeriodEnd: args.subscription.cancel_at_period_end,
-      canceledAt:
-        typeof args.subscription.canceled_at === "number"
-          ? args.subscription.canceled_at * 1000
-          : undefined,
-      clerkUserId: billingContext.user.clerkUserId,
-      clearScheduledChange:
-        scheduledChange.scheduledChangeType === undefined &&
-        !args.subscription.cancel_at_period_end,
-      currentPeriodEnd: getSubscriptionItemCurrentPeriodEnd(args.subscription),
-      currentPeriodStart: getSubscriptionItemCurrentPeriodStart(
-        args.subscription
-      ),
-      defaultPaymentMethodId: getStripeDefaultPaymentMethodId(
-        args.subscription.default_payment_method
-      ),
-      endedAt:
-        typeof args.subscription.ended_at === "number"
-          ? args.subscription.ended_at * 1000
-          : undefined,
-      interval: getStripeSubscriptionInterval(args.subscription),
-      lastStripeEventId: args.lastStripeEventId,
-      managedGrantEndsAt: getStripeManagedGrantEndsAt(args.subscription),
-      managedGrantMode: getStripeManagedGrantMode(args.subscription),
-      managedGrantSource: getStripeManagedGrantSource(args.subscription),
-      planKey: plan.key,
-      quantity: item.quantity ?? 1,
-      scheduledChangeAt: scheduledChange.scheduledChangeAt,
-      scheduledChangeRequestedAt: scheduledChange.scheduledChangeRequestedAt,
-      scheduledChangeType: scheduledChange.scheduledChangeType,
-      scheduledInterval: scheduledChange.scheduledInterval,
-      scheduledPlanKey: scheduledChange.scheduledPlanKey,
-      startedAt:
-        typeof args.subscription.start_date === "number"
-          ? args.subscription.start_date * 1000
-          : undefined,
-      status: mapStripeSubscriptionStatus(args.subscription.status),
-      stripeCustomerId,
-      stripeLatestInvoiceId: getStripeInvoiceId(
-        args.subscription.latest_invoice
-      ),
-      stripeLatestPaymentIntentId: getInvoicePaymentIntentId(
-        args.subscription.latest_invoice
-      ),
-      stripePriceId: priceId,
-      stripeProductId: getStripeProductId(item.price.product),
-      stripeScheduleId: scheduledChange.stripeScheduleId ?? scheduleId,
-      stripeSubscriptionId: args.subscription.id,
-      stripeSubscriptionItemId: item.id,
-      trialEnd:
-        typeof args.subscription.trial_end === "number"
-          ? args.subscription.trial_end * 1000
-          : undefined,
-      trialStart:
-        typeof args.subscription.trial_start === "number"
-          ? args.subscription.trial_start * 1000
-          : undefined,
-      userId: billingContext.user._id,
-    }
+  await args.ctx.upsertBillingSubscription({
+    attentionStatus: deriveAttentionStatus({
+      invoiceEventType: args.invoiceEventType,
+      subscription: args.subscription,
+    }),
+    attentionUpdatedAt: Date.now(),
+    cancelAt:
+      typeof args.subscription.cancel_at === "number"
+        ? args.subscription.cancel_at * 1000
+        : undefined,
+    cancelAtPeriodEnd: args.subscription.cancel_at_period_end,
+    canceledAt:
+      typeof args.subscription.canceled_at === "number"
+        ? args.subscription.canceled_at * 1000
+        : undefined,
+    clerkUserId: billingContext.user.clerkUserId,
+    clearScheduledChange:
+      scheduledChange.scheduledChangeType === undefined &&
+      !args.subscription.cancel_at_period_end,
+    currentPeriodEnd: getSubscriptionItemCurrentPeriodEnd(args.subscription),
+    currentPeriodStart: getSubscriptionItemCurrentPeriodStart(
+      args.subscription
+    ),
+    defaultPaymentMethodId: getStripeDefaultPaymentMethodId(
+      args.subscription.default_payment_method
+    ),
+    endedAt:
+      typeof args.subscription.ended_at === "number"
+        ? args.subscription.ended_at * 1000
+        : undefined,
+    interval: getStripeSubscriptionInterval(args.subscription),
+    lastStripeEventId: args.lastStripeEventId,
+    managedGrantEndsAt: getStripeManagedGrantEndsAt(args.subscription),
+    managedGrantMode: getStripeManagedGrantMode(args.subscription),
+    managedGrantSource: getStripeManagedGrantSource(args.subscription),
+    planKey: plan.key,
+    quantity: item.quantity ?? 1,
+    scheduledChangeAt: scheduledChange.scheduledChangeAt,
+    scheduledChangeRequestedAt: scheduledChange.scheduledChangeRequestedAt,
+    scheduledChangeType: scheduledChange.scheduledChangeType,
+    scheduledInterval: scheduledChange.scheduledInterval,
+    scheduledPlanKey: scheduledChange.scheduledPlanKey,
+    startedAt:
+      typeof args.subscription.start_date === "number"
+        ? args.subscription.start_date * 1000
+        : undefined,
+    status: mapStripeSubscriptionStatus(args.subscription.status),
+    stripeCustomerId,
+    stripeLatestInvoiceId: getStripeInvoiceId(args.subscription.latest_invoice),
+    stripeLatestPaymentIntentId: getInvoicePaymentIntentId(
+      args.subscription.latest_invoice
+    ),
+    stripePriceId: priceId,
+    stripeProductId: getStripeProductId(item.price.product),
+    stripeScheduleId: scheduledChange.stripeScheduleId ?? scheduleId,
+    stripeSubscriptionId: args.subscription.id,
+    stripeSubscriptionItemId: item.id,
+    trialEnd:
+      typeof args.subscription.trial_end === "number"
+        ? args.subscription.trial_end * 1000
+        : undefined,
+    trialStart:
+      typeof args.subscription.trial_start === "number"
+        ? args.subscription.trial_start * 1000
+        : undefined,
+    userId: billingContext.user._id,
+  })
+
+  const creatorCode = getStripeMetadataValue(
+    args.subscription.metadata,
+    "creatorCode"
   )
+  const creatorUsageLockId = getStripeMetadataValue(
+    args.subscription.metadata,
+    "creatorUsageLockId"
+  )
+
+  if (
+    args.ctx.bindCreatorCodeUsageLock &&
+    (creatorCode || creatorUsageLockId)
+  ) {
+    const subscriptionStartedAt =
+      typeof args.subscription.start_date === "number"
+        ? args.subscription.start_date * 1000
+        : Date.now()
+
+    await args.ctx.bindCreatorCodeUsageLock({
+      clerkUserId: billingContext.user.clerkUserId,
+      creatorCode,
+      creatorDiscountPercent: getStripeMetadataNumber(
+        args.subscription.metadata,
+        "creatorDiscountPercent"
+      ),
+      creatorPayoutPercent: getStripeMetadataNumber(
+        args.subscription.metadata,
+        "creatorPayoutPercent"
+      ),
+      creatorUsageLockId,
+      normalizedCode: normalizeCreatorCodeFromMetadata(creatorCode),
+      source: "manual",
+      stripeCustomerId,
+      stripeSubscriptionId: args.subscription.id,
+      subscriptionStartedAt,
+      userId: billingContext.user._id,
+    })
+  }
 
   return {
     planKey: plan.key,
@@ -726,13 +805,23 @@ export async function reconcileStripeInvoice(args: {
     }
   )
 
-  return await reconcileStripeSubscription({
+  const result = await reconcileStripeSubscription({
     ctx: args.ctx,
     invoiceEventType: args.eventType,
     lastStripeEventId: args.lastStripeEventId,
     stripe: args.stripe,
     subscription,
   })
+
+  if (stripeCustomerId && result) {
+    await syncBillingInvoicesForCustomer({
+      ctx: args.ctx,
+      stripe: args.stripe,
+      stripeCustomerId,
+    })
+  }
+
+  return result
 }
 
 export async function syncBillingPaymentMethodsForCustomer(args: {
@@ -740,11 +829,10 @@ export async function syncBillingPaymentMethodsForCustomer(args: {
   stripe: Stripe
   stripeCustomerId: string
 }): Promise<SyncedBillingCollectionResult> {
-  const billingContext: UserBillingContext | null = await args.ctx.getBillingContextByStripeCustomerId(
-    {
+  const billingContext: UserBillingContext | null =
+    await args.ctx.getBillingContextByStripeCustomerId({
       stripeCustomerId: args.stripeCustomerId,
-    }
-  )
+    })
 
   if (!billingContext) {
     return null
@@ -761,39 +849,37 @@ export async function syncBillingPaymentMethodsForCustomer(args: {
     }
   )
 
-  await args.ctx.syncBillingPaymentMethods(
-    {
-      clerkUserId: billingContext.user.clerkUserId,
-      defaultPaymentMethodId: getStripeDefaultPaymentMethodId(
-        stripeCustomer?.invoice_settings.default_payment_method
+  await args.ctx.syncBillingPaymentMethods({
+    clerkUserId: billingContext.user.clerkUserId,
+    defaultPaymentMethodId: getStripeDefaultPaymentMethodId(
+      stripeCustomer?.invoice_settings.default_payment_method
+    ),
+    paymentMethods: paymentMethods.data.map((paymentMethod) => ({
+      bankName:
+        paymentMethod.us_bank_account?.bank_name ??
+        paymentMethod.sepa_debit?.bank_code ??
+        undefined,
+      billingAddress: normalizeBillingAddress(
+        paymentMethod.billing_details.address
       ),
-      paymentMethods: paymentMethods.data.map((paymentMethod) => ({
-        bankName:
-          paymentMethod.us_bank_account?.bank_name ??
-          paymentMethod.sepa_debit?.bank_code ??
-          undefined,
-        billingAddress: normalizeBillingAddress(
-          paymentMethod.billing_details.address
-        ),
-        brand:
-          paymentMethod.card?.brand ??
-          paymentMethod.us_bank_account?.bank_name ??
-          undefined,
-        cardholderName: paymentMethod.billing_details.name ?? undefined,
-        expMonth: paymentMethod.card?.exp_month ?? undefined,
-        expYear: paymentMethod.card?.exp_year ?? undefined,
-        last4:
-          paymentMethod.card?.last4 ??
-          paymentMethod.us_bank_account?.last4 ??
-          paymentMethod.sepa_debit?.last4 ??
-          undefined,
-        stripePaymentMethodId: paymentMethod.id,
-        type: paymentMethod.type,
-      })),
-      stripeCustomerId: args.stripeCustomerId,
-      userId: billingContext.user._id,
-    }
-  )
+      brand:
+        paymentMethod.card?.brand ??
+        paymentMethod.us_bank_account?.bank_name ??
+        undefined,
+      cardholderName: paymentMethod.billing_details.name ?? undefined,
+      expMonth: paymentMethod.card?.exp_month ?? undefined,
+      expYear: paymentMethod.card?.exp_year ?? undefined,
+      last4:
+        paymentMethod.card?.last4 ??
+        paymentMethod.us_bank_account?.last4 ??
+        paymentMethod.sepa_debit?.last4 ??
+        undefined,
+      stripePaymentMethodId: paymentMethod.id,
+      type: paymentMethod.type,
+    })),
+    stripeCustomerId: args.stripeCustomerId,
+    userId: billingContext.user._id,
+  })
 
   return {
     count: paymentMethods.data.length,
@@ -807,11 +893,10 @@ export async function syncBillingInvoicesForCustomer(args: {
   stripe: Stripe
   stripeCustomerId: string
 }): Promise<SyncedBillingCollectionResult> {
-  const billingContext: UserBillingContext | null = await args.ctx.getBillingContextByStripeCustomerId(
-    {
+  const billingContext: UserBillingContext | null =
+    await args.ctx.getBillingContextByStripeCustomerId({
       stripeCustomerId: args.stripeCustomerId,
-    }
-  )
+    })
 
   if (!billingContext) {
     return null
@@ -844,48 +929,47 @@ export async function syncBillingInvoicesForCustomer(args: {
     stripe: args.stripe,
   })
 
-  await args.ctx.syncBillingInvoices(
-    {
-      clerkUserId: billingContext.user.clerkUserId,
-      invoices: invoices.map((invoice) => {
-        const paymentMethod = resolveInvoicePaymentMethod(
-          invoice,
-          paymentMethodsById
-        )
+  await args.ctx.syncBillingInvoices({
+    clerkUserId: billingContext.user.clerkUserId,
+    invoices: invoices.map((invoice) => {
+      const paymentMethod = resolveInvoicePaymentMethod(
+        invoice,
+        paymentMethodsById
+      )
 
-        return {
-          amountDue: invoice.amount_due,
-          amountPaid: invoice.amount_paid,
-          amountTotal: invoice.total,
-          currency: invoice.currency,
-          description:
-            invoice.lines.data[0]?.description ??
-            invoice.description ??
-            invoice.number ??
-            "Subscription invoice",
-          hostedInvoiceUrl: getSafeHttpsUrl(invoice.hosted_invoice_url),
-          invoiceIssuedAt: invoice.created * 1000,
-          invoiceNumber: invoice.number ?? undefined,
-          invoicePdfUrl: getSafeHttpsUrl(invoice.invoice_pdf),
-          paymentMethodBrand:
-            paymentMethod?.card?.brand ??
-            paymentMethod?.us_bank_account?.bank_name ??
-            undefined,
-          paymentMethodLast4:
-            paymentMethod?.card?.last4 ??
-            paymentMethod?.us_bank_account?.last4 ??
-            paymentMethod?.sepa_debit?.last4 ??
-            undefined,
-          paymentMethodType: paymentMethod?.type ?? undefined,
-          status: invoice.status ?? "draft",
-          stripeInvoiceId: invoice.id,
-          stripeSubscriptionId: getInvoiceSubscriptionId(invoice),
-        }
-      }),
-      stripeCustomerId: args.stripeCustomerId,
-      userId: billingContext.user._id,
-    }
-  )
+      return {
+        amountDue: invoice.amount_due,
+        amountPaid: invoice.amount_paid,
+        amountTotal: invoice.total,
+        currency: invoice.currency,
+        description:
+          invoice.lines.data[0]?.description ??
+          invoice.description ??
+          invoice.number ??
+          "Subscription invoice",
+        hostedInvoiceUrl: getSafeHttpsUrl(invoice.hosted_invoice_url),
+        invoiceIssuedAt: invoice.created * 1000,
+        invoiceNumber: invoice.number ?? undefined,
+        invoicePdfUrl: getSafeHttpsUrl(invoice.invoice_pdf),
+        paymentMethodBrand:
+          paymentMethod?.card?.brand ??
+          paymentMethod?.us_bank_account?.bank_name ??
+          undefined,
+        paymentMethodLast4:
+          paymentMethod?.card?.last4 ??
+          paymentMethod?.us_bank_account?.last4 ??
+          paymentMethod?.sepa_debit?.last4 ??
+          undefined,
+        paymentMethodType: paymentMethod?.type ?? undefined,
+        status: invoice.status ?? "draft",
+        stripeInvoiceId: invoice.id,
+        stripePaymentIntentId: getInvoicePaymentIntentId(invoice),
+        stripeSubscriptionId: getInvoiceSubscriptionId(invoice),
+      }
+    }),
+    stripeCustomerId: args.stripeCustomerId,
+    userId: billingContext.user._id,
+  })
 
   return {
     count: invoices.length,

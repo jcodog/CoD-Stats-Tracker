@@ -38,6 +38,8 @@ import { rankedTitles } from "../src/db/tables/rankedTitles"
 import { connectedAccounts } from "../src/db/tables/connectedAccounts"
 import { creatorAccounts } from "../src/db/tables/creatorAccounts"
 import { creatorAttributions } from "../src/db/tables/creatorAttributions"
+import { creatorCodeUsageLocks } from "../src/db/tables/creatorCodeUsageLocks"
+import { creatorEarningLedger } from "../src/db/tables/creatorEarningLedger"
 import { creatorProgramDefaults } from "../src/db/tables/creatorProgramDefaults"
 
 export default defineSchema({
@@ -76,5 +78,7 @@ export default defineSchema({
   connectedAccounts,
   creatorAccounts,
   creatorAttributions,
+  creatorCodeUsageLocks,
+  creatorEarningLedger,
   creatorProgramDefaults,
 })

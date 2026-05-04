@@ -16,17 +16,14 @@ import {
   syncBillingPaymentMethodsForCustomer,
   type BillingLifecycleOps,
 } from "../../../src/lib/billingLifecycle"
-import {
-  hasManagedCreatorGrantSubscriptionAccess,
-} from "../../../src/lib/billing"
+import { hasManagedCreatorGrantSubscriptionAccess } from "../../../src/lib/billing"
 import { hasCreatorAccess } from "../../../src/lib/billingAccess"
-import {
-  getExpandedStripeInvoice,
-} from "../../../src/lib/stripe/billing"
+import { getExpandedStripeInvoice } from "../../../src/lib/stripe/billing"
 import {
   getClerkBackendClient,
   syncClerkCreatorAttributionMetadata,
 } from "../../../src/lib/clerk"
+import { isSelfCreatorCode } from "../../../src/lib/creatorAccounting"
 import { getStripe, STRIPE_CATALOG_APP } from "../../../src/lib/stripe/client"
 import {
   buildCheckoutCancelUrl,
@@ -42,6 +39,7 @@ import {
   createGbpEstimateFxQuote,
   estimateFromGbpMinorUnits,
 } from "../../lib/stripe/helpers/fxQuotes"
+import { buildCreatorDiscountCouponCreateParams } from "../../lib/stripe/helpers/creatorDiscounts"
 import { createStripeBillingPortalSession } from "../../lib/stripe/helpers/portal"
 
 type BillingPlanRecord = {
@@ -95,6 +93,7 @@ type CreatorAccountRecord = {
   code: string
   codeActive: boolean
   discountPercent: number
+  payoutPercent: number
   userId: string
 }
 type CreatorAttributionRecord = {
@@ -102,6 +101,14 @@ type CreatorAttributionRecord = {
   creatorCode: string
   normalizedCode: string
   source: "cookie" | "manual" | "staff"
+}
+type CreatorCodeUsageLockRecord = {
+  _id: string
+  creatorAccountId: string
+  creatorCode: string
+  normalizedCode: string
+  source: "cookie" | "manual" | "staff"
+  stripeSubscriptionId?: string
 }
 type CreatorAttributionResult =
   | {
@@ -117,7 +124,11 @@ type CreatorAttributionResult =
 type CheckoutCreatorDiscount = {
   amount: number
   code: string
+  creatorAccountId: Id<"creatorAccounts">
   discountPercent: number
+  normalizedCode: string
+  payoutPercent: number
+  source: "cookie" | "manual" | "staff"
   sourceLabel: string
 }
 type CheckoutCreatorDiscountResult = {
@@ -352,9 +363,7 @@ async function assertCheckoutEnabled(ctx: PublicActionCtx) {
   }
 }
 
-function hasActiveCreatorGrant(
-  userContext: BillingUserContext
-) {
+function hasActiveCreatorGrant(userContext: BillingUserContext) {
   return (
     hasCreatorAccess({
       effectivePlanKey: userContext.accessGrant?.planKey,
@@ -365,9 +374,7 @@ function hasActiveCreatorGrant(
   )
 }
 
-function getCreatorGrantAccessWindow(
-  userContext: BillingUserContext
-) {
+function getCreatorGrantAccessWindow(userContext: BillingUserContext) {
   if (userContext.subscription?.managedGrantEndsAt) {
     return ` until ${new Date(userContext.subscription.managedGrantEndsAt).toISOString()}`
   }
@@ -510,7 +517,9 @@ function resolveCheckoutPlanPricing(args: {
   }
 }
 
-async function getLiveStripePriceSnapshot<TInterval extends "month" | "year">(args: {
+async function getLiveStripePriceSnapshot<
+  TInterval extends "month" | "year",
+>(args: {
   fallbackPricing: {
     amount: number
     currency: string
@@ -702,12 +711,11 @@ async function ensureCreatorDiscountCoupon(args: {
   discountPercent: number
   stripe: Stripe
 }) {
-  const couponId = [
-    "creator",
-    "once",
-    args.creatorCode.toLowerCase(),
-    String(args.discountPercent),
-  ].join("_")
+  const couponParams = buildCreatorDiscountCouponCreateParams({
+    creatorCode: args.creatorCode,
+    discountPercent: args.discountPercent,
+  })
+  const couponId = couponParams.id!
 
   try {
     const existingCoupon = await args.stripe.coupons.retrieve(couponId)
@@ -726,17 +734,7 @@ async function ensureCreatorDiscountCoupon(args: {
     }
   }
 
-  const createdCoupon = await args.stripe.coupons.create({
-    duration: "once",
-    id: couponId,
-    metadata: {
-      app: STRIPE_CATALOG_APP,
-      creatorCode: args.creatorCode,
-      kind: "creator_discount",
-    },
-    name: `${args.creatorCode} first payment discount`,
-    percent_off: args.discountPercent,
-  })
+  const createdCoupon = await args.stripe.coupons.create(couponParams)
 
   return createdCoupon.id
 }
@@ -747,17 +745,18 @@ async function finalizeCreatorAttribution(args: {
   normalizedCode: string
   userContext: BillingUserContext
 }) {
-  const attributionResult: CreatorAttributionResult = await args.ctx.runMutation(
-    internal.mutations.creator.attribution.ensureCanonicalAttribution,
-    {
-      clerkUserId: args.userContext.user.clerkUserId,
-      creatorAccountId: args.creatorAccount._id as Id<"creatorAccounts">,
-      creatorCode: args.creatorAccount.code,
-      normalizedCode: args.normalizedCode,
-      source: "manual",
-      userId: args.userContext.user._id,
-    }
-  )
+  const attributionResult: CreatorAttributionResult =
+    await args.ctx.runMutation(
+      internal.mutations.creator.attribution.ensureCanonicalAttribution,
+      {
+        clerkUserId: args.userContext.user.clerkUserId,
+        creatorAccountId: args.creatorAccount._id as Id<"creatorAccounts">,
+        creatorCode: args.creatorAccount.code,
+        normalizedCode: args.normalizedCode,
+        source: "manual",
+        userId: args.userContext.user._id,
+      }
+    )
 
   if (attributionResult.status === "applied") {
     const clerkUser = await getClerkBackendClient().users.getUser(
@@ -782,14 +781,89 @@ async function resolveCheckoutCreatorDiscount(args: {
   finalizeCodeEntry?: boolean
   userContext: BillingUserContext
 }): Promise<CheckoutCreatorDiscountResult> {
-  const activeAttribution: CreatorAttributionRecord | null =
-    await args.ctx.runQuery(
-    internal.queries.creator.internal.getActiveAttributionByUserId,
+  const usageLock: CreatorCodeUsageLockRecord | null = await args.ctx.runQuery(
+    internal.queries.creator.internal.getUsageLockByUserId,
     {
       userId: args.userContext.user._id,
     }
   )
+  const activeAttribution: CreatorAttributionRecord | null =
+    await args.ctx.runQuery(
+      internal.queries.creator.internal.getActiveAttributionByUserId,
+      {
+        userId: args.userContext.user._id,
+      }
+    )
   const normalizedEnteredCode = normalizeCreatorCodeInput(args.creatorCode)
+
+  if (usageLock?.stripeSubscriptionId) {
+    return {
+      appliedDiscount: null,
+      entryState: normalizedEnteredCode
+        ? ("rejected" as CheckoutCreatorEntryState)
+        : ("not_eligible" as CheckoutCreatorEntryState),
+      message: `This account already used creator code ${usageLock.creatorCode}.`,
+    }
+  }
+
+  if (
+    usageLock &&
+    normalizedEnteredCode &&
+    normalizedEnteredCode !== usageLock.normalizedCode
+  ) {
+    return {
+      appliedDiscount: null,
+      entryState: "rejected" as CheckoutCreatorEntryState,
+      message: `This account is already linked to ${usageLock.creatorCode}.`,
+    }
+  }
+
+  if (usageLock) {
+    const creatorAccount: CreatorAccountRecord | null = await args.ctx.runQuery(
+      internal.queries.creator.internal.getCreatorAccountById,
+      {
+        creatorAccountId: usageLock.creatorAccountId as Id<"creatorAccounts">,
+      }
+    )
+    const hasActiveDiscount =
+      creatorAccount &&
+      creatorAccount.codeActive &&
+      creatorAccount.discountPercent > 0 &&
+      !isSelfCreatorCode({
+        creatorUserId: creatorAccount.userId,
+        userId: args.userContext.user._id,
+      })
+
+    if (!hasActiveDiscount) {
+      return {
+        appliedDiscount: null,
+        entryState: "not_eligible" as CheckoutCreatorEntryState,
+        message:
+          "Your linked creator code is no longer eligible for a first payment discount.",
+      }
+    }
+
+    return {
+      appliedDiscount: {
+        amount: getCreatorDiscountAmount({
+          amount: args.amount,
+          discountPercent: creatorAccount.discountPercent,
+        }),
+        code: creatorAccount.code,
+        creatorAccountId: creatorAccount._id as Id<"creatorAccounts">,
+        discountPercent: creatorAccount.discountPercent,
+        normalizedCode: usageLock.normalizedCode,
+        payoutPercent: creatorAccount.payoutPercent,
+        source: usageLock.source,
+        sourceLabel: getCreatorSourceLabel(usageLock.source),
+      },
+      entryState: "applied" as CheckoutCreatorEntryState,
+      message:
+        usageLock.source === "manual"
+          ? "Already linked to your account."
+          : "Applied from creator link.",
+    }
+  }
 
   if (activeAttribution) {
     const creatorAccount: CreatorAccountRecord | null = await args.ctx.runQuery(
@@ -803,7 +877,10 @@ async function resolveCheckoutCreatorDiscount(args: {
       creatorAccount &&
       creatorAccount.codeActive &&
       creatorAccount.discountPercent > 0 &&
-      creatorAccount.userId !== args.userContext.user._id
+      !isSelfCreatorCode({
+        creatorUserId: creatorAccount.userId,
+        userId: args.userContext.user._id,
+      })
 
     const appliedDiscount = hasActiveDiscount
       ? {
@@ -812,7 +889,11 @@ async function resolveCheckoutCreatorDiscount(args: {
             discountPercent: creatorAccount.discountPercent,
           }),
           code: creatorAccount.code,
+          creatorAccountId: creatorAccount._id as Id<"creatorAccounts">,
           discountPercent: creatorAccount.discountPercent,
+          normalizedCode: activeAttribution.normalizedCode,
+          payoutPercent: creatorAccount.payoutPercent,
+          source: activeAttribution.source,
           sourceLabel: getCreatorSourceLabel(activeAttribution.source),
         }
       : null
@@ -870,7 +951,12 @@ async function resolveCheckoutCreatorDiscount(args: {
     }
   }
 
-  if (creatorAccount.userId === args.userContext.user._id) {
+  if (
+    isSelfCreatorCode({
+      creatorUserId: creatorAccount.userId,
+      userId: args.userContext.user._id,
+    })
+  ) {
     return {
       appliedDiscount: null,
       entryState: "rejected" as CheckoutCreatorEntryState,
@@ -894,7 +980,11 @@ async function resolveCheckoutCreatorDiscount(args: {
         discountPercent: creatorAccount.discountPercent,
       }),
       code: creatorAccount.code,
+      creatorAccountId: creatorAccount._id as Id<"creatorAccounts">,
       discountPercent: creatorAccount.discountPercent,
+      normalizedCode: normalizedEnteredCode,
+      payoutPercent: creatorAccount.payoutPercent,
+      source: "manual",
       sourceLabel: "Applied from code entry",
     },
     entryState: "applied" as CheckoutCreatorEntryState,
@@ -1197,6 +1287,17 @@ function createBillingLifecycleOps(
   ctx: Pick<ActionCtx, "runMutation" | "runQuery">
 ): BillingLifecycleOps {
   return {
+    bindCreatorCodeUsageLock: (args) =>
+      ctx.runMutation(
+        internal.mutations.creator.attribution.bindUsageLockToSubscription,
+        {
+          ...args,
+          creatorUsageLockId: args.creatorUsageLockId
+            ? (args.creatorUsageLockId as Id<"creatorCodeUsageLocks">)
+            : undefined,
+          userId: args.userId as Id<"users">,
+        }
+      ),
     getBillingContextByStripeCustomerId: (args) =>
       ctx.runQuery(
         internal.queries.billing.internal.getBillingContextByStripeCustomerId,
@@ -1508,6 +1609,36 @@ export const createSubscriptionCheckoutSession = action({
         }
       }
 
+      const creatorUsageLock = creatorDiscount.appliedDiscount
+        ? await ctx.runMutation(
+            internal.mutations.creator.attribution.ensureCreatorCodeUsageLock,
+            {
+              clerkUserId: userContext.user.clerkUserId,
+              creatorAccountId:
+                creatorDiscount.appliedDiscount.creatorAccountId,
+              creatorCode: creatorDiscount.appliedDiscount.code,
+              discountAppliedAt: Date.now(),
+              discountPercent: creatorDiscount.appliedDiscount.discountPercent,
+              normalizedCode: creatorDiscount.appliedDiscount.normalizedCode,
+              payoutPercent: creatorDiscount.appliedDiscount.payoutPercent,
+              source: creatorDiscount.appliedDiscount.source,
+              stripeCustomerId: customerId,
+              userId: userContext.user._id,
+            }
+          )
+        : null
+
+      if (
+        creatorUsageLock?.status === "already_used" ||
+        creatorUsageLock?.status === "conflict_locked"
+      ) {
+        throw new BillingActionError(
+          "creator_code_already_used",
+          `This account already used creator code ${creatorUsageLock.existingCode}.`,
+          409
+        )
+      }
+
       const discountCouponId = creatorDiscount.appliedDiscount?.discountPercent
         ? await ensureCreatorDiscountCoupon({
             creatorCode: creatorDiscount.appliedDiscount.code,
@@ -1523,6 +1654,9 @@ export const createSubscriptionCheckoutSession = action({
         creatorCode: creatorDiscount.appliedDiscount?.code ?? "",
         creatorDiscountPercent:
           creatorDiscount.appliedDiscount?.discountPercent?.toString() ?? "",
+        creatorPayoutPercent:
+          creatorDiscount.appliedDiscount?.payoutPercent?.toString() ?? "",
+        creatorUsageLockId: creatorUsageLock?.usageLockId ?? "",
         planKey: plan.key,
         pricingCurrency: currency,
         userId: userContext.user._id,
@@ -1532,14 +1666,14 @@ export const createSubscriptionCheckoutSession = action({
         customerId,
         discountCouponId,
         idempotencyKey: [
-            "billing",
-            "checkout-session",
-            userContext.user._id,
-            plan.key,
-            args.interval,
-            creatorDiscount.appliedDiscount?.code ?? "no-code",
-            currency,
-          ].join(":"),
+          "billing",
+          "checkout-session",
+          userContext.user._id,
+          plan.key,
+          args.interval,
+          creatorDiscount.appliedDiscount?.code ?? "no-code",
+          currency,
+        ].join(":"),
         lineItemPriceId: priceId,
         metadata,
         stripe,
@@ -1552,6 +1686,18 @@ export const createSubscriptionCheckoutSession = action({
           "missing_checkout_url",
           "Stripe did not return a hosted Checkout URL.",
           502
+        )
+      }
+
+      if (creatorUsageLock) {
+        await ctx.runMutation(
+          internal.mutations.creator.attribution
+            .attachCheckoutSessionToUsageLock,
+          {
+            checkoutSessionCreatedAt: Date.now(),
+            stripeCheckoutSessionId: session.id,
+            usageLockId: creatorUsageLock.usageLockId,
+          }
         )
       }
 
@@ -1645,10 +1791,7 @@ export const syncCheckoutSessionCompletion = action({
   args: {
     sessionId: v.string(),
   },
-  handler: async (
-    ctx,
-    args
-  ): Promise<CheckoutSessionCompletionSyncResult> => {
+  handler: async (ctx, args): Promise<CheckoutSessionCompletionSyncResult> => {
     try {
       const userContext = await requireBillingUser(ctx)
       const stripe = getStripe()

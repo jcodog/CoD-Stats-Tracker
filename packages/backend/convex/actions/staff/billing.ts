@@ -4496,7 +4496,6 @@ export const runCatalogSync = action({
   },
 })
 
-
 async function requireAuthorizedStaffAction(
   ctx: ActionCtx,
   requiredRole: RequiredStaffRole
@@ -4526,11 +4525,21 @@ async function requireAuthorizedStaffAction(
   })
 }
 
-
 function createBillingLifecycleOps(
   ctx: Pick<ActionCtx, "runMutation" | "runQuery">
 ): BillingLifecycleOps {
   return {
+    bindCreatorCodeUsageLock: (args) =>
+      ctx.runMutation(
+        internal.mutations.creator.attribution.bindUsageLockToSubscription,
+        {
+          ...args,
+          creatorUsageLockId: args.creatorUsageLockId
+            ? (args.creatorUsageLockId as Id<"creatorCodeUsageLocks">)
+            : undefined,
+          userId: args.userId as Id<"users">,
+        }
+      ),
     getBillingContextByStripeCustomerId: (args) =>
       ctx.runQuery(
         internal.queries.billing.internal.getBillingContextByStripeCustomerId,
@@ -4544,13 +4553,10 @@ function createBillingLifecycleOps(
         args
       ),
     syncBillingInvoices: (args) =>
-      ctx.runMutation(
-        internal.mutations.billing.state.syncBillingInvoices,
-        {
-          ...args,
-          userId: args.userId as Id<"users">,
-        }
-      ),
+      ctx.runMutation(internal.mutations.billing.state.syncBillingInvoices, {
+        ...args,
+        userId: args.userId as Id<"users">,
+      }),
     syncBillingPaymentMethods: (args) =>
       ctx.runMutation(
         internal.mutations.billing.state.syncBillingPaymentMethods,
@@ -4560,13 +4566,10 @@ function createBillingLifecycleOps(
         }
       ),
     upsertBillingCustomer: (args) =>
-      ctx.runMutation(
-        internal.mutations.billing.state.upsertBillingCustomer,
-        {
-          ...args,
-          userId: args.userId as Id<"users">,
-        }
-      ),
+      ctx.runMutation(internal.mutations.billing.state.upsertBillingCustomer, {
+        ...args,
+        userId: args.userId as Id<"users">,
+      }),
     upsertBillingSubscription: (args) =>
       ctx.runMutation(
         internal.mutations.billing.state.upsertBillingSubscription,

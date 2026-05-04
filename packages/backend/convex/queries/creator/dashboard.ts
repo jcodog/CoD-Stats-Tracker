@@ -3,6 +3,7 @@ import {
   getCreatorConnectPendingActions,
   getCreatorConnectState,
 } from "../../../src/lib/creatorProgram"
+import { isCreatorEarningEstimateStatus } from "../../../src/lib/creatorAccounting"
 
 const PAID_CONVERSION_STATUSES = new Set([
   "active",
@@ -41,6 +42,7 @@ export const getCurrentCreatorDashboard = query({
     if (!creatorAccount) {
       return {
         creatorAccount: null,
+        estimatedEarningsByCurrency: [],
         paidConversionCount: 0,
         signupCount: 0,
       }
@@ -52,10 +54,31 @@ export const getCurrentCreatorDashboard = query({
         query.eq("creatorAccountId", creatorAccount._id)
       )
       .collect()
+    const usageLocks = await ctx.db
+      .query("creatorCodeUsageLocks")
+      .withIndex("by_creatorAccountId", (query) =>
+        query.eq("creatorAccountId", creatorAccount._id)
+      )
+      .collect()
+    const earningRows = await ctx.db
+      .query("creatorEarningLedger")
+      .withIndex("by_creatorAccountId", (query) =>
+        query.eq("creatorAccountId", creatorAccount._id)
+      )
+      .collect()
 
     const attributedUserIds = [
-      ...new Set(attributions.map((item) => item.userId)),
+      ...new Set([
+        ...attributions.map((item) => item.userId),
+        ...usageLocks.map((item) => item.userId),
+      ]),
     ]
+    const lockedSubscriptionIds = new Set(
+      usageLocks
+        .map((lock) => lock.stripeSubscriptionId)
+        .filter((value): value is string => Boolean(value))
+    )
+    const lockedUserIds = new Set(usageLocks.map((lock) => lock.userId))
     const subscriptionBuckets = await Promise.all(
       attributedUserIds.map((userId) =>
         ctx.db
@@ -65,19 +88,41 @@ export const getCurrentCreatorDashboard = query({
       )
     )
 
-    const paidConversionCount = subscriptionBuckets.reduce(
-      (count, subscriptions) => {
-        return (
-          count +
-          (subscriptions.some((subscription) =>
-            PAID_CONVERSION_STATUSES.has(subscription.status)
-          )
-            ? 1
-            : 0)
+    const paidConversionUserIds = new Set<string>()
+
+    subscriptionBuckets.forEach((subscriptions, index) => {
+      const attributedUserId = attributedUserIds[index]
+
+      if (!attributedUserId) {
+        return
+      }
+
+      if (
+        subscriptions.some(
+          (subscription) =>
+            PAID_CONVERSION_STATUSES.has(subscription.status) &&
+            (!lockedUserIds.has(attributedUserId) ||
+              lockedSubscriptionIds.has(subscription.stripeSubscriptionId))
         )
-      },
-      0
+      ) {
+        paidConversionUserIds.add(attributedUserId)
+      }
+    })
+
+    const estimatedEarningsByCurrency = Array.from(
+      earningRows
+        .filter((row) => isCreatorEarningEstimateStatus(row.status))
+        .reduce((totals, row) => {
+          totals.set(
+            row.currency,
+            (totals.get(row.currency) ?? 0) + row.earningAmount
+          )
+          return totals
+        }, new Map<string, number>())
+        .entries()
     )
+      .map(([currency, amount]) => ({ amount, currency }))
+      .sort((left, right) => left.currency.localeCompare(right.currency))
 
     const connectState = getCreatorConnectState(creatorAccount)
     const pendingActions = getCreatorConnectPendingActions(creatorAccount)
@@ -106,7 +151,8 @@ export const getCurrentCreatorDashboard = query({
         stripeConnectedAccountId:
           creatorAccount.stripeConnectedAccountId ?? null,
       },
-      paidConversionCount,
+      estimatedEarningsByCurrency,
+      paidConversionCount: paidConversionUserIds.size,
       signupCount: attributedUserIds.length,
     }
   },

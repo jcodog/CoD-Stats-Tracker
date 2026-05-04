@@ -142,6 +142,7 @@ export function CreatorHomeView() {
     connectPayoutReady:
       dashboard.creatorAccount.connectState === "ready" &&
       dashboard.creatorAccount.payoutsEnabled === true,
+    estimatedEarningsByCurrency: dashboard.estimatedEarningsByCurrency,
     paidConversionCount: dashboard.paidConversionCount,
     payoutEligible: dashboard.creatorAccount.payoutEligible,
   })

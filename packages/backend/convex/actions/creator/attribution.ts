@@ -9,6 +9,7 @@ import {
   getClerkBackendClient,
   syncClerkCreatorAttributionMetadata,
 } from "../../../src/lib/clerk"
+import { isSelfCreatorCode } from "../../../src/lib/creatorAccounting"
 
 type ApplyCreatorCodeResult =
   | {
@@ -90,7 +91,12 @@ export const applyCreatorCode = action({
       }
     }
 
-    if (creatorAccount.userId === user._id) {
+    if (
+      isSelfCreatorCode({
+        creatorUserId: creatorAccount.userId,
+        userId: user._id,
+      })
+    ) {
       return {
         status: "self_code_not_allowed",
       }

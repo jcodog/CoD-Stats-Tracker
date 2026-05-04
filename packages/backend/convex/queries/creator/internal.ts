@@ -30,6 +30,22 @@ export const getActiveAttributionByUserId = internalQuery({
   },
 })
 
+export const getUsageLockByUserId = internalQuery({
+  args: {
+    userId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const locks = await ctx.db
+      .query("creatorCodeUsageLocks")
+      .withIndex("by_userId", (query) => query.eq("userId", args.userId))
+      .collect()
+
+    return (
+      locks.sort((left, right) => left.createdAt - right.createdAt)[0] ?? null
+    )
+  },
+})
+
 export const getCreatorAccountByUserId = internalQuery({
   args: {
     userId: v.id("users"),

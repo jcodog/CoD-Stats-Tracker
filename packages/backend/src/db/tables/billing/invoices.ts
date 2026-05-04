@@ -7,6 +7,7 @@ export const billingInvoices = defineTable({
 
   stripeCustomerId: v.string(),
   stripeInvoiceId: v.string(),
+  stripePaymentIntentId: v.optional(v.string()),
   stripeSubscriptionId: v.optional(v.string()),
 
   amountDue: v.number(),

@@ -129,6 +129,10 @@ export function getCreatorConnectPresentation(connectState: string) {
 
 export function getEstimatedPayoutPresentation(args: {
   connectPayoutReady: boolean
+  estimatedEarningsByCurrency: Array<{
+    amount: number
+    currency: string
+  }>
   paidConversionCount: number
   payoutEligible: boolean
 }) {
@@ -150,9 +154,23 @@ export function getEstimatedPayoutPresentation(args: {
     }
   }
 
+  if (args.estimatedEarningsByCurrency.length > 0) {
+    return {
+      detail,
+      value: args.estimatedEarningsByCurrency
+        .map((earning) =>
+          new Intl.NumberFormat("en-GB", {
+            currency: earning.currency.toUpperCase(),
+            style: "currency",
+          }).format(earning.amount / 100)
+        )
+        .join(" + "),
+    }
+  }
+
   return {
     detail,
-    value: `${args.paidConversionCount} pending`,
+    value: "No estimate yet",
   }
 }
 
@@ -161,8 +179,8 @@ export function formatCreatorProgramSummary(args: {
   payoutPercent: number
 }) {
   return {
-    discount: `${args.discountPercent}% off the first month`,
-    payout: `${args.payoutPercent}% of the first paid invoice`,
+    discount: `${args.discountPercent}% off the first payment`,
+    payout: `${args.payoutPercent}% of paid subscription invoices for the first 6 months`,
   }
 }
 

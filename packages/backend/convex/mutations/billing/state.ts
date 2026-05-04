@@ -7,6 +7,11 @@ import {
   billingTaxExemptValidator,
   billingTaxIdValidator,
 } from "../../../src/db/tables/billing/shared"
+import {
+  calculateCreatorEarningAmount,
+  getCreatorEarningStatusForPaidInvoice,
+  isPaidSubscriptionInvoiceEligibleForCreatorEarning,
+} from "../../../src/lib/creatorAccounting"
 import { buildResolvedBillingState } from "../../queries/billing/resolution"
 
 const billingIntervalValidator = v.union(v.literal("month"), v.literal("year"))
@@ -65,6 +70,7 @@ const billingInvoiceSnapshotValidator = v.object({
   paymentMethodType: v.optional(v.string()),
   status: v.string(),
   stripeInvoiceId: v.string(),
+  stripePaymentIntentId: v.optional(v.string()),
   stripeSubscriptionId: v.optional(v.string()),
 })
 
@@ -688,6 +694,192 @@ export const syncBillingPaymentMethods = internalMutation({
   },
 })
 
+async function getCreatorUsageLockForSubscription(args: {
+  ctx: MutationCtx
+  stripeSubscriptionId: string
+}) {
+  return await args.ctx.db
+    .query("creatorCodeUsageLocks")
+    .withIndex("by_stripeSubscriptionId", (query) =>
+      query.eq("stripeSubscriptionId", args.stripeSubscriptionId)
+    )
+    .unique()
+}
+
+async function getExistingCreatorEarningLedgerRow(args: {
+  ctx: MutationCtx
+  idempotencyKey: string
+}) {
+  return await args.ctx.db
+    .query("creatorEarningLedger")
+    .withIndex("by_idempotencyKey", (query) =>
+      query.eq("idempotencyKey", args.idempotencyKey)
+    )
+    .unique()
+}
+
+async function voidCreatorEarningLedgerRow(args: {
+  ctx: MutationCtx
+  existingRow: Doc<"creatorEarningLedger">
+  invoice: {
+    amountPaid: number
+    amountTotal: number
+    invoiceIssuedAt: number
+    status: string
+    stripePaymentIntentId?: string
+  }
+  now: number
+}) {
+  await args.ctx.db.patch(args.existingRow._id, {
+    earningAmount: 0,
+    invoiceAmountPaid: args.invoice.amountPaid,
+    invoiceAmountTotal: args.invoice.amountTotal,
+    invoiceIssuedAt: args.invoice.invoiceIssuedAt,
+    invoiceStatus: args.invoice.status,
+    lastSyncedAt: args.now,
+    status: "void",
+    stripePaymentIntentId: args.invoice.stripePaymentIntentId,
+    updatedAt: args.now,
+  })
+}
+
+async function syncCreatorEarningLedgerForInvoice(args: {
+  ctx: MutationCtx
+  invoice: {
+    amountPaid: number
+    amountTotal: number
+    currency: string
+    invoiceIssuedAt: number
+    status: string
+    stripeCustomerId: string
+    stripeInvoiceId: string
+    stripePaymentIntentId?: string
+    stripeSubscriptionId?: string
+  }
+  now: number
+}) {
+  if (!args.invoice.stripeSubscriptionId) {
+    return
+  }
+
+  const idempotencyKey = [
+    "stripe_invoice",
+    args.invoice.stripeInvoiceId,
+    args.invoice.stripeSubscriptionId,
+  ].join(":")
+  const existingRow = await getExistingCreatorEarningLedgerRow({
+    ctx: args.ctx,
+    idempotencyKey,
+  })
+  const usageLock = await getCreatorUsageLockForSubscription({
+    ctx: args.ctx,
+    stripeSubscriptionId: args.invoice.stripeSubscriptionId,
+  })
+
+  if (
+    !usageLock ||
+    usageLock.attributionStartedAt === undefined ||
+    usageLock.payoutEligibilityEndsAt === undefined
+  ) {
+    if (existingRow) {
+      await voidCreatorEarningLedgerRow({
+        ctx: args.ctx,
+        existingRow,
+        invoice: args.invoice,
+        now: args.now,
+      })
+    }
+
+    return
+  }
+
+  const isEligibleInvoice = isPaidSubscriptionInvoiceEligibleForCreatorEarning({
+    amountPaid: args.invoice.amountPaid,
+    attributionStartedAt: usageLock.attributionStartedAt,
+    invoiceIssuedAt: args.invoice.invoiceIssuedAt,
+    payoutEligibilityEndsAt: usageLock.payoutEligibilityEndsAt,
+    status: args.invoice.status,
+    stripeSubscriptionId: args.invoice.stripeSubscriptionId,
+  })
+
+  if (!isEligibleInvoice) {
+    if (existingRow) {
+      await voidCreatorEarningLedgerRow({
+        ctx: args.ctx,
+        existingRow,
+        invoice: args.invoice,
+        now: args.now,
+      })
+    }
+
+    return
+  }
+
+  const creatorAccount = await args.ctx.db.get(usageLock.creatorAccountId)
+  const payoutPercent = usageLock.payoutPercent
+  const earningAmount = calculateCreatorEarningAmount({
+    amountPaid: args.invoice.amountPaid,
+    payoutPercent,
+  })
+  const status = getCreatorEarningStatusForPaidInvoice({
+    payoutEligible: creatorAccount?.payoutEligible === true,
+  })
+  const nextValues = {
+    attributionStartedAt: usageLock.attributionStartedAt,
+    clerkUserId: usageLock.clerkUserId,
+    creatorAccountId: usageLock.creatorAccountId,
+    creatorCode: usageLock.creatorCode,
+    currency: args.invoice.currency,
+    earningAmount,
+    idempotencyKey,
+    invoiceAmountPaid: args.invoice.amountPaid,
+    invoiceAmountTotal: args.invoice.amountTotal,
+    invoiceIssuedAt: args.invoice.invoiceIssuedAt,
+    invoiceStatus: args.invoice.status,
+    lastSyncedAt: args.now,
+    normalizedCode: usageLock.normalizedCode,
+    payoutEligibilityEndsAt: usageLock.payoutEligibilityEndsAt,
+    payoutPercent,
+    status,
+    stripeCustomerId: args.invoice.stripeCustomerId,
+    stripeInvoiceId: args.invoice.stripeInvoiceId,
+    stripePaymentIntentId: args.invoice.stripePaymentIntentId,
+    stripeSubscriptionId: args.invoice.stripeSubscriptionId,
+    usageLockId: usageLock._id,
+    userId: usageLock.userId,
+  }
+
+  // TODO: Wire Stripe refunds and credit notes into billing sync, then mark
+  // affected creator earning rows as reversed instead of relying only on invoice
+  // status/amount changes.
+  if (!existingRow) {
+    await args.ctx.db.insert("creatorEarningLedger", {
+      ...nextValues,
+      createdAt: args.now,
+      updatedAt: args.now,
+    })
+
+    return
+  }
+
+  const patch: Partial<Doc<"creatorEarningLedger">> = {}
+
+  for (const [key, value] of Object.entries(nextValues)) {
+    const typedKey = key as keyof typeof nextValues
+
+    if (existingRow[typedKey] !== value) {
+      Object.assign(patch, { [typedKey]: value })
+    }
+  }
+
+  if (!hasChanged(patch)) {
+    return
+  }
+
+  patch.updatedAt = args.now
+  await args.ctx.db.patch(existingRow._id, patch)
+}
+
 export const syncBillingInvoices = internalMutation({
   args: {
     clerkUserId: v.string(),
@@ -726,6 +918,7 @@ export const syncBillingInvoices = internalMutation({
         status: invoice.status,
         stripeCustomerId: args.stripeCustomerId,
         stripeInvoiceId: invoice.stripeInvoiceId,
+        stripePaymentIntentId: invoice.stripePaymentIntentId,
         stripeSubscriptionId: invoice.stripeSubscriptionId,
         userId: args.userId,
       }
@@ -799,6 +992,12 @@ export const syncBillingInvoices = internalMutation({
       if (existingRecord.status !== nextValues.status) {
         patch.status = nextValues.status
       }
+      if (
+        (existingRecord.stripePaymentIntentId ?? undefined) !==
+        nextValues.stripePaymentIntentId
+      ) {
+        patch.stripePaymentIntentId = nextValues.stripePaymentIntentId
+      }
       if (existingRecord.stripeCustomerId !== nextValues.stripeCustomerId) {
         patch.stripeCustomerId = nextValues.stripeCustomerId
       }
@@ -818,6 +1017,24 @@ export const syncBillingInvoices = internalMutation({
 
       patch.updatedAt = now
       await ctx.db.patch(existingRecord._id, patch)
+    }
+
+    for (const invoice of args.invoices) {
+      await syncCreatorEarningLedgerForInvoice({
+        ctx,
+        invoice: {
+          amountPaid: invoice.amountPaid,
+          amountTotal: invoice.amountTotal,
+          currency: invoice.currency,
+          invoiceIssuedAt: invoice.invoiceIssuedAt,
+          status: invoice.status,
+          stripeCustomerId: args.stripeCustomerId,
+          stripeInvoiceId: invoice.stripeInvoiceId,
+          stripePaymentIntentId: invoice.stripePaymentIntentId,
+          stripeSubscriptionId: invoice.stripeSubscriptionId,
+        },
+        now,
+      })
     }
 
     return {
