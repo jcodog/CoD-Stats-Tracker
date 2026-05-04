@@ -37,3 +37,12 @@
 - Do not run multiple Playwright commands in parallel against the same auth state.
 - Prefer single-shot CLI commands (e.g. screenshot, open, pdf) over any multi-step automation.
 - Any solution that involves writing Playwright scripts instead of using CLI commands is incorrect.
+
+## Rules
+
+- Do not run build scripts
+- Do not run codegen scripts
+- Only run scripts in `package.json` such as typecheck
+- Do not start dev servers, I already have it running in my own terminal
+- Do not consistently re-evaluate codebase
+- Be sparing with tokens, convey your thoughts and responses in short, token light messages.

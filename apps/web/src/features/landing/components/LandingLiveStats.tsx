@@ -41,7 +41,8 @@ export function LandingLiveStats({
 
   const { data, isPending, isError } = useQuery({
     queryKey: ["landing-live-stats", userId ?? "anonymous"],
-    queryFn: () => convex.query(api.stats.getLandingMetrics, {}),
+    queryFn: () =>
+      convex.query(api.queries.stats.landing.getLandingMetrics, {}),
     enabled: queryEnabled,
     initialData: initialData ?? undefined,
     staleTime,

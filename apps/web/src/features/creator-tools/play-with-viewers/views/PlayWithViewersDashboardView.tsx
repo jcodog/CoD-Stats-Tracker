@@ -176,6 +176,32 @@ type SelectionResultState = {
   selectedUsers: QueueRoundUser[]
 } | null
 
+type QueueBotPermissionStatusInput = Omit<
+  QueueChannelBotPermissionStatus,
+  "missingManagePermissionLabels" | "missingOverwritePermissionLabels"
+> &
+  Partial<
+    Pick<
+      QueueChannelBotPermissionStatus,
+      "missingManagePermissionLabels" | "missingOverwritePermissionLabels"
+    >
+  >
+
+function normalizeQueueBotPermissionStatus(
+  status: QueueBotPermissionStatusInput | null | undefined
+): QueueChannelBotPermissionStatus | null {
+  if (!status) {
+    return null
+  }
+
+  return {
+    ...status,
+    missingManagePermissionLabels: status.missingManagePermissionLabels ?? [],
+    missingOverwritePermissionLabels:
+      status.missingOverwritePermissionLabels ?? [],
+  }
+}
+
 const rankOptions: Array<{ label: string; value: QueueConfigRankValue }> =
   COMPETITIVE_RANK_OPTIONS.map((rank) => ({
     label: getParticipantRankLabel(rank),
@@ -1008,7 +1034,9 @@ export function PlayWithViewersDashboardView({
         }
 
         setAuditedChannelPermsCorrect(result.channelPermsCorrect)
-        setQueueBotPermissionStatus(result.botPermissionStatus)
+        setQueueBotPermissionStatus(
+          normalizeQueueBotPermissionStatus(result.botPermissionStatus)
+        )
       } catch {
         // Keep the dashboard usable even if the Discord audit fails.
       } finally {
@@ -1071,7 +1099,9 @@ export function PlayWithViewersDashboardView({
   ) {
     setAuditedQueueId(queueId)
     setAuditedChannelPermsCorrect(result.channelPermsCorrect)
-    setQueueBotPermissionStatus(result.botPermissionStatus)
+    setQueueBotPermissionStatus(
+      normalizeQueueBotPermissionStatus(result.botPermissionStatus)
+    )
 
     if (
       result.botPermissionStatus?.needsReinvite ||
@@ -1425,7 +1455,9 @@ export function PlayWithViewersDashboardView({
 
       setAuditedQueueId(queue._id)
       setAuditedChannelPermsCorrect(result.channelPermsCorrect)
-      setQueueBotPermissionStatus(result.botPermissionStatus)
+      setQueueBotPermissionStatus(
+        normalizeQueueBotPermissionStatus(result.botPermissionStatus)
+      )
 
       if (!result.permissionsUpdated) {
         setPermissionsDialogOpen(true)
@@ -1539,7 +1571,7 @@ export function PlayWithViewersDashboardView({
       setSelectionResultState({
         createdAt: result.createdAt,
         inviteMode: queueInviteMode ?? "bot_dm",
-        roundId: result.roundId,
+        roundId: result.roundId as Id<"viewerQueueRounds">,
         selectedUsers,
         selectionKind,
       })

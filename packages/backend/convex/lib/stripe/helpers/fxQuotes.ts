@@ -31,8 +31,8 @@ export async function createGbpEstimateFxQuote(args: {
   estimateCurrency: Exclude<FxQuoteCurrency, "GBP">
 }) {
   const body = new URLSearchParams()
-  body.set("to_currency", "gbp")
-  body.append("from_currencies[]", args.estimateCurrency.toLowerCase())
+  body.set("to_currency", args.estimateCurrency.toLowerCase())
+  body.append("from_currencies[]", "gbp")
   body.set("lock_duration", "none")
 
   const response = await fetch("https://api.stripe.com/v1/fx_quotes", {
@@ -50,8 +50,7 @@ export async function createGbpEstimateFxQuote(args: {
   }
 
   const quote = (await response.json()) as StripeFxQuote
-  const rate =
-    quote.rates?.[args.estimateCurrency.toLowerCase()]?.exchange_rate ?? null
+  const rate = quote.rates?.gbp?.exchange_rate ?? null
 
   if (typeof rate !== "number" || !Number.isFinite(rate) || rate <= 0) {
     throw new Error("Stripe FX quote did not include a usable exchange rate.")
@@ -67,5 +66,5 @@ export function estimateFromGbpMinorUnits(args: {
   amount: number
   rate: number
 }) {
-  return Math.max(0, Math.round(args.amount / args.rate))
+  return Math.max(0, Math.round(args.amount * args.rate))
 }

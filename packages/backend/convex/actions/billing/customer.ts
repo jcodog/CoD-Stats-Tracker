@@ -18,17 +18,10 @@ import {
 } from "../../../src/lib/billingLifecycle"
 import {
   hasManagedCreatorGrantSubscriptionAccess,
-  isManageableBillingSubscription,
 } from "../../../src/lib/billing"
 import { hasCreatorAccess } from "../../../src/lib/billingAccess"
 import {
   getExpandedStripeInvoice,
-  getInvoiceConfirmationSecret,
-  getSetupIntentClientSecret,
-  getStripeScheduleId,
-  getStripeSubscriptionInterval,
-  getStripeSubscriptionItem,
-  getSubscriptionItemCurrentPeriodEnd,
 } from "../../../src/lib/stripe/billing"
 import {
   getClerkBackendClient,
@@ -158,26 +151,6 @@ type BillingPortalSessionResult = {
   portalUrl: string
   sessionId: string
 }
-type SubscriptionChangePreviewResult = {
-  amountDueNow: number
-  creditApplied: number
-  currentAmount: number
-  currentInterval: "month" | "year"
-  currentPlanKey: string
-  effectiveAt: number | null
-  interval: "month" | "year"
-  mode:
-    | "cancel_at_period_end"
-    | "immediate_change"
-    | "noop"
-    | "scheduled_change"
-  planKey: string
-  prorationBehavior: "always_invoice" | "none"
-  prorationDate: number | null
-  proratedCharge: number
-  summary: string
-  targetAmount: number
-}
 type CheckoutSessionCompletionSyncResult = {
   paymentStatus: "no_payment_required" | "paid" | "unpaid" | null
   planKey: string | null
@@ -269,50 +242,6 @@ function normalizeOptionalString(value: string | null | undefined) {
 
   const trimmedValue = value.trim()
   return trimmedValue.length > 0 ? trimmedValue : undefined
-}
-
-function toStripeEmptyableString(value: string | null | undefined) {
-  return normalizeOptionalString(value) ?? ""
-}
-
-function buildStripeAddress(
-  address:
-    | {
-        city?: string
-        country?: string
-        line1?: string
-        line2?: string
-        postalCode?: string
-        state?: string
-      }
-    | null
-    | undefined
-): Stripe.Emptyable<Stripe.AddressParam> {
-  if (!address) {
-    return ""
-  }
-
-  const nextAddress = {
-    city: normalizeOptionalString(address.city),
-    country: normalizeOptionalString(address.country),
-    line1: normalizeOptionalString(address.line1),
-    line2: normalizeOptionalString(address.line2),
-    postal_code: normalizeOptionalString(address.postalCode),
-    state: normalizeOptionalString(address.state),
-  }
-
-  if (
-    !nextAddress.line1 &&
-    !nextAddress.line2 &&
-    !nextAddress.city &&
-    !nextAddress.state &&
-    !nextAddress.postal_code &&
-    !nextAddress.country
-  ) {
-    return ""
-  }
-
-  return nextAddress
 }
 
 function getMetadataStripeCustomerId(value: unknown) {
@@ -543,55 +472,10 @@ function getPlanAmount(plan: BillingPlanRecord, interval: "month" | "year") {
   return interval === "month" ? plan.monthlyPriceAmount : plan.yearlyPriceAmount
 }
 
-function getCheckoutPlanAmount(args: {
-  currency: SupportedPricingCurrency
-  interval: "month" | "year"
-  plan: BillingPlanRecord
-}) {
-  if (args.currency === "USD") {
-    return args.interval === "month"
-      ? args.plan.monthlyPriceAmountUsd
-      : args.plan.yearlyPriceAmountUsd
-  }
-
-  if (args.currency === "CAD") {
-    return args.interval === "month"
-      ? args.plan.monthlyPriceAmountCad
-      : args.plan.yearlyPriceAmountCad
-  }
-
-  if (args.currency === "EUR") {
-    return args.interval === "month"
-      ? args.plan.monthlyPriceAmountEur
-      : args.plan.yearlyPriceAmountEur
-  }
-
-  return getPlanAmount(args.plan, args.interval)
-}
-
 function getCheckoutPlanPriceId(args: {
-  currency: SupportedPricingCurrency
   interval: "month" | "year"
   plan: BillingPlanRecord
 }) {
-  if (args.currency === "USD") {
-    return args.interval === "month"
-      ? args.plan.monthlyPriceIdUsd
-      : args.plan.yearlyPriceIdUsd
-  }
-
-  if (args.currency === "CAD") {
-    return args.interval === "month"
-      ? args.plan.monthlyPriceIdCad
-      : args.plan.yearlyPriceIdCad
-  }
-
-  if (args.currency === "EUR") {
-    return args.interval === "month"
-      ? args.plan.monthlyPriceIdEur
-      : args.plan.yearlyPriceIdEur
-  }
-
   return args.interval === "month"
     ? args.plan.monthlyPriceId
     : args.plan.yearlyPriceId
@@ -634,7 +518,6 @@ async function getLiveStripePriceSnapshot<TInterval extends "month" | "year">(ar
   } | null
   interval: TInterval
   plan: BillingPlanRecord | null
-  preferredCurrency: SupportedPricingCurrency
   priceCache: Map<string, Promise<Stripe.Price | null>>
   stripe: Stripe
 }): Promise<{
@@ -646,22 +529,12 @@ async function getLiveStripePriceSnapshot<TInterval extends "month" | "year">(ar
     return args.fallbackPricing
   }
 
-  const candidatePriceIds = Array.from(
-    new Set(
-      [
-        getCheckoutPlanPriceId({
-          currency: args.preferredCurrency,
-          interval: args.interval,
-          plan: args.plan,
-        }),
-        getCheckoutPlanPriceId({
-          currency: "GBP",
-          interval: args.interval,
-          plan: args.plan,
-        }),
-      ].filter((value): value is string => Boolean(value))
-    )
-  )
+  const candidatePriceIds = [
+    getCheckoutPlanPriceId({
+      interval: args.interval,
+      plan: args.plan,
+    }),
+  ].filter((value): value is string => Boolean(value))
 
   for (const priceId of candidatePriceIds) {
     let pricePromise = args.priceCache.get(priceId)
@@ -707,6 +580,85 @@ function getEstimatedPricingSnapshot<TInterval extends "month" | "year">(args: {
     }),
     currency: args.estimateCurrency,
     interval: args.pricing.interval,
+  }
+}
+
+async function buildStripeEstimatedPricingCatalog(args: {
+  baseCatalog: PricingCatalog
+  ctx: PublicActionCtx
+  estimateCurrency: SupportedPricingCurrency
+}): Promise<PricingCatalog> {
+  const stripe = getStripe()
+  const priceCache = new Map<string, Promise<Stripe.Price | null>>()
+  const fxQuote =
+    args.estimateCurrency === "GBP"
+      ? null
+      : await createGbpEstimateFxQuote({
+          estimateCurrency: args.estimateCurrency,
+        }).catch(() => null)
+  const displayedCurrency =
+    args.estimateCurrency === "GBP" || fxQuote
+      ? args.estimateCurrency
+      : ("GBP" as const)
+  const paidPlanKeys = args.baseCatalog.plans
+    .filter((plan) => plan.planType === "paid")
+    .map((plan) => plan.planKey)
+  const planRecords: Array<BillingPlanRecord | null> = await Promise.all(
+    paidPlanKeys.map((planKey) =>
+      args.ctx.runQuery(internal.queries.billing.internal.getPlanByKey, {
+        planKey,
+      })
+    )
+  )
+  const plansByKey = new Map(
+    planRecords
+      .filter((plan): plan is BillingPlanRecord => Boolean(plan))
+      .map((plan) => [plan.key, plan] as const)
+  )
+  const fxRate = displayedCurrency === "GBP" ? null : (fxQuote?.rate ?? null)
+
+  return {
+    ...args.baseCatalog,
+    plans: await Promise.all(
+      args.baseCatalog.plans.map(async (plan) => {
+        const planRecord = plansByKey.get(plan.planKey) ?? null
+
+        return {
+          ...plan,
+          pricing: {
+            month: await getEstimatedPricingSnapshot({
+              estimateCurrency: displayedCurrency,
+              fxRate,
+              pricing: await getLiveStripePriceSnapshot({
+                fallbackPricing: plan.pricing.month,
+                interval: "month",
+                plan: planRecord,
+                priceCache,
+                stripe,
+              }),
+            }),
+            year: await getEstimatedPricingSnapshot({
+              estimateCurrency: displayedCurrency,
+              fxRate,
+              pricing: await getLiveStripePriceSnapshot({
+                fallbackPricing: plan.pricing.year,
+                interval: "year",
+                plan: planRecord,
+                priceCache,
+                stripe,
+              }),
+            }),
+          },
+        }
+      })
+    ),
+    currencyNotice:
+      args.estimateCurrency === "GBP"
+        ? "Plans are billed from the GBP catalog. Stripe Checkout confirms final currency, taxes, discounts, and total."
+        : fxQuote
+          ? `Showing approximate ${args.estimateCurrency} estimates from Stripe FX Quotes. Final currency, taxes, discounts, and total are confirmed by Stripe Checkout, and exchange rates may shift.`
+          : `Stripe ${args.estimateCurrency} estimates are unavailable right now, so prices are shown in GBP. Final currency, taxes, discounts, and total are confirmed by Stripe Checkout, and exchange rates may shift.`,
+    selectedCurrency: displayedCurrency,
   }
 }
 
@@ -950,95 +902,6 @@ async function resolveCheckoutCreatorDiscount(args: {
   }
 }
 
-function getPreviewProrationBreakdown(args: {
-  invoice: Stripe.Invoice
-  prorationDate: number
-}) {
-  let creditApplied = 0
-  let proratedCharge = 0
-
-  for (const lineItem of args.invoice.lines.data) {
-    const linePeriodStart =
-      typeof lineItem.period?.start === "number"
-        ? lineItem.period.start
-        : undefined
-    const isProrationLine =
-      ("proration" in lineItem && lineItem.proration === true) ||
-      linePeriodStart === args.prorationDate
-
-    if (!isProrationLine) {
-      continue
-    }
-
-    if (lineItem.amount < 0) {
-      creditApplied += Math.abs(lineItem.amount)
-      continue
-    }
-
-    if (lineItem.amount > 0) {
-      proratedCharge += lineItem.amount
-    }
-  }
-
-  return {
-    creditApplied,
-    proratedCharge,
-  }
-}
-
-function getMonthlyEquivalentAmount(
-  plan: BillingPlanRecord,
-  interval: "month" | "year"
-) {
-  const amount = getPlanAmount(plan, interval)
-  return interval === "year" ? amount / 12 : amount
-}
-
-function classifyPlanChange(args: {
-  currentInterval: "month" | "year"
-  currentPlan: BillingPlanRecord
-  targetInterval: "month" | "year"
-  targetPlan: BillingPlanRecord
-}) {
-  if (
-    args.targetPlan.key === args.currentPlan.key &&
-    args.targetInterval === args.currentInterval
-  ) {
-    return "noop" as const
-  }
-
-  if (args.targetPlan.key === args.currentPlan.key) {
-    return "switch_now" as const
-  }
-
-  if (args.targetPlan.sortOrder > args.currentPlan.sortOrder) {
-    return "upgrade_now" as const
-  }
-
-  if (args.targetPlan.sortOrder < args.currentPlan.sortOrder) {
-    return "downgrade_later" as const
-  }
-
-  const currentEquivalent = getMonthlyEquivalentAmount(
-    args.currentPlan,
-    args.currentInterval
-  )
-  const targetEquivalent = getMonthlyEquivalentAmount(
-    args.targetPlan,
-    args.targetInterval
-  )
-
-  if (targetEquivalent > currentEquivalent) {
-    return "upgrade_now" as const
-  }
-
-  if (targetEquivalent < currentEquivalent) {
-    return "switch_later" as const
-  }
-
-  return "switch_now" as const
-}
-
 async function ensureStripeCustomer(args: {
   ctx: PublicActionCtx
   email?: string
@@ -1211,191 +1074,171 @@ async function getExpandedSubscription(args: {
   })
 }
 
-async function getTargetSubscription(args: {
+async function voidOrDeleteInvoiceIfPending(args: {
+  invoice: string | Stripe.Invoice | null | undefined
+  stripe: Stripe
+}) {
+  const expandedInvoice = getExpandedStripeInvoice(args.invoice)
+  const invoiceId =
+    expandedInvoice?.id ??
+    (typeof args.invoice === "string" ? args.invoice : undefined)
+
+  if (!invoiceId) {
+    return false
+  }
+
+  const invoice =
+    expandedInvoice ?? (await args.stripe.invoices.retrieve(invoiceId))
+
+  if (invoice.status === "draft") {
+    await args.stripe.invoices.del(invoice.id)
+    return true
+  }
+
+  if (invoice.status === "open") {
+    await args.stripe.invoices.voidInvoice(invoice.id)
+    return true
+  }
+
+  return false
+}
+
+async function clearPendingInvoicesForSubscription(args: {
+  stripe: Stripe
+  subscriptionId: string
+}) {
+  let invoiceWasCleared = false
+  const invoices = await args.stripe.invoices.list({
+    limit: 12,
+    subscription: args.subscriptionId,
+  })
+
+  for (const invoice of invoices.data) {
+    if (invoice.status === "draft") {
+      await args.stripe.invoices.del(invoice.id)
+      invoiceWasCleared = true
+      continue
+    }
+
+    if (invoice.status === "open") {
+      await args.stripe.invoices.voidInvoice(invoice.id)
+      invoiceWasCleared = true
+    }
+  }
+
+  return invoiceWasCleared
+}
+
+async function cancelIncompleteSubscription(args: {
   ctx: PublicActionCtx
-  stripeSubscriptionId?: string
+  reason: "checkout_abandoned" | "replaced_before_confirmation"
+  stripe: Stripe
+  subscription: Stripe.Subscription
   userContext: BillingUserContext
-}): Promise<BillingSubscriptionRecord> {
-  if (!args.stripeSubscriptionId) {
-    if (!args.userContext.subscription) {
-      throw new BillingActionError(
-        "missing_subscription",
-        "No active subscription was found for this account.",
-        404
-      )
-    }
-
-    return args.userContext.subscription
-  }
-
-  const subscription: BillingSubscriptionRecord | null = await args.ctx.runQuery(
-    internal.queries.billing.internal
-      .getBillingSubscriptionByStripeSubscriptionIdForUser,
-    {
-      stripeSubscriptionId: args.stripeSubscriptionId,
-      userId: args.userContext.user._id,
-    }
-  )
-
-  if (!subscription) {
-    throw new BillingActionError(
-      "subscription_not_found",
-      "That subscription could not be found for this billing account.",
-      404
-    )
-  }
-
-  if (!isManageableBillingSubscription(subscription, Date.now())) {
-    throw new BillingActionError(
-      "subscription_inactive",
-      "That subscription is no longer active for this billing account.",
-      409
-    )
-  }
-
-  return subscription
-}
-
-function getConfirmationPayload(subscription: Stripe.Subscription) {
-  const invoiceClientSecret = getInvoiceConfirmationSecret(
-    subscription.latest_invoice
-  )
-
-  if (invoiceClientSecret) {
-    return {
-      clientSecret: invoiceClientSecret,
-      secretType: "payment_intent" as const,
-    }
-  }
-
-  const setupIntentClientSecret = getSetupIntentClientSecret(
-    subscription.pending_setup_intent
-  )
-
-  if (setupIntentClientSecret) {
-    return {
-      clientSecret: setupIntentClientSecret,
-      secretType: "setup_intent" as const,
-    }
-  }
-
-  return {
-    clientSecret: undefined,
-    secretType: "none" as const,
-  }
-}
-
-async function releaseExistingSchedule(
-  subscription: Stripe.Subscription,
-  stripe: Stripe
-) {
-  const scheduleId = getStripeScheduleId(subscription.schedule)
-
-  if (!scheduleId) {
-    return
-  }
-
-  try {
-    await stripe.subscriptionSchedules.release(scheduleId)
-  } catch (error) {
-    if (
-      error instanceof Stripe.errors.StripeInvalidRequestError &&
-      error.code === "resource_missing"
-    ) {
-      return
-    }
-
-    throw error
-  }
-}
-
-function getSubscriptionCurrentPeriodEnd(subscription: Stripe.Subscription) {
-  return getSubscriptionItemCurrentPeriodEnd(subscription) ?? Date.now()
-}
-
-async function scheduleSubscriptionCancellationAtPeriodEnd(args: {
-  stripe: Stripe
-  stripeSubscriptionId: string
 }) {
-  const currentSubscription = await getExpandedSubscription({
-    stripe: args.stripe,
-    subscriptionId: args.stripeSubscriptionId,
-  })
-
-  await releaseExistingSchedule(currentSubscription, args.stripe)
-
-  const updatedSubscription = await args.stripe.subscriptions.update(
-    currentSubscription.id,
-    {
-      cancel_at_period_end: true,
-    }
-  )
-
-  return await getExpandedSubscription({
-    stripe: args.stripe,
-    subscriptionId: updatedSubscription.id,
-  })
-}
-
-async function cancelSubscriptionImmediately(args: {
-  stripe: Stripe
-  stripeSubscriptionId: string
-}) {
-  const currentSubscription = await getExpandedSubscription({
-    stripe: args.stripe,
-    subscriptionId: args.stripeSubscriptionId,
-  })
-
-  await releaseExistingSchedule(currentSubscription, args.stripe)
-
-  const canceledSubscription = await args.stripe.subscriptions.cancel(
-    currentSubscription.id,
+  const cancelledSubscription = await args.stripe.subscriptions.cancel(
+    args.subscription.id,
     {
       invoice_now: false,
       prorate: false,
     }
   )
-
-  return await getExpandedSubscription({
+  const expandedCancelledSubscription = await getExpandedSubscription({
     stripe: args.stripe,
-    subscriptionId: canceledSubscription.id,
+    subscriptionId: cancelledSubscription.id,
   })
-}
+  const latestInvoiceWasCleared = await voidOrDeleteInvoiceIfPending({
+    invoice: expandedCancelledSubscription.latest_invoice,
+    stripe: args.stripe,
+  })
+  const relatedInvoicesWereCleared = await clearPendingInvoicesForSubscription({
+    stripe: args.stripe,
+    subscriptionId: expandedCancelledSubscription.id,
+  })
+  const invoiceWasCleared =
+    latestInvoiceWasCleared || relatedInvoicesWereCleared
 
-async function createCustomerSessionClientSecret(args: {
-  customerId: string
-  stripe: Stripe
-}) {
-  try {
-    const customerSession = await args.stripe.customerSessions.create({
-      components: {
-        payment_element: {
-          enabled: true,
-          features: {
-            payment_method_redisplay: "enabled",
-            payment_method_remove: "enabled",
-            payment_method_save: "enabled",
-            payment_method_save_usage: "off_session",
-          },
-        },
+  await reconcileStripeSubscription({
+    ctx: createBillingLifecycleOps(args.ctx),
+    stripe: args.stripe,
+    subscription: expandedCancelledSubscription,
+  })
+
+  await recordBillingAuditLog({
+    action: "billing.checkout.abandoned",
+    ctx: args.ctx,
+    details: JSON.stringify(
+      {
+        invoiceWasCleared,
+        reason: args.reason,
+        stripeSubscriptionId: expandedCancelledSubscription.id,
       },
-      customer: args.customerId,
-    })
+      null,
+      2
+    ),
+    entityId: expandedCancelledSubscription.id,
+    entityLabel: expandedCancelledSubscription.metadata.planKey ?? undefined,
+    result: "warning",
+    summary:
+      args.reason === "checkout_abandoned"
+        ? "Abandoned checkout before payment confirmation."
+        : "Replaced an incomplete checkout with a new selection before confirmation.",
+    user: args.userContext.user,
+    userName: args.userContext.actorName,
+  })
 
-    return customerSession.client_secret ?? undefined
-  } catch (error) {
-    if (
-      error instanceof Stripe.errors.StripeInvalidRequestError ||
-      error instanceof Stripe.errors.StripePermissionError
-    ) {
-      return undefined
-    }
-
-    throw error
+  return {
+    invoiceWasCleared,
+    subscription: expandedCancelledSubscription,
   }
 }
 
-function throwManagedInCustomerPortal(): void {
+function createBillingLifecycleOps(
+  ctx: Pick<ActionCtx, "runMutation" | "runQuery">
+): BillingLifecycleOps {
+  return {
+    getBillingContextByStripeCustomerId: (args) =>
+      ctx.runQuery(
+        internal.queries.billing.internal.getBillingContextByStripeCustomerId,
+        args
+      ),
+    getBillingPlans: (args) =>
+      ctx.runQuery(internal.queries.billing.catalog.getBillingPlans, args),
+    getPlanByStripePriceId: (args) =>
+      ctx.runQuery(
+        internal.queries.billing.internal.getPlanByStripePriceId,
+        args
+      ),
+    syncBillingInvoices: (args) =>
+      ctx.runMutation(internal.mutations.billing.state.syncBillingInvoices, {
+        ...args,
+        userId: args.userId as Id<"users">,
+      }),
+    syncBillingPaymentMethods: (args) =>
+      ctx.runMutation(
+        internal.mutations.billing.state.syncBillingPaymentMethods,
+        {
+          ...args,
+          userId: args.userId as Id<"users">,
+        }
+      ),
+    upsertBillingCustomer: (args) =>
+      ctx.runMutation(internal.mutations.billing.state.upsertBillingCustomer, {
+        ...args,
+        userId: args.userId as Id<"users">,
+      }),
+    upsertBillingSubscription: (args) =>
+      ctx.runMutation(
+        internal.mutations.billing.state.upsertBillingSubscription,
+        {
+          ...args,
+          userId: args.userId as Id<"users">,
+        }
+      ),
+  }
+}
+
+function throwManagedInCustomerPortal(): never {
   throw new BillingActionError(
     "managed_in_stripe_customer_portal",
     "This billing operation is managed in Stripe Customer Portal.",
@@ -1535,58 +1378,9 @@ export const updateBillingProfile = action({
     name: v.optional(v.string()),
     phone: v.optional(v.string()),
   },
-  handler: async (ctx, args): Promise<{ updated: true }> => {
+  handler: async (): Promise<never> => {
     try {
       throwManagedInCustomerPortal()
-      const userContext = await requireBillingUser(ctx)
-      const stripe = getStripe()
-      const customerId = await ensureStripeCustomer({
-        ctx,
-        email: normalizeOptionalString(args.email) ?? userContext.email,
-        stripe,
-        userContext,
-      })
-
-      await stripe.customers.update(customerId, {
-        address: buildStripeAddress(args.address),
-        business_name: toStripeEmptyableString(args.businessName),
-        email: toStripeEmptyableString(args.email),
-        name: toStripeEmptyableString(args.name),
-        phone: toStripeEmptyableString(args.phone),
-      })
-
-      await syncCustomerBillingSnapshot({
-        ctx,
-        stripe,
-        stripeCustomerId: customerId,
-        syncInvoices: false,
-      })
-
-      await recordBillingAuditLog({
-        action: "billing.profile.updated",
-        ctx,
-        details: JSON.stringify(
-          {
-            addressUpdated: !!args.address,
-            businessName: normalizeOptionalString(args.businessName) ?? null,
-            email: normalizeOptionalString(args.email) ?? null,
-            phone: normalizeOptionalString(args.phone) ?? null,
-          },
-          null,
-          2
-        ),
-        entityId: customerId,
-        entityLabel:
-          normalizeOptionalString(args.name) ?? userContext.actorName,
-        result: "success",
-        summary: "Updated the billing profile.",
-        user: userContext.user,
-        userName: userContext.actorName,
-      })
-
-      return {
-        updated: true,
-      }
     } catch (error) {
       throw sanitizeBillingError(error)
     }
@@ -1595,49 +1389,9 @@ export const updateBillingProfile = action({
 
 export const createPaymentMethodSetupIntent = action({
   args: {},
-  handler: async (ctx) => {
+  handler: async (): Promise<never> => {
     try {
       throwManagedInCustomerPortal()
-      const userContext = await requireBillingUser(ctx)
-      const stripe = getStripe()
-      const customerId = await ensureStripeCustomer({
-        ctx,
-        email: userContext.email,
-        stripe,
-        userContext,
-      })
-      const setupIntent = await stripe.setupIntents.create({
-        automatic_payment_methods: {
-          enabled: true,
-        },
-        customer: customerId,
-        metadata: {
-          app: STRIPE_CATALOG_APP,
-          clerkUserId: userContext.user.clerkUserId,
-          userId: userContext.user._id,
-        },
-        usage: "off_session",
-      })
-
-      await syncCustomerBillingSnapshot({
-        ctx,
-        stripe,
-        stripeCustomerId: customerId,
-        syncInvoices: false,
-      })
-
-      if (!setupIntent.client_secret) {
-        throw new BillingActionError(
-          "missing_client_secret",
-          "Stripe did not return a setup client secret.",
-          502
-        )
-      }
-
-      return {
-        clientSecret: setupIntent.client_secret,
-        secretType: "setup_intent" as const,
-      }
     } catch (error) {
       throw sanitizeBillingError(error)
     }
@@ -1648,103 +1402,9 @@ export const setDefaultPaymentMethod = action({
   args: {
     paymentMethodId: v.string(),
   },
-  handler: async (
-    ctx,
-    args
-  ): Promise<{ defaultPaymentMethodId: string; updated: true }> => {
+  handler: async (): Promise<never> => {
     try {
       throwManagedInCustomerPortal()
-      const userContext = await requireBillingUser(ctx)
-      const stripe = getStripe()
-      const customerId = await ensureStripeCustomer({
-        ctx,
-        email: userContext.email,
-        stripe,
-        userContext,
-      })
-      const paymentMethods = await stripe.customers.listPaymentMethods(
-        customerId,
-        {
-          limit: 24,
-        }
-      )
-      const targetPaymentMethod = paymentMethods.data.find(
-        (paymentMethod) => paymentMethod.id === args.paymentMethodId
-      )
-
-      if (!targetPaymentMethod) {
-        throw new BillingActionError(
-          "payment_method_not_found",
-          "That payment method is not attached to this billing account.",
-          404
-        )
-      }
-
-      await stripe.customers.update(customerId, {
-        invoice_settings: {
-          default_payment_method: targetPaymentMethod.id,
-        },
-      })
-
-      const subscriptions = await listStripeSubscriptionsForCustomer({
-        customerId,
-        stripe,
-      })
-
-      for (const subscription of subscriptions) {
-        if (
-          subscription.status === "canceled" ||
-          subscription.status === "incomplete_expired"
-        ) {
-          continue
-        }
-
-        const updatedSubscription = await stripe.subscriptions.update(
-          subscription.id,
-          {
-            default_payment_method: targetPaymentMethod.id,
-            expand: [
-              "customer",
-              "default_payment_method",
-              "items.data.price.product",
-              "latest_invoice.confirmation_secret",
-              "latest_invoice.payment_intent",
-              "pending_setup_intent",
-              "schedule",
-            ],
-          }
-        )
-
-        await reconcileStripeSubscription({
-          ctx: createBillingLifecycleOps(ctx),
-          stripe,
-          subscription: updatedSubscription,
-        })
-      }
-
-      await syncCustomerBillingSnapshot({
-        ctx,
-        stripe,
-        stripeCustomerId: customerId,
-        syncInvoices: false,
-      })
-
-      await recordBillingAuditLog({
-        action: "billing.payment_method.default_updated",
-        ctx,
-        entityId: targetPaymentMethod.id,
-        entityLabel:
-          targetPaymentMethod.card?.brand ?? targetPaymentMethod.type,
-        result: "success",
-        summary: "Updated the default payment method.",
-        user: userContext.user,
-        userName: userContext.actorName,
-      })
-
-      return {
-        defaultPaymentMethodId: targetPaymentMethod.id,
-        updated: true,
-      }
     } catch (error) {
       throw sanitizeBillingError(error)
     }
@@ -1755,237 +1415,14 @@ export const removePaymentMethod = action({
   args: {
     paymentMethodId: v.string(),
   },
-  handler: async (ctx, args) => {
+  handler: async (): Promise<never> => {
     try {
       throwManagedInCustomerPortal()
-      const userContext = await requireBillingUser(ctx)
-      const stripe = getStripe()
-      const customerId = await ensureStripeCustomer({
-        ctx,
-        email: userContext.email,
-        stripe,
-        userContext,
-      })
-      const customer = await stripe.customers.retrieve(customerId, {
-        expand: ["invoice_settings.default_payment_method"],
-      })
-
-      if ("deleted" in customer && customer.deleted) {
-        throw new BillingActionError(
-          "customer_deleted",
-          "This billing customer is no longer available in Stripe.",
-          409
-        )
-      }
-
-      const paymentMethods = await stripe.customers.listPaymentMethods(
-        customerId,
-        {
-          limit: 24,
-        }
-      )
-      const targetPaymentMethod = paymentMethods.data.find(
-        (paymentMethod) => paymentMethod.id === args.paymentMethodId
-      )
-
-      if (!targetPaymentMethod) {
-        throw new BillingActionError(
-          "payment_method_not_found",
-          "That payment method is not attached to this billing account.",
-          404
-        )
-      }
-
-      const defaultPaymentMethodId =
-        typeof customer.invoice_settings.default_payment_method === "string"
-          ? customer.invoice_settings.default_payment_method
-          : customer.invoice_settings.default_payment_method?.id
-
-      if (defaultPaymentMethodId === targetPaymentMethod.id) {
-        throw new BillingActionError(
-          "payment_method_in_use",
-          "Select another default payment method before removing this one.",
-          409
-        )
-      }
-
-      const subscriptions = await listStripeSubscriptionsForCustomer({
-        customerId,
-        stripe,
-      })
-      const attachedSubscription = subscriptions.find((subscription) => {
-        if (
-          subscription.status === "canceled" ||
-          subscription.status === "incomplete_expired"
-        ) {
-          return false
-        }
-
-        return (
-          (typeof subscription.default_payment_method === "string"
-            ? subscription.default_payment_method
-            : subscription.default_payment_method?.id) ===
-          targetPaymentMethod.id
-        )
-      })
-
-      if (attachedSubscription) {
-        throw new BillingActionError(
-          "payment_method_in_use",
-          "This payment method is still assigned to a subscription. Set another default first.",
-          409
-        )
-      }
-
-      await stripe.paymentMethods.detach(targetPaymentMethod.id)
-
-      await syncCustomerBillingSnapshot({
-        ctx,
-        stripe,
-        stripeCustomerId: customerId,
-        syncInvoices: false,
-      })
-
-      await recordBillingAuditLog({
-        action: "billing.payment_method.removed",
-        ctx,
-        entityId: targetPaymentMethod.id,
-        entityLabel:
-          targetPaymentMethod.card?.brand ?? targetPaymentMethod.type,
-        result: "warning",
-        summary: "Removed a saved payment method.",
-        user: userContext.user,
-        userName: userContext.actorName,
-      })
-
-      return {
-        removed: true,
-      }
     } catch (error) {
       throw sanitizeBillingError(error)
     }
   },
 })
-
-async function voidOrDeleteInvoiceIfPending(args: {
-  invoice: string | Stripe.Invoice | null | undefined
-  stripe: Stripe
-}) {
-  const expandedInvoice = getExpandedStripeInvoice(args.invoice)
-  const invoiceId =
-    expandedInvoice?.id ??
-    (typeof args.invoice === "string" ? args.invoice : undefined)
-
-  if (!invoiceId) {
-    return false
-  }
-
-  const invoice =
-    expandedInvoice ?? (await args.stripe.invoices.retrieve(invoiceId))
-
-  if (invoice.status === "draft") {
-    await args.stripe.invoices.del(invoice.id)
-    return true
-  }
-
-  if (invoice.status === "open") {
-    await args.stripe.invoices.voidInvoice(invoice.id)
-    return true
-  }
-
-  return false
-}
-
-async function clearPendingInvoicesForSubscription(args: {
-  stripe: Stripe
-  subscriptionId: string
-}) {
-  let invoiceWasCleared = false
-  const invoices = await args.stripe.invoices.list({
-    limit: 12,
-    subscription: args.subscriptionId,
-  })
-
-  for (const invoice of invoices.data) {
-    if (invoice.status === "draft") {
-      await args.stripe.invoices.del(invoice.id)
-      invoiceWasCleared = true
-      continue
-    }
-
-    if (invoice.status === "open") {
-      await args.stripe.invoices.voidInvoice(invoice.id)
-      invoiceWasCleared = true
-    }
-  }
-
-  return invoiceWasCleared
-}
-
-async function cancelIncompleteSubscription(args: {
-  ctx: PublicActionCtx
-  reason: "checkout_abandoned" | "replaced_before_confirmation"
-  stripe: Stripe
-  subscription: Stripe.Subscription
-  userContext: BillingUserContext
-}) {
-  const cancelledSubscription = await args.stripe.subscriptions.cancel(
-    args.subscription.id,
-    {
-      invoice_now: false,
-      prorate: false,
-    }
-  )
-  const expandedCancelledSubscription = await getExpandedSubscription({
-    stripe: args.stripe,
-    subscriptionId: cancelledSubscription.id,
-  })
-  const latestInvoiceWasCleared = await voidOrDeleteInvoiceIfPending({
-    invoice: expandedCancelledSubscription.latest_invoice,
-    stripe: args.stripe,
-  })
-  const relatedInvoicesWereCleared = await clearPendingInvoicesForSubscription({
-    stripe: args.stripe,
-    subscriptionId: expandedCancelledSubscription.id,
-  })
-  const invoiceWasCleared =
-    latestInvoiceWasCleared || relatedInvoicesWereCleared
-
-  await reconcileStripeSubscription({
-    ctx: createBillingLifecycleOps(args.ctx),
-    stripe: args.stripe,
-    subscription: expandedCancelledSubscription,
-  })
-
-  await recordBillingAuditLog({
-    action: "billing.checkout.abandoned",
-    ctx: args.ctx,
-    details: JSON.stringify(
-      {
-        invoiceWasCleared,
-        reason: args.reason,
-        stripeSubscriptionId: expandedCancelledSubscription.id,
-      },
-      null,
-      2
-    ),
-    entityId: expandedCancelledSubscription.id,
-    entityLabel: expandedCancelledSubscription.metadata.planKey ?? undefined,
-    result: "warning",
-    summary:
-      args.reason === "checkout_abandoned"
-        ? "Abandoned checkout before payment confirmation."
-        : "Replaced an incomplete checkout with a new selection before confirmation.",
-    user: args.userContext.user,
-    userName: args.userContext.actorName,
-  })
-
-  return {
-    invoiceWasCleared,
-    subscription: expandedCancelledSubscription,
-  }
-}
-
 export const createSubscriptionCheckoutSession = action({
   args: {
     creatorCode: v.optional(v.string()),
@@ -2166,71 +1603,38 @@ export const getPublicPricingCatalog = action({
         internal.queries.billing.catalog.getPublicPricingCatalogInternal,
         {}
       )
-      const stripe = getStripe()
-      const priceCache = new Map<string, Promise<Stripe.Price | null>>()
-      const fxQuote =
-        estimateCurrency === "GBP"
-          ? null
-          : await createGbpEstimateFxQuote({
-              estimateCurrency,
-            }).catch(() => null)
-      const paidPlanKeys = baseCatalog.plans
-        .filter((plan) => plan.planType === "paid")
-        .map((plan) => plan.planKey)
-      const planRecords: Array<BillingPlanRecord | null> = await Promise.all(
-        paidPlanKeys.map((planKey) =>
-          ctx.runQuery(internal.queries.billing.internal.getPlanByKey, {
-            planKey,
-          })
-        )
-      )
-      const plansByKey = new Map(
-        planRecords
-          .filter((plan): plan is BillingPlanRecord => Boolean(plan))
-          .map((plan) => [plan.key, plan] as const)
+
+      return await buildStripeEstimatedPricingCatalog({
+        baseCatalog,
+        ctx,
+        estimateCurrency,
+      })
+    } catch (error) {
+      throw sanitizeBillingError(error)
+    }
+  },
+})
+
+export const getCustomerPricingCatalog = action({
+  args: {
+    preferredCurrency: v.optional(supportedPricingCurrencyValidator),
+  },
+  handler: async (ctx, args): Promise<PricingCatalog> => {
+    try {
+      const userContext = await requireBillingUser(ctx)
+      const estimateCurrency = args.preferredCurrency ?? "GBP"
+      const baseCatalog: PricingCatalog = await ctx.runQuery(
+        internal.queries.billing.catalog.getCustomerPricingCatalogInternal,
+        {
+          clerkUserId: userContext.user.clerkUserId,
+        }
       )
 
-      return {
-        ...baseCatalog,
-        plans: await Promise.all(
-          baseCatalog.plans.map(async (plan) => ({
-            ...plan,
-            pricing: {
-              month: await getEstimatedPricingSnapshot({
-                estimateCurrency,
-                fxRate: fxQuote?.rate ?? null,
-                pricing: await getLiveStripePriceSnapshot({
-                fallbackPricing: plan.pricing.month,
-                interval: "month",
-                plan: plansByKey.get(plan.planKey) ?? null,
-                  preferredCurrency: "GBP",
-                priceCache,
-                stripe,
-              }),
-              }),
-              year: await getEstimatedPricingSnapshot({
-                estimateCurrency,
-                fxRate: fxQuote?.rate ?? null,
-                pricing: await getLiveStripePriceSnapshot({
-                fallbackPricing: plan.pricing.year,
-                interval: "year",
-                plan: plansByKey.get(plan.planKey) ?? null,
-                  preferredCurrency: "GBP",
-                priceCache,
-                stripe,
-              }),
-              }),
-            },
-          }))
-        ),
-        currencyNotice:
-          estimateCurrency === "GBP"
-            ? "Plans are billed from the GBP catalog. Stripe Checkout confirms final currency, taxes, discounts, and total."
-            : fxQuote
-              ? `Showing approximate ${estimateCurrency} estimates from Stripe FX Quotes. Final currency, taxes, discounts, and total are confirmed by Stripe Checkout, and exchange rates may shift.`
-              : `Stripe ${estimateCurrency} estimates are unavailable right now, so prices are shown in GBP. Final currency, taxes, discounts, and total are confirmed by Stripe Checkout, and exchange rates may shift.`,
-        selectedCurrency: estimateCurrency,
-      }
+      return await buildStripeEstimatedPricingCatalog({
+        baseCatalog,
+        ctx,
+        estimateCurrency,
+      })
     } catch (error) {
       throw sanitizeBillingError(error)
     }
@@ -2459,163 +1863,9 @@ export const previewSubscriptionChange = action({
     prorationDate: v.optional(v.number()),
     stripeSubscriptionId: v.optional(v.string()),
   },
-  handler: async (ctx, args): Promise<SubscriptionChangePreviewResult> => {
+  handler: async (): Promise<never> => {
     try {
       throwManagedInCustomerPortal()
-      const userContext = await requireBillingUser(ctx)
-      assertCreatorGrantAllowsSelfServeBilling({
-        action: "plan_change",
-        userContext,
-      })
-      const targetSubscription = await getTargetSubscription({
-        ctx,
-        stripeSubscriptionId: args.stripeSubscriptionId,
-        userContext,
-      })
-
-      const currentPlan = await ctx.runQuery(
-        internal.queries.billing.internal.getPlanByKey,
-        {
-          planKey: targetSubscription.planKey,
-        }
-      )
-
-      if (!currentPlan) {
-        throw new BillingActionError(
-          "missing_current_plan",
-          "The current billing plan could not be resolved.",
-          409
-        )
-      }
-
-      if (args.planKey === "free") {
-        return {
-          amountDueNow: 0,
-          creditApplied: 0,
-          currentAmount: getPlanAmount(
-            currentPlan,
-            targetSubscription.interval
-          ),
-          currentInterval: targetSubscription.interval,
-          currentPlanKey: currentPlan.key,
-          effectiveAt: targetSubscription.currentPeriodEnd ?? null,
-          interval: "month" as const,
-          mode: "cancel_at_period_end" as const,
-          planKey: "free",
-          prorationBehavior: "none" as const,
-          prorationDate: null,
-          proratedCharge: 0,
-          summary:
-            "This downgrade will move the account back to free access at the end of the current paid period. Paid features stay active until then and Stripe will not issue a refund.",
-          targetAmount: 0,
-        }
-      }
-
-      const { plan: targetPlan, priceId } = await getPurchasablePlan({
-        ctx,
-        interval: args.interval,
-        planKey: args.planKey,
-      })
-      const changeKind = classifyPlanChange({
-        currentInterval: targetSubscription.interval,
-        currentPlan,
-        targetInterval: args.interval,
-        targetPlan,
-      })
-
-      if (changeKind === "noop") {
-        return {
-          amountDueNow: 0,
-          creditApplied: 0,
-          currentAmount: getPlanAmount(
-            currentPlan,
-            targetSubscription.interval
-          ),
-          currentInterval: targetSubscription.interval,
-          currentPlanKey: currentPlan.key,
-          effectiveAt: null,
-          interval: args.interval,
-          mode: "noop" as const,
-          planKey: targetPlan.key,
-          prorationBehavior: "none" as const,
-          prorationDate: null,
-          proratedCharge: 0,
-          summary: "That plan and billing interval is already active.",
-          targetAmount: getPlanAmount(targetPlan, args.interval),
-        }
-      }
-
-      if (changeKind === "downgrade_later" || changeKind === "switch_later") {
-        return {
-          amountDueNow: 0,
-          creditApplied: 0,
-          currentAmount: getPlanAmount(
-            currentPlan,
-            targetSubscription.interval
-          ),
-          currentInterval: targetSubscription.interval,
-          currentPlanKey: currentPlan.key,
-          effectiveAt: targetSubscription.currentPeriodEnd ?? null,
-          interval: args.interval,
-          mode: "scheduled_change" as const,
-          planKey: targetPlan.key,
-          prorationBehavior: "none" as const,
-          prorationDate: null,
-          proratedCharge: 0,
-          summary:
-            "This downgrade will take effect at the next renewal. Existing access and pricing stay in place until the current billing period ends, and the lower price starts on the next payment.",
-          targetAmount: getPlanAmount(targetPlan, args.interval),
-        }
-      }
-
-      const stripe = getStripe()
-      const prorationDate = args.prorationDate ?? Math.floor(Date.now() / 1000)
-      const preview = await stripe.invoices.createPreview({
-        customer: targetSubscription.stripeCustomerId,
-        subscription: targetSubscription.stripeSubscriptionId,
-        subscription_details: {
-          items: targetSubscription.stripeSubscriptionItemId
-            ? [
-                {
-                  id: targetSubscription.stripeSubscriptionItemId,
-                  price: priceId,
-                  quantity: 1,
-                },
-              ]
-            : [
-                {
-                  price: priceId,
-                  quantity: 1,
-                },
-              ],
-          proration_date: prorationDate,
-          proration_behavior: "always_invoice",
-        },
-      })
-      const prorationBreakdown = getPreviewProrationBreakdown({
-        invoice: preview,
-        prorationDate,
-      })
-
-      return {
-        amountDueNow: preview.amount_due,
-        creditApplied: prorationBreakdown.creditApplied,
-        currentAmount: getPlanAmount(currentPlan, targetSubscription.interval),
-        currentInterval: targetSubscription.interval,
-        currentPlanKey: currentPlan.key,
-        effectiveAt: Date.now(),
-        interval: args.interval,
-        mode: "immediate_change" as const,
-        planKey: targetPlan.key,
-        prorationBehavior: "always_invoice" as const,
-        prorationDate,
-        proratedCharge: prorationBreakdown.proratedCharge,
-        summary:
-          prorationBreakdown.creditApplied > 0
-            ? "This upgrade takes effect immediately. Stripe applied credit for the unused time on the current plan and reduced what is due today."
-            : "This upgrade takes effect immediately. Stripe will create the change invoice right away.",
-        targetAmount: getPlanAmount(targetPlan, args.interval),
-      }
     } catch (error) {
       throw sanitizeBillingError(error)
     }
@@ -2629,277 +1879,9 @@ export const changeSubscriptionPlan = action({
     prorationDate: v.optional(v.number()),
     stripeSubscriptionId: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (): Promise<never> => {
     try {
       throwManagedInCustomerPortal()
-      await assertCheckoutEnabled(ctx)
-
-      const userContext = await requireBillingUser(ctx)
-      assertCreatorGrantAllowsSelfServeBilling({
-        action: "plan_change",
-        userContext,
-      })
-      const targetSubscription = await getTargetSubscription({
-        ctx,
-        stripeSubscriptionId: args.stripeSubscriptionId,
-        userContext,
-      })
-
-      const currentPlan = await ctx.runQuery(
-        internal.queries.billing.internal.getPlanByKey,
-        {
-          planKey: targetSubscription.planKey,
-        }
-      )
-
-      if (!currentPlan) {
-        throw new BillingActionError(
-          "missing_current_plan",
-          "The current billing plan could not be resolved.",
-          409
-        )
-      }
-
-      const stripe = getStripe()
-      const currentSubscription = await getExpandedSubscription({
-        stripe,
-        subscriptionId: targetSubscription.stripeSubscriptionId,
-      })
-
-      if (args.planKey === "free") {
-        const expandedUpdatedSubscription =
-          await scheduleSubscriptionCancellationAtPeriodEnd({
-            stripe,
-            stripeSubscriptionId: currentSubscription.id,
-          })
-
-        await reconcileStripeSubscription({
-          ctx: createBillingLifecycleOps(ctx),
-          stripe,
-          subscription: expandedUpdatedSubscription,
-        })
-
-        await ctx.runMutation(
-          internal.mutations.billing.state.setSubscriptionScheduledChange,
-          {
-            scheduledChangeAt: getSubscriptionCurrentPeriodEnd(
-              expandedUpdatedSubscription
-            ),
-            scheduledChangeRequestedAt: Date.now(),
-            scheduledChangeType: "cancel",
-            stripeSubscriptionId: expandedUpdatedSubscription.id,
-          }
-        )
-        await syncCustomerBillingSnapshot({
-          ctx,
-          stripe,
-          stripeCustomerId: targetSubscription.stripeCustomerId,
-        })
-
-        await recordBillingAuditLog({
-          action: "billing.subscription.cancel_scheduled",
-          ctx,
-          details: JSON.stringify(
-            {
-              effectiveAt: getSubscriptionCurrentPeriodEnd(
-                expandedUpdatedSubscription
-              ),
-            },
-            null,
-            2
-          ),
-          entityId: expandedUpdatedSubscription.id,
-          entityLabel: currentPlan.name,
-          result: "success",
-          summary: `Scheduled cancellation for ${currentPlan.name}.`,
-          user: userContext.user,
-          userName: userContext.actorName,
-        })
-
-        return {
-          effectiveAt: getSubscriptionCurrentPeriodEnd(
-            expandedUpdatedSubscription
-          ),
-          mode: "cancel_at_period_end" as const,
-          requiresConfirmation: false,
-        }
-      }
-
-      const { plan: targetPlan, priceId } = await getPurchasablePlan({
-        ctx,
-        interval: args.interval,
-        planKey: args.planKey,
-      })
-      const changeKind = classifyPlanChange({
-        currentInterval: targetSubscription.interval,
-        currentPlan,
-        targetInterval: args.interval,
-        targetPlan,
-      })
-
-      if (changeKind === "noop") {
-        throw new BillingActionError(
-          "noop_change",
-          "That plan is already active.",
-          409
-        )
-      }
-
-      if (changeKind === "downgrade_later" || changeKind === "switch_later") {
-        await releaseExistingSchedule(currentSubscription, stripe)
-
-        const currentItem = getStripeSubscriptionItem(currentSubscription)
-        const schedule = await stripe.subscriptionSchedules.create({
-          from_subscription: currentSubscription.id,
-        })
-        const updatedSchedule = await stripe.subscriptionSchedules.update(
-          schedule.id,
-          {
-            end_behavior: "release",
-            phases: [
-              {
-                end_date: currentItem.current_period_end,
-                items: [
-                  {
-                    price: currentItem.price.id,
-                    quantity: currentItem.quantity ?? 1,
-                  },
-                ],
-                start_date: "now",
-              },
-              {
-                items: [
-                  {
-                    price: priceId,
-                    quantity: 1,
-                  },
-                ],
-                proration_behavior: "none",
-                start_date:
-                  getStripeSubscriptionItem(currentSubscription)
-                    .current_period_end,
-              },
-            ],
-          }
-        )
-
-        await ctx.runMutation(
-          internal.mutations.billing.state.setSubscriptionScheduledChange,
-          {
-            scheduledChangeAt:
-              getSubscriptionCurrentPeriodEnd(currentSubscription),
-            scheduledChangeRequestedAt: Date.now(),
-            scheduledChangeType: "plan_change",
-            scheduledInterval: args.interval,
-            scheduledPlanKey: targetPlan.key,
-            stripeScheduleId: updatedSchedule.id,
-            stripeSubscriptionId: currentSubscription.id,
-          }
-        )
-
-        await recordBillingAuditLog({
-          action: "billing.subscription.plan_change_scheduled",
-          ctx,
-          details: JSON.stringify(
-            {
-              effectiveAt: getSubscriptionCurrentPeriodEnd(currentSubscription),
-              interval: args.interval,
-              nextPlanKey: targetPlan.key,
-            },
-            null,
-            2
-          ),
-          entityId: currentSubscription.id,
-          entityLabel: `${currentPlan.name} -> ${targetPlan.name}`,
-          result: "success",
-          summary: `Scheduled ${targetPlan.name} (${args.interval}) for the next renewal.`,
-          user: userContext.user,
-          userName: userContext.actorName,
-        })
-
-        return {
-          effectiveAt: getSubscriptionCurrentPeriodEnd(currentSubscription),
-          mode: "scheduled_change" as const,
-          requiresConfirmation: false,
-        }
-      }
-
-      await releaseExistingSchedule(currentSubscription, stripe)
-
-      const updatedSubscription = await stripe.subscriptions.update(
-        currentSubscription.id,
-        {
-          cancel_at_period_end: false,
-          expand: [
-            "customer",
-            "default_payment_method",
-            "items.data.price.product",
-            "latest_invoice.confirmation_secret",
-            "latest_invoice.payment_intent",
-            "pending_setup_intent",
-            "schedule",
-          ],
-          items: [
-            {
-              id: getStripeSubscriptionItem(currentSubscription).id,
-              price: priceId,
-              quantity: 1,
-            },
-          ],
-          payment_behavior: "pending_if_incomplete",
-          proration_date: args.prorationDate,
-          proration_behavior: "always_invoice",
-        }
-      )
-
-      await reconcileStripeSubscription({
-        ctx: createBillingLifecycleOps(ctx),
-        stripe,
-        subscription: updatedSubscription,
-      })
-      await syncCustomerBillingSnapshot({
-        ctx,
-        stripe,
-        stripeCustomerId: targetSubscription.stripeCustomerId,
-      })
-      await ctx.runMutation(
-        internal.mutations.billing.state.clearSubscriptionScheduledChange,
-        {
-          stripeSubscriptionId: updatedSubscription.id,
-        }
-      )
-
-      const confirmationPayload = getConfirmationPayload(updatedSubscription)
-
-      await recordBillingAuditLog({
-        action: "billing.subscription.plan_changed",
-        ctx,
-        details: JSON.stringify(
-          {
-            interval: args.interval,
-            nextPlanKey: targetPlan.key,
-            requiresConfirmation:
-              confirmationPayload.clientSecret !== undefined,
-          },
-          null,
-          2
-        ),
-        entityId: updatedSubscription.id,
-        entityLabel: `${currentPlan.name} -> ${targetPlan.name}`,
-        result: "success",
-        summary: `Updated subscription to ${targetPlan.name} (${args.interval}).`,
-        user: userContext.user,
-        userName: userContext.actorName,
-      })
-
-      return {
-        clientSecret: confirmationPayload.clientSecret,
-        effectiveAt: Date.now(),
-        mode: "immediate_change" as const,
-        requiresConfirmation: confirmationPayload.clientSecret !== undefined,
-        secretType: confirmationPayload.secretType,
-        status: updatedSubscription.status,
-      }
     } catch (error) {
       throw sanitizeBillingError(error)
     }
@@ -2911,107 +1893,9 @@ export const cancelCurrentSubscription = action({
     mode: subscriptionCancellationModeValidator,
     stripeSubscriptionId: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (): Promise<never> => {
     try {
       throwManagedInCustomerPortal()
-      const userContext = await requireBillingUser(ctx)
-      assertCreatorGrantAllowsSelfServeBilling({
-        action: "cancellation",
-        userContext,
-      })
-      const targetSubscription = await getTargetSubscription({
-        ctx,
-        stripeSubscriptionId: args.stripeSubscriptionId,
-        userContext,
-      })
-
-      const stripe = getStripe()
-      const expandedUpdatedSubscription =
-        args.mode === "immediately"
-          ? await cancelSubscriptionImmediately({
-              stripe,
-              stripeSubscriptionId: targetSubscription.stripeSubscriptionId,
-            })
-          : await scheduleSubscriptionCancellationAtPeriodEnd({
-              stripe,
-              stripeSubscriptionId: targetSubscription.stripeSubscriptionId,
-            })
-
-      await reconcileStripeSubscription({
-        ctx: createBillingLifecycleOps(ctx),
-        stripe,
-        subscription: expandedUpdatedSubscription,
-      })
-
-      if (args.mode === "period_end") {
-        await ctx.runMutation(
-          internal.mutations.billing.state.setSubscriptionScheduledChange,
-          {
-            scheduledChangeAt: getSubscriptionCurrentPeriodEnd(
-              expandedUpdatedSubscription
-            ),
-            scheduledChangeRequestedAt: Date.now(),
-            scheduledChangeType: "cancel",
-            stripeSubscriptionId: expandedUpdatedSubscription.id,
-          }
-        )
-      } else {
-        await ctx.runMutation(
-          internal.mutations.billing.state.clearSubscriptionScheduledChange,
-          {
-            stripeSubscriptionId: expandedUpdatedSubscription.id,
-          }
-        )
-      }
-      await syncCustomerBillingSnapshot({
-        ctx,
-        stripe,
-        stripeCustomerId: targetSubscription.stripeCustomerId,
-      })
-
-      await recordBillingAuditLog({
-        action:
-          args.mode === "immediately"
-            ? "billing.subscription.canceled"
-            : "billing.subscription.cancel_scheduled",
-        ctx,
-        details: JSON.stringify(
-          {
-            effectiveAt:
-              args.mode === "immediately"
-                ? expandedUpdatedSubscription.ended_at
-                  ? expandedUpdatedSubscription.ended_at * 1000
-                  : Date.now()
-                : getSubscriptionCurrentPeriodEnd(expandedUpdatedSubscription),
-            mode: args.mode,
-          },
-          null,
-          2
-        ),
-        entityId: expandedUpdatedSubscription.id,
-        entityLabel: targetSubscription.planKey,
-        result: "success",
-        summary:
-          args.mode === "immediately"
-            ? "Canceled the subscription immediately."
-            : "Scheduled subscription cancellation at period end.",
-        user: userContext.user,
-        userName: userContext.actorName,
-      })
-
-      return {
-        effectiveAt:
-          args.mode === "immediately"
-            ? expandedUpdatedSubscription.ended_at
-              ? expandedUpdatedSubscription.ended_at * 1000
-              : Date.now()
-            : getSubscriptionCurrentPeriodEnd(expandedUpdatedSubscription),
-        mode:
-          args.mode === "immediately"
-            ? ("cancel_immediately" as const)
-            : ("cancel_at_period_end" as const),
-        status: expandedUpdatedSubscription.status,
-      }
     } catch (error) {
       throw sanitizeBillingError(error)
     }
@@ -3022,132 +1906,11 @@ export const reactivateCurrentSubscription = action({
   args: {
     stripeSubscriptionId: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (): Promise<never> => {
     try {
       throwManagedInCustomerPortal()
-      await assertCheckoutEnabled(ctx)
-
-      const userContext = await requireBillingUser(ctx)
-      assertCreatorGrantAllowsSelfServeBilling({
-        action: "reactivation",
-        userContext,
-      })
-      const targetSubscription = await getTargetSubscription({
-        ctx,
-        stripeSubscriptionId: args.stripeSubscriptionId,
-        userContext,
-      })
-
-      const stripe = getStripe()
-      const currentSubscription = await getExpandedSubscription({
-        stripe,
-        subscriptionId: targetSubscription.stripeSubscriptionId,
-      })
-
-      await releaseExistingSchedule(currentSubscription, stripe)
-
-      const updatedSubscription = await stripe.subscriptions.update(
-        currentSubscription.id,
-        {
-          cancel_at_period_end: false,
-          expand: [
-            "customer",
-            "default_payment_method",
-            "items.data.price.product",
-            "latest_invoice.confirmation_secret",
-            "latest_invoice.payment_intent",
-            "pending_setup_intent",
-            "schedule",
-          ],
-        }
-      )
-
-      await reconcileStripeSubscription({
-        ctx: createBillingLifecycleOps(ctx),
-        stripe,
-        subscription: updatedSubscription,
-      })
-      await syncCustomerBillingSnapshot({
-        ctx,
-        stripe,
-        stripeCustomerId: targetSubscription.stripeCustomerId,
-      })
-      await ctx.runMutation(
-        internal.mutations.billing.state.clearSubscriptionScheduledChange,
-        {
-          stripeSubscriptionId: updatedSubscription.id,
-        }
-      )
-
-      await recordBillingAuditLog({
-        action: "billing.subscription.reactivated",
-        ctx,
-        entityId: updatedSubscription.id,
-        entityLabel: targetSubscription.planKey,
-        result: "success",
-        summary: "Reactivated the current subscription.",
-        user: userContext.user,
-        userName: userContext.actorName,
-      })
-
-      return {
-        mode: "reactivated" as const,
-        status: updatedSubscription.status,
-      }
     } catch (error) {
       throw sanitizeBillingError(error)
     }
   },
 })
-
-
-function createBillingLifecycleOps(
-  ctx: Pick<ActionCtx, "runMutation" | "runQuery">
-): BillingLifecycleOps {
-  return {
-    getBillingContextByStripeCustomerId: (args) =>
-      ctx.runQuery(
-        internal.queries.billing.internal.getBillingContextByStripeCustomerId,
-        args
-      ),
-    getBillingPlans: (args) =>
-      ctx.runQuery(internal.queries.billing.catalog.getBillingPlans, args),
-    getPlanByStripePriceId: (args) =>
-      ctx.runQuery(
-        internal.queries.billing.internal.getPlanByStripePriceId,
-        args
-      ),
-    syncBillingInvoices: (args) =>
-      ctx.runMutation(
-        internal.mutations.billing.state.syncBillingInvoices,
-        {
-          ...args,
-          userId: args.userId as Id<"users">,
-        }
-      ),
-    syncBillingPaymentMethods: (args) =>
-      ctx.runMutation(
-        internal.mutations.billing.state.syncBillingPaymentMethods,
-        {
-          ...args,
-          userId: args.userId as Id<"users">,
-        }
-      ),
-    upsertBillingCustomer: (args) =>
-      ctx.runMutation(
-        internal.mutations.billing.state.upsertBillingCustomer,
-        {
-          ...args,
-          userId: args.userId as Id<"users">,
-        }
-      ),
-    upsertBillingSubscription: (args) =>
-      ctx.runMutation(
-        internal.mutations.billing.state.upsertBillingSubscription,
-        {
-          ...args,
-          userId: args.userId as Id<"users">,
-        }
-      ),
-  }
-}

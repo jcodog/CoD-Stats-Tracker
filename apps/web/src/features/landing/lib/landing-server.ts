@@ -12,7 +12,7 @@ export async function resolveLandingMetricsInitialState() {
 
   try {
     return (await fetchQuery(
-      api.stats.getLandingMetrics,
+      api.queries.stats.landing.getLandingMetrics,
       {},
       token ? { token } : {}
     )) as LandingMetricsResponse

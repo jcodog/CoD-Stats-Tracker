@@ -55,89 +55,6 @@ export type PricingCatalogEntry = {
   sortOrder: number
 }
 
-function normalizePreferredCurrency(
-  value: string | null | undefined
-): SupportedCurrency | null {
-  if (typeof value !== "string") {
-    return null
-  }
-
-  const normalizedValue = value.trim().toUpperCase()
-
-  return SUPPORTED_CURRENCIES.includes(normalizedValue as SupportedCurrency)
-    ? (normalizedValue as SupportedCurrency)
-    : null
-}
-
-function getAlternatePlanAmount(args: {
-  interval: "month" | "year"
-  currency: Exclude<SupportedCurrency, "GBP">
-  plan: BillingPlanRecord
-}) {
-  switch (args.currency) {
-    case "USD":
-      return args.interval === "month"
-        ? args.plan.monthlyPriceAmountUsd
-        : args.plan.yearlyPriceAmountUsd
-    case "CAD":
-      return args.interval === "month"
-        ? args.plan.monthlyPriceAmountCad
-        : args.plan.yearlyPriceAmountCad
-    case "EUR":
-      return args.interval === "month"
-        ? args.plan.monthlyPriceAmountEur
-        : args.plan.yearlyPriceAmountEur
-  }
-}
-
-function getAlternatePriceId(args: {
-  interval: "month" | "year"
-  currency: Exclude<SupportedCurrency, "GBP">
-  plan: BillingPlanRecord
-}) {
-  switch (args.currency) {
-    case "USD":
-      return args.interval === "month"
-        ? args.plan.monthlyPriceIdUsd
-        : args.plan.yearlyPriceIdUsd
-    case "CAD":
-      return args.interval === "month"
-        ? args.plan.monthlyPriceIdCad
-        : args.plan.yearlyPriceIdCad
-    case "EUR":
-      return args.interval === "month"
-        ? args.plan.monthlyPriceIdEur
-        : args.plan.yearlyPriceIdEur
-  }
-}
-
-function planSupportsCurrency(plan: BillingPlanRecord, currency: SupportedCurrency) {
-  if (plan.planType !== "paid") {
-    return true
-  }
-
-  if (currency === "GBP") {
-    return true
-  }
-
-  const supportsMonthly =
-    plan.monthlyPriceAmount <= 0 ||
-    (getAlternatePlanAmount({
-      currency,
-      interval: "month",
-      plan,
-    }) ?? 0) > 0
-  const supportsYearly =
-    plan.yearlyPriceAmount <= 0 ||
-    (getAlternatePlanAmount({
-      currency,
-      interval: "year",
-      plan,
-    }) ?? 0) > 0
-
-  return supportsMonthly && supportsYearly
-}
-
 function getAvailableCurrencies(plans: BillingPlanRecord[]) {
   const activePaidPlans = plans.filter(
     (plan) => plan.active && plan.archivedAt === undefined && plan.planType === "paid"
@@ -155,34 +72,11 @@ function resolvePricingCurrency(args: {
   preferredCurrency?: string | null
 }) {
   const availableCurrencies = getAvailableCurrencies(args.plans)
-  const normalizedPreferredCurrency = normalizePreferredCurrency(
-    args.preferredCurrency
-  )
-  const selectedCurrency =
-    normalizedPreferredCurrency &&
-    availableCurrencies.includes(normalizedPreferredCurrency)
-      ? normalizedPreferredCurrency
-      : ("GBP" as SupportedCurrency)
-  const hasFallbackPricing =
-    selectedCurrency !== "GBP" &&
-    args.plans.some(
-      (plan) =>
-        plan.active &&
-        plan.archivedAt === undefined &&
-        plan.planType === "paid" &&
-        !planSupportsCurrency(plan, selectedCurrency)
-    )
 
   return {
     availableCurrencies,
-    currencyNotice:
-      normalizedPreferredCurrency &&
-      normalizedPreferredCurrency !== selectedCurrency
-        ? `Pricing is currently billed in ${selectedCurrency} for your selected plans.`
-        : hasFallbackPricing
-          ? `Some plans fall back to GBP because Stripe pricing for ${selectedCurrency} is not configured for every billing interval yet.`
-        : null,
-    selectedCurrency,
+    currencyNotice: null,
+    selectedCurrency: "GBP" as SupportedCurrency,
   }
 }
 
@@ -195,43 +89,14 @@ function resolvePlanPricing<TInterval extends "month" | "year">(args: {
     return null
   }
 
-  if (args.selectedCurrency === "GBP") {
-    const amount =
-      args.interval === "month"
-        ? args.plan.monthlyPriceAmount
-        : args.plan.yearlyPriceAmount
-
-    return amount > 0
-      ? {
-          amount,
-          currency: "GBP",
-          interval: args.interval,
-        }
-      : null
-  }
-
-  const alternateAmount = getAlternatePlanAmount({
-    currency: args.selectedCurrency,
-    interval: args.interval,
-    plan: args.plan,
-  })
-
-  if ((alternateAmount ?? 0) > 0) {
-    return {
-      amount: alternateAmount!,
-      currency: args.selectedCurrency,
-      interval: args.interval,
-    }
-  }
-
-  const fallbackAmount =
+  const amount =
     args.interval === "month"
       ? args.plan.monthlyPriceAmount
       : args.plan.yearlyPriceAmount
 
-  return fallbackAmount > 0
+  return amount > 0
     ? {
-        amount: fallbackAmount,
+        amount,
         currency: "GBP",
         interval: args.interval,
       }
@@ -482,6 +347,47 @@ export const getCustomerPricingCatalog = query({
     const pricingCurrency = resolvePricingCurrency({
       plans,
       preferredCurrency: args.preferredCurrency,
+    })
+
+    return {
+      availableCurrencies: pricingCurrency.availableCurrencies,
+      currentInterval,
+      currentPlanKey: resolvedState?.effectivePlanKey ?? null,
+      currencyNotice: pricingCurrency.currencyNotice,
+      plans: buildPricingCatalog({
+        currentPlan,
+        currentSubscriptionInterval: currentInterval,
+        features,
+        planFeatures,
+        plans,
+        selectedCurrency: pricingCurrency.selectedCurrency,
+      }),
+      selectedCurrency: pricingCurrency.selectedCurrency,
+    }
+  },
+})
+
+export const getCustomerPricingCatalogInternal = internalQuery({
+  args: {
+    clerkUserId: v.string(),
+  },
+  handler: async (ctx, args): Promise<PricingCatalog> => {
+    const [plans, planFeatures, features, user] = await Promise.all([
+      listBillingPlans(ctx),
+      ctx.db.query("billingPlanFeatures").collect(),
+      listBillingFeatures(ctx),
+      ctx.db
+        .query("users")
+        .withIndex("by_clerkUserId", (query) =>
+          query.eq("clerkUserId", args.clerkUserId)
+        )
+        .unique(),
+    ])
+    const resolvedState = user ? await buildResolvedBillingState(ctx, user) : null
+    const currentPlan = resolvedState?.effectivePlan ?? null
+    const currentInterval = resolvedState?.subscription?.interval
+    const pricingCurrency = resolvePricingCurrency({
+      plans,
     })
 
     return {

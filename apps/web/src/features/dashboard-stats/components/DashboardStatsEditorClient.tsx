@@ -189,14 +189,7 @@ function DashboardStatsEditorLoaded({
   viewport: RequestViewport
 }) {
   const isMobileView = viewport === "mobile"
-  const initialSessions = initialDashboardState.activeSessions as Array<{
-    id: string
-    losses: number
-    season: number
-    titleLabel: string
-    usernameLabel: string | null
-    wins: number
-  }>
+  const initialSessions = initialDashboardState.activeSessions
   const [createSessionOpen, setCreateSessionOpen] = useState(false)
   const [logMatchOpen, setLogMatchOpen] = useState(false)
   const {
@@ -231,8 +224,7 @@ function DashboardStatsEditorLoaded({
     dashboardState.preferredMatchLoggingMode ??
     DEFAULT_DASHBOARD_MATCH_LOGGING_MODE
   const effectiveLoggingMode = selectedLoggingMode ?? persistedLoggingMode
-  const activeSessions = (dashboardState.activeSessions ??
-    initialSessions) as typeof initialSessions
+  const activeSessions = dashboardState.activeSessions ?? initialSessions
   const effectiveSelectedSessionId =
     selectedSessionId &&
     activeSessions.some((session) => session.id === selectedSessionId)

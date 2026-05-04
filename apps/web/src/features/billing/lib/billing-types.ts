@@ -276,63 +276,7 @@ export type CheckoutQuoteResult = {
   renewalTotal: number
 }
 
-export type BillingChangePreview = {
-  amountDueNow: number
-  creditApplied: number
-  currentAmount: number
-  currentInterval: BillingInterval
-  currentPlanKey: string
-  effectiveAt: number | null
-  interval: BillingInterval
-  mode:
-    | "cancel_at_period_end"
-    | "immediate_change"
-    | "noop"
-    | "scheduled_change"
-  planKey: string
-  prorationBehavior: "always_invoice" | "none"
-  prorationDate: number | null
-  proratedCharge: number
-  summary: string
-  targetAmount: number
-}
-
-export type BillingChangeResult = {
-  clientSecret?: string
-  effectiveAt: number
-  mode: "cancel_at_period_end" | "immediate_change" | "scheduled_change"
-  requiresConfirmation: boolean
-  secretType?: "none" | "payment_intent" | "setup_intent"
-  status?: string
-}
-
-export type CancellationResult = {
-  effectiveAt: number | null
-  mode: "cancel_at_period_end" | "cancel_immediately"
-  status: string
-}
-
-export type ReactivationResult = {
-  mode: "reactivated"
-  status: string
-}
-
 export type BillingCenterSyncResult = {
   hasCustomer: boolean
   syncedAt: number
-}
-
-export type BillingProfileUpdateResult = {
-  updated: boolean
-}
-
-export type PaymentMethodSetupIntentResult = {
-  clientSecret: string
-  secretType: "setup_intent"
-}
-
-export type PaymentMethodMutationResult = {
-  defaultPaymentMethodId?: string
-  removed?: boolean
-  updated?: boolean
 }

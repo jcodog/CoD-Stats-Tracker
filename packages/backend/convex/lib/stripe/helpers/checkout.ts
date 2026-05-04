@@ -2,6 +2,10 @@ import Stripe from "stripe"
 
 import { getSubscriptionItemCurrentPeriodEnd } from "../../../../src/lib/stripe/billing"
 
+type StripeCheckoutSessionCreateParams = NonNullable<
+  Parameters<Stripe["checkout"]["sessions"]["create"]>[0]
+>
+
 export function buildCheckoutSuccessUrl(appOrigin: string) {
   return `${appOrigin}/checkout/complete?session_id={CHECKOUT_SESSION_ID}`
 }
@@ -83,6 +87,7 @@ export async function createHostedSubscriptionCheckoutSession(args: {
         metadata: args.metadata,
       },
       success_url: args.successUrl,
+      ui_mode: "hosted" as unknown as StripeCheckoutSessionCreateParams["ui_mode"],
     },
     {
       idempotencyKey: args.idempotencyKey,
