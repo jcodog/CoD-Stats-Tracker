@@ -12,10 +12,15 @@ export type CreatorTransferLedgerStatus =
   | "transfer_requires_review"
 
 export type CreatorPayoutRunStatus =
+  | "canceled"
   | "cancelled"
+  | "completed"
   | "draft"
+  | "failed"
   | "executing"
+  | "partial_failed"
   | "partially_transferred"
+  | "processing"
   | "requires_review"
   | "transferred"
 
@@ -27,8 +32,19 @@ export type CreatorPayoutTransferStatus =
   | "transferred"
   | "transferring"
 
+export type CreatorPayoutRunSource =
+  | "dry_run_review"
+  | "manual"
+  | "scheduled"
+
+export type CreatorPayoutTransferSource =
+  | "dry_run_review"
+  | "manual_retry"
+  | "scheduled"
+
 export type CreatorTransferReadinessBlockerCode =
   | "connect_requirements_due"
+  | "connect_status_stale"
   | "connect_status_not_refreshed"
   | "missing_connect_account"
   | "missing_creator_account"
@@ -67,6 +83,7 @@ export type CreatorTransferAccount = {
   requirementsCurrentlyDue?: string[] | null
   requirementsDue?: string[] | null
   requirementsPastDue?: string[] | null
+  stripeConnectedAccountVersion?: "v1" | "v2" | null
   stripeConnectedAccountId?: string | null
 }
 
@@ -93,6 +110,27 @@ export type CreatorPayoutPreview = {
   transferCount: number
 }
 
+export type CreatorPayoutPeriod = {
+  periodEnd: number
+  periodStart: number
+}
+
+export type StripeTransferCreator = {
+  transfers: {
+    create: (
+      params: {
+        amount: number
+        currency: string
+        destination: string
+        metadata: Record<string, string>
+      },
+      options: { idempotencyKey: string }
+    ) => Promise<{ id: string }>
+  }
+}
+
+export const CREATOR_CONNECT_STATUS_STALE_AFTER_MS = 7 * 24 * 60 * 60 * 1000
+
 function toNormalizedCurrency(value: string) {
   return value.trim().toLowerCase()
 }
@@ -102,9 +140,13 @@ function hasEntries(value: string[] | null | undefined) {
 }
 
 export function getCreatorTransferReadiness(
-  account: CreatorTransferAccount | null | undefined
+  account: CreatorTransferAccount | null | undefined,
+  options?: { now?: number; staleAfterMs?: number }
 ) {
   const blockers: CreatorTransferReadinessBlocker[] = []
+  const now = options?.now ?? Date.now()
+  const staleAfterMs =
+    options?.staleAfterMs ?? CREATOR_CONNECT_STATUS_STALE_AFTER_MS
 
   if (!account) {
     return {
@@ -137,6 +179,11 @@ export function getCreatorTransferReadiness(
       code: "connect_status_not_refreshed",
       message: "Stripe Connect status has not been refreshed.",
     })
+  } else if (now - account.connectStatusUpdatedAt > staleAfterMs) {
+    blockers.push({
+      code: "connect_status_stale",
+      message: "Stripe Connect status is stale and must be refreshed.",
+    })
   }
 
   if (
@@ -151,6 +198,11 @@ export function getCreatorTransferReadiness(
     })
   }
 
+  // Accounts v2 exposes recipient transfer readiness through the
+  // stripe_balance.stripe_transfers capability. Legacy v1 accounts use the
+  // transfers capability; this code stores that capability snapshot in the
+  // existing chargesEnabled field after refresh. We still require payoutsEnabled
+  // so automated transfers do not push funds into accounts Stripe cannot pay out.
   if (account.payoutsEnabled !== true) {
     blockers.push({
       code: "payouts_not_enabled",
@@ -201,6 +253,7 @@ export function summarizeCreatorPayoutCurrencyTotals(
 export function buildCreatorPayoutPreview(args: {
   creatorAccounts: CreatorTransferAccount[]
   ledgerRows: CreatorTransferLedgerRow[]
+  now?: number
   periodEnd?: number
   periodStart?: number
   selectedLedgerEntryIds?: string[]
@@ -265,7 +318,9 @@ export function buildCreatorPayoutPreview(args: {
   }
 
   const groups = Array.from(groupedRows.values()).map((group) => {
-    const readiness = getCreatorTransferReadiness(group.account)
+    const readiness = getCreatorTransferReadiness(group.account, {
+      now: args.now,
+    })
 
     return {
       amount: group.amount,
@@ -336,5 +391,57 @@ export function buildCreatorPayoutTransferMetadata(args: {
     ledgerEntryCount: String(args.ledgerEntryCount),
     payoutRunId: args.payoutRunId,
     payoutTransferId: args.payoutTransferId,
+  }
+}
+
+export async function createCreatorStripeTransfer(args: {
+  amount: number
+  creatorAccountId: string
+  creatorCode: string
+  currency: string
+  idempotencyKey: string
+  ledgerEntryCount: number
+  payoutRunId: string
+  payoutTransferId: string
+  stripe: StripeTransferCreator
+  stripeConnectedAccountId: string
+}) {
+  return await args.stripe.transfers.create(
+    {
+      amount: args.amount,
+      currency: args.currency.toLowerCase(),
+      destination: args.stripeConnectedAccountId,
+      metadata: buildCreatorPayoutTransferMetadata({
+        creatorAccountId: args.creatorAccountId,
+        creatorCode: args.creatorCode,
+        ledgerEntryCount: args.ledgerEntryCount,
+        payoutRunId: args.payoutRunId,
+        payoutTransferId: args.payoutTransferId,
+      }),
+    },
+    {
+      idempotencyKey: args.idempotencyKey,
+    }
+  )
+}
+
+export function getPreviousCompletedMonthlyPayoutPeriod(
+  now: number = Date.now()
+): CreatorPayoutPeriod {
+  const date = new Date(now)
+  const periodEndExclusive = Date.UTC(
+    date.getUTCFullYear(),
+    date.getUTCMonth(),
+    1
+  )
+  const periodStart = Date.UTC(
+    date.getUTCFullYear(),
+    date.getUTCMonth() - 1,
+    1
+  )
+
+  return {
+    periodEnd: periodEndExclusive - 1,
+    periodStart,
   }
 }

@@ -3,6 +3,8 @@ import { describe, expect, it } from "bun:test"
 import {
   buildCreatorPayoutPreview,
   buildCreatorPayoutTransferIdempotencyKey,
+  createCreatorStripeTransfer,
+  getPreviousCompletedMonthlyPayoutPeriod,
 } from "../creatorTransfers.ts"
 import {
   cancelCreatorPayoutRun,
@@ -15,6 +17,7 @@ import {
 const INDEX_FIELDS = {
   creatorEarningLedger: {
     by_status: ["status"],
+    by_status_invoiceIssuedAt: ["status", "invoiceIssuedAt"],
   },
   creatorPayoutTransfers: {
     by_payoutRunId: ["payoutRunId"],
@@ -24,6 +27,7 @@ const INDEX_FIELDS = {
 class FakeQuery {
   #db
   #filters = []
+  #order = "asc"
   #table
 
   constructor(db, table) {
@@ -48,6 +52,22 @@ class FakeQuery {
         filters.push({ field, value })
         return builder
       },
+      gte(field, value) {
+        if (!indexFields.includes(field)) {
+          throw new Error(`unsupported_index_field:${indexName}:${field}`)
+        }
+
+        filters.push({ field, op: "gte", value })
+        return builder
+      },
+      lte(field, value) {
+        if (!indexFields.includes(field)) {
+          throw new Error(`unsupported_index_field:${indexName}:${field}`)
+        }
+
+        filters.push({ field, op: "lte", value })
+        return builder
+      },
     }
 
     selector(builder)
@@ -60,10 +80,31 @@ class FakeQuery {
     return this.#applyFilters()
   }
 
+  order(direction) {
+    this.#order = direction
+    return this
+  }
+
+  async take(count) {
+    return this.#applyFilters().slice(0, count)
+  }
+
   #applyFilters() {
-    return [...(this.#db.tables[this.#table] ?? [])].filter((doc) =>
-      this.#filters.every(({ field, value }) => doc[field] === value)
+    const rows = [...(this.#db.tables[this.#table] ?? [])].filter((doc) =>
+      this.#filters.every(({ field, op, value }) => {
+        if (op === "gte") {
+          return doc[field] >= value
+        }
+
+        if (op === "lte") {
+          return doc[field] <= value
+        }
+
+        return doc[field] === value
+      })
     )
+
+    return this.#order === "desc" ? rows.reverse() : rows
   }
 }
 
@@ -138,7 +179,7 @@ function creatorAccount(overrides = {}) {
     chargesEnabled: true,
     clerkUserId: "creator_clerk",
     code: "ALPHA",
-    connectStatusUpdatedAt: Date.UTC(2026, 0, 2),
+    connectStatusUpdatedAt: Date.now(),
     detailsSubmitted: true,
     payoutEligible: true,
     payoutsEnabled: true,
@@ -172,6 +213,15 @@ async function createRun(ctx) {
 }
 
 describe("creator transfer preview", () => {
+  it("selects the previous completed monthly payout period", () => {
+    expect(
+      getPreviousCompletedMonthlyPayoutPeriod(Date.UTC(2026, 4, 7, 12))
+    ).toEqual({
+      periodEnd: Date.UTC(2026, 4, 1) - 1,
+      periodStart: Date.UTC(2026, 3, 1),
+    })
+  })
+
   it("groups eligible rows by creator and currency", () => {
     const preview = buildCreatorPayoutPreview({
       creatorAccounts: [
@@ -233,6 +283,10 @@ describe("creator transfer preview", () => {
       creatorAccounts: [],
       ledgerRows: [ledgerRow()],
     })
+    const noStripe = buildCreatorPayoutPreview({
+      creatorAccounts: [creatorAccount({ stripeConnectedAccountId: undefined })],
+      ledgerRows: [ledgerRow()],
+    })
     const paused = buildCreatorPayoutPreview({
       creatorAccounts: [creatorAccount({ payoutEligible: false })],
       ledgerRows: [ledgerRow()],
@@ -251,6 +305,9 @@ describe("creator transfer preview", () => {
     expect(missing.blockedGroups[0].blockers[0].code).toBe(
       "missing_creator_account"
     )
+    expect(noStripe.blockedGroups[0].blockers[0].code).toBe(
+      "missing_connect_account"
+    )
     expect(paused.blockedGroups[0].blockers[0].code).toBe(
       "payout_eligibility_paused"
     )
@@ -263,12 +320,71 @@ describe("creator transfer preview", () => {
     ])
   })
 
+  it("blocks stale Connect readiness snapshots", () => {
+    const preview = buildCreatorPayoutPreview({
+      creatorAccounts: [
+        creatorAccount({
+          connectStatusUpdatedAt: Date.UTC(2026, 0, 1),
+        }),
+      ],
+      ledgerRows: [ledgerRow()],
+      now: Date.UTC(2026, 0, 20),
+    })
+
+    expect(preview.blockedGroups[0].blockers[0].code).toBe(
+      "connect_status_stale"
+    )
+  })
+
   it("builds stable transfer idempotency keys", () => {
     expect(
       buildCreatorPayoutTransferIdempotencyKey({
         payoutTransferId: "creatorPayoutTransfers:1",
       })
     ).toBe("cod-stats-tracker:creator-transfer:creatorPayoutTransfers:1")
+  })
+
+  it("creates Stripe transfers with strict transfer parameters", async () => {
+    const calls = []
+    const stripeTransfer = await createCreatorStripeTransfer({
+      amount: 1234,
+      creatorAccountId: "creatorAccounts:1",
+      creatorCode: "ALPHA",
+      currency: "GBP",
+      idempotencyKey: "creator-transfer-key",
+      ledgerEntryCount: 3,
+      payoutRunId: "creatorPayoutRuns:1",
+      payoutTransferId: "creatorPayoutTransfers:1",
+      stripe: {
+        transfers: {
+          create(params, options) {
+            calls.push({ options, params })
+            return { id: "tr_123" }
+          },
+        },
+      },
+      stripeConnectedAccountId: "acct_ready",
+    })
+
+    expect(stripeTransfer.id).toBe("tr_123")
+    expect(calls).toEqual([
+      {
+        options: { idempotencyKey: "creator-transfer-key" },
+        params: {
+          amount: 1234,
+          currency: "gbp",
+          destination: "acct_ready",
+          metadata: {
+            app: "cod-stats-tracker",
+            creatorAccountId: "creatorAccounts:1",
+            creatorCode: "ALPHA",
+            ledgerEntryCount: "3",
+            payoutRunId: "creatorPayoutRuns:1",
+            payoutTransferId: "creatorPayoutTransfers:1",
+          },
+        },
+      },
+    ])
   })
 })
 
@@ -320,7 +436,7 @@ describe("creator payout run mutations", () => {
       stripeTransferId: "tr_1",
       transferStatus: "transferred",
     })
-    expect(ctx.db.tables.creatorPayoutRuns[0].status).toBe("transferred")
+    expect(ctx.db.tables.creatorPayoutRuns[0].status).toBe("completed")
   })
 
   it("preserves retry path on failure and blocks retry after success", async () => {
@@ -377,7 +493,7 @@ describe("creator payout run mutations", () => {
       payoutRunId: run.payoutRunId,
     })
 
-    expect(ctx.db.tables.creatorPayoutRuns[0].status).toBe("cancelled")
+    expect(ctx.db.tables.creatorPayoutRuns[0].status).toBe("canceled")
     expect(ctx.db.tables.creatorPayoutTransfers[0].status).toBe("cancelled")
     expect(ctx.db.tables.creatorEarningLedger[0]).toMatchObject({
       status: "eligible",

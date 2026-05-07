@@ -305,6 +305,22 @@ function formatPercent(value: number) {
 }
 
 function formatCreatorTransferStatus(value: string) {
+  if (value === "completed" || value === "transferred") {
+    return "transferred to Stripe Connect"
+  }
+
+  if (value === "processing" || value === "executing") {
+    return "processing through Stripe"
+  }
+
+  if (value === "partial_failed" || value === "partially_transferred") {
+    return "partial failure"
+  }
+
+  if (value === "canceled" || value === "cancelled") {
+    return "canceled"
+  }
+
   return value.replaceAll("_", " ")
 }
 
@@ -1424,7 +1440,10 @@ export function StaffBillingView({
               {formatDateTime(row.original.createdAt)}
             </span>
             <span className="text-xs text-muted-foreground">
-              {row.original.createdByName ?? row.original.createdByClerkUserId}
+              {row.original.source === "scheduled"
+                ? "Scheduled automation"
+                : (row.original.createdByName ??
+                  row.original.createdByClerkUserId)}
             </span>
           </div>
         ),
@@ -1449,10 +1468,26 @@ export function StaffBillingView({
               {row.original.creatorCount} creator(s),{" "}
               {row.original.transferCount} transfer(s)
             </span>
+            {row.original.blockedGroupCount ? (
+              <span className="text-xs text-muted-foreground">
+                {row.original.blockedGroupCount} blocker(s)
+              </span>
+            ) : null}
           </div>
         ),
         header: "Totals",
         id: "totals",
+      },
+      {
+        cell: ({ row }) => (
+          <span className="text-sm text-muted-foreground">
+            {row.original.periodStart && row.original.periodEnd
+              ? `${formatDateTime(row.original.periodStart)} - ${formatDateTime(row.original.periodEnd)}`
+              : "No period"}
+          </span>
+        ),
+        header: "Period",
+        id: "period",
       },
       {
         cell: ({ row }) => (
@@ -1514,6 +1549,13 @@ export function StaffBillingView({
           <span className="font-medium">{row.original.creatorCode}</span>
           <span className="text-xs text-muted-foreground">
             {row.original.ledgerEntryCount} ledger row(s)
+          </span>
+          <span className="text-xs text-muted-foreground">
+            {row.original.source === "scheduled"
+              ? "Scheduled"
+              : row.original.source === "manual_retry"
+                ? "Manual retry"
+                : "Review"}
           </span>
         </div>
       ),
@@ -2292,7 +2334,7 @@ export function StaffBillingView({
             : section === "subscriptions-creator-transfers"
               ? [
                   {
-                    label: "Ready creators",
+                    label: "Eligible creators",
                     value: data.creatorPayoutPreview?.readyCreatorCount ?? 0,
                   },
                   {
@@ -2300,7 +2342,7 @@ export function StaffBillingView({
                     value: data.creatorPayoutPreview?.transferCount ?? 0,
                   },
                   {
-                    label: "Ready totals",
+                    label: "Eligible totals",
                     value: formatCurrencyTotals(
                       data.creatorPayoutPreview?.currencyTotals ?? []
                     ),
@@ -3368,18 +3410,18 @@ export function StaffBillingView({
                 onClick={() => void createCreatorPayoutRun()}
                 size="sm"
               >
-                Create review run
+                Create manual review run
               </Button>
             }
             contentClassName="grid gap-5"
-            description="Preview uses local ledger and Stripe Connect readiness snapshots. Execution refreshes Stripe before creating transfers."
-            title="Transfer preview"
+            description="Dry-run preview for the previous completed payout period. The monthly schedule creates and executes clean runs automatically when the transfer gate is enabled."
+            title="Monthly transfer preview"
           >
             <StaffKeyValueGrid
               columnsClassName="md:grid-cols-4"
               rows={[
                 {
-                  label: "Ready creators",
+                  label: "Eligible creators",
                   value: data.creatorPayoutPreview?.readyCreatorCount ?? 0,
                 },
                 {
@@ -3387,13 +3429,13 @@ export function StaffBillingView({
                   value: data.creatorPayoutPreview?.transferCount ?? 0,
                 },
                 {
-                  label: "Ready totals",
+                  label: "Eligible totals",
                   value: formatCurrencyTotals(
                     data.creatorPayoutPreview?.currencyTotals ?? []
                   ),
                 },
                 {
-                  label: "Excluded rows",
+                  label: "Skipped rows",
                   value: data.creatorPayoutPreview?.excludedCount ?? 0,
                 },
               ]}

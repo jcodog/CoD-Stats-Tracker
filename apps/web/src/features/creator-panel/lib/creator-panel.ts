@@ -138,7 +138,7 @@ export function getEstimatedPayoutPresentation(args: {
 }) {
   const detail = args.connectPayoutReady
     ? "This is an estimation of your next monthly payout."
-    : "This is an estimation of what you could be earning when you connect Stripe."
+    : "This is an estimation of what you could have been paid if you had connected Stripe."
 
   if (!args.payoutEligible) {
     return {

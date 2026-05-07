@@ -14,7 +14,7 @@
     "test:debug": "bun test \"src/app/(chatgpt-app-connector)/debug/__tests__/chatgpt-app-config.test.mjs\"",
     "test:mcp": "bun test \"src/lib/server/__tests__/chatgpt-app-mcp.test.mjs\"",
     "test:oauth": "bun test \"src/app/(chatgpt-app-connector)/oauth/__tests__\"",
-    "test:features": "bun test \"src/features/dashboard-stats/lib/__tests__/dashboard-stats-log-match-flow.test.mjs\"",
+    "test:features": "bun test \"src/features/creator-panel/lib/__tests__/creator-panel.test.mjs\" \"src/features/dashboard-stats/lib/__tests__/dashboard-stats-log-match-flow.test.mjs\"",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

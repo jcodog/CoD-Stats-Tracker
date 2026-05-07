@@ -16,6 +16,18 @@ const payoutTransferStatusValidator = v.union(
   v.literal("transferring")
 )
 
+const payoutRunSourceValidator = v.union(
+  v.literal("dry_run_review"),
+  v.literal("manual"),
+  v.literal("scheduled")
+)
+
+const payoutTransferSourceValidator = v.union(
+  v.literal("dry_run_review"),
+  v.literal("manual_retry"),
+  v.literal("scheduled")
+)
+
 async function getPayoutTransfersByRunId(
   ctx: MutationCtx,
   payoutRunId: Id<"creatorPayoutRuns">
@@ -29,8 +41,12 @@ async function getPayoutTransfersByRunId(
 function getRunStatusFromTransfers(
   transfers: Array<Doc<"creatorPayoutTransfers">>
 ) {
+  if (transfers.length === 0) {
+    return "completed" as const
+  }
+
   if (transfers.every((transfer) => transfer.status === "transferred")) {
-    return "transferred" as const
+    return "completed" as const
   }
 
   const failedCount = transfers.filter(
@@ -42,7 +58,7 @@ function getRunStatusFromTransfers(
   ).length
 
   if (failedCount > 0 && transferredCount > 0) {
-    return "partially_transferred" as const
+    return "partial_failed" as const
   }
 
   if (failedCount > 0) {
@@ -50,7 +66,7 @@ function getRunStatusFromTransfers(
   }
 
   if (transfers.some((transfer) => transfer.status === "transferring")) {
-    return "executing" as const
+    return "processing" as const
   }
 
   return "draft" as const
@@ -62,7 +78,7 @@ async function refreshPayoutRunStatus(
 ) {
   const run = await ctx.db.get(payoutRunId)
 
-  if (!run || run.status === "cancelled") {
+  if (!run || run.status === "cancelled" || run.status === "canceled") {
     return run
   }
 
@@ -96,24 +112,46 @@ async function getRowsForTransfer(
 
 export const createCreatorPayoutRun = internalMutation({
   args: {
+    allowEmpty: v.optional(v.boolean()),
+    blockedGroupCount: v.optional(v.number()),
     createdByClerkUserId: v.string(),
     createdByName: v.optional(v.string()),
+    createdBySystem: v.optional(v.boolean()),
     ledgerEntryIds: v.optional(v.array(v.id("creatorEarningLedger"))),
     periodEnd: v.optional(v.number()),
     periodStart: v.optional(v.number()),
+    skippedLedgerRowCount: v.optional(v.number()),
+    source: v.optional(payoutRunSourceValidator),
   },
   handler: async (ctx, args) => {
     const now = Date.now()
-    const selectedRows = args.ledgerEntryIds
-      ? (
-          await Promise.all(
-            args.ledgerEntryIds.map((ledgerEntryId) => ctx.db.get(ledgerEntryId))
-          )
-        ).filter((row): row is Doc<"creatorEarningLedger"> => Boolean(row))
-      : await ctx.db
-          .query("creatorEarningLedger")
-          .withIndex("by_status", (query) => query.eq("status", "eligible"))
-          .collect()
+    let selectedRows: Array<Doc<"creatorEarningLedger">>
+
+    if (args.ledgerEntryIds) {
+      selectedRows = (
+        await Promise.all(
+          args.ledgerEntryIds.map((ledgerEntryId) => ctx.db.get(ledgerEntryId))
+        )
+      ).filter((row): row is Doc<"creatorEarningLedger"> => Boolean(row))
+    } else if (args.periodStart !== undefined && args.periodEnd !== undefined) {
+      const periodStart = args.periodStart
+      const periodEnd = args.periodEnd
+
+      selectedRows = await ctx.db
+        .query("creatorEarningLedger")
+        .withIndex("by_status_invoiceIssuedAt", (query) =>
+          query
+            .eq("status", "eligible")
+            .gte("invoiceIssuedAt", periodStart)
+            .lte("invoiceIssuedAt", periodEnd)
+        )
+        .take(5000)
+    } else {
+      selectedRows = await ctx.db
+        .query("creatorEarningLedger")
+        .withIndex("by_status", (query) => query.eq("status", "eligible"))
+        .take(5000)
+    }
     const creatorAccountIds = Array.from(
       new Set(selectedRows.map((row) => row.creatorAccountId))
     )
@@ -130,7 +168,7 @@ export const createCreatorPayoutRun = internalMutation({
       selectedLedgerEntryIds: args.ledgerEntryIds,
     })
 
-    if (preview.readyGroups.length === 0) {
+    if (preview.readyGroups.length === 0 && !args.allowEmpty) {
       throw new Error("No eligible creator earnings are ready to transfer.")
     }
 
@@ -153,15 +191,27 @@ export const createCreatorPayoutRun = internalMutation({
     }
 
     const payoutRunId = await ctx.db.insert("creatorPayoutRuns", {
+      blockedGroupCount: args.blockedGroupCount,
       createdAt: now,
       createdByClerkUserId: args.createdByClerkUserId,
       createdByName: args.createdByName,
+      createdBySystem: args.createdBySystem,
       creatorCount: preview.readyCreatorCount,
       currencyTotals: preview.currencyTotals,
-      failureSummary: undefined,
+      failureSummary:
+        (args.blockedGroupCount ?? 0) > 0
+          ? `${args.blockedGroupCount} creator transfer group(s) require staff review.`
+          : undefined,
       periodEnd: args.periodEnd,
       periodStart: args.periodStart,
-      status: "draft",
+      skippedLedgerRowCount: args.skippedLedgerRowCount,
+      source: args.source,
+      status:
+        preview.readyGroups.length > 0
+          ? "draft"
+          : (args.blockedGroupCount ?? 0) > 0
+            ? "requires_review"
+            : "completed",
       transferCount: preview.transferCount,
       updatedAt: now,
     })
@@ -184,6 +234,7 @@ export const createCreatorPayoutRun = internalMutation({
         ledgerEntryIds:
           group.ledgerEntryIds as Array<Id<"creatorEarningLedger">>,
         payoutRunId,
+        source: args.source === "scheduled" ? "scheduled" : "dry_run_review",
         status: "draft",
         stripeConnectedAccountId: group.stripeConnectedAccountId,
         stripeTransferId: undefined,
@@ -224,6 +275,7 @@ export const createCreatorPayoutRun = internalMutation({
 export const markCreatorPayoutTransferExecuting = internalMutation({
   args: {
     allowedStatuses: v.array(payoutTransferStatusValidator),
+    source: v.optional(payoutTransferSourceValidator),
     payoutTransferId: v.id("creatorPayoutTransfers"),
   },
   handler: async (ctx, args) => {
@@ -247,7 +299,7 @@ export const markCreatorPayoutTransferExecuting = internalMutation({
 
     const run = await ctx.db.get(transfer.payoutRunId)
 
-    if (!run || run.status === "cancelled") {
+    if (!run || run.status === "cancelled" || run.status === "canceled") {
       throw new Error("Creator payout run is not executable.")
     }
 
@@ -278,6 +330,7 @@ export const markCreatorPayoutTransferExecuting = internalMutation({
     await ctx.db.patch(transfer._id, {
       failureCode: undefined,
       failureMessage: undefined,
+      source: args.source ?? transfer.source,
       status: "transferring",
       updatedAt: now,
     })
@@ -292,7 +345,7 @@ export const markCreatorPayoutTransferExecuting = internalMutation({
 
     await ctx.db.patch(transfer.payoutRunId, {
       executedAt: run.executedAt ?? now,
-      status: "executing",
+      status: "processing",
       updatedAt: now,
     })
 
@@ -441,7 +494,7 @@ export const cancelCreatorPayoutRun = internalMutation({
 
     await ctx.db.patch(run._id, {
       failureSummary: undefined,
-      status: "cancelled",
+      status: "canceled",
       updatedAt: now,
     })
 

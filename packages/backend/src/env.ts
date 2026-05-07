@@ -29,6 +29,12 @@ function createConvexEnv() {
       REDIS_TLS_URL: z.string().optional(),
       REDIS_URL: z.string().optional(),
       APP_PUBLIC_ORIGIN: z.string().optional(),
+      CREATOR_AUTO_TRANSFER_MAX_MINOR_UNITS: z.coerce
+        .number()
+        .int()
+        .positive()
+        .optional(),
+      CREATOR_AUTO_TRANSFERS_ENABLED: z.string().optional(),
       STRIPE_SECRET_KEY: z.string().optional(),
       STRIPE_WEBHOOK_SECRET: z.string().optional(),
       SUPER_ADMIN_DISCORD_ID: z.string().optional(),

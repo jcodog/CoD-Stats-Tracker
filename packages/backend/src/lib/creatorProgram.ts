@@ -184,9 +184,14 @@ export function mapStripeConnectedAccountSnapshot(account: Stripe.Account) {
   const pendingVerification = toUniqueSortedList(
     account.requirements?.pending_verification
   )
+  const transferCapabilityStatus = account.capabilities?.transfers
+  const transferCapabilityActive = transferCapabilityStatus === "active"
 
   return {
-    chargesEnabled: account.charges_enabled,
+    // For legacy Accounts v1, receiving platform transfers depends on the
+    // `transfers` capability. `charges_enabled` only means the connected
+    // account can accept charges, so it is not a safe transfer readiness proxy.
+    chargesEnabled: transferCapabilityActive,
     connectStatusUpdatedAt: Date.now(),
     detailsSubmitted: account.details_submitted,
     payoutsEnabled: account.payouts_enabled,
@@ -319,6 +324,9 @@ export function mapStripeConnectedAccountV2Snapshot(account: StripeAccountV2) {
   const detailsSubmitted = requirementsDue.length === 0
 
   return {
+    // Accounts v2 recipient accounts expose transfer readiness through
+    // stripe_balance.stripe_transfers, which replaces the v1 transfers
+    // capability for this funds flow.
     chargesEnabled: transferCapability?.status === "active",
     connectStatusUpdatedAt: Date.now(),
     detailsSubmitted,

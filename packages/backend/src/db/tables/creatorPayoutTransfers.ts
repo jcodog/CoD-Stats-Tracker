@@ -19,6 +19,13 @@ export const creatorPayoutTransfers = defineTable({
   ),
   stripeTransferId: v.optional(v.string()),
   idempotencyKey: v.string(),
+  source: v.optional(
+    v.union(
+      v.literal("dry_run_review"),
+      v.literal("manual_retry"),
+      v.literal("scheduled")
+    )
+  ),
   failureCode: v.optional(v.string()),
   failureMessage: v.optional(v.string()),
   createdAt: v.number(),
@@ -28,5 +35,7 @@ export const creatorPayoutTransfers = defineTable({
   .index("by_payoutRunId", ["payoutRunId"])
   .index("by_creatorAccountId", ["creatorAccountId"])
   .index("by_status", ["status"])
+  .index("by_status_updatedAt", ["status", "updatedAt"])
+  .index("by_updatedAt", ["updatedAt"])
   .index("by_idempotencyKey", ["idempotencyKey"])
   .index("by_stripeTransferId", ["stripeTransferId"])

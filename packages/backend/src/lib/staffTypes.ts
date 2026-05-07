@@ -2,7 +2,9 @@ import type { AppPlanKey } from "./billingAccess"
 import type { CreatorConnectState } from "./creatorProgram"
 import type {
   CreatorPayoutPreview,
+  CreatorPayoutRunSource,
   CreatorPayoutRunStatus,
+  CreatorPayoutTransferSource,
   CreatorPayoutTransferStatus,
 } from "./creatorTransfers"
 import type {
@@ -248,6 +250,7 @@ export type StaffCreatorPayoutRunRecord = {
   createdAt: number
   createdByClerkUserId: string
   createdByName?: string
+  createdBySystem?: boolean
   creatorCount: number
   currencyTotals: Array<{ amount: number; currency: string }>
   executedAt?: number
@@ -255,6 +258,9 @@ export type StaffCreatorPayoutRunRecord = {
   id: string
   periodEnd?: number
   periodStart?: number
+  blockedGroupCount?: number
+  skippedLedgerRowCount?: number
+  source?: CreatorPayoutRunSource
   status: CreatorPayoutRunStatus
   transferCount: number
   updatedAt: number
@@ -272,6 +278,7 @@ export type StaffCreatorPayoutTransferRecord = {
   idempotencyKey: string
   ledgerEntryCount: number
   payoutRunId: string
+  source?: CreatorPayoutTransferSource
   status: CreatorPayoutTransferStatus
   stripeConnectedAccountId: string
   stripeTransferId?: string

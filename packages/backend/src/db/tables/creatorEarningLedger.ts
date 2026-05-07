@@ -62,5 +62,10 @@ export const creatorEarningLedger = defineTable({
   .index("by_creatorAccountId", ["creatorAccountId"])
   .index("by_usageLockId", ["usageLockId"])
   .index("by_status", ["status"])
+  .index("by_status_invoiceIssuedAt", ["status", "invoiceIssuedAt"])
+  .index("by_creatorAccountId_invoiceIssuedAt", [
+    "creatorAccountId",
+    "invoiceIssuedAt",
+  ])
   .index("by_payoutRunId", ["payoutRunId"])
   .index("by_payoutTransferId", ["payoutTransferId"])

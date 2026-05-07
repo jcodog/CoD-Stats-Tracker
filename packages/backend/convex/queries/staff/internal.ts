@@ -1,5 +1,5 @@
 import type { Doc } from "../../_generated/dataModel"
-import { internalQuery } from "../../_generated/server"
+import { internalQuery, type QueryCtx } from "../../_generated/server"
 import { v } from "convex/values"
 import { getWebhookObjectIdsFromPayloadJson } from "../../../src/lib/stripe/billing"
 import { resolveConfiguredUserRole } from "../../../src/lib/staffRoleConfig"
@@ -10,6 +10,139 @@ type BillingFeatureRecord = Doc<"billingFeatures">
 type RankedTitleRecord = Doc<"rankedTitles">
 type RankedModeRecord = Doc<"rankedModes">
 type RankedMapRecord = Doc<"rankedMaps">
+
+const payoutTransferStatusValidator = v.union(
+  v.literal("cancelled"),
+  v.literal("draft"),
+  v.literal("failed"),
+  v.literal("requires_review"),
+  v.literal("transferred"),
+  v.literal("transferring")
+)
+
+const payoutRunStatusValidator = v.union(
+  v.literal("canceled"),
+  v.literal("cancelled"),
+  v.literal("completed"),
+  v.literal("draft"),
+  v.literal("failed"),
+  v.literal("executing"),
+  v.literal("partial_failed"),
+  v.literal("partially_transferred"),
+  v.literal("processing"),
+  v.literal("requires_review"),
+  v.literal("transferred")
+)
+
+async function listEligibleCreatorPayoutLedgerRows(
+  ctx: QueryCtx,
+  args: {
+    creatorPayoutPeriodEnd?: number
+    creatorPayoutPeriodStart?: number
+  }
+) {
+  if (
+    args.creatorPayoutPeriodStart !== undefined &&
+    args.creatorPayoutPeriodEnd !== undefined
+  ) {
+    const periodStart = args.creatorPayoutPeriodStart
+    const periodEnd = args.creatorPayoutPeriodEnd
+
+    return await ctx.db
+      .query("creatorEarningLedger")
+      .withIndex("by_status_invoiceIssuedAt", (query) =>
+        query
+          .eq("status", "eligible")
+          .gte("invoiceIssuedAt", periodStart)
+          .lte("invoiceIssuedAt", periodEnd)
+      )
+      .take(5000)
+  }
+
+  return await ctx.db
+    .query("creatorEarningLedger")
+    .withIndex("by_status", (query) => query.eq("status", "eligible"))
+    .take(5000)
+}
+
+async function listCreatorPayoutTransfersForDashboard(
+  ctx: QueryCtx,
+  args: {
+    creatorPayoutTransferStatus?: Doc<"creatorPayoutTransfers">["status"]
+  }
+) {
+  if (args.creatorPayoutTransferStatus) {
+    const status = args.creatorPayoutTransferStatus
+
+    return await ctx.db
+      .query("creatorPayoutTransfers")
+      .withIndex("by_status_updatedAt", (query) =>
+        query.eq("status", status)
+      )
+      .order("desc")
+      .take(100)
+  }
+
+  return await ctx.db
+    .query("creatorPayoutTransfers")
+    .withIndex("by_updatedAt")
+    .order("desc")
+    .take(100)
+}
+
+async function listCreatorPayoutRunsForDashboard(
+  ctx: QueryCtx,
+  args: {
+    creatorPayoutRunCreatedAfter?: number
+    creatorPayoutRunCreatedBefore?: number
+    creatorPayoutRunStatus?: Doc<"creatorPayoutRuns">["status"]
+  }
+) {
+  if (args.creatorPayoutRunStatus) {
+    const status = args.creatorPayoutRunStatus
+
+    return await ctx.db
+      .query("creatorPayoutRuns")
+      .withIndex("by_status_createdAt", (query) => {
+        const scoped = query.eq("status", status)
+
+        if (
+          args.creatorPayoutRunCreatedAfter !== undefined &&
+          args.creatorPayoutRunCreatedBefore !== undefined
+        ) {
+          return scoped
+            .gte("createdAt", args.creatorPayoutRunCreatedAfter)
+            .lte("createdAt", args.creatorPayoutRunCreatedBefore)
+        }
+
+        return scoped
+      })
+      .order("desc")
+      .take(50)
+  }
+
+  if (
+    args.creatorPayoutRunCreatedAfter !== undefined &&
+    args.creatorPayoutRunCreatedBefore !== undefined
+  ) {
+    const createdAfter = args.creatorPayoutRunCreatedAfter
+    const createdBefore = args.creatorPayoutRunCreatedBefore
+
+    return await ctx.db
+      .query("creatorPayoutRuns")
+      .withIndex("by_createdAt", (query) =>
+        query.gte("createdAt", createdAfter).lte("createdAt", createdBefore)
+      )
+      .order("desc")
+      .take(50)
+  }
+
+  return await ctx.db
+    .query("creatorPayoutRuns")
+    .withIndex("by_createdAt")
+    .order("desc")
+    .take(50)
+}
 
 function sortUsers(left: UserRecord, right: UserRecord) {
   return left.name.localeCompare(right.name)
@@ -123,8 +256,15 @@ export const getManagementRecords = internalQuery({
 })
 
 export const getBillingRecords = internalQuery({
-  args: {},
-  handler: async (ctx) => {
+  args: {
+    creatorPayoutPeriodEnd: v.optional(v.number()),
+    creatorPayoutPeriodStart: v.optional(v.number()),
+    creatorPayoutRunCreatedAfter: v.optional(v.number()),
+    creatorPayoutRunCreatedBefore: v.optional(v.number()),
+    creatorPayoutRunStatus: v.optional(payoutRunStatusValidator),
+    creatorPayoutTransferStatus: v.optional(payoutTransferStatusValidator),
+  },
+  handler: async (ctx, args) => {
     const [
       plans,
       features,
@@ -161,13 +301,9 @@ export const getBillingRecords = internalQuery({
         .take(200),
       ctx.db.query("creatorAccounts").collect(),
       ctx.db.query("creatorAttributions").collect(),
-      ctx.db.query("creatorEarningLedger").collect(),
-      ctx.db
-        .query("creatorPayoutRuns")
-        .withIndex("by_createdAt")
-        .order("desc")
-        .take(25),
-      ctx.db.query("creatorPayoutTransfers").collect(),
+      listEligibleCreatorPayoutLedgerRows(ctx, args),
+      listCreatorPayoutRunsForDashboard(ctx, args),
+      listCreatorPayoutTransfersForDashboard(ctx, args),
       ctx.db
         .query("creatorProgramDefaults")
         .withIndex("by_key", (query) => query.eq("key", "global"))
@@ -204,6 +340,34 @@ export const getCreatorPayoutRunById = internalQuery({
   },
   handler: async (ctx, args) => {
     return await ctx.db.get(args.payoutRunId)
+  },
+})
+
+export const findCreatorPayoutRunByPeriodStartAndSource = internalQuery({
+  args: {
+    periodStart: v.number(),
+    source: v.union(
+      v.literal("dry_run_review"),
+      v.literal("manual"),
+      v.literal("scheduled")
+    ),
+  },
+  handler: async (ctx, args) => {
+    const runs = await ctx.db
+      .query("creatorPayoutRuns")
+      .withIndex("by_periodStart", (query) =>
+        query.eq("periodStart", args.periodStart)
+      )
+      .collect()
+
+    return (
+      runs.find(
+        (run) =>
+          run.source === args.source &&
+          run.status !== "canceled" &&
+          run.status !== "cancelled"
+      ) ?? null
+    )
   },
 })
 

@@ -10,4 +10,11 @@ crons.interval(
   {}
 )
 
+crons.monthly(
+  "process monthly creator stripe transfers",
+  { day: 1, hourUTC: 8, minuteUTC: 0 },
+  internal.actions.creator.payouts.runScheduledMonthlyCreatorPayoutTransfers,
+  {}
+)
+
 export default crons

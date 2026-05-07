@@ -531,7 +531,7 @@ describe("creator checkout and dashboard presentation", () => {
     })
 
     expect(notReady.detail).toBe(
-      "This is an estimation of what you could be earning when you connect Stripe."
+      "This is an estimation of what you could have been paid if you had connected Stripe."
     )
     expect(ready.detail).toBe(
       "This is an estimation of your next monthly payout."

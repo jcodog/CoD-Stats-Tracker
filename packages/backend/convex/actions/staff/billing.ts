@@ -73,10 +73,11 @@ import { getStripe, STRIPE_CATALOG_APP } from "../../../src/lib/stripe/client"
 import type { StripeCatalogSyncResult } from "../billing/syncCatalogToStripe"
 import {
   buildCreatorPayoutPreview,
-  buildCreatorPayoutTransferMetadata,
+  getPreviousCompletedMonthlyPayoutPeriod,
   getCreatorTransferReadiness,
   type CreatorPayoutPreview,
 } from "../../../src/lib/creatorTransfers"
+import { executeCreatorPayoutTransfer } from "../creator/payoutExecution"
 
 type CreatorConnectedAccountSnapshot =
   | ReturnType<typeof mapStripeConnectedAccountV2Snapshot>
@@ -1118,12 +1119,16 @@ function buildCreatorPayoutRunRows(args: {
     createdAt: number
     createdByClerkUserId: string
     createdByName?: string
+    createdBySystem?: boolean
     creatorCount: number
     currencyTotals: Array<{ amount: number; currency: string }>
     executedAt?: number
     failureSummary?: string
     periodEnd?: number
     periodStart?: number
+    blockedGroupCount?: number
+    skippedLedgerRowCount?: number
+    source?: StaffCreatorPayoutRunRecord["source"]
     status: StaffCreatorPayoutRunRecord["status"]
     transferCount: number
     updatedAt: number
@@ -1133,6 +1138,7 @@ function buildCreatorPayoutRunRows(args: {
     createdAt: run.createdAt,
     createdByClerkUserId: run.createdByClerkUserId,
     createdByName: run.createdByName,
+    createdBySystem: run.createdBySystem,
     creatorCount: run.creatorCount,
     currencyTotals: run.currencyTotals,
     executedAt: run.executedAt,
@@ -1140,6 +1146,9 @@ function buildCreatorPayoutRunRows(args: {
     id: run._id,
     periodEnd: run.periodEnd,
     periodStart: run.periodStart,
+    blockedGroupCount: run.blockedGroupCount,
+    skippedLedgerRowCount: run.skippedLedgerRowCount,
+    source: run.source,
     status: run.status,
     transferCount: run.transferCount,
     updatedAt: run.updatedAt,
@@ -1159,6 +1168,7 @@ function buildCreatorPayoutTransferRows(args: {
     idempotencyKey: string
     ledgerEntryIds: string[]
     payoutRunId: string
+    source?: StaffCreatorPayoutTransferRecord["source"]
     status: StaffCreatorPayoutTransferRecord["status"]
     stripeConnectedAccountId: string
     stripeTransferId?: string
@@ -1179,6 +1189,7 @@ function buildCreatorPayoutTransferRows(args: {
       idempotencyKey: transfer.idempotencyKey,
       ledgerEntryCount: transfer.ledgerEntryIds.length,
       payoutRunId: transfer.payoutRunId,
+      source: transfer.source,
       status: transfer.status,
       stripeConnectedAccountId: transfer.stripeConnectedAccountId,
       stripeTransferId: transfer.stripeTransferId,
@@ -1541,6 +1552,7 @@ function buildBillingDashboard(
       createdAt: number
       createdByClerkUserId: string
       createdByName?: string
+      createdBySystem?: boolean
       creatorCount: number
       currencyTotals: Array<{ amount: number; currency: string }>
       executedAt?: number
@@ -1548,12 +1560,20 @@ function buildBillingDashboard(
       periodEnd?: number
       periodStart?: number
       status:
+        | "canceled"
         | "cancelled"
+        | "completed"
         | "draft"
+        | "failed"
         | "executing"
+        | "partial_failed"
         | "partially_transferred"
+        | "processing"
         | "requires_review"
         | "transferred"
+      blockedGroupCount?: number
+      skippedLedgerRowCount?: number
+      source?: "dry_run_review" | "manual" | "scheduled"
       transferCount: number
       updatedAt: number
     }>
@@ -1569,6 +1589,7 @@ function buildBillingDashboard(
       idempotencyKey: string
       ledgerEntryIds: string[]
       payoutRunId: string
+      source?: "dry_run_review" | "manual_retry" | "scheduled"
       status:
         | "cancelled"
         | "draft"
@@ -1941,179 +1962,18 @@ export const getDashboard = action({
   args: {},
   handler: async (ctx): Promise<StaffBillingDashboard> => {
     const operator = await requireAuthorizedStaffAction(ctx, "staff")
+    const payoutPeriod = getPreviousCompletedMonthlyPayoutPeriod()
     const records = await ctx.runQuery(
       internal.queries.staff.internal.getBillingRecords,
-      {}
+      {
+        creatorPayoutPeriodEnd: payoutPeriod.periodEnd,
+        creatorPayoutPeriodStart: payoutPeriod.periodStart,
+      }
     )
 
     return buildBillingDashboard(records, operator.actorRole)
   },
 })
-
-function getStripeTransferFailure(error: unknown) {
-  const code =
-    error instanceof Stripe.errors.StripeError
-      ? error.code
-      : error instanceof Error && "code" in error
-        ? String(error.code)
-        : undefined
-  const message =
-    error instanceof Error ? error.message : "Stripe transfer failed."
-  const requiresReview =
-    code === "balance_insufficient" ||
-    message.toLowerCase().includes("insufficient funds")
-
-  return {
-    code,
-    message,
-    status: requiresReview ? ("requires_review" as const) : ("failed" as const),
-  }
-}
-
-async function executeCreatorPayoutTransfer(args: {
-  allowedStatuses: Array<
-    "draft" | "failed" | "requires_review" | "transferring"
-  >
-  ctx: ActionCtx
-  transfer: {
-    _id: Id<"creatorPayoutTransfers">
-    amount: number
-    creatorAccountId: Id<"creatorAccounts">
-    creatorCode: string
-    currency: string
-    idempotencyKey: string
-    ledgerEntryIds: Array<Id<"creatorEarningLedger">>
-    payoutRunId: Id<"creatorPayoutRuns">
-    status: "draft" | "failed" | "requires_review" | "transferring"
-    stripeConnectedAccountId: string
-  }
-}) {
-  const executingTransfer = await args.ctx.runMutation(
-    internal.mutations.staff.payouts.markCreatorPayoutTransferExecuting,
-    {
-      allowedStatuses: args.allowedStatuses,
-      payoutTransferId: args.transfer._id,
-    }
-  )
-
-  if (!executingTransfer) {
-    throw new Error("Creator payout transfer not found.")
-  }
-
-  const creatorAccount = await args.ctx.runQuery(
-    internal.queries.creator.internal.getCreatorAccountById,
-    {
-      creatorAccountId: args.transfer.creatorAccountId,
-    }
-  )
-
-  if (!creatorAccount) {
-    await args.ctx.runMutation(
-      internal.mutations.staff.payouts.markCreatorPayoutTransferFailed,
-      {
-        failureCode: "missing_creator_account",
-        failureMessage: "Creator account no longer exists.",
-        payoutTransferId: args.transfer._id,
-        status: "requires_review",
-      }
-    )
-
-    return "requires_review" as const
-  }
-
-  const snapshot = await syncCreatorProgramConnectAccount({
-    creatorAccountId: args.transfer.creatorAccountId,
-    ctx: args.ctx,
-    stripeConnectedAccountId: args.transfer.stripeConnectedAccountId,
-  }).catch(async (error) => {
-    await args.ctx.runMutation(
-      internal.mutations.staff.payouts.markCreatorPayoutTransferFailed,
-      {
-        failureCode: "connect_readiness_refresh_failed",
-        failureMessage:
-          error instanceof Error
-            ? error.message
-            : "Unable to refresh Stripe Connect readiness.",
-        payoutTransferId: args.transfer._id,
-        status: "requires_review",
-      }
-    )
-
-    return null
-  })
-
-  if (!snapshot) {
-    return "requires_review" as const
-  }
-  const readiness = getCreatorTransferReadiness({
-    ...snapshot,
-    _id: creatorAccount._id,
-    code: creatorAccount.code,
-    payoutEligible: creatorAccount.payoutEligible,
-  })
-
-  if (!readiness.ready) {
-    await args.ctx.runMutation(
-      internal.mutations.staff.payouts.markCreatorPayoutTransferFailed,
-      {
-        failureCode: readiness.blockers[0]?.code,
-        failureMessage: readiness.blockers
-          .map((blocker) => blocker.message)
-          .join(" "),
-        payoutTransferId: args.transfer._id,
-        status: "requires_review",
-      }
-    )
-
-    return "requires_review" as const
-  }
-
-  try {
-    const stripe = getStripe()
-    const stripeTransfer = await stripe.transfers.create(
-      {
-        amount: args.transfer.amount,
-        currency: args.transfer.currency.toLowerCase(),
-        destination: args.transfer.stripeConnectedAccountId,
-        metadata: buildCreatorPayoutTransferMetadata({
-          creatorAccountId: args.transfer.creatorAccountId,
-          creatorCode: args.transfer.creatorCode,
-          ledgerEntryCount: args.transfer.ledgerEntryIds.length,
-          payoutRunId: args.transfer.payoutRunId,
-          payoutTransferId: args.transfer._id,
-        }),
-      },
-      {
-        idempotencyKey: args.transfer.idempotencyKey,
-      }
-    )
-
-    await args.ctx.runMutation(
-      internal.mutations.staff.payouts.markCreatorPayoutTransferSucceeded,
-      {
-        payoutTransferId: args.transfer._id,
-        stripeTransferId: stripeTransfer.id,
-        transferredAt: Date.now(),
-      }
-    )
-
-    return "transferred" as const
-  } catch (error) {
-    const failure = getStripeTransferFailure(error)
-
-    await args.ctx.runMutation(
-      internal.mutations.staff.payouts.markCreatorPayoutTransferFailed,
-      {
-        failureCode: failure.code,
-        failureMessage: failure.message,
-        payoutTransferId: args.transfer._id,
-        status: failure.status,
-      }
-    )
-
-    return failure.status
-  }
-}
 
 export const previewCreatorPayoutTransfers = action({
   args: {
@@ -2125,7 +1985,10 @@ export const previewCreatorPayoutTransfers = action({
     await requireAuthorizedStaffAction(ctx, "staff")
     const records = await ctx.runQuery(
       internal.queries.staff.internal.getBillingRecords,
-      {}
+      {
+        creatorPayoutPeriodEnd: args.periodEnd,
+        creatorPayoutPeriodStart: args.periodStart,
+      }
     )
 
     return buildCreatorPayoutPreview({
@@ -2154,6 +2017,7 @@ export const createCreatorPayoutRun = action({
         ledgerEntryIds: args.ledgerEntryIds,
         periodEnd: args.periodEnd,
         periodStart: args.periodStart,
+        source: "dry_run_review",
       }
     )
 
@@ -2194,7 +2058,12 @@ export const executeCreatorPayoutRun = action({
       throw new Error("Creator payout run not found.")
     }
 
-    if (run.status === "cancelled" || run.status === "transferred") {
+    if (
+      run.status === "cancelled" ||
+      run.status === "canceled" ||
+      run.status === "transferred" ||
+      run.status === "completed"
+    ) {
       throw new Error("Creator payout run is not executable.")
     }
 
@@ -2220,6 +2089,7 @@ export const executeCreatorPayoutRun = action({
       const result = await executeCreatorPayoutTransfer({
         allowedStatuses: ["draft", "transferring"],
         ctx,
+        source: "dry_run_review",
         transfer: {
           ...transfer,
           status: transfer.status,
@@ -2255,11 +2125,11 @@ export const executeCreatorPayoutRun = action({
       entityLabel: `Creator transfer run ${args.payoutRunId}`,
       entityType: "billingCreatorTransferRun",
       result: failedCount > 0 || reviewCount > 0 ? "warning" : "success",
-      summary: `Executed creator transfer run: ${transferredCount} transferred, ${reviewCount} review, ${failedCount} failed.`,
+      summary: `Executed creator transfer run: ${transferredCount} transferred to Stripe Connect, ${reviewCount} review, ${failedCount} failed.`,
     })
 
     return {
-      summary: `Executed creator transfer run: ${transferredCount} transferred, ${reviewCount} review, ${failedCount} failed.`,
+      summary: `Executed creator transfer run: ${transferredCount} transferred to Stripe Connect, ${reviewCount} review, ${failedCount} failed.`,
     }
   },
 })
@@ -2288,6 +2158,7 @@ export const retryCreatorPayoutTransfer = action({
     const result = await executeCreatorPayoutTransfer({
       allowedStatuses: ["failed", "requires_review"],
       ctx,
+      source: "manual_retry",
       transfer: {
         ...transfer,
         status: transfer.status,
