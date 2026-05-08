@@ -11,7 +11,7 @@ import {
   calculateCreatorEarningAmount,
   getCreatorEarningStatusForPaidInvoice,
   isPaidSubscriptionInvoiceEligibleForCreatorEarning,
-} from "../../../src/lib/creatorAccounting"
+} from "../../../src/lib/creator/accounting"
 import { buildResolvedBillingState } from "../../queries/billing/resolution"
 
 const billingIntervalValidator = v.union(v.literal("month"), v.literal("year"))

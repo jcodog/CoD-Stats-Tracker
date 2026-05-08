@@ -1,7 +1,7 @@
 import type { Id } from "../../convex/_generated/dataModel"
 import type { MutationCtx, QueryCtx } from "../../convex/_generated/server"
 import { buildResolvedBillingState } from "../../convex/queries/billing/resolution"
-import { hasCreatorWorkspaceAccess } from "./creatorProgram"
+import { hasCreatorWorkspaceAccess } from "./creator/program"
 
 type CreatorToolsDataCtx =
   | Pick<QueryCtx, "auth" | "db">

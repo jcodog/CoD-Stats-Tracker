@@ -1,9 +1,9 @@
-import { query } from "../../_generated/server"
+import { query } from "../../../_generated/server"
 import {
   getCreatorConnectPendingActions,
   getCreatorConnectState,
-} from "../../../src/lib/creatorProgram"
-import { isCreatorEarningEstimateStatus } from "../../../src/lib/creatorAccounting"
+} from "../../../../src/lib/creator/program"
+import { isCreatorEarningEstimateStatus } from "../../../../src/lib/creator/accounting"
 
 const PAID_CONVERSION_STATUSES = new Set([
   "active",

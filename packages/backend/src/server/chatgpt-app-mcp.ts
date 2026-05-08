@@ -37,6 +37,39 @@ import { attachCodstatsUiToPayload } from "@workspace/backend/server/chatgpt-app
 import { CHATGPT_APP_TOOL_SECURITY_SCHEMES } from "@workspace/backend/server/chatgpt-app-scopes";
 
 type ToolExtra = RequestHandlerExtra<ServerRequest, ServerNotification>;
+type CodstatsToolConfig = {
+  annotations?: Record<string, unknown>;
+  description?: string;
+  inputSchema?: Record<string, unknown>;
+  outputSchema?: Record<string, unknown>;
+  title?: string;
+  _meta?: Record<string, unknown>;
+};
+type CodstatsToolHandler<TArgs extends Record<string, unknown>> = (
+  args: TArgs,
+  extra: ToolExtra,
+) => unknown | Promise<unknown>;
+
+// Keep the third-party app helper's generic Zod inference behind a shallow
+// boundary. Next's type worker can otherwise expand the SDK types deeply enough
+// to fail before reaching the rest of the project.
+const registerCodstatsTool = <
+  TArgs extends Record<string, unknown>,
+>(
+  server: Pick<McpServer, "registerTool">,
+  name: string,
+  config: CodstatsToolConfig,
+  cb: CodstatsToolHandler<TArgs>,
+) => {
+  const register = registerAppTool as unknown as (
+    server: Pick<McpServer, "registerTool">,
+    name: string,
+    config: CodstatsToolConfig,
+    cb: CodstatsToolHandler<TArgs>,
+  ) => void;
+
+  register(server, name, config, cb);
+};
 
 type ContractSuccess = ChatGptAppSuccessPayload<Record<string, unknown>>;
 type ContractError = ChatGptAppErrorPayload;
@@ -908,7 +941,9 @@ export function createChatGptAppMcpServer(
     );
   }
 
-  registerAppTool(
+  registerCodstatsTool<{
+    tab?: "overview" | "matches" | "rank" | "settings";
+  }>(
     server,
     "codstats_open",
     {
@@ -941,7 +976,7 @@ export function createChatGptAppMcpServer(
     },
   );
 
-  registerAppTool(
+  registerCodstatsTool<Record<string, never>>(
     server,
     "codstats_get_current_session",
     {
@@ -965,7 +1000,7 @@ export function createChatGptAppMcpServer(
     },
   );
 
-  registerAppTool(
+  registerCodstatsTool<Record<string, never>>(
     server,
     "codstats_get_last_session",
     {
@@ -985,7 +1020,10 @@ export function createChatGptAppMcpServer(
     },
   );
 
-  registerAppTool(
+  registerCodstatsTool<{
+    cursor?: string;
+    limit?: number;
+  }>(
     server,
     "codstats_get_match_history",
     {
@@ -1012,7 +1050,9 @@ export function createChatGptAppMcpServer(
     },
   );
 
-  registerAppTool(
+  registerCodstatsTool<{
+    matchId: string;
+  }>(
     server,
     "codstats_get_match",
     {
@@ -1037,7 +1077,7 @@ export function createChatGptAppMcpServer(
     },
   );
 
-  registerAppTool(
+  registerCodstatsTool<Record<string, never>>(
     server,
     "codstats_get_rank_ladder",
     {
@@ -1056,7 +1096,7 @@ export function createChatGptAppMcpServer(
     },
   );
 
-  registerAppTool(
+  registerCodstatsTool<Record<string, never>>(
     server,
     "codstats_get_rank_progress",
     {
@@ -1076,7 +1116,7 @@ export function createChatGptAppMcpServer(
     },
   );
 
-  registerAppTool(
+  registerCodstatsTool<Record<string, never>>(
     server,
     "codstats_get_settings",
     {
@@ -1096,7 +1136,9 @@ export function createChatGptAppMcpServer(
     },
   );
 
-  registerAppTool(
+  registerCodstatsTool<{
+    confirm?: boolean;
+  }>(
     server,
     "codstats_disconnect",
     {

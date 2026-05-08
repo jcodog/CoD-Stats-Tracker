@@ -1,4 +1,4 @@
-import { STRIPE_CATALOG_APP } from "./stripe/client"
+import { STRIPE_CATALOG_APP } from "../../stripe/client"
 
 export type CreatorTransferLedgerStatus =
   | "pending"

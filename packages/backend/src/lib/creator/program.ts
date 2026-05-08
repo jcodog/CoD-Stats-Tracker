@@ -1,7 +1,7 @@
 import type Stripe from "stripe"
 
-import { hasCreatorAccessFromState } from "./billingAccess"
-import { parseUserRole, roleMeetsRequirement } from "./staffRoles"
+import { hasCreatorAccessFromState } from "../billingAccess"
+import { parseUserRole, roleMeetsRequirement } from "../staffRoles"
 
 export const CREATOR_PROGRAM_DEFAULTS_KEY = "global" as const
 

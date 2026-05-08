@@ -1,8 +1,8 @@
 import { v } from "convex/values"
 
-import type { Doc } from "../../_generated/dataModel"
-import { internalMutation, type MutationCtx } from "../../_generated/server"
-import { calculateCreatorPayoutEligibilityEndsAt } from "../../../src/lib/creatorAccounting"
+import type { Doc } from "../../../_generated/dataModel"
+import { internalMutation, type MutationCtx } from "../../../_generated/server"
+import { calculateCreatorPayoutEligibilityEndsAt } from "../../../../src/lib/creator/accounting"
 
 export type EnsureCanonicalAttributionResult =
   | {

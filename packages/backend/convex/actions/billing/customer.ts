@@ -23,7 +23,7 @@ import {
   getClerkBackendClient,
   syncClerkCreatorAttributionMetadata,
 } from "../../../src/lib/clerk"
-import { isSelfCreatorCode } from "../../../src/lib/creatorAccounting"
+import { isSelfCreatorCode } from "../../../src/lib/creator/accounting"
 import { getStripe, STRIPE_CATALOG_APP } from "../../../src/lib/stripe/client"
 import {
   buildCheckoutCancelUrl,
@@ -747,7 +747,7 @@ async function finalizeCreatorAttribution(args: {
 }) {
   const attributionResult: CreatorAttributionResult =
     await args.ctx.runMutation(
-      internal.mutations.creator.attribution.ensureCanonicalAttribution,
+      internal.mutations.creator.attribution.lifecycle.ensureCanonicalAttribution,
       {
         clerkUserId: args.userContext.user.clerkUserId,
         creatorAccountId: args.creatorAccount._id as Id<"creatorAccounts">,
@@ -782,14 +782,14 @@ async function resolveCheckoutCreatorDiscount(args: {
   userContext: BillingUserContext
 }): Promise<CheckoutCreatorDiscountResult> {
   const usageLock: CreatorCodeUsageLockRecord | null = await args.ctx.runQuery(
-    internal.queries.creator.internal.getUsageLockByUserId,
+    internal.queries.creator.attribution.internal.getUsageLockByUserId,
     {
       userId: args.userContext.user._id,
     }
   )
   const activeAttribution: CreatorAttributionRecord | null =
     await args.ctx.runQuery(
-      internal.queries.creator.internal.getActiveAttributionByUserId,
+      internal.queries.creator.attribution.internal.getActiveAttributionByUserId,
       {
         userId: args.userContext.user._id,
       }
@@ -820,7 +820,7 @@ async function resolveCheckoutCreatorDiscount(args: {
 
   if (usageLock) {
     const creatorAccount: CreatorAccountRecord | null = await args.ctx.runQuery(
-      internal.queries.creator.internal.getCreatorAccountById,
+      internal.queries.creator.accounts.internal.getCreatorAccountById,
       {
         creatorAccountId: usageLock.creatorAccountId as Id<"creatorAccounts">,
       }
@@ -867,7 +867,7 @@ async function resolveCheckoutCreatorDiscount(args: {
 
   if (activeAttribution) {
     const creatorAccount: CreatorAccountRecord | null = await args.ctx.runQuery(
-      internal.queries.creator.internal.getCreatorAccountById,
+      internal.queries.creator.accounts.internal.getCreatorAccountById,
       {
         creatorAccountId:
           activeAttribution.creatorAccountId as Id<"creatorAccounts">,
@@ -937,7 +937,7 @@ async function resolveCheckoutCreatorDiscount(args: {
   }
 
   const creatorAccount: CreatorAccountRecord | null = await args.ctx.runQuery(
-    internal.queries.creator.internal.getCreatorAccountByNormalizedCode,
+    internal.queries.creator.accounts.internal.getCreatorAccountByNormalizedCode,
     {
       normalizedCode: normalizedEnteredCode,
     }
@@ -1289,7 +1289,7 @@ function createBillingLifecycleOps(
   return {
     bindCreatorCodeUsageLock: (args) =>
       ctx.runMutation(
-        internal.mutations.creator.attribution.bindUsageLockToSubscription,
+        internal.mutations.creator.attribution.lifecycle.bindUsageLockToSubscription,
         {
           ...args,
           creatorUsageLockId: args.creatorUsageLockId
@@ -1611,7 +1611,7 @@ export const createSubscriptionCheckoutSession = action({
 
       const creatorUsageLock = creatorDiscount.appliedDiscount
         ? await ctx.runMutation(
-            internal.mutations.creator.attribution.ensureCreatorCodeUsageLock,
+            internal.mutations.creator.attribution.lifecycle.ensureCreatorCodeUsageLock,
             {
               clerkUserId: userContext.user.clerkUserId,
               creatorAccountId:
@@ -1682,7 +1682,7 @@ export const createSubscriptionCheckoutSession = action({
 
       if (creatorUsageLock) {
         await ctx.runMutation(
-          internal.mutations.creator.attribution
+          internal.mutations.creator.attribution.lifecycle
             .attachCheckoutSessionToUsageLock,
           {
             checkoutSessionCreatedAt: Date.now(),

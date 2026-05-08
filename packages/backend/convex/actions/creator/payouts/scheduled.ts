@@ -2,18 +2,27 @@
 
 import { v } from "convex/values"
 
-import { internal } from "../../_generated/api"
-import type { Id } from "../../_generated/dataModel"
-import { internalAction, type ActionCtx } from "../../_generated/server"
-import { getConvexEnv } from "../../../src/env"
+import { internal } from "../../../_generated/api"
+import type { Id } from "../../../_generated/dataModel"
+import { internalAction, type ActionCtx } from "../../../_generated/server"
+import { getConvexEnv } from "../../../../src/env"
 import {
   buildCreatorPayoutPreview,
   getPreviousCompletedMonthlyPayoutPeriod,
-} from "../../../src/lib/creatorTransfers"
-import { executeCreatorPayoutTransfer } from "./payoutExecution"
+} from "../../../../src/lib/creator/payouts/transfers"
+import { executeCreatorPayoutTransfer } from "./execution"
 
 const SYSTEM_ACTOR_CLERK_USER_ID = "system:creator-monthly-payout-cron"
 const SYSTEM_ACTOR_NAME = "Creator payout schedule"
+
+type ScheduledPayoutActionArgs = {
+  dryRun?: boolean
+  now?: number
+}
+
+type ScheduledPayoutActionDeps = {
+  executeTransfer?: typeof executeCreatorPayoutTransfer
+}
 
 function getAutomaticTransferConfig() {
   const env = getConvexEnv()
@@ -52,31 +61,35 @@ async function insertScheduledAuditLog(args: {
   })
 }
 
-export const runScheduledMonthlyCreatorPayoutTransfers = internalAction({
-  args: {
-    dryRun: v.optional(v.boolean()),
-    now: v.optional(v.number()),
-  },
-  handler: async (ctx, args): Promise<unknown> => {
+export async function runScheduledMonthlyCreatorPayoutTransfersHandler(
+  ctx: ActionCtx,
+  args: ScheduledPayoutActionArgs,
+  deps: ScheduledPayoutActionDeps = {}
+): Promise<unknown> {
     const now = args.now ?? Date.now()
     const period = getPreviousCompletedMonthlyPayoutPeriod(now)
     const config = getAutomaticTransferConfig()
     const existingRun: { _id: Id<"creatorPayoutRuns"> } | null =
       await ctx.runQuery(
-      internal.queries.staff.internal.findCreatorPayoutRunByPeriodStartAndSource,
-      {
-        periodStart: period.periodStart,
-        source: "scheduled",
-      }
-    )
+        internal.queries.staff.internal
+          .findCreatorPayoutRunByPeriodStartAndSource,
+        {
+          periodStart: period.periodStart,
+          source: "scheduled",
+        }
+      )
 
+    // Scheduled runs are idempotent per period. If creators are fixed after
+    // the cron runs, staff recovery happens through review/retry on the
+    // existing run instead of creating a duplicate scheduled run.
     if (existingRun && !args.dryRun) {
       return {
         automaticTransfersEnabled: config.automaticTransfersEnabled,
         dryRun: false,
         existingRunId: existingRun._id,
         period,
-        summary: "Scheduled creator payout run already exists for this period.",
+        summary:
+          "Scheduled creator payout run already exists for this period; staff review and retry is the recovery path.",
       }
     }
 
@@ -121,6 +134,7 @@ export const runScheduledMonthlyCreatorPayoutTransfers = internalAction({
         createdBySystem: true,
         ledgerEntryIds:
           preview.selectedLedgerEntryIds as Array<Id<"creatorEarningLedger">>,
+        now,
         periodEnd: period.periodEnd,
         periodStart: period.periodStart,
         skippedLedgerRowCount: preview.excludedCount,
@@ -196,16 +210,18 @@ export const runScheduledMonthlyCreatorPayoutTransfers = internalAction({
     let transferredCount = 0
     let reviewCount = 0
     let failedCount = 0
+    const executeTransfer = deps.executeTransfer ?? executeCreatorPayoutTransfer
 
     for (const transfer of transfers) {
       if (transfer.status !== "draft" && transfer.status !== "transferring") {
         continue
       }
 
-      const result = await executeCreatorPayoutTransfer({
+      const result = await executeTransfer({
         allowedStatuses: ["draft", "transferring"],
         ctx,
         maxTransferAmountMinorUnits: config.maxTransferAmountMinorUnits,
+        now,
         source: "scheduled",
         transfer: {
           ...transfer,
@@ -253,5 +269,13 @@ export const runScheduledMonthlyCreatorPayoutTransfers = internalAction({
       summary: `Scheduled creator transfer run: ${transferredCount} transferred to Stripe Connect, ${reviewCount} review, ${failedCount} failed.`,
       transferredCount,
     }
+}
+
+export const runScheduledMonthlyCreatorPayoutTransfers = internalAction({
+  args: {
+    dryRun: v.optional(v.boolean()),
+    now: v.optional(v.number()),
   },
+  handler: async (ctx, args): Promise<unknown> =>
+    runScheduledMonthlyCreatorPayoutTransfersHandler(ctx, args),
 })

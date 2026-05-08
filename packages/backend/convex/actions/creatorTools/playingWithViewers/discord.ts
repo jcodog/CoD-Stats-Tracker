@@ -1778,7 +1778,7 @@ async function requireCreatorToolsActionAccess(
     ctx.runQuery(internal.queries.billing.resolution.resolveUserPlanState, {
       userId,
     }),
-    ctx.runQuery(internal.queries.creator.internal.getCreatorAccountByUserId, {
+    ctx.runQuery(internal.queries.creator.accounts.internal.getCreatorAccountByUserId, {
       userId,
     }),
   ])

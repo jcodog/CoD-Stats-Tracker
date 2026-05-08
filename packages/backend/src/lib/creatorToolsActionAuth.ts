@@ -1,7 +1,7 @@
 "use node"
 
 import type { AppPlanKey, BillingStatePlanLike } from "./billingAccess"
-import { hasCreatorWorkspaceAccess } from "./creatorProgram"
+import { hasCreatorWorkspaceAccess } from "./creator/program"
 import { isPlayWithViewersTwitchEnabled } from "./creatorToolsConfig"
 
 export type TwitchAccount = {

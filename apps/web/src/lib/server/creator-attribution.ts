@@ -34,7 +34,7 @@ export const getPendingCreatorCodeSummary = cache(async () => {
   }
 
   return (await fetchQuery(
-    api.queries.creator.attribution.getPublicCreatorCodeSummary,
+    api.queries.creator.attribution.public.getPublicCreatorCodeSummary,
     {
       code: pendingCode,
     }
@@ -61,7 +61,7 @@ export async function canonicalizePendingCreatorAttribution() {
   }
 
   return fetchAction(
-    api.actions.creator.attribution.applyCreatorCode,
+    api.actions.creator.attribution.apply.applyCreatorCode,
     {
       code: pendingCode,
       source: "cookie",

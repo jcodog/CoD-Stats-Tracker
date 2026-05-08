@@ -1,12 +1,12 @@
 import type { AppPlanKey } from "./billingAccess"
-import type { CreatorConnectState } from "./creatorProgram"
+import type { CreatorConnectState } from "./creator/program"
 import type {
   CreatorPayoutPreview,
   CreatorPayoutRunSource,
   CreatorPayoutRunStatus,
   CreatorPayoutTransferSource,
   CreatorPayoutTransferStatus,
-} from "./creatorTransfers"
+} from "./creator/payouts/transfers"
 import type {
   AuditLogResult,
   BillingFeatureApplyMode,

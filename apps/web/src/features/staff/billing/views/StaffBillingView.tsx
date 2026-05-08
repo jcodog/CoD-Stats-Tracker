@@ -22,7 +22,7 @@ import {
   buildCreatorCodeSeed,
   DEFAULT_CREATOR_PROGRAM_DEFAULTS,
   formatCreatorRequirementLabel,
-} from "@workspace/backend/lib/creatorProgram"
+} from "@workspace/backend/lib/creator/program"
 import { resolveAppPlanKey } from "@workspace/backend/lib/billingAccess"
 import type { UserRole } from "@workspace/backend/lib/staffRoles"
 import { AppSelect } from "@/components/AppSelect"
@@ -99,7 +99,11 @@ import { toast } from "sonner"
 import {
   getStaffBillingSectionConfig,
   type StaffBillingSection,
-} from "@/features/staff/lib/staff-billing-sections"
+} from "@/features/staff/billing/lib/sections"
+import {
+  CreatorPayoutExecuteDialog,
+  type CreatorPayoutExecuteConfirmationState,
+} from "@/features/staff/billing/components/creator-transfers/CreatorPayoutExecuteDialog"
 import type { BillingActionRequest } from "@/features/staff/lib/staff-schemas"
 import {
   StaffClientError,
@@ -774,6 +778,10 @@ export function StaffBillingView({
   const [creatorPayoutActionId, setCreatorPayoutActionId] = useState<
     string | null
   >(null)
+  const [
+    creatorPayoutExecuteConfirmationState,
+    setCreatorPayoutExecuteConfirmationState,
+  ] = useState<CreatorPayoutExecuteConfirmationState | null>(null)
   const billingMutation = useStaffMutation<
     BillingActionRequest,
     StaffMutationResponse
@@ -1517,7 +1525,12 @@ export function StaffBillingView({
             <div className="flex justify-end gap-2">
               <Button
                 disabled={isWorking || row.original.status !== "draft"}
-                onClick={() => void executeCreatorPayoutRun(row.original.id)}
+                onClick={() =>
+                  setCreatorPayoutExecuteConfirmationState({
+                    confirmation: "",
+                    payoutRun: row.original,
+                  })
+                }
                 size="sm"
                 variant="outline"
               >
@@ -4071,6 +4084,22 @@ export function StaffBillingView({
         plan={creatorAccessPlan}
         selectedUsers={selectedCreatorUsers}
         state={creatorGrantConfirmationState}
+      />
+      <CreatorPayoutExecuteDialog
+        actionPending={creatorPayoutActionId !== null}
+        formatCurrencyTotals={formatCurrencyTotals}
+        onClose={() => setCreatorPayoutExecuteConfirmationState(null)}
+        onConfirm={(payoutRunId) =>
+          void executeCreatorPayoutRun(payoutRunId).then(() =>
+            setCreatorPayoutExecuteConfirmationState(null)
+          )
+        }
+        onConfirmationChange={(confirmation) =>
+          setCreatorPayoutExecuteConfirmationState((current) =>
+            current ? { ...current, confirmation } : current
+          )
+        }
+        state={creatorPayoutExecuteConfirmationState}
       />
       <AlertDialog
         open={Boolean(creatorGrantRevocationState)}

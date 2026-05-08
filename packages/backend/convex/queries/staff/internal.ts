@@ -41,6 +41,8 @@ async function listEligibleCreatorPayoutLedgerRows(
     creatorPayoutPeriodStart?: number
   }
 ) {
+  // Payout previews are intentionally bounded and period-scoped for the staff
+  // dashboard. TODO: add cursor pagination before exposing full ledger history.
   if (
     args.creatorPayoutPeriodStart !== undefined &&
     args.creatorPayoutPeriodEnd !== undefined
@@ -71,6 +73,8 @@ async function listCreatorPayoutTransfersForDashboard(
     creatorPayoutTransferStatus?: Doc<"creatorPayoutTransfers">["status"]
   }
 ) {
+  // Dashboard transfer history loads the latest operational slice only.
+  // TODO: replace the fixed cap with cursor pagination for deep audit browsing.
   if (args.creatorPayoutTransferStatus) {
     const status = args.creatorPayoutTransferStatus
 
@@ -98,6 +102,8 @@ async function listCreatorPayoutRunsForDashboard(
     creatorPayoutRunStatus?: Doc<"creatorPayoutRuns">["status"]
   }
 ) {
+  // Run history is indexed by status/date and capped for initial dashboard load.
+  // TODO: add cursor pagination when staff need multi-period archive browsing.
   if (args.creatorPayoutRunStatus) {
     const status = args.creatorPayoutRunStatus
 

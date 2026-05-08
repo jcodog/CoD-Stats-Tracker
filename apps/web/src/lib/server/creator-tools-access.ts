@@ -5,7 +5,7 @@ import { auth } from "@clerk/nextjs/server"
 import { fetchQuery } from "convex/nextjs"
 
 import { api } from "@workspace/backend/convex/_generated/api"
-import { hasCreatorWorkspaceAccess } from "@workspace/backend/lib/creatorProgram"
+import { hasCreatorWorkspaceAccess } from "@workspace/backend/lib/creator/program"
 
 type CreatorToolsAccessState = {
   hasCreatorAccess: boolean
@@ -34,7 +34,7 @@ export const getCreatorToolsAccessState = cache(
 
     const [creatorWorkspaceState, dbUser, billingState] = await Promise.all([
       fetchQuery(
-        api.queries.creator.dashboard.getCurrentCreatorWorkspaceState,
+        api.queries.creator.dashboard.current.getCurrentCreatorWorkspaceState,
         {},
         { token }
       ),

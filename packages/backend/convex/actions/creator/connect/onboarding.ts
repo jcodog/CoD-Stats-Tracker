@@ -1,15 +1,15 @@
 "use node"
 
-import { internal } from "../../_generated/api"
-import type { Doc, Id } from "../../_generated/dataModel"
-import { action, type ActionCtx } from "../../_generated/server"
-import { getConvexEnv } from "../../../src/env"
+import { internal } from "../../../_generated/api"
+import type { Doc, Id } from "../../../_generated/dataModel"
+import { action, type ActionCtx } from "../../../_generated/server"
+import { getConvexEnv } from "../../../../src/env"
 import {
   createStripeAccountLinkV2,
   createStripeRecipientAccountV2,
   isStripeV2CompatibilityError,
   retrieveStripeAccountV2,
-} from "../../../src/lib/stripe/connect"
+} from "../../../../src/lib/stripe/connect"
 import {
   buildCreatorCodeSeed,
   DEFAULT_CREATOR_PROGRAM_DEFAULTS,
@@ -18,9 +18,9 @@ import {
   mapStripeConnectedAccountSnapshot,
   normalizeCreatorCode,
   normalizeCreatorCountry,
-} from "../../../src/lib/creatorProgram"
-import { getClerkBackendClient } from "../../../src/lib/clerk"
-import { getStripe } from "../../../src/lib/stripe/client"
+} from "../../../../src/lib/creator/program"
+import { getClerkBackendClient } from "../../../../src/lib/clerk"
+import { getStripe } from "../../../../src/lib/stripe/client"
 
 type CreatorConnectedAccountSnapshot =
   | ReturnType<typeof mapStripeConnectedAccountV2Snapshot>
@@ -87,7 +87,7 @@ async function buildAvailableCreatorCode(ctx: ActionCtx, base: string) {
     }
 
     const existingAccount = await ctx.runQuery(
-      internal.queries.creator.internal.getCreatorAccountByNormalizedCode,
+      internal.queries.creator.accounts.internal.getCreatorAccountByNormalizedCode,
       {
         normalizedCode: candidate,
       }
@@ -108,7 +108,7 @@ async function createCreatorAccountFromDefaults(args: {
 }) {
   const defaults =
     (await args.ctx.runQuery(
-      internal.queries.creator.internal.getCreatorProgramDefaults,
+      internal.queries.creator.program.internal.getCreatorProgramDefaults,
       {}
     )) ?? DEFAULT_CREATOR_PROGRAM_DEFAULTS
   const country = normalizeCreatorCountry(defaults.defaultCountry)
@@ -128,7 +128,7 @@ async function createCreatorAccountFromDefaults(args: {
     })
   )
   const creatorAccount = await args.ctx.runMutation(
-    internal.mutations.creator.internal.upsertCreatorAccount,
+    internal.mutations.creator.accounts.internal.upsertCreatorAccount,
     {
       clerkUserId: args.user.clerkUserId,
       code,
@@ -161,7 +161,7 @@ async function requireCurrentCreatorConnectContext(
   }
 
   const user = await ctx.runQuery(
-    internal.queries.creator.internal.getUserByClerkUserId,
+    internal.queries.creator.identity.internal.getUserByClerkUserId,
     {
       clerkUserId: identity.subject,
     }
@@ -172,7 +172,7 @@ async function requireCurrentCreatorConnectContext(
   }
 
   let creatorAccount = await ctx.runQuery(
-    internal.queries.creator.internal.getCreatorAccountByUserId,
+    internal.queries.creator.accounts.internal.getCreatorAccountByUserId,
     {
       userId: user._id,
     }
@@ -245,7 +245,7 @@ async function syncCreatorStripeAccount(args: {
   }
 
   await args.ctx.runMutation(
-    internal.mutations.creator.internal.applyStripeConnectedAccountSnapshot,
+    internal.mutations.creator.accounts.internal.applyStripeConnectedAccountSnapshot,
     {
       ...snapshot,
       creatorAccountId: args.creatorAccountId,
@@ -329,7 +329,7 @@ export const startHostedOnboarding = action({
       const snapshot = mapStripeConnectedAccountV2Snapshot(stripeAccount)
 
       await ctx.runMutation(
-        internal.mutations.creator.internal.applyStripeConnectedAccountSnapshot,
+        internal.mutations.creator.accounts.internal.applyStripeConnectedAccountSnapshot,
         {
           ...snapshot,
           creatorAccountId: creatorAccount._id,
@@ -354,7 +354,7 @@ export const startHostedOnboarding = action({
         const snapshot = mapStripeConnectedAccountV2Snapshot(stripeAccount)
 
         await ctx.runMutation(
-          internal.mutations.creator.internal
+          internal.mutations.creator.accounts.internal
             .applyStripeConnectedAccountSnapshot,
           {
             ...snapshot,
@@ -389,7 +389,7 @@ export const startHostedOnboarding = action({
         }
 
         await ctx.runMutation(
-          internal.mutations.creator.internal
+          internal.mutations.creator.accounts.internal
             .applyStripeConnectedAccountSnapshot,
           {
             ...snapshot,

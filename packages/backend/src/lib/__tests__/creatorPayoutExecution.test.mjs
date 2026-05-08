@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test"
 
-import { executeCreatorPayoutTransfer } from "../../../convex/actions/creator/payoutExecution.ts"
+import { executeCreatorPayoutTransfer } from "../../../convex/actions/creator/payouts/execution.ts"
 import {
   createCreatorPayoutRun,
   markCreatorPayoutTransferExecuting,

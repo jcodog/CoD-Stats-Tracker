@@ -15,13 +15,13 @@ import {
 import type {
   StaffBillingSectionConfig,
   StaffBreadcrumbItem,
-} from "@/features/staff/lib/staff-billing-sections"
+} from "@/features/staff/billing/lib/sections"
 import {
   STAFF_BILLING_CATALOG_ITEMS,
   STAFF_BILLING_SUBSCRIPTION_ITEMS,
   getStaffBillingSectionConfig,
   resolveStaffBillingSectionFromPathname,
-} from "@/features/staff/lib/staff-billing-sections"
+} from "@/features/staff/billing/lib/sections"
 
 export const STAFF_CONSOLE_TITLE = "Staff Console"
 

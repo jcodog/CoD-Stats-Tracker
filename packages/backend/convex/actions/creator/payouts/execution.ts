@@ -2,24 +2,24 @@
 
 import Stripe from "stripe"
 
-import { internal } from "../../_generated/api"
-import type { Id } from "../../_generated/dataModel"
-import type { ActionCtx } from "../../_generated/server"
+import { internal } from "../../../_generated/api"
+import type { Id } from "../../../_generated/dataModel"
+import type { ActionCtx } from "../../../_generated/server"
 import {
   mapStripeConnectedAccountV2Snapshot,
   mapStripeConnectedAccountSnapshot,
-} from "../../../src/lib/creatorProgram"
+} from "../../../../src/lib/creator/program"
 import {
   createCreatorStripeTransfer,
   getCreatorTransferReadiness,
   type CreatorPayoutTransferSource,
   type StripeTransferCreator,
-} from "../../../src/lib/creatorTransfers"
+} from "../../../../src/lib/creator/payouts/transfers"
 import {
   isStripeV2CompatibilityError,
   retrieveStripeAccountV2,
-} from "../../../src/lib/stripe/connect"
-import { getStripe } from "../../../src/lib/stripe/client"
+} from "../../../../src/lib/stripe/connect"
+import { getStripe } from "../../../../src/lib/stripe/client"
 
 type CreatorConnectedAccountSnapshot =
   | ReturnType<typeof mapStripeConnectedAccountV2Snapshot>
@@ -86,7 +86,7 @@ async function syncCreatorProgramConnectAccount(args: {
   }
 
   await args.ctx.runMutation(
-    internal.mutations.creator.internal.applyStripeConnectedAccountSnapshot,
+    internal.mutations.creator.accounts.internal.applyStripeConnectedAccountSnapshot,
     {
       ...snapshot,
       creatorAccountId: args.creatorAccountId,
@@ -102,6 +102,7 @@ export async function executeCreatorPayoutTransfer(args: {
   >
   ctx: ActionCtx
   maxTransferAmountMinorUnits?: number
+  now?: number
   source?: CreatorPayoutTransferSource
   stripe?: StripeTransferCreator
   syncConnectAccount?: typeof syncCreatorProgramConnectAccount
@@ -139,7 +140,7 @@ export async function executeCreatorPayoutTransfer(args: {
   }
 
   const creatorAccount = await args.ctx.runQuery(
-    internal.queries.creator.internal.getCreatorAccountById,
+    internal.queries.creator.accounts.internal.getCreatorAccountById,
     {
       creatorAccountId: args.transfer.creatorAccountId,
     }
@@ -186,12 +187,15 @@ export async function executeCreatorPayoutTransfer(args: {
     return "requires_review" as const
   }
 
-  const readiness = getCreatorTransferReadiness({
-    ...snapshot,
-    _id: creatorAccount._id,
-    code: creatorAccount.code,
-    payoutEligible: creatorAccount.payoutEligible,
-  })
+  const readiness = getCreatorTransferReadiness(
+    {
+      ...snapshot,
+      _id: creatorAccount._id,
+      code: creatorAccount.code,
+      payoutEligible: creatorAccount.payoutEligible,
+    },
+    { now: args.now }
+  )
 
   if (!readiness.ready) {
     await args.ctx.runMutation(
@@ -228,7 +232,7 @@ export async function executeCreatorPayoutTransfer(args: {
       {
         payoutTransferId: args.transfer._id,
         stripeTransferId: stripeTransfer.id,
-        transferredAt: Date.now(),
+        transferredAt: args.now ?? Date.now(),
       }
     )
 

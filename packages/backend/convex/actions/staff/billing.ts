@@ -63,7 +63,7 @@ import {
   normalizeCreatorCode,
   normalizeCreatorCountry,
   validateCreatorPercent,
-} from "../../../src/lib/creatorProgram"
+} from "../../../src/lib/creator/program"
 import {
   createStripeRecipientAccountV2,
   isStripeV2CompatibilityError,
@@ -76,8 +76,8 @@ import {
   getPreviousCompletedMonthlyPayoutPeriod,
   getCreatorTransferReadiness,
   type CreatorPayoutPreview,
-} from "../../../src/lib/creatorTransfers"
-import { executeCreatorPayoutTransfer } from "../creator/payoutExecution"
+} from "../../../src/lib/creator/payouts/transfers"
+import { executeCreatorPayoutTransfer } from "../creator/payouts/execution"
 
 type CreatorConnectedAccountSnapshot =
   | ReturnType<typeof mapStripeConnectedAccountV2Snapshot>
@@ -1246,7 +1246,7 @@ async function resolveCreatorProgramCode(args: {
     }
 
     const conflictingAccount = await args.ctx.runQuery(
-      internal.queries.creator.internal.getCreatorAccountByNormalizedCode,
+      internal.queries.creator.accounts.internal.getCreatorAccountByNormalizedCode,
       {
         normalizedCode: normalizedRequestedCode,
       }
@@ -1274,7 +1274,7 @@ async function resolveCreatorProgramCode(args: {
     }
 
     const conflictingAccount = await args.ctx.runQuery(
-      internal.queries.creator.internal.getCreatorAccountByNormalizedCode,
+      internal.queries.creator.accounts.internal.getCreatorAccountByNormalizedCode,
       {
         normalizedCode: candidateCode,
       }
@@ -1319,7 +1319,7 @@ async function syncCreatorProgramConnectAccount(args: {
   }
 
   await args.ctx.runMutation(
-    internal.mutations.creator.internal.applyStripeConnectedAccountSnapshot,
+    internal.mutations.creator.accounts.internal.applyStripeConnectedAccountSnapshot,
     {
       ...snapshot,
       creatorAccountId: args.creatorAccountId,
@@ -4227,11 +4227,11 @@ export const upsertCreatorProgramDefaults = action({
     }
 
     const defaultsBefore = await ctx.runQuery(
-      internal.queries.creator.internal.getCreatorProgramDefaults,
+      internal.queries.creator.program.internal.getCreatorProgramDefaults,
       {}
     )
     const defaultsAfter = await ctx.runMutation(
-      internal.mutations.creator.internal.upsertCreatorProgramDefaults,
+      internal.mutations.creator.program.defaults.upsertCreatorProgramDefaults,
       {
         defaultCodeActive: args.defaultCodeActive,
         defaultCountry: normalizedCountry,
@@ -4291,11 +4291,11 @@ export const upsertCreatorProgramAccount = action({
     const operator = await requireAuthorizedStaffAction(ctx, "admin")
     const [defaults, existingCreatorAccount, targetUser] = await Promise.all([
       ctx.runQuery(
-        internal.queries.creator.internal.getCreatorProgramDefaults,
+        internal.queries.creator.program.internal.getCreatorProgramDefaults,
         {}
       ),
       ctx.runQuery(
-        internal.queries.creator.internal.getCreatorAccountByUserId,
+        internal.queries.creator.accounts.internal.getCreatorAccountByUserId,
         {
           userId: args.targetUserId,
         }
@@ -4336,7 +4336,7 @@ export const upsertCreatorProgramAccount = action({
       user: targetUser,
     })
     const creatorAccountAfter = await ctx.runMutation(
-      internal.mutations.creator.internal.upsertCreatorAccount,
+      internal.mutations.creator.accounts.internal.upsertCreatorAccount,
       {
         clerkUserId: targetUser.clerkUserId,
         code,
@@ -4399,7 +4399,7 @@ export const prepareCreatorProgramConnectAccount = action({
     const operator = await requireAuthorizedStaffAction(ctx, "admin")
     const [creatorAccount, targetUser] = await Promise.all([
       ctx.runQuery(
-        internal.queries.creator.internal.getCreatorAccountByUserId,
+        internal.queries.creator.accounts.internal.getCreatorAccountByUserId,
         {
           userId: args.targetUserId,
         }
@@ -4469,7 +4469,7 @@ export const prepareCreatorProgramConnectAccount = action({
     }
 
     await ctx.runMutation(
-      internal.mutations.creator.internal.applyStripeConnectedAccountSnapshot,
+      internal.mutations.creator.accounts.internal.applyStripeConnectedAccountSnapshot,
       {
         ...snapshot,
         creatorAccountId: creatorAccount._id,
@@ -4517,7 +4517,7 @@ export const refreshCreatorProgramConnectStatus = action({
     const operator = await requireAuthorizedStaffAction(ctx, "admin")
     const [creatorAccount, targetUser] = await Promise.all([
       ctx.runQuery(
-        internal.queries.creator.internal.getCreatorAccountByUserId,
+        internal.queries.creator.accounts.internal.getCreatorAccountByUserId,
         {
           userId: args.targetUserId,
         }
@@ -4984,7 +4984,7 @@ function createBillingLifecycleOps(
   return {
     bindCreatorCodeUsageLock: (args) =>
       ctx.runMutation(
-        internal.mutations.creator.attribution.bindUsageLockToSubscription,
+        internal.mutations.creator.attribution.lifecycle.bindUsageLockToSubscription,
         {
           ...args,
           creatorUsageLockId: args.creatorUsageLockId

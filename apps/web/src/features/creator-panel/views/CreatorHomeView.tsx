@@ -74,7 +74,7 @@ const pageDescription =
 
 export function CreatorHomeView() {
   const dashboard = useQuery(
-    api.queries.creator.dashboard.getCurrentCreatorDashboard
+    api.queries.creator.dashboard.current.getCurrentCreatorDashboard
   )
 
   if (dashboard === undefined) {

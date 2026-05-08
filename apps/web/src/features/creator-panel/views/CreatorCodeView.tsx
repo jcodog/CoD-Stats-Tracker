@@ -16,7 +16,7 @@ import {
 } from "@tabler/icons-react"
 
 import { api } from "@workspace/backend/convex/_generated/api"
-import { formatCreatorRequirementLabel } from "@workspace/backend/lib/creatorProgram"
+import { formatCreatorRequirementLabel } from "@workspace/backend/lib/creator/program"
 import { CreatorConsoleHeader } from "@/features/creator-panel/components/CreatorConsoleHeader"
 import {
   formatCreatorProgramSummary,
@@ -106,10 +106,10 @@ const pageDescription =
 
 export function CreatorCodeView() {
   const dashboard = useQuery(
-    api.queries.creator.dashboard.getCurrentCreatorDashboard
+    api.queries.creator.dashboard.current.getCurrentCreatorDashboard
   )
   const setCodeActiveState = useMutation(
-    api.mutations.creator.account.setCurrentCreatorCodeActiveState
+    api.mutations.creator.accounts.settings.setCurrentCreatorCodeActiveState
   )
   const searchParams = useSearchParams()
   const [isSaving, setIsSaving] = useState(false)

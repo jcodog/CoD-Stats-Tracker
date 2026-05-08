@@ -3,7 +3,7 @@ import { describe, expect, it } from "bun:test"
 import {
   calculateCreatorPayoutEligibilityEndsAt,
   isSelfCreatorCode,
-} from "../creatorAccounting.ts"
+} from "../creator/accounting.ts"
 import {
   createHostedSubscriptionCheckoutSession,
   shouldBlockNewCheckout,
@@ -13,7 +13,7 @@ import { syncBillingInvoices } from "../../../convex/mutations/billing/state.ts"
 import {
   bindUsageLockToSubscription,
   ensureCreatorCodeUsageLock,
-} from "../../../convex/mutations/creator/attribution.ts"
+} from "../../../convex/mutations/creator/attribution/lifecycle.ts"
 import { getEstimatedPayoutPresentation } from "../../../../../apps/web/src/features/creator-panel/lib/creator-panel.ts"
 
 const INDEX_FIELDS = {

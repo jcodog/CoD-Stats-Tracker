@@ -52,7 +52,7 @@ export async function GET(request: Request) {
 
   try {
     await fetchAction(
-      api.actions.creator.connect.syncCurrentCreatorConnectAccount,
+      api.actions.creator.connect.onboarding.syncCurrentCreatorConnectAccount,
       {},
       {
         token,

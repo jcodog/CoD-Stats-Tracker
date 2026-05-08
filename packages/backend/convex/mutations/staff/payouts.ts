@@ -5,7 +5,7 @@ import { internalMutation, type MutationCtx } from "../../_generated/server"
 import {
   buildCreatorPayoutPreview,
   buildCreatorPayoutTransferIdempotencyKey,
-} from "../../../src/lib/creatorTransfers"
+} from "../../../src/lib/creator/payouts/transfers"
 
 const payoutTransferStatusValidator = v.union(
   v.literal("cancelled"),
@@ -118,13 +118,14 @@ export const createCreatorPayoutRun = internalMutation({
     createdByName: v.optional(v.string()),
     createdBySystem: v.optional(v.boolean()),
     ledgerEntryIds: v.optional(v.array(v.id("creatorEarningLedger"))),
+    now: v.optional(v.number()),
     periodEnd: v.optional(v.number()),
     periodStart: v.optional(v.number()),
     skippedLedgerRowCount: v.optional(v.number()),
     source: v.optional(payoutRunSourceValidator),
   },
   handler: async (ctx, args) => {
-    const now = Date.now()
+    const now = args.now ?? Date.now()
     let selectedRows: Array<Doc<"creatorEarningLedger">>
 
     if (args.ledgerEntryIds) {
@@ -163,6 +164,7 @@ export const createCreatorPayoutRun = internalMutation({
     const preview = buildCreatorPayoutPreview({
       creatorAccounts,
       ledgerRows: selectedRows,
+      now,
       periodEnd: args.periodEnd,
       periodStart: args.periodStart,
       selectedLedgerEntryIds: args.ledgerEntryIds,

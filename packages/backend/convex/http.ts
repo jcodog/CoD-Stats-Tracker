@@ -18,7 +18,7 @@ import {
   buildWebhookSafeSummary,
   getWebhookObjectIds,
 } from "../src/lib/stripe/billing"
-import { mapStripeConnectedAccountSnapshot } from "../src/lib/creatorProgram"
+import { mapStripeConnectedAccountSnapshot } from "../src/lib/creator/program"
 import { getStripe } from "../src/lib/stripe/client"
 import { getConvexEnv } from "../src/env"
 import { handleDiscordInteractions } from "../src/httpRoutes/discord/interactions"
@@ -311,7 +311,7 @@ http.route({
           const snapshot = mapStripeConnectedAccountSnapshot(account)
 
           await ctx.runMutation(
-            internal.mutations.creator.internal
+            internal.mutations.creator.accounts.internal
               .applyStripeConnectedAccountSnapshot,
             snapshot
           )
@@ -452,7 +452,7 @@ function createBillingLifecycleOps(
   return {
     bindCreatorCodeUsageLock: (args) =>
       ctx.runMutation(
-        internal.mutations.creator.attribution.bindUsageLockToSubscription,
+        internal.mutations.creator.attribution.lifecycle.bindUsageLockToSubscription,
         {
           ...args,
           creatorUsageLockId: args.creatorUsageLockId

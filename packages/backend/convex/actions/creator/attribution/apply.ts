@@ -2,14 +2,14 @@
 
 import { v } from "convex/values"
 
-import { internal } from "../../_generated/api"
-import { action } from "../../_generated/server"
-import type { EnsureCanonicalAttributionResult } from "../../mutations/creator/attribution"
+import { internal } from "../../../_generated/api"
+import { action } from "../../../_generated/server"
+import type { EnsureCanonicalAttributionResult } from "../../../mutations/creator/attribution/lifecycle"
 import {
   getClerkBackendClient,
   syncClerkCreatorAttributionMetadata,
-} from "../../../src/lib/clerk"
-import { isSelfCreatorCode } from "../../../src/lib/creatorAccounting"
+} from "../../../../src/lib/clerk"
+import { isSelfCreatorCode } from "../../../../src/lib/creator/accounting"
 
 type ApplyCreatorCodeResult =
   | {
@@ -69,12 +69,12 @@ export const applyCreatorCode = action({
 
     const [creatorAccount, user] = await Promise.all([
       ctx.runQuery(
-        internal.queries.creator.internal.getCreatorAccountByNormalizedCode,
+        internal.queries.creator.accounts.internal.getCreatorAccountByNormalizedCode,
         {
           normalizedCode,
         }
       ),
-      ctx.runQuery(internal.queries.creator.internal.getUserByClerkUserId, {
+      ctx.runQuery(internal.queries.creator.identity.internal.getUserByClerkUserId, {
         clerkUserId: identity.subject,
       }),
     ])
@@ -104,7 +104,7 @@ export const applyCreatorCode = action({
 
     const attributionResult: EnsureCanonicalAttributionResult =
       await ctx.runMutation(
-        internal.mutations.creator.attribution.ensureCanonicalAttribution,
+        internal.mutations.creator.attribution.lifecycle.ensureCanonicalAttribution,
         {
           clerkUserId: user.clerkUserId,
           creatorAccountId: creatorAccount._id,

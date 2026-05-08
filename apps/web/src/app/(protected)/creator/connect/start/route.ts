@@ -51,7 +51,7 @@ export async function GET(request: Request) {
 
   try {
     const onboarding = await fetchAction(
-      api.actions.creator.connect.startHostedOnboarding,
+      api.actions.creator.connect.onboarding.startHostedOnboarding,
       {},
       {
         token,

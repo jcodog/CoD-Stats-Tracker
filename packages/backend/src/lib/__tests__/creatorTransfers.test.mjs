@@ -5,7 +5,7 @@ import {
   buildCreatorPayoutTransferIdempotencyKey,
   createCreatorStripeTransfer,
   getPreviousCompletedMonthlyPayoutPeriod,
-} from "../creatorTransfers.ts"
+} from "../creator/payouts/transfers.ts"
 import {
   cancelCreatorPayoutRun,
   createCreatorPayoutRun,
