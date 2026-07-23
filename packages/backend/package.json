@@ -27,7 +27,7 @@
     "@modelcontextprotocol/sdk": "^1.29.0",
     "convex": "^1.42.3",
     "discord-api-types": "^0.38.50",
-    "next": "16.2.11",
+    "next": "16.3.0-preview.8",
     "redis": "^6.1.0",
     "stripe": "^22.3.2",
     "svix": "^1.99.1",
