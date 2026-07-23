@@ -1,3 +1,5 @@
+> Currently using preview nextjs as it is the only one that supports the current version of typescript (v7.0.2)
+
 # CoD Stats Tracker
 
 CoD Stats Tracker is a Bun-based monorepo for a production web app and ChatGPT App connector focused on Call of Duty ranked tracking.

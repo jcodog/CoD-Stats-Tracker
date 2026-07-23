@@ -93,14 +93,51 @@ function ComboboxContent({
   align = "start",
   alignOffset = 0,
   anchor,
+  portalContainer,
   ...props
 }: ComboboxPrimitive.Popup.Props &
   Pick<
     ComboboxPrimitive.Positioner.Props,
     "side" | "align" | "sideOffset" | "alignOffset" | "anchor"
-  >) {
+  > & {
+    portalContainer?: ComboboxPrimitive.Portal.Props["container"]
+  }) {
+  const [dialogContainer, setDialogContainer] =
+    React.useState<HTMLElement | null>(null)
+
+  React.useLayoutEffect(() => {
+    if (portalContainer !== undefined) {
+      return
+    }
+
+    const anchorElement =
+      anchor && typeof anchor === "object" && "current" in anchor
+        ? anchor.current
+        : null
+
+    const nextDialogContainer =
+      anchorElement instanceof HTMLElement
+        ? anchorElement.closest<HTMLElement>("[data-slot=dialog-content]")
+        : null
+
+    setDialogContainer(nextDialogContainer)
+
+    if (!nextDialogContainer) {
+      return
+    }
+
+    const previousOverflow = nextDialogContainer.style.overflow
+    nextDialogContainer.style.overflow = "visible"
+
+    return () => {
+      nextDialogContainer.style.overflow = previousOverflow
+    }
+  }, [anchor, portalContainer])
+
   return (
-    <ComboboxPrimitive.Portal>
+    <ComboboxPrimitive.Portal
+      container={portalContainer ?? dialogContainer ?? undefined}
+    >
       <ComboboxPrimitive.Positioner
         side={side}
         sideOffset={sideOffset}

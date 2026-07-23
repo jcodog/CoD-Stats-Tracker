@@ -35,6 +35,7 @@ export function StaffRankedModeMultiSelect({
 }) {
   const anchorRef = useComboboxAnchor()
   const [query, setQuery] = useState("")
+  const disabled = options.length === 0
   const selectedOptions = useMemo(
     () => options.filter((option) => value.includes(option.value)),
     [options, value]
@@ -55,6 +56,7 @@ export function StaffRankedModeMultiSelect({
 
   return (
     <Combobox
+      disabled={disabled}
       items={filteredOptions}
       itemToStringLabel={(item: StaffRankedModeOption) => item.label}
       itemToStringValue={(item: StaffRankedModeOption) => item.value}
@@ -64,20 +66,30 @@ export function StaffRankedModeMultiSelect({
       ) => item.value === selectedValue.value}
       multiple
       onInputValueChange={setQuery}
-      onValueChange={(nextValue) =>
+      onValueChange={(nextValue) => {
+        setQuery("")
         onChange(
           Array.isArray(nextValue)
             ? Array.from(new Set(nextValue.map((item) => item.value)))
             : []
         )
-      }
+      }}
       value={selectedOptions}
     >
-      <ComboboxChips className="min-h-11" ref={anchorRef}>
+      <ComboboxChips
+        aria-disabled={disabled}
+        className="min-h-11"
+        ref={anchorRef}
+      >
         {selectedOptions.map((option) => (
           <ComboboxChip key={option.value}>{option.label}</ComboboxChip>
         ))}
-        <ComboboxChipsInput className="min-w-28" placeholder={placeholder} />
+        <ComboboxChipsInput
+          className="min-w-28"
+          disabled={disabled}
+          id="ranked-map-modes"
+          placeholder={placeholder}
+        />
       </ComboboxChips>
       <ComboboxContent anchor={anchorRef}>
         <ComboboxList>
