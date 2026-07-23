@@ -181,6 +181,7 @@ function CatalogManagementRow({
             disabled={actionDisabled}
             onClick={onAction}
             size="sm"
+            type="button"
             variant="ghost"
           >
             <IconPlus aria-hidden="true" className="size-4" />
@@ -228,32 +229,44 @@ function CatalogEditorDialog({
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
-      <DialogContent className="flex max-h-[min(88vh,54rem)] flex-col overflow-hidden p-0 sm:max-w-[min(92vw,42rem)]">
-        <DialogHeader className="border-b border-border/60 px-6 py-5">
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>{description}</DialogDescription>
-        </DialogHeader>
+      <DialogContent className="flex max-h-[min(88vh,54rem)] flex-col overflow-visible p-0 sm:max-w-[min(92vw,42rem)]">
+        <form
+          className="contents"
+          onSubmit={(event) => {
+            event.preventDefault()
+            void handleSave()
+          }}
+        >
+          <DialogHeader className="border-b border-border/60 px-6 py-5">
+            <DialogTitle>{title}</DialogTitle>
+            <DialogDescription>{description}</DialogDescription>
+          </DialogHeader>
 
-        <ScrollArea className="min-h-0 flex-1 overscroll-contain">
-          <div className="px-6 py-6">{children}</div>
-        </ScrollArea>
+          <ScrollArea className="min-h-0 flex-1 overscroll-contain">
+            <div className="px-6 py-6">{children}</div>
+          </ScrollArea>
 
-        <DialogFooter className="border-t border-border/60 px-6 py-5 sm:items-center sm:justify-end">
-          <Button onClick={() => onOpenChange(false)} variant="outline">
-            Cancel
-          </Button>
-          <Button disabled={pending} onClick={onReset} variant="ghost">
-            {resetLabel}
-          </Button>
-          <Button
-            disabled={pending || saveDisabled}
-            onClick={() => {
-              void handleSave()
-            }}
-          >
-            {pending ? "Saving..." : saveLabel}
-          </Button>
-        </DialogFooter>
+          <DialogFooter className="border-t border-border/60 px-6 py-5 sm:items-center sm:justify-end">
+            <Button
+              onClick={() => onOpenChange(false)}
+              type="button"
+              variant="outline"
+            >
+              Cancel
+            </Button>
+            <Button
+              disabled={pending}
+              onClick={onReset}
+              type="button"
+              variant="ghost"
+            >
+              {resetLabel}
+            </Button>
+            <Button disabled={pending || saveDisabled} type="submit">
+              {pending ? "Saving..." : saveLabel}
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   )
@@ -597,6 +610,7 @@ function TitleCatalogTable({
                 <Button
                   onClick={() => onEdit(title)}
                   size="sm"
+                  type="button"
                   variant="outline"
                 >
                   Edit
@@ -674,6 +688,7 @@ function ModeCatalogTable({
                 <Button
                   onClick={() => onEdit(mode)}
                   size="sm"
+                  type="button"
                   variant="outline"
                 >
                   Edit
@@ -752,7 +767,12 @@ function MapCatalogTable({
               </TableCell>
               <TableCell>{map.sortOrder}</TableCell>
               <TableCell className="text-right">
-                <Button onClick={() => onEdit(map)} size="sm" variant="outline">
+                <Button
+                  onClick={() => onEdit(map)}
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                >
                   Edit
                 </Button>
               </TableCell>
@@ -842,6 +862,13 @@ export function StaffRankedCatalogSection({
   const titleDialogOpen = editorState?.kind === "title"
   const modeDialogOpen = editorState?.kind === "mode"
   const mapDialogOpen = editorState?.kind === "map"
+  const modeSaveDisabled =
+    !selectedTitle || !modeForm.key.trim() || !modeForm.label.trim()
+  const mapSaveDisabled =
+    !selectedTitle ||
+    !mapForm.name.trim() ||
+    mapForm.supportedModeIds.length === 0 ||
+    activeTitleModes.length === 0
 
   function handleEditorOpenChange(
     kind: "map" | "mode" | "title",
@@ -905,6 +932,40 @@ export function StaffRankedCatalogSection({
       titleKey: map.titleKey,
     })
     setEditorState({ kind: "map", mode: "edit" })
+  }
+
+  function resetModeEditor() {
+    if (
+      editorState?.kind === "mode" &&
+      editorState.mode === "edit" &&
+      modeForm.modeId
+    ) {
+      const mode = modes.find((candidate) => candidate.id === modeForm.modeId)
+
+      if (mode) {
+        openModeEdit(mode)
+        return
+      }
+    }
+
+    onResetMode()
+  }
+
+  function resetMapEditor() {
+    if (
+      editorState?.kind === "map" &&
+      editorState.mode === "edit" &&
+      mapForm.mapId
+    ) {
+      const map = maps.find((candidate) => candidate.id === mapForm.mapId)
+
+      if (map) {
+        openMapEdit(map)
+        return
+      }
+    }
+
+    onResetMap()
   }
 
   return (
@@ -1083,10 +1144,16 @@ export function StaffRankedCatalogSection({
             : "Choose a catalog title before editing ranked modes."
         }
         onOpenChange={(open) => handleEditorOpenChange("mode", open)}
-        onReset={onResetMode}
+        onReset={resetModeEditor}
         onSave={onSaveMode}
         open={modeDialogOpen}
         pending={pending}
+        resetLabel={
+          editorState?.kind === "mode" && editorState.mode === "edit"
+            ? "Reset changes"
+            : "Clear"
+        }
+        saveDisabled={modeSaveDisabled}
         saveLabel="Save mode"
         title={
           editorState?.kind === "mode" && editorState.mode === "edit"
@@ -1110,11 +1177,16 @@ export function StaffRankedCatalogSection({
             : "Choose a catalog title before editing maps."
         }
         onOpenChange={(open) => handleEditorOpenChange("map", open)}
-        onReset={onResetMap}
+        onReset={resetMapEditor}
         onSave={onSaveMap}
         open={mapDialogOpen}
         pending={pending}
-        saveDisabled={activeTitleModes.length === 0}
+        resetLabel={
+          editorState?.kind === "map" && editorState.mode === "edit"
+            ? "Reset changes"
+            : "Clear"
+        }
+        saveDisabled={mapSaveDisabled}
         saveLabel="Save map"
         title={
           editorState?.kind === "map" && editorState.mode === "edit"
