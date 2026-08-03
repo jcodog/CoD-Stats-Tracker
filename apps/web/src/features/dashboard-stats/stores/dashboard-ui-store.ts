@@ -2,7 +2,7 @@
 
 import { create } from "zustand"
 
-import type { DashboardMatchLoggingMode } from "@/features/dashboard-stats/lib/dashboard-stats-logging-mode"
+import type { DashboardMatchLoggingMode } from "@/features/dashboard-stats/lib/log-match/mode"
 
 export type DashboardTimeRange = "14d" | "30d" | "7d" | "all"
 

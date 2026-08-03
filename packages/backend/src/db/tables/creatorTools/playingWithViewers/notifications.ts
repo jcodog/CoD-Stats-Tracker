@@ -5,7 +5,7 @@ import {
   queueNotificationMethodValidator,
   queueNotificationStatusValidator,
   queuePlatformValidator,
-} from "../../../../../src/lib/playingWithViewers"
+} from "../../../../../src/lib/creator-tools/play-with-viewers/queue-domain"
 
 export const viewerQueueNotifications = defineTable({
   queueId: v.id("viewerQueues"),

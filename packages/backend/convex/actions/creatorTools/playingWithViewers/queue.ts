@@ -15,17 +15,17 @@ import {
   type ParticipantRankValue,
   type QueuePlatform,
   type StoredInviteMode,
-} from "../../../../src/lib/playingWithViewers"
+} from "../../../../src/lib/creator-tools/play-with-viewers/queue-domain"
 import {
   getDisabledPlayWithViewersTwitchContext,
   isPlayWithViewersTwitchEnabled,
-} from "../../../../src/lib/creatorToolsConfig"
+} from "../../../../src/lib/creator-tools/play-with-viewers/config"
 import {
   assertOwnedQueueActionAccess,
   assertOwnedQueueEntryActionAccess,
   resolveCreatorToolsActionAccess,
   type CreatorActionActor,
-} from "../../../../src/lib/creatorToolsActionAuth"
+} from "../../../../src/lib/creator-tools/play-with-viewers/action-access"
 
 type QueueIdResult = {
   queueId: string

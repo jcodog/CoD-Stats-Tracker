@@ -1,13 +1,16 @@
+import Link from "next/link"
 import { IconCheck, IconMinus } from "@tabler/icons-react"
 
 import type {
   PricingCatalogPlan,
   PricingCatalogResponse,
 } from "@/features/billing/lib/billing-types"
+import { buildAuthHref } from "@/features/auth/lib/auth-redirects"
 import { formatCurrencyAmount } from "@/features/billing/lib/format"
 import { CreatorCodeNotice } from "@/features/creator-attribution/components/CreatorCodeNotice"
 import { PricingCurrencySelect } from "@/features/pricing/components/PricingCurrencySelect"
 import type { PendingCreatorCodeSummary } from "@/lib/server/creator-attribution"
+import { Button } from "@workspace/ui/components/button"
 
 type PricingFeatureRow = {
   category: string
@@ -26,6 +29,26 @@ function getPlanPriceLabel(args: {
 }) {
   const prefix = args.currency === "GBP" ? "" : "Est. "
   return `${prefix}${formatCurrencyAmount(args.amount, args.currency)} / ${args.interval}`
+}
+
+function getPlanCtaLabel(plan: PricingCatalogPlan) {
+  const key = plan.planKey.toLowerCase()
+
+  if (key.includes("creator") || plan.name.toLowerCase().includes("creator")) {
+    return "Choose Creator"
+  }
+
+  if (key.includes("premium") || plan.name.toLowerCase().includes("premium")) {
+    return "Choose Premium"
+  }
+
+  return `Choose ${plan.name}`
+}
+
+function getPlanCtaHref(signedIn: boolean) {
+  return signedIn
+    ? "/settings/billing/plan"
+    : buildAuthHref("/sign-up", "/settings/billing/plan")
 }
 
 function buildPricingFeatureRows(plans: PricingCatalogPlan[]) {
@@ -132,6 +155,12 @@ export function PricingIntro({
       {currencyNotice ? (
         <p className="text-sm leading-6 text-foreground/72">{currencyNotice}</p>
       ) : null}
+      {pendingCreatorCode ? (
+        <p className="max-w-[46rem] text-sm leading-6 text-foreground/72">
+          Creator code discounts are carried into Stripe Checkout and applied
+          there when eligible.
+        </p>
+      ) : null}
       <p className="max-w-[46rem] text-sm leading-6 text-foreground/72">
         Estimates are approximate. Final currency, taxes, discounts, and total
         are confirmed by Stripe Checkout, and exchange rates may shift.
@@ -142,14 +171,19 @@ export function PricingIntro({
 
 export function PricingPlanList({
   catalog,
+  signedIn,
   viewport,
 }: {
   catalog: PricingCatalogResponse
+  signedIn: boolean
   viewport: "desktop" | "mobile"
 }) {
   const isMobileView = viewport === "mobile"
+  const paidPlans = catalog.plans.filter(
+    (plan) => plan.planType === "paid" && plan.active
+  )
 
-  if (catalog.plans.length === 0) {
+  if (paidPlans.length === 0) {
     return (
       <section className="border-b border-border/70 py-8">
         <p className="max-w-[40rem] text-sm leading-7 text-foreground/80 sm:text-base">
@@ -163,7 +197,7 @@ export function PricingPlanList({
   return (
     <section>
       <div className="border-b border-border/70">
-        {catalog.plans.map((plan) => (
+        {paidPlans.map((plan) => (
           <article
             className="border-b border-border/70 py-5 last:border-b-0 sm:py-6"
             key={plan.planKey}
@@ -172,7 +206,7 @@ export function PricingPlanList({
               className={
                 isMobileView
                   ? "grid gap-4"
-                  : "grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(11rem,0.4fr)_minmax(11rem,0.4fr)] lg:items-start"
+                  : "grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(10rem,0.32fr)_minmax(10rem,0.32fr)_auto] lg:items-start"
               }
             >
               <div className="grid gap-2">
@@ -206,6 +240,19 @@ export function PricingPlanList({
                 <div className="text-sm text-foreground/74">
                   {plan.pricing.year ? "Billed yearly" : "No yearly price"}
                 </div>
+              </div>
+
+              <div className="grid gap-2 border-t border-border/70 pt-3 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-6">
+                <Button asChild>
+                  <Link href={getPlanCtaHref(signedIn)}>
+                    {getPlanCtaLabel(plan)}
+                  </Link>
+                </Button>
+                <p className="max-w-[12rem] text-xs leading-5 text-foreground/68">
+                  {signedIn
+                    ? "Continue through billing settings."
+                    : "Sign up first, then continue to billing."}
+                </p>
               </div>
             </div>
 

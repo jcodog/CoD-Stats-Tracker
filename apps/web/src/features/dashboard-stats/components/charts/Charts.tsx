@@ -19,16 +19,16 @@ import type {
   DashboardSessionDailyPerformance,
   DashboardSessionSrTimeline,
   DashboardSessionWinLossBreakdown,
-} from "@/features/dashboard-stats/lib/dashboard-stats-client"
+} from "@/features/dashboard-stats/lib/client/dashboard-state"
 import {
   formatDashboardDay,
   getTimeRangeStart,
-} from "@/features/dashboard-stats/lib/dashboard-stats-format"
+} from "@/features/dashboard-stats/lib/formatting/numbers"
 import {
   DASHBOARD_NEGATIVE_COLOR,
   DASHBOARD_POSITIVE_COLOR,
   getDashboardMetricColor,
-} from "@/features/dashboard-stats/lib/dashboard-stats-visuals"
+} from "@/features/dashboard-stats/lib/visuals/metrics"
 import type { DashboardTimeRange } from "@/features/dashboard-stats/stores/dashboard-ui-store"
 import {
   ChartContainer,

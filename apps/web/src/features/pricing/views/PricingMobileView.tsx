@@ -9,9 +9,11 @@ import type { PendingCreatorCodeSummary } from "@/lib/server/creator-attribution
 export function PricingMobileView({
   catalog,
   pendingCreatorCode,
+  signedIn,
 }: {
   catalog: PricingCatalogResponse
   pendingCreatorCode?: PendingCreatorCodeSummary | null
+  signedIn: boolean
 }) {
   return (
     <div className="grid gap-8">
@@ -21,7 +23,11 @@ export function PricingMobileView({
         pendingCreatorCode={pendingCreatorCode}
         selectedCurrency={catalog.selectedCurrency}
       />
-      <PricingPlanList catalog={catalog} viewport="mobile" />
+      <PricingPlanList
+        catalog={catalog}
+        signedIn={signedIn}
+        viewport="mobile"
+      />
       <PricingComparisonMobile catalog={catalog} />
     </div>
   )

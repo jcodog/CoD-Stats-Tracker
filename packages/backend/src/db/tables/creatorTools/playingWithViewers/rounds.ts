@@ -5,7 +5,7 @@ import {
   queueNotificationMethodValidator,
   queueNotificationStatusValidator,
   storedInviteModeValidator,
-} from "../../../../../src/lib/playingWithViewers"
+} from "../../../../../src/lib/creator-tools/play-with-viewers/queue-domain"
 
 export const viewerQueueRounds = defineTable({
   queueId: v.id("viewerQueues"),

@@ -6,7 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
 import { api } from "@workspace/backend/convex/_generated/api"
 import type { Id } from "@workspace/backend/convex/_generated/dataModel"
-import type { DashboardMatchLoggingMode } from "@/features/dashboard-stats/lib/dashboard-stats-logging-mode"
+import type { DashboardMatchLoggingMode } from "@/features/dashboard-stats/lib/log-match/mode"
 
 export class DashboardStatsClientError extends Error {
   data: unknown

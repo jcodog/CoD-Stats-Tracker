@@ -38,7 +38,7 @@ import {
   type ParticipantRankValue,
   type QueueConfigRankValue,
   type QueuePlatform,
-} from "@workspace/backend/lib/playingWithViewers"
+} from "@workspace/backend/lib/creator-tools/play-with-viewers/queue-domain"
 import { AppSelect } from "@/components/AppSelect"
 import {
   type AvailableDiscordGuild,
@@ -428,6 +428,33 @@ function summarizeNotificationStatuses(selectedUsers: QueueRoundUser[]) {
   )
 }
 
+function getSelectionResultUsers(
+  selectionResult: SelectionResultState
+): NormalizedQueueRoundUser[] {
+  return selectionResult
+    ? selectionResult.selectedUsers.map(normalizeQueueRoundUser)
+    : []
+}
+
+function isFailedBotDeliveryUser(user: QueueRoundUser) {
+  const { notificationMethod, notificationStatus } = getNotificationState(user)
+
+  return (
+    notificationStatus === "failed" &&
+    notificationMethod === "discord_dm"
+  )
+}
+
+function getFailedBotDeliveryUsers(
+  selectionResult: SelectionResultState
+): NormalizedQueueRoundUser[] {
+  if (selectionResult?.inviteMode !== "bot_dm") {
+    return []
+  }
+
+  return getSelectionResultUsers(selectionResult).filter(isFailedBotDeliveryUser)
+}
+
 function getInitials(value: string) {
   const words = value
     .split(/\s+/)
@@ -647,12 +674,16 @@ function LockedState({ queueTitle }: Readonly<{ queueTitle: string }>) {
 function SelectionResultSummary({
   onCopyContactList,
   onCopyDiscordMentions,
+  onCopyFailedContactList,
+  onCopyFailedDiscordMentions,
   onCopyTwitchHandles,
   selectionResult,
   showTwitchTools,
 }: Readonly<{
   onCopyContactList: () => Promise<void>
   onCopyDiscordMentions: () => Promise<void>
+  onCopyFailedContactList: () => Promise<void>
+  onCopyFailedDiscordMentions: () => Promise<void>
   onCopyTwitchHandles: () => Promise<void>
   selectionResult: SelectionResultState
   showTwitchTools: boolean
@@ -661,9 +692,12 @@ function SelectionResultSummary({
     return null
   }
 
-  const selectedUsers = selectionResult.selectedUsers.map(normalizeQueueRoundUser)
-  const notificationSummary = summarizeNotificationStatuses(selectedUsers)
+  const selectedUsers = getSelectionResultUsers(selectionResult)
+  const failedBotDeliveryUsers = getFailedBotDeliveryUsers(selectionResult)
   const discordUserCount = selectedUsers.filter(
+    (user) => user.platform === "discord"
+  ).length
+  const failedDiscordUserCount = failedBotDeliveryUsers.filter(
     (user) => user.platform === "discord"
   ).length
   const twitchUserCount = selectedUsers.filter(
@@ -681,19 +715,47 @@ function SelectionResultSummary({
         </span>
       </div>
 
-      {selectionResult.inviteMode === "bot_dm" &&
-      notificationSummary.failed > 0 ? (
-        <div className="border-b border-border/70 px-4 py-3">
+      {failedBotDeliveryUsers.length > 0 ? (
+        <div className="flex flex-col gap-3 border-b border-border/70 px-4 py-3">
           <Alert variant="destructive">
             <IconAlertTriangle />
-            <AlertTitle>Manual follow-up needed</AlertTitle>
+            <AlertTitle>Some viewers were not DM'd</AlertTitle>
             <AlertDescription>
-              {notificationSummary.failed} viewer
-              {notificationSummary.failed === 1 ? "" : "s"} could not be
-              reached by the bot delivery flow. Review the round below and
-              follow up manually where needed.
+              Do not close this until you have copied/contacted them manually.
             </AlertDescription>
           </Alert>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Button onClick={onCopyFailedContactList} size="sm" variant="outline">
+              <IconCopy data-icon="inline-start" />
+              Copy failed contact list
+            </Button>
+            <Button
+              disabled={failedDiscordUserCount === 0}
+              onClick={onCopyFailedDiscordMentions}
+              size="sm"
+              variant="outline"
+            >
+              <IconBrandDiscord data-icon="inline-start" />
+              Copy failed Discord mentions
+            </Button>
+          </div>
+
+          <div className="flex flex-col gap-1 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2">
+            {failedBotDeliveryUsers.map((user) => (
+              <div
+                key={`${user.platform}:${user.platformUserId}`}
+                className="flex flex-wrap items-center justify-between gap-2 text-sm"
+              >
+                <span className="font-medium text-foreground">
+                  {user.displayName}
+                </span>
+                <span className="text-muted-foreground">
+                  {getContactLabel(user)}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       ) : null}
 
@@ -824,6 +886,8 @@ export function PlayWithViewersDashboardView({
     useState<SelectionDialogState>(null)
   const [selectionResultState, setSelectionResultState] =
     useState<SelectionResultState>(null)
+  const [failedDeliveryAcknowledged, setFailedDeliveryAcknowledged] =
+    useState(false)
   const [selectionInviteCode, setSelectionInviteCode] = useState("")
   const [selectionInviteCodeType, setSelectionInviteCodeType] =
     useState<InviteCodeType>(DEFAULT_INVITE_CODE_TYPE)
@@ -886,6 +950,12 @@ export function PlayWithViewersDashboardView({
       selectedUsers: selectionResultRound.selectedUsers,
     }
   }, [selectionResultRound, selectionResultState])
+  const failedBotDeliveryUsers = useMemo(
+    () => getFailedBotDeliveryUsers(selectionResult),
+    [selectionResult]
+  )
+  const mustAcknowledgeFailedDeliveries =
+    failedBotDeliveryUsers.length > 0 && !failedDeliveryAcknowledged
   const hasAuditedQueuePermissions = Boolean(
     queue && auditedQueueId === queue._id
   )
@@ -943,6 +1013,10 @@ export function PlayWithViewersDashboardView({
       window.clearInterval(intervalId)
     }
   }, [])
+
+  useEffect(() => {
+    setFailedDeliveryAcknowledged(false)
+  }, [selectionResultState?.roundId])
 
   useEffect(() => {
     if (!settingsOpen || queue !== null) {
@@ -1200,6 +1274,23 @@ export function PlayWithViewersDashboardView({
     )
   }
 
+  async function handleCopyFailedDiscordMentions() {
+    const failedUsers = getFailedBotDeliveryUsers(selectionResult)
+    const mentions = failedUsers
+      .map((user) => getDiscordMention(user))
+      .filter((value): value is string => Boolean(value))
+
+    if (mentions.length === 0) {
+      toast.error("No failed Discord deliveries were found for this round.")
+      return
+    }
+
+    await handleCopyToClipboard(
+      mentions.join("\n"),
+      "Failed Discord mentions copied."
+    )
+  }
+
   async function handleCopyTwitchHandles() {
     if (!selectionResult) {
       return
@@ -1217,6 +1308,25 @@ export function PlayWithViewersDashboardView({
     await handleCopyToClipboard(
       handles.join("\n"),
       "Twitch handles copied."
+    )
+  }
+
+  async function handleCopyFailedContactList() {
+    const failedUsers = getFailedBotDeliveryUsers(selectionResult)
+
+    if (failedUsers.length === 0) {
+      toast.error("No failed bot deliveries were found for this round.")
+      return
+    }
+
+    await handleCopyToClipboard(
+      failedUsers
+        .map(
+          (user) =>
+            `${user.displayName} (${getPlatformLabel(user.platform)}) - ${getContactLabel(user)}`
+        )
+        .join("\n"),
+      "Failed contact list copied."
     )
   }
 
@@ -1633,6 +1743,23 @@ export function PlayWithViewersDashboardView({
     setSelectionDialogState(state)
     setSelectionInviteCode("")
     setSelectionInviteCodeType(DEFAULT_INVITE_CODE_TYPE)
+  }
+
+  function closeSelectionResultDialog() {
+    if (mustAcknowledgeFailedDeliveries) {
+      return
+    }
+
+    setSelectionResultState(null)
+    setFailedDeliveryAcknowledged(false)
+  }
+
+  function handleSelectionResultOpenChange(open: boolean) {
+    if (open) {
+      return
+    }
+
+    closeSelectionResultDialog()
   }
 
   if (isLoadingQueue) {
@@ -2778,14 +2905,23 @@ export function PlayWithViewersDashboardView({
       </Dialog>
 
       <Dialog
-        onOpenChange={(open) => {
-          if (!open) {
-            setSelectionResultState(null)
-          }
-        }}
+        onOpenChange={handleSelectionResultOpenChange}
         open={selectionResultState !== null}
       >
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent
+          className="sm:max-w-2xl"
+          onEscapeKeyDown={(event) => {
+            if (mustAcknowledgeFailedDeliveries) {
+              event.preventDefault()
+            }
+          }}
+          onPointerDownOutside={(event) => {
+            if (mustAcknowledgeFailedDeliveries) {
+              event.preventDefault()
+            }
+          }}
+          showCloseButton={!mustAcknowledgeFailedDeliveries}
+        >
           <DialogHeader>
             <DialogTitle>{selectionResultTitle}</DialogTitle>
             <DialogDescription>{selectionResultDescription}</DialogDescription>
@@ -2794,18 +2930,26 @@ export function PlayWithViewersDashboardView({
           <SelectionResultSummary
             onCopyContactList={handleCopyContactList}
             onCopyDiscordMentions={handleCopyDiscordMentions}
+            onCopyFailedContactList={handleCopyFailedContactList}
+            onCopyFailedDiscordMentions={handleCopyFailedDiscordMentions}
             onCopyTwitchHandles={handleCopyTwitchHandles}
             selectionResult={selectionResult}
             showTwitchTools={twitchEnabled}
           />
 
           <DialogFooter>
-            <Button
-              onClick={() => setSelectionResultState(null)}
-              variant="outline"
-            >
-              Close
-            </Button>
+            {mustAcknowledgeFailedDeliveries ? (
+              <Button
+                onClick={() => setFailedDeliveryAcknowledged(true)}
+                variant="destructive"
+              >
+                I understand, I'll contact them manually
+              </Button>
+            ) : (
+              <Button onClick={closeSelectionResultDialog} variant="outline">
+                Close
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

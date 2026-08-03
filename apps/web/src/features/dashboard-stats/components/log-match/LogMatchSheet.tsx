@@ -15,12 +15,12 @@ import type {
   DashboardAvailableMaps,
   DashboardAvailableModes,
   DashboardState,
-} from "@/features/dashboard-stats/lib/dashboard-stats-client"
+} from "@/features/dashboard-stats/lib/client/dashboard-state"
 import {
   DashboardStatsClientError,
   useLogDashboardMatch,
-} from "@/features/dashboard-stats/lib/dashboard-stats-client"
-import type { DashboardMatchLoggingMode } from "@/features/dashboard-stats/lib/dashboard-stats-logging-mode"
+} from "@/features/dashboard-stats/lib/client/dashboard-state"
+import type { DashboardMatchLoggingMode } from "@/features/dashboard-stats/lib/log-match/mode"
 import {
   getLogMatchStepDefinition,
   getSignedSrChange,
@@ -29,7 +29,7 @@ import {
   parseRequiredInteger,
   sanitizeSrChangeInput,
   type LogMatchStep,
-} from "@/features/dashboard-stats/lib/dashboard-stats-log-match-flow"
+} from "@/features/dashboard-stats/lib/log-match/flow"
 import { useLogMatchWizardStore } from "@/features/dashboard-stats/stores/log-match-wizard-store"
 import {
   Alert,

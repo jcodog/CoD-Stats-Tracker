@@ -6,14 +6,10 @@ import {
   LandingHeader,
   MARKETING_SHELL_MAX_WIDTH,
 } from "@/features/landing/components/LandingSections"
-import { resolveLandingMetricsInitialState } from "@/features/landing/lib/landing-server"
 import { resolveRequestViewport } from "@/lib/server/request-viewport"
 
 export async function LandingView() {
-  const [initialMetrics, viewport] = await Promise.all([
-    resolveLandingMetricsInitialState(),
-    resolveRequestViewport(),
-  ])
+  const viewport = await resolveRequestViewport()
 
   return (
     <div className="relative isolate flex min-h-screen flex-col bg-background [font-family:var(--font-geist-sans)]">
@@ -31,11 +27,7 @@ export async function LandingView() {
         id="main-content"
         className={`mx-auto flex w-full ${MARKETING_SHELL_MAX_WIDTH} flex-1 flex-col overflow-x-clip px-4 pt-20 pb-20 sm:px-6 sm:pt-24 lg:px-8`}
       >
-        {viewport === "mobile" ? (
-          <LandingMobileView initialMetrics={initialMetrics} />
-        ) : (
-          <LandingDesktopView initialMetrics={initialMetrics} />
-        )}
+        {viewport === "mobile" ? <LandingMobileView /> : <LandingDesktopView />}
       </main>
 
       <LandingFooter />

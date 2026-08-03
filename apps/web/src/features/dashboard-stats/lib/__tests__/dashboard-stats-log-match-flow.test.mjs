@@ -3,7 +3,7 @@ import { describe, expect, it } from "bun:test"
 import {
   getLogMatchStepDefinition,
   getVisibleLogMatchSteps,
-} from "../dashboard-stats-log-match-flow.ts"
+} from "../log-match/flow.ts"
 
 describe("dashboard stats log match flow", () => {
   it("places SR as the last basic step before review", () => {

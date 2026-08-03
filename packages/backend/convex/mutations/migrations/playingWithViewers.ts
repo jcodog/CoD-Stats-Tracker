@@ -5,11 +5,11 @@ import { internalMutation } from "../../_generated/server"
 import {
   getDisabledPlayWithViewersTwitchContext,
   normalizePlayWithViewersTwitchContext,
-} from "../../../src/lib/creatorToolsConfig"
+} from "../../../src/lib/creator-tools/play-with-viewers/config"
 import {
   normalizeStoredQueueParticipant,
   normalizeStoredInviteMode,
-} from "../../../src/lib/playingWithViewers"
+} from "../../../src/lib/creator-tools/play-with-viewers/queue-domain"
 
 const LEGACY_INVITE_MODE = "discord_dm"
 const CURRENT_BOT_DM_INVITE_MODE = "bot_dm"

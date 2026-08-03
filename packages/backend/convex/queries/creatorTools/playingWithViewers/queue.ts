@@ -4,17 +4,17 @@ import { internalQuery, query, type QueryCtx } from "../../../_generated/server"
 import {
   getQueuePositionForIdentity,
   normalizePlatformUserId,
-} from "../../../../src/lib/playingWithViewersIdentity"
+} from "../../../../src/lib/creator-tools/play-with-viewers/identity"
 import {
   normalizeStoredQueueParticipant,
   normalizeStoredInviteMode,
   queuePlatformValidator,
-} from "../../../../src/lib/playingWithViewers"
+} from "../../../../src/lib/creator-tools/play-with-viewers/queue-domain"
 import {
   requireCreatorToolsViewerAccess,
   requireOwnedCreatorQueueAccess,
-} from "../../../../src/lib/creatorToolsAccess"
-import { normalizePlayWithViewersTwitchContext } from "../../../../src/lib/creatorToolsConfig"
+} from "../../../../src/lib/creator-tools/play-with-viewers/access"
+import { normalizePlayWithViewersTwitchContext } from "../../../../src/lib/creator-tools/play-with-viewers/config"
 
 function normalizeViewerQueue(queue: Doc<"viewerQueues">) {
   return {

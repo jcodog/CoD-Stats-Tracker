@@ -2,9 +2,9 @@
 
 import type { CSSProperties } from "react"
 
-import type { DashboardSessionOverview } from "@/features/dashboard-stats/lib/dashboard-stats-client"
-import { formatDashboardPercent } from "@/features/dashboard-stats/lib/dashboard-stats-format"
-import { getDashboardMetricTextStyle } from "@/features/dashboard-stats/lib/dashboard-stats-visuals"
+import type { DashboardSessionOverview } from "@/features/dashboard-stats/lib/client/dashboard-state"
+import { formatDashboardPercent } from "@/features/dashboard-stats/lib/formatting/numbers"
+import { getDashboardMetricTextStyle } from "@/features/dashboard-stats/lib/visuals/metrics"
 import { cn } from "@workspace/ui/lib/utils"
 
 function SummaryMetric({

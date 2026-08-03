@@ -2,8 +2,8 @@ import "server-only"
 
 import { auth } from "@clerk/nextjs/server"
 
-import { DashboardStatsEditorClient } from "@/features/dashboard-stats/components/DashboardStatsEditorClient"
-import { resolveDashboardStatsEditorInitialState } from "@/features/dashboard-stats/lib/dashboard-stats-server"
+import { DashboardStatsEditorClient } from "@/features/dashboard-stats/components/editor/EditorClient"
+import { resolveDashboardStatsEditorInitialState } from "@/features/dashboard-stats/lib/server/initial-state"
 import { resolveRequestViewport } from "@/lib/server/request-viewport"
 
 export async function DashboardStatsEditorView() {

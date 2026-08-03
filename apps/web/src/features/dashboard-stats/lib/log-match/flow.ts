@@ -1,6 +1,6 @@
 "use client"
 
-import type { DashboardMatchLoggingMode } from "@/features/dashboard-stats/lib/dashboard-stats-logging-mode"
+import type { DashboardMatchLoggingMode } from "@/features/dashboard-stats/lib/log-match/mode"
 
 export type LogMatchStep =
   | "map"

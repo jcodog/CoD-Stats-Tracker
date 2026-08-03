@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test"
 
-import { resolveDashboardStatsEditorInitialState } from "../dashboard-stats-server.ts"
+import { resolveDashboardStatsEditorInitialState } from "../server/initial-state.ts"
 
 describe("dashboard stats server initial state", () => {
   it("returns authFailed without querying when the Convex token is missing", async () => {

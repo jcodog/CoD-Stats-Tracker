@@ -8,11 +8,11 @@ import { getConvexEnv } from "../../../env"
 import {
   participantQueueRankValidator,
   queueNotificationMethodValidator,
-} from "../../../../src/lib/playingWithViewers"
+} from "../../../../src/lib/creator-tools/play-with-viewers/queue-domain"
 import {
   isPlayWithViewersTwitchEnabled,
   normalizePlayWithViewersTwitchContext,
-} from "../../../../src/lib/creatorToolsConfig"
+} from "../../../../src/lib/creator-tools/play-with-viewers/config"
 import { requireValidTwitchWorkerSecret } from "../../../../src/lib/workerAuth"
 import type {
   QueueJoinResult,

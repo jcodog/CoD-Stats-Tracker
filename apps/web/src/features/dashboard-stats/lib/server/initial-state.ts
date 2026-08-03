@@ -1,7 +1,7 @@
 import { fetchQuery } from "convex/nextjs"
 
 import { api } from "@workspace/backend/convex/_generated/api"
-import type { DashboardState } from "@/features/dashboard-stats/lib/dashboard-stats-client"
+import type { DashboardState } from "@/features/dashboard-stats/lib/client/dashboard-state"
 
 export type DashboardStatsEditorInitialState = {
   authFailed: boolean

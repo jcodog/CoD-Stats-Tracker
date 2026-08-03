@@ -1,10 +1,8 @@
 import Link from "next/link"
 import type { ReactElement, SVGProps } from "react"
 
-import { LandingLiveStats } from "@/features/landing/components/LandingLiveStats"
 import { NavbarAuthActions } from "@/features/landing/components/NavbarAuthActions"
 import { PUBLIC_SITE_ANALYTICS_URL } from "@/lib/site-analytics"
-import type { LandingMetricsResponse } from "@workspace/backend/landing/metrics"
 import { ClerkIconLight } from "@workspace/ui/components/ui/svgs/clerkIconLight"
 import { ClerkWordmarkDark } from "@workspace/ui/components/ui/svgs/clerkWordmarkDark"
 import { Cloudflare } from "@workspace/ui/components/ui/svgs/cloudflare"
@@ -26,6 +24,7 @@ import {
   AvatarFallback,
   AvatarImage,
 } from "@workspace/ui/components/avatar"
+import { Button } from "@workspace/ui/components/button"
 import { cn } from "@workspace/ui/lib/utils"
 
 export type LandingViewport = "desktop" | "mobile"
@@ -33,44 +32,44 @@ export const MARKETING_SHELL_MAX_WIDTH = "max-w-[90rem]"
 
 const MARKETING_FRAME_CLASSNAME = `mx-auto w-full ${MARKETING_SHELL_MAX_WIDTH} px-4 sm:px-6 lg:px-8`
 
-const dashboardReviewItems = [
+const productSteps = [
   {
-    title: "Session snapshot",
+    title: "Track ranked sessions",
     description:
-      "Open a session and read start SR, current SR, net SR, and win rate without digging through match history first.",
+      "Start a ranked run, log match outcomes, and keep SR movement attached to the session you are reviewing.",
   },
   {
-    title: "SR progression",
+    title: "Review performance",
     description:
-      "See how a run actually moved match by match so streaks, recoveries, and drops are obvious at a glance.",
+      "Use the dashboard to compare wins, losses, SR changes, recent matches, and session trends in one place.",
   },
   {
-    title: "Daily outcomes",
+    title: "Use creator tools where relevant",
     description:
-      "Review wins, losses, and daily SR gain together when you want the shape of a session instead of a single stat.",
-  },
-  {
-    title: "Recent matches",
-    description:
-      "Keep the latest match log close to the rest of the dashboard so review stays fast and focused.",
+      "Creator-plan accounts can manage community tools such as Play With Viewers without a separate public creator page.",
   },
 ] as const
 
-const platformSignalItems = [
+const dashboardReviewItems = [
   {
-    title: "Account-linked tracking",
-    detail:
-      "CodStats keeps match activity tied to the signed-in account so the same data flows from live sync into the dashboard.",
+    title: "Ranked sessions",
+    description:
+      "Create a current ranked session and keep match logs tied to that run.",
   },
   {
-    title: "Live ranked activity",
-    detail:
-      "The landing panel shows the public pulse by default, then switches to your own totals once you sign in.",
+    title: "Match and stat tracking",
+    description:
+      "Record outcomes, SR changes, maps, modes, and optional match details.",
   },
   {
-    title: "Built for fast review",
-    detail:
-      "The product is shaped around quick ranked-session reads, not raw log dumping or oversized admin-style reporting.",
+    title: "Graphical stat views",
+    description:
+      "Review SR timelines, win/loss breakdowns, and daily performance where session data exists.",
+  },
+  {
+    title: "Creator tools on Creator",
+    description:
+      "Creator-plan accounts unlock community queue tooling for ranked creators.",
   },
 ] as const
 
@@ -78,17 +77,17 @@ const creatorToolItems = [
   {
     title: "Play With Viewers queue",
     detail:
-      "Creators can open a ranked viewer queue, set rank bounds, control matches per viewer, and publish the queue straight into Discord.",
+      "Creator-plan accounts can open a ranked viewer queue, set rank bounds, control matches per viewer, and publish the queue into Discord.",
   },
   {
-    title: "Discord-first selection flow",
+    title: "Selection and invite flow",
     detail:
       "Queue management, batch selection, and invite handling stay close to the creator dashboard so viewer lobbies can move without chaos.",
   },
   {
-    title: "Why creators matter here",
+    title: "Plan-gated creator workspace",
     detail:
-      "Ranked creators sit at the center of community play. Supporting them makes CodStats more useful for the wider CoD ranked ecosystem, not just the person tracking solo sessions.",
+      "Creator tools are available through the Creator plan and authenticated creator workspace, not a public creator directory.",
   },
 ] as const
 
@@ -172,11 +171,8 @@ export function LandingBackground() {
       className="pointer-events-none fixed inset-0 -z-10 overflow-hidden"
     >
       <div className="absolute inset-0 bg-background/90" />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,hsl(var(--background)/0.12),transparent_42%)]" />
-      <div className="absolute -top-32 left-1/2 h-96 w-96 -translate-x-[130%] rounded-full bg-sky-200/34 blur-3xl" />
-      <div className="absolute -top-16 left-1/2 h-112 w-md -translate-x-[10%] rounded-full bg-emerald-200/26 blur-3xl" />
-      <div className="absolute top-64 -right-40 h-80 w-80 rounded-full bg-blue-100/38 blur-3xl" />
-      <div className="absolute inset-0 bg-linear-to-br from-background/24 via-transparent to-background/16" />
+      <div className="absolute inset-0 bg-[linear-gradient(to_bottom,hsl(var(--muted)/0.16),transparent_18rem)]" />
+      <div className="absolute inset-x-0 top-0 border-t border-border/50" />
       <div className="absolute inset-x-0 bottom-0 h-64 bg-linear-to-t from-background via-background/96 to-transparent" />
     </div>
   )
@@ -251,29 +247,34 @@ export function LandingHeroSection({
               : "max-w-[44rem] text-5xl leading-[0.94] font-semibold tracking-tight text-balance lg:text-6xl"
           }
         >
-          Track Every Match. Learn Faster. Win More.
+          Ranked sessions, match history, and creator tools in one place.
         </h1>
         <p className="max-w-[34rem] text-base leading-8 text-pretty text-foreground/84 sm:text-lg">
-          CodStats turns ranked sessions into a clear performance view so you
-          can spot patterns and improve faster.
+          CodStats helps Call of Duty ranked players track sessions, understand
+          performance, and manage creator/community tools where relevant.
         </p>
       </div>
 
-      <div className="grid gap-4">
+      <div
+        className={
+          isMobileView ? "grid gap-2" : "flex flex-wrap items-center gap-3"
+        }
+      >
         <NavbarAuthActions
           context="hero"
           layout={isMobileView ? "stacked" : "inline"}
         />
+        <Button asChild variant="outline">
+          <Link href="/pricing">View pricing</Link>
+        </Button>
       </div>
     </section>
   )
 }
 
-export function LandingSnapshotSection({
-  initialMetrics,
+export function LandingProductSection({
   viewport,
 }: {
-  initialMetrics: LandingMetricsResponse | null
   viewport: LandingViewport
 }) {
   const isMobileView = viewport === "mobile"
@@ -288,16 +289,26 @@ export function LandingSnapshotSection({
     >
       <div className="grid gap-2">
         <h2 className="text-lg font-semibold tracking-tight sm:text-xl">
-          Live ranked activity
+          What CodStats does
         </h2>
         <p className="max-w-[30rem] text-sm leading-7 text-foreground/80">
-          CodStats keeps ranked match totals current and account-linked, then
-          expands that same data into the full dashboard once you sign in.
+          The product is centered on ranked review: track a session, log the
+          matches that shaped it, and read the result without a noisy dashboard.
         </p>
       </div>
 
-      <div className="mt-5">
-        <LandingLiveStats initialData={initialMetrics} />
+      <div className="mt-5 border-y border-border/70">
+        {productSteps.map((item) => (
+          <article
+            className="grid gap-1 border-b border-border/70 py-4 last:border-b-0"
+            key={item.title}
+          >
+            <h3 className="text-sm font-semibold">{item.title}</h3>
+            <p className="text-sm leading-6 text-foreground/78">
+              {item.description}
+            </p>
+          </article>
+        ))}
       </div>
     </aside>
   )
@@ -320,11 +331,11 @@ export function LandingFeatureList({
     >
       <div className="grid gap-2">
         <h2 className="text-2xl font-semibold tracking-tight text-balance sm:text-3xl">
-          What You Can Review Inside the Dashboard
+          What you can do
         </h2>
         <p className="max-w-[21rem] text-sm leading-7 text-pretty text-foreground/80 sm:max-w-[23rem] sm:text-base">
-          CodStats is built around ranked-session review, with the core panels
-          focused on the data you actually need after a run.
+          Start with match tracking, then upgrade when you need more room,
+          stronger views, or creator tools.
         </p>
       </div>
 
@@ -353,56 +364,6 @@ export function LandingFeatureList({
   )
 }
 
-export function LandingPlatformList({
-  viewport,
-}: {
-  viewport: LandingViewport
-}) {
-  const isMobileView = viewport === "mobile"
-
-  return (
-    <section
-      className={
-        isMobileView
-          ? "grid gap-4 pb-10"
-          : "grid gap-8 pb-10 lg:grid-cols-[minmax(0,18rem)_minmax(0,1fr)] lg:items-start"
-      }
-    >
-      <div className="grid gap-2">
-        <h2 className="text-2xl font-semibold tracking-tight text-balance sm:text-3xl">
-          What CodStats Keeps in Sync
-        </h2>
-        <p className="max-w-[21rem] text-sm leading-7 text-pretty text-foreground/80 sm:max-w-[23rem] sm:text-base">
-          The landing page and dashboard are reading from the same product
-          system, with account-specific tracking layered in after sign in.
-        </p>
-      </div>
-
-      <div className="border-y border-border/70">
-        {platformSignalItems.map((item) => (
-          <article
-            key={item.title}
-            className={
-              isMobileView
-                ? "border-b border-border/70 py-5 last:border-b-0"
-                : "border-b border-border/70 py-6 last:border-b-0"
-            }
-          >
-            <div className="grid gap-1">
-              <h3 className="text-lg font-semibold tracking-tight">
-                {item.title}
-              </h3>
-              <p className="max-w-[44rem] text-sm leading-7 wrap-break-word text-foreground/80">
-                {item.detail}
-              </p>
-            </div>
-          </article>
-        ))}
-      </div>
-    </section>
-  )
-}
-
 export function LandingCreatorToolsSection({
   viewport,
 }: {
@@ -420,12 +381,11 @@ export function LandingCreatorToolsSection({
     >
       <div className="grid gap-2">
         <h2 className="text-2xl font-semibold tracking-tight text-balance sm:text-3xl">
-          Creator Tools Available Now
+          Creator tools on Creator
         </h2>
         <p className="max-w-[21rem] text-sm leading-7 text-pretty text-foreground/80 sm:max-w-[23rem] sm:text-base">
-          CodStats already supports ranked creators directly, because community
-          queues and creator-led lobbies are a real part of how this scene
-          plays.
+          Creator tooling is plan-gated and account-based. It supports creator
+          workflows without implying a public creator page.
         </p>
       </div>
 
@@ -454,6 +414,45 @@ export function LandingCreatorToolsSection({
   )
 }
 
+export function LandingPricingTeaser({
+  viewport,
+}: {
+  viewport: LandingViewport
+}) {
+  const isMobileView = viewport === "mobile"
+
+  return (
+    <section
+      className={
+        isMobileView
+          ? "grid gap-4 border-y border-border/70 py-6"
+          : "grid gap-8 border-y border-border/70 py-8 lg:grid-cols-[minmax(0,18rem)_minmax(0,1fr)] lg:items-center"
+      }
+    >
+      <div className="grid gap-2">
+        <h2 className="text-2xl font-semibold tracking-tight text-balance sm:text-3xl">
+          Plans stay simple
+        </h2>
+        <p className="max-w-[23rem] text-sm leading-7 text-foreground/80 sm:text-base">
+          Premium is for deeper ranked review. Creator adds creator workspace
+          tools.
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <p className="max-w-[38rem] text-sm leading-7 text-foreground/80">
+          Pricing is shown on the pricing page with estimated currencies where
+          available. Stripe Checkout confirms the final currency, discounts,
+          taxes, and total.
+        </p>
+        <Button asChild>
+          <Link href="/pricing">View pricing</Link>
+        </Button>
+      </div>
+    </section>
+  )
+}
+
 export function LandingStackSection({
   viewport,
 }: {
@@ -471,9 +470,7 @@ export function LandingStackSection({
           Built on tools you can inspect
         </h2>
         <p className="max-w-[42rem] text-sm leading-7 text-pretty text-foreground/78 sm:text-base">
-          CodStats keeps the core stack legible: typed app code, trusted
-          billing, fast cached paths, and infrastructure that stays easy to
-          reason about.
+          Open-source, typed, and built on inspectable tools.
         </p>
       </div>
 

@@ -5,8 +5,8 @@ import {
   normalizeStoredQueueParticipant,
   queueNotificationMethodValidator,
   type QueuePlatform,
-} from "../../../lib/playingWithViewers"
-import { normalizePlayWithViewersTwitchContext } from "../../../lib/creatorToolsConfig"
+} from "../../../../src/lib/creator-tools/play-with-viewers/queue-domain"
+import { normalizePlayWithViewersTwitchContext } from "../../../../src/lib/creator-tools/play-with-viewers/config"
 
 type NotificationMutationCtx = MutationCtx
 type QueueRoundSelectedUser = Doc<"viewerQueueRounds">["selectedUsers"][number]
@@ -31,6 +31,35 @@ export type RecordNotificationResult = {
 }
 export type DeferNotificationResult = RecordNotificationResult & {
   nextAttemptAt?: number
+}
+export type RecordDiscordDmFailureOperationalLogResult = {
+  logId: Id<"viewerQueueOperationalLogs">
+}
+
+const DISCORD_DM_FAILED_EVENT_TYPE = "play_with_viewers.discord_dm_failed"
+const MAX_OPERATIONAL_LOG_TEXT_LENGTH = 500
+
+function sanitizeOperationalLogText(value: string | undefined) {
+  const normalized = value?.trim().replace(/\s+/g, " ")
+
+  if (!normalized) {
+    return undefined
+  }
+
+  const redacted = normalized
+    .replace(/\b(Bot|Bearer)\s+[A-Za-z0-9._~-]+/giu, "$1 [redacted]")
+    .replace(
+      /\b(authorization\s*[:=]\s*)[^\s,;}]+/giu,
+      "$1[redacted]"
+    )
+    .replace(
+      /\b((?:invite|lobby|party|private match)\s*(?:code)?\s*[:=]\s*)[^\s,;}]+/giu,
+      "$1[redacted]"
+    )
+
+  return redacted.length > MAX_OPERATIONAL_LOG_TEXT_LENGTH
+    ? `${redacted.slice(0, MAX_OPERATIONAL_LOG_TEXT_LENGTH)}...`
+    : redacted
 }
 
 function normalizeRoundSelectedUser(
@@ -319,6 +348,45 @@ export const recordNotificationResult = internalMutation({
       notificationId: args.notificationId,
       notificationStatus: args.notificationStatus,
     }
+  },
+})
+
+export const recordDiscordDmFailureOperationalLog = internalMutation({
+  args: {
+    discordApiCode: v.optional(v.number()),
+    discordApiMessage: v.optional(v.string()),
+    discordHttpStatus: v.optional(v.number()),
+    displayName: v.optional(v.string()),
+    internalErrorMessage: v.optional(v.string()),
+    notificationId: v.id("viewerQueueNotifications"),
+    platformUserId: v.string(),
+    queueId: v.id("viewerQueues"),
+    roundId: v.id("viewerQueueRounds"),
+    username: v.optional(v.string()),
+  },
+  handler: async (
+    ctx,
+    args
+  ): Promise<RecordDiscordDmFailureOperationalLogResult> => {
+    const logId = await ctx.db.insert("viewerQueueOperationalLogs", {
+      discordApiCode: args.discordApiCode,
+      discordApiMessage: sanitizeOperationalLogText(args.discordApiMessage),
+      discordHttpStatus: args.discordHttpStatus,
+      displayName: sanitizeOperationalLogText(args.displayName),
+      eventType: DISCORD_DM_FAILED_EVENT_TYPE,
+      internalErrorMessage: sanitizeOperationalLogText(
+        args.internalErrorMessage
+      ),
+      notificationId: args.notificationId,
+      platformUserId: args.platformUserId,
+      queueId: args.queueId,
+      roundId: args.roundId,
+      severity: "info",
+      timestamp: Date.now(),
+      username: sanitizeOperationalLogText(args.username),
+    })
+
+    return { logId }
   },
 })
 

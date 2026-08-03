@@ -5,7 +5,7 @@ import type { MutationCtx } from "../../../_generated/server"
 import {
   findQueueEntryForIdentity,
   resolveQueueIdentity,
-} from "../../../../src/lib/playingWithViewersIdentity"
+} from "../../../../src/lib/creator-tools/play-with-viewers/identity"
 import {
   DEFAULT_INVITE_CODE_TYPE,
   inviteCodeTypeValidator,
@@ -22,12 +22,12 @@ import {
   type ParticipantRankValue,
   type QueueConfigRankValue,
   type QueuePlatform,
-} from "../../../../src/lib/playingWithViewers"
+} from "../../../../src/lib/creator-tools/play-with-viewers/queue-domain"
 import {
   getDisabledPlayWithViewersTwitchContext,
   type PlayWithViewersStoredTwitchContextLike,
   isPlayWithViewersTwitchEnabled,
-} from "../../../../src/lib/creatorToolsConfig"
+} from "../../../../src/lib/creator-tools/play-with-viewers/config"
 
 const selectedQueueUserValidator = v.object({
   platform: queuePlatformValidator,

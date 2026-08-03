@@ -1,9 +1,9 @@
-import type { Doc, Id } from "../../convex/_generated/dataModel"
-import type { MutationCtx, QueryCtx } from "../../convex/_generated/server"
+import type { Doc, Id } from "../../../../convex/_generated/dataModel"
+import type { MutationCtx, QueryCtx } from "../../../../convex/_generated/server"
 import {
   normalizeStoredQueueParticipantIdentity,
   type QueuePlatform,
-} from "./playingWithViewers"
+} from "./queue-domain"
 
 type IdentityDataCtx = Pick<QueryCtx, "db"> | Pick<MutationCtx, "db">
 type QueueEntryDoc = Doc<"viewerQueueEntries">

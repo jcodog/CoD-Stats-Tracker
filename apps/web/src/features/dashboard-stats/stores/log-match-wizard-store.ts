@@ -2,9 +2,9 @@
 
 import { create } from "zustand"
 
-import type { LogMatchStep } from "@/features/dashboard-stats/lib/dashboard-stats-log-match-flow"
+import type { LogMatchStep } from "@/features/dashboard-stats/lib/log-match/flow"
 
-export type { LogMatchStep } from "@/features/dashboard-stats/lib/dashboard-stats-log-match-flow"
+export type { LogMatchStep } from "@/features/dashboard-stats/lib/log-match/flow"
 
 type LogMatchWizardState = {
   deaths: string

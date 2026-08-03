@@ -3,6 +3,7 @@ import { describe, expect, it } from "bun:test"
 import {
   deferNotification,
   initializeRoundNotifications,
+  recordDiscordDmFailureOperationalLog,
   recordNotificationResult,
 } from "../creatorTools/playingWithViewers/notifications.ts"
 import { getPendingTwitchNotifications } from "../../queries/creatorTools/playingWithViewers/twitch.ts"
@@ -233,6 +234,117 @@ describe("playing with viewers notification persistence", () => {
       notificationMethod: "twitch_chat_fallback",
       notificationStatus: "sent",
     })
+  })
+
+  it("records Discord DM failures and mirrors the safe creator-facing reason", async () => {
+    const roundId = "viewerQueueRounds:1"
+    const failureReason =
+      "Couldn't DM this viewer. Ask them to enable DMs or contact them manually."
+    const ctx = createMutationCtx({
+      viewerQueueRounds: [
+        createQueueRound({
+          _id: roundId,
+          selectedUsers: [
+            createSelectedUser({
+              platform: "discord",
+              platformUserId: "discord-1",
+            }),
+          ],
+        }),
+      ],
+    })
+
+    await withMockedNow(1_000, () =>
+      initializeRoundNotifications._handler(ctx, { roundId })
+    )
+
+    const notificationId = ctx.db.tables.viewerQueueNotifications[0]._id
+    await withMockedNow(2_000, () =>
+      recordNotificationResult._handler(ctx, {
+        notificationFailureReason: failureReason,
+        notificationId,
+        notificationMethod: "discord_dm",
+        notificationStatus: "failed",
+      })
+    )
+
+    expect(ctx.db.tables.viewerQueueNotifications[0]).toMatchObject({
+      attemptCount: 1,
+      notificationFailureReason: failureReason,
+      notificationMethod: "discord_dm",
+      notificationStatus: "failed",
+    })
+    expect(ctx.db.tables.viewerQueueRounds[0].selectedUsers[0]).toMatchObject({
+      dmFailureReason: failureReason,
+      dmStatus: "failed",
+      notificationFailureReason: failureReason,
+      notificationMethod: "discord_dm",
+      notificationStatus: "failed",
+    })
+  })
+
+  it("persists Discord DM failure details to a non-email operational log", async () => {
+    const queueId = "viewerQueues:1"
+    const roundId = "viewerQueueRounds:1"
+    const notificationId = "viewerQueueNotifications:1"
+    const ctx = createMutationCtx({
+      viewerQueueNotifications: [
+        {
+          _id: notificationId,
+          attemptCount: 1,
+          createdAt: 1_000,
+          displayName: "Discord Viewer",
+          lastAttemptAt: 2_000,
+          nextAttemptAt: 1_000,
+          notificationFailureReason: "Couldn't DM this viewer.",
+          notificationMethod: "discord_dm",
+          notificationStatus: "failed",
+          platform: "discord",
+          platformUserId: "123456789",
+          queueId,
+          rank: "gold",
+          roundId,
+          updatedAt: 2_000,
+          username: "discord_viewer",
+        },
+      ],
+    })
+
+    const result = await withMockedNow(3_000, () =>
+      recordDiscordDmFailureOperationalLog._handler(ctx, {
+        discordApiCode: 50007,
+        discordApiMessage: "Cannot send messages to this user",
+        discordHttpStatus: 403,
+        displayName: "Discord Viewer",
+        internalErrorMessage:
+          "Failed to send DM: Cannot send messages to this user invite code ABC123",
+        notificationId,
+        platformUserId: "123456789",
+        queueId,
+        roundId,
+        username: "discord_viewer",
+      })
+    )
+
+    expect(result.logId).toBe("viewerQueueOperationalLogs:1")
+    expect(ctx.db.tables.viewerQueueOperationalLogs).toHaveLength(1)
+    expect(ctx.db.tables.viewerQueueOperationalLogs[0]).toMatchObject({
+      discordApiCode: 50007,
+      discordApiMessage: "Cannot send messages to this user",
+      discordHttpStatus: 403,
+      displayName: "Discord Viewer",
+      eventType: "play_with_viewers.discord_dm_failed",
+      notificationId,
+      platformUserId: "123456789",
+      queueId,
+      roundId,
+      severity: "info",
+      timestamp: 3_000,
+      username: "discord_viewer",
+    })
+    expect(
+      ctx.db.tables.viewerQueueOperationalLogs[0].internalErrorMessage
+    ).toContain("invite code [redacted]")
   })
 
   it("defers pending Twitch notifications and remains idempotent after final delivery", async () => {

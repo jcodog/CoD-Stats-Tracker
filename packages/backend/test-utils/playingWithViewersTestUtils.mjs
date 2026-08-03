@@ -26,6 +26,11 @@ const INDEX_FIELDS = {
     by_roundId: ["roundId"],
     by_roundId_and_platformUserId: ["roundId", "platform", "platformUserId"],
   },
+  viewerQueueOperationalLogs: {
+    by_eventType_timestamp: ["eventType", "timestamp"],
+    by_queueId_timestamp: ["queueId", "timestamp"],
+    by_roundId_timestamp: ["roundId", "timestamp"],
+  },
   viewerQueues: {
     by_creatorUserId: ["creatorUserId"],
     by_guildId_and_channelId: ["guildId", "channelId"],
@@ -149,6 +154,7 @@ export class FakeDb {
       viewerQueueCooldowns: [],
       viewerQueueEntries: [],
       viewerQueueNotifications: [],
+      viewerQueueOperationalLogs: [],
       viewerQueueRounds: [],
       viewerQueues: [],
       ...(initialTables ?? {}),

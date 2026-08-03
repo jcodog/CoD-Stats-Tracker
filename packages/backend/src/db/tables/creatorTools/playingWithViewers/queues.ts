@@ -1,7 +1,7 @@
 import { defineTable } from "convex/server"
 import { v } from "convex/values"
 import { competitiveRankValidator } from "../../../../../src/lib/rankValidator"
-import { storedInviteModeValidator } from "../../../../../src/lib/playingWithViewers"
+import { storedInviteModeValidator } from "../../../../../src/lib/creator-tools/play-with-viewers/queue-domain"
 
 export const viewerQueues = defineTable({
   creatorUserId: v.id("users"),

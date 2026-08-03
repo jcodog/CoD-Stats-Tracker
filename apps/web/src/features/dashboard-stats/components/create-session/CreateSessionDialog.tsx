@@ -3,12 +3,12 @@
 import { useShallow } from "zustand/react/shallow"
 
 import type { Id } from "@workspace/backend/convex/_generated/dataModel"
-import type { DashboardState } from "@/features/dashboard-stats/lib/dashboard-stats-client"
+import type { DashboardState } from "@/features/dashboard-stats/lib/client/dashboard-state"
 import {
   DashboardStatsClientError,
   useCreateDashboardSession,
   useDashboardAvailableUsernames,
-} from "@/features/dashboard-stats/lib/dashboard-stats-client"
+} from "@/features/dashboard-stats/lib/client/dashboard-state"
 import { useCreateSessionFlowStore } from "@/features/dashboard-stats/stores/create-session-flow-store"
 import { AppSelect } from "@/components/AppSelect"
 import {

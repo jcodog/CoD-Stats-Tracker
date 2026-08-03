@@ -4,7 +4,7 @@ import {
   buildInviteMessagePreview,
   getInviteCodeTypeLabel,
   renderInviteCodeInstructions,
-} from "../playingWithViewers.js"
+} from "../creator-tools/play-with-viewers/queue-domain.js"
 
 describe("playing with viewers invite templates", () => {
   it("renders party code instructions with the selected code", () => {

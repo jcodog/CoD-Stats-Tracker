@@ -1,11 +1,11 @@
 "use client"
 
 import Link from "next/link"
+import { useState } from "react"
 import {
   IconArrowRight,
   IconChartLine,
   IconCrown,
-  IconSparkles,
   IconX,
 } from "@tabler/icons-react"
 
@@ -40,8 +40,7 @@ export function DashboardUpgradeButton({
     <Button
       asChild
       className={cn(
-        "border-primary/40 bg-primary/15 text-primary-foreground shadow-[0_0_0.9rem_hsl(var(--primary)/0.16)] hover:bg-primary/25",
-        "supports-backdrop-filter:bg-primary/12 supports-backdrop-filter:backdrop-blur-xs",
+        "border-primary/40 bg-primary text-primary-foreground hover:bg-primary/90",
         className
       )}
       size={size}
@@ -65,24 +64,20 @@ export function DashboardUpgradePrompt({
   compact = false,
   href = "/settings/billing/plan",
 }: DashboardUpgradePromptProps) {
+  const [dismissed, setDismissed] = useState(false)
+
+  if (dismissed) {
+    return null
+  }
+
   return (
     <section
       className={cn(
-        "relative isolate overflow-hidden rounded-xl border border-primary/20 bg-background",
-        "shadow-[0_0_0_1px_hsl(var(--primary)/0.05),0_1.2rem_3rem_hsl(var(--background)/0.45)]",
+        "rounded-lg border border-primary/25 bg-background",
         compact ? "px-4 py-4" : "px-5 py-5 sm:px-6 sm:py-5",
         className
       )}
     >
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_18%_20%,hsl(var(--primary)/0.18),transparent_34%),linear-gradient(110deg,hsl(var(--primary)/0.08),transparent_45%)]"
-      />
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute right-0 bottom-0 -z-10 h-28 w-72 translate-x-16 translate-y-10 rounded-full bg-primary/10 blur-3xl"
-      />
-
       <div
         className={cn(
           "grid gap-4",
@@ -94,7 +89,7 @@ export function DashboardUpgradePrompt({
         <div className="grid gap-3">
           <div className="flex flex-wrap items-center gap-2">
             <Badge
-              className="border-primary/25 bg-primary/10 text-primary-foreground"
+              className="rounded-md border-primary/25 bg-primary/10 text-foreground"
               variant="outline"
             >
               Free plan
@@ -108,15 +103,14 @@ export function DashboardUpgradePrompt({
             <h2
               className={cn(
                 "font-semibold tracking-tight text-balance",
-                compact ? "text-lg" : "text-xl sm:text-2xl"
+                compact ? "text-base" : "text-lg"
               )}
             >
-              Unlock the full ranked stats experience
+              Unlock deeper ranked insight
             </h2>
             <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-              Premium adds advanced analytics, graphical stat cards, multiple
-              sessions, and the tools that make your match history easier to
-              review.
+              Upgrade when you want advanced analytics, graphical stat views,
+              multiple sessions, and creator tools on Creator.
             </p>
           </div>
 
@@ -130,15 +124,15 @@ export function DashboardUpgradePrompt({
                 Advanced analytics
               </span>
               <span className="inline-flex items-center gap-2">
-                <IconSparkles
+                <IconChartLine
                   aria-hidden="true"
                   className="size-4 text-primary"
                 />
-                Better stat cards
+                Graphical stat views
               </span>
               <span className="inline-flex items-center gap-2">
                 <IconCrown aria-hidden="true" className="size-4 text-primary" />
-                Creator tools available
+                Creator tools on Creator
               </span>
             </div>
           ) : null}
@@ -148,14 +142,23 @@ export function DashboardUpgradePrompt({
           <Button
             asChild
             className="border-primary/40 bg-primary text-primary-foreground hover:bg-primary/90"
+            size="sm"
           >
             <Link href={href}>
-              View plans
+              Upgrade
               <IconArrowRight aria-hidden="true" />
             </Link>
           </Button>
 
           <UpgradeDialog href={href} />
+          <Button
+            aria-label="Dismiss upgrade prompt"
+            onClick={() => setDismissed(true)}
+            size="icon"
+            variant="ghost"
+          >
+            <IconX aria-hidden="true" />
+          </Button>
         </div>
       </div>
     </section>
@@ -166,20 +169,18 @@ function UpgradeDialog({ href }: { href: string }) {
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <Button variant="outline">What do I get?</Button>
+        <Button size="sm" variant="outline">
+          What do I get?
+        </Button>
       </DialogTrigger>
 
       <DialogContent className="overflow-hidden border-border/70 bg-background p-0 sm:max-w-lg">
-        <div className="relative isolate px-5 pt-5 pb-4 sm:px-6 sm:pt-6">
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_18%_5%,hsl(var(--primary)/0.18),transparent_34%)]"
-          />
+        <div className="px-5 pt-5 pb-4 sm:px-6 sm:pt-6">
           <DialogHeader>
             <div className="flex items-start justify-between gap-4 pr-8">
               <div className="grid gap-2">
                 <Badge
-                  className="w-fit border-primary/25 bg-primary/10 text-primary-foreground"
+                  className="w-fit rounded-md border-primary/25 bg-primary/10 text-foreground"
                   variant="outline"
                 >
                   Premium
@@ -206,7 +207,7 @@ function UpgradeDialog({ href }: { href: string }) {
                 className="flex gap-3 rounded-lg border border-border/60 bg-muted/20 px-3 py-2.5"
                 key={item}
               >
-                <IconSparkles
+                <IconChartLine
                   aria-hidden="true"
                   className="mt-0.5 size-4 shrink-0 text-primary"
                 />

@@ -2,17 +2,17 @@
 
 import { useMemo, useState } from "react"
 
-import type { DashboardRecentSessionMatches } from "@/features/dashboard-stats/lib/dashboard-stats-client"
+import type { DashboardRecentSessionMatches } from "@/features/dashboard-stats/lib/client/dashboard-state"
 import {
   formatDashboardDateTime,
   getMapLabel,
   getModeLabel,
   getTimeRangeStart,
-} from "@/features/dashboard-stats/lib/dashboard-stats-format"
+} from "@/features/dashboard-stats/lib/formatting/numbers"
 import {
   getDashboardMetricTextStyle,
   getDashboardOutcomeBadgeStyle,
-} from "@/features/dashboard-stats/lib/dashboard-stats-visuals"
+} from "@/features/dashboard-stats/lib/visuals/metrics"
 import type { DashboardTimeRange } from "@/features/dashboard-stats/stores/dashboard-ui-store"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"

@@ -6,7 +6,7 @@ import {
   participantRankValidator,
   type CompetitiveRank,
   type ParticipantRank,
-} from "./rankValidator"
+} from "../../rankValidator"
 
 export { getParticipantRankLabel }
 

@@ -5,7 +5,11 @@ import { startTransition, useMemo, useState } from "react"
 import { useShallow } from "zustand/react/shallow"
 
 import { AppSelect } from "@/components/AppSelect"
-import type { DashboardState } from "@/features/dashboard-stats/lib/dashboard-stats-client"
+import {
+  DashboardUpgradeButton,
+  DashboardUpgradePrompt,
+} from "@/features/billing/components/DashboardUpgradeCta"
+import type { DashboardState } from "@/features/dashboard-stats/lib/client/dashboard-state"
 import {
   DashboardStatsClientError,
   useDashboardAvailableMaps,
@@ -16,15 +20,15 @@ import {
   useDashboardSessionSrTimeline,
   useDashboardStatsState,
   useUpdateDashboardPreferredMatchLoggingMode,
-} from "@/features/dashboard-stats/lib/dashboard-stats-client"
-import { DashboardStatsRecentMatches } from "@/features/dashboard-stats/components/DashboardStatsRecentMatches"
-import { DashboardStatsSummary } from "@/features/dashboard-stats/components/DashboardStatsSummary"
-import { getTimeRangeStart } from "@/features/dashboard-stats/lib/dashboard-stats-format"
-import { getVisibleLogMatchSteps } from "@/features/dashboard-stats/lib/dashboard-stats-log-match-flow"
+} from "@/features/dashboard-stats/lib/client/dashboard-state"
+import { DashboardStatsRecentMatches } from "@/features/dashboard-stats/components/recent-matches/RecentMatches"
+import { DashboardStatsSummary } from "@/features/dashboard-stats/components/summary/Summary"
+import { getTimeRangeStart } from "@/features/dashboard-stats/lib/formatting/numbers"
+import { getVisibleLogMatchSteps } from "@/features/dashboard-stats/lib/log-match/flow"
 import {
   DEFAULT_DASHBOARD_MATCH_LOGGING_MODE,
   type DashboardMatchLoggingMode,
-} from "@/features/dashboard-stats/lib/dashboard-stats-logging-mode"
+} from "@/features/dashboard-stats/lib/log-match/mode"
 import { useCreateSessionFlowStore } from "@/features/dashboard-stats/stores/create-session-flow-store"
 import { useDashboardUiStore } from "@/features/dashboard-stats/stores/dashboard-ui-store"
 import { useLogMatchWizardStore } from "@/features/dashboard-stats/stores/log-match-wizard-store"
@@ -51,7 +55,7 @@ import { toast } from "sonner"
 
 const DashboardStatsCharts = dynamic(
   () =>
-    import("@/features/dashboard-stats/components/DashboardStatsCharts").then(
+    import("@/features/dashboard-stats/components/charts/Charts").then(
       (module) => module.DashboardStatsCharts
     ),
   {
@@ -61,7 +65,7 @@ const DashboardStatsCharts = dynamic(
 
 const DashboardStatsCreateSessionDialog = dynamic(
   () =>
-    import("@/features/dashboard-stats/components/DashboardStatsCreateSessionDialog").then(
+    import("@/features/dashboard-stats/components/create-session/CreateSessionDialog").then(
       (module) => module.DashboardStatsCreateSessionDialog
     ),
   {
@@ -71,7 +75,7 @@ const DashboardStatsCreateSessionDialog = dynamic(
 
 const DashboardStatsLogMatchSheet = dynamic(
   () =>
-    import("@/features/dashboard-stats/components/DashboardStatsLogMatchSheet").then(
+    import("@/features/dashboard-stats/components/log-match/LogMatchSheet").then(
       (module) => module.DashboardStatsLogMatchSheet
     ),
   {
@@ -255,6 +259,7 @@ function DashboardStatsEditorLoaded({
   const showCreateSessionButton =
     setupMessage === null &&
     (activeSessions.length === 0 || dashboardState.planKey !== "free")
+  const showUpgradeCta = dashboardState.planKey === "free"
   const canCreateSession = showCreateSessionButton && !sessionWritesPaused
   const canLogMatches =
     setupMessage === null &&
@@ -438,6 +443,13 @@ function DashboardStatsEditorLoaded({
                 : "flex flex-wrap items-center gap-2"
             }
           >
+            {showUpgradeCta ? (
+              <DashboardUpgradeButton
+                className={
+                  isMobileView ? "h-11 w-full justify-center" : undefined
+                }
+              />
+            ) : null}
             {showCreateSessionButton ? (
               <Button
                 className={
@@ -474,6 +486,10 @@ function DashboardStatsEditorLoaded({
             <AlertTitle>Ranked writes are paused</AlertTitle>
             <AlertDescription>{sessionWritesMessage}</AlertDescription>
           </Alert>
+        ) : null}
+
+        {showUpgradeCta ? (
+          <DashboardUpgradePrompt compact={isMobileView} />
         ) : null}
 
         {activeSessions.length === 0 ? (

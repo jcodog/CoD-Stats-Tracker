@@ -21,17 +21,17 @@ import {
   type InviteCodeType,
   type ParticipantRankValue,
   type QueuePlatform,
-} from "../../../../src/lib/playingWithViewers"
+} from "../../../../src/lib/creator-tools/play-with-viewers/queue-domain"
 import {
   getDisabledPlayWithViewersTwitchContext,
   isPlayWithViewersTwitchEnabled,
-} from "../../../../src/lib/creatorToolsConfig"
+} from "../../../../src/lib/creator-tools/play-with-viewers/config"
 import {
   assertOwnedQueueActionAccess,
   assertOwnedQueueEntryActionAccess,
   resolveCreatorToolsActionAccess,
   type CreatorActionActor,
-} from "../../../../src/lib/creatorToolsActionAuth"
+} from "../../../../src/lib/creator-tools/play-with-viewers/action-access"
 import {
   ButtonStyle,
   ChannelType,
@@ -154,9 +154,11 @@ type ViewerQueueRoundRecord = {
 
 type ViewerQueueNotificationRecord = {
   _id: string
+  displayName?: string
   notificationStatus: "failed" | "pending" | "sent"
   platform: QueuePlatform
   platformUserId: string
+  username?: string
 }
 
 type QueueDiscordContext = {
@@ -348,15 +350,63 @@ function getPermissionLabel(permission: bigint) {
   )
 }
 
+type DiscordApiErrorDetails = {
+  code?: number
+  message: string
+  status?: number
+}
+
+const MAX_OPERATIONAL_LOG_MESSAGE_LENGTH = 500
+
+class DiscordApiRequestError extends Error {
+  details: DiscordApiErrorDetails
+
+  constructor(prefix: string, details: DiscordApiErrorDetails) {
+    super(`${prefix}: ${details.message}`)
+    this.name = "DiscordApiRequestError"
+    this.details = details
+  }
+}
+
+function sanitizeOperationalLogMessage(value: string | undefined) {
+  const normalized = value?.trim().replace(/\s+/g, " ")
+
+  if (!normalized) {
+    return undefined
+  }
+
+  const redacted = normalized
+    .replace(/\b(Bot|Bearer)\s+[A-Za-z0-9._~-]+/giu, "$1 [redacted]")
+    .replace(
+      /\b(authorization\s*[:=]\s*)[^\s,;}]+/giu,
+      "$1[redacted]"
+    )
+    .replace(
+      /\b((?:invite|lobby|party|private match)\s*(?:code)?\s*[:=]\s*)[^\s,;}]+/giu,
+      "$1[redacted]"
+    )
+
+  return redacted.length > MAX_OPERATIONAL_LOG_MESSAGE_LENGTH
+    ? `${redacted.slice(0, MAX_OPERATIONAL_LOG_MESSAGE_LENGTH)}...`
+    : redacted
+}
+
+function getDiscordApiErrorDetailsForLog(
+  error: unknown
+): Partial<DiscordApiErrorDetails> {
+  return error instanceof DiscordApiRequestError ? error.details : {}
+}
+
 async function readDiscordApiErrorDetails(
   response: Response,
   fallback: string
-) {
+): Promise<DiscordApiErrorDetails> {
   const responseText = await response.text()
 
   if (!responseText.trim()) {
     return {
       code: undefined,
+      status: response.status,
       message: fallback,
     }
   }
@@ -369,7 +419,8 @@ async function readDiscordApiErrorDetails(
 
     return {
       code: payload.code,
-      message: payload.message?.trim() || responseText,
+      status: response.status,
+      message: sanitizeOperationalLogMessage(payload.message) ?? fallback,
     }
   } catch {
     // Fall back to the raw text when Discord doesn't send JSON.
@@ -377,7 +428,8 @@ async function readDiscordApiErrorDetails(
 
   return {
     code: undefined,
-    message: responseText,
+    status: response.status,
+    message: sanitizeOperationalLogMessage(responseText) ?? fallback,
   }
 }
 
@@ -1333,9 +1385,12 @@ async function sendDirectMessageToViewer(args: {
   })
 
   if (!channelResponse.ok) {
-    const errorText = await channelResponse.text()
+    const errorDetails = await readDiscordApiErrorDetails(
+      channelResponse,
+      "Discord rejected the DM channel request."
+    )
 
-    throw new Error(`Failed to open DM channel: ${errorText}`)
+    throw new DiscordApiRequestError("Failed to open DM channel", errorDetails)
   }
 
   const directMessageChannel = (await channelResponse.json()) as { id: string }
@@ -1348,9 +1403,12 @@ async function sendDirectMessageToViewer(args: {
   )
 
   if (!messageResponse.ok) {
-    const errorText = await messageResponse.text()
+    const errorDetails = await readDiscordApiErrorDetails(
+      messageResponse,
+      "Discord rejected the DM message request."
+    )
 
-    throw new Error(`Failed to send DM: ${errorText}`)
+    throw new DiscordApiRequestError("Failed to send DM", errorDetails)
   }
 }
 
@@ -1443,10 +1501,16 @@ async function deliverDiscordRoundNotifications(args: {
       deliveredCount += 1
     } catch (error) {
       const failureReason = getCreatorFacingDirectMessageFailureMessage()
+      const discordErrorDetails = getDiscordApiErrorDetailsForLog(error)
+      const internalErrorMessage = sanitizeOperationalLogMessage(
+        toErrorMessage(error, "Failed to send Discord DM.")
+      )
 
       console.error("Play With Viewers Discord DM send failed", {
         discordUserId: notification.platformUserId,
-        errorMessage: toErrorMessage(error, "Failed to send Discord DM."),
+        discordApiCode: discordErrorDetails.code,
+        discordHttpStatus: discordErrorDetails.status,
+        errorMessage: internalErrorMessage,
         queueId: queue._id,
         roundId: args.roundId,
       })
@@ -1461,6 +1525,36 @@ async function deliverDiscordRoundNotifications(args: {
           notificationStatus: "failed",
         }
       )
+
+      try {
+        await args.ctx.runMutation(
+          internal.mutations.creatorTools.playingWithViewers.notifications
+            .recordDiscordDmFailureOperationalLog,
+          {
+            discordApiCode: discordErrorDetails.code,
+            discordApiMessage: discordErrorDetails.message,
+            discordHttpStatus: discordErrorDetails.status,
+            displayName: notification.displayName,
+            internalErrorMessage,
+            notificationId:
+              notification._id as Id<"viewerQueueNotifications">,
+            platformUserId: notification.platformUserId,
+            queueId: queue._id as Id<"viewerQueues">,
+            roundId: args.roundId,
+            username: notification.username,
+          }
+        )
+      } catch (logError) {
+        console.error("Play With Viewers Discord DM failure log failed", {
+          errorMessage: toErrorMessage(
+            logError,
+            "Failed to persist Discord DM failure log."
+          ),
+          notificationId: notification._id,
+          queueId: queue._id,
+          roundId: args.roundId,
+        })
+      }
       failedCount += 1
     }
   }
