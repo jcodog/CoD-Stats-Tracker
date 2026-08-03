@@ -82,6 +82,8 @@ type CreatorAccountRecord = {
 type ViewerQueueRecord = {
   _id: string
   creatorUserId: string
+  twitchBotAnnouncementsEnabled?: boolean
+  twitchCommandsEnabled?: boolean
 }
 
 type ViewerQueueEntryRecord = {

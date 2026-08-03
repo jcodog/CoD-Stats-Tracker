@@ -53,7 +53,7 @@ function sanitizeOperationalLogText(value: string | undefined) {
       "$1[redacted]"
     )
     .replace(
-      /\b((?:invite|lobby|party|private match)\s*(?:code)?\s*[:=]\s*)[^\s,;}]+/giu,
+      /\b((?:invite|lobby|party|private match)\s*(?:code)?(?:\s*[:=]\s*|\s+))[^\s,;}]+/giu,
       "$1[redacted]"
     )
 

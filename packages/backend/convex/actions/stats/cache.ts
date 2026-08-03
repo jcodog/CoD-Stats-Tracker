@@ -1,6 +1,6 @@
 "use node"
 
-import { createClient } from "redis"
+import { createClient, type RedisClientType } from "redis"
 import { v } from "convex/values"
 
 import { internalAction } from "../../_generated/server"
@@ -11,7 +11,7 @@ const LANDING_METRICS_TRACE_LIST_KEY = `${LANDING_METRICS_CACHE_PREFIX}:trace`
 
 const REDIS_URL_ENV_KEYS = ["REDIS_URL", "REDIS_TLS_URL", "KV_URL"] as const
 
-type ActionRedisClient = ReturnType<typeof createClient>
+type ActionRedisClient = RedisClientType<{}, {}, {}, 3, {}>
 
 let redisClient: ActionRedisClient | null = null
 let redisClientPromise: Promise<ActionRedisClient | null> | null = null

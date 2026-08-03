@@ -18,8 +18,17 @@ import {
   buildWebhookSafeSummary,
   getWebhookObjectIds,
 } from "../src/lib/stripe/billing"
-import { mapStripeConnectedAccountSnapshot } from "../src/lib/creator/program"
+import {
+  mapStripeConnectedAccountSnapshot,
+  mapStripeConnectedAccountV2Snapshot,
+} from "../src/lib/creator/program"
 import { getStripe } from "../src/lib/stripe/client"
+import {
+  getCreatorConnectV2AccountId,
+  isCreatorConnectV2EventNotification,
+  parseStripeV2EventNotification,
+} from "../src/lib/stripe/connectEvents"
+import { retrieveStripeAccountV2 } from "../src/lib/stripe/connect"
 import { getConvexEnv } from "../src/env"
 import { handleDiscordInteractions } from "../src/httpRoutes/discord/interactions"
 
@@ -102,6 +111,70 @@ function sanitizeStripeWebhookSecret(value: string | undefined) {
 function getStripeWebhookCryptoProvider() {
   return Stripe.createSubtleCryptoProvider()
 }
+
+http.route({
+  path: "/stripe-connect-v2-webhook",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const stripe = getStripe()
+    const webhookSecret = sanitizeStripeWebhookSecret(
+      getConvexEnv().STRIPE_CONNECT_V2_WEBHOOK_SECRET
+    )
+    const signature = request.headers.get("stripe-signature")?.trim()
+
+    if (!webhookSecret) {
+      console.error("Missing STRIPE_CONNECT_V2_WEBHOOK_SECRET")
+      return new Response(JSON.stringify({ ok: false }), { status: 503 })
+    }
+
+    if (!signature) {
+      return new Response(JSON.stringify({ ok: false }), { status: 400 })
+    }
+
+    let event: Stripe.V2.Core.EventNotification
+
+    try {
+      event = await parseStripeV2EventNotification({
+        payload: await request.text(),
+        secret: webhookSecret,
+        signature,
+        stripe,
+      })
+    } catch (error) {
+      console.error(
+        "Stripe Connect v2 webhook signature verification failed",
+        error instanceof Error ? error.message : undefined
+      )
+      return new Response(JSON.stringify({ ok: false }), { status: 400 })
+    }
+
+    if (!isCreatorConnectV2EventNotification(event)) {
+      return new Response(JSON.stringify({ ok: true, ignored: true }), {
+        status: 200,
+      })
+    }
+
+    try {
+      const account = await retrieveStripeAccountV2(
+        getCreatorConnectV2AccountId(event)
+      )
+
+      await ctx.runMutation(
+        internal.mutations.creator.accounts.internal
+          .applyStripeConnectedAccountSnapshot,
+        mapStripeConnectedAccountV2Snapshot(account)
+      )
+    } catch (error) {
+      console.error("Stripe Connect v2 webhook processing failed", {
+        eventType: event.type,
+        message: sanitizeStripeWebhookError(error),
+      })
+      return new Response(JSON.stringify({ ok: false }), { status: 500 })
+    }
+
+    return new Response(JSON.stringify({ ok: true }), { status: 200 })
+  }),
+})
 
 http.route({
   path: "/stripe-webhook",

@@ -11,6 +11,7 @@ import {
 } from "../../../../src/lib/creator/program"
 import {
   createCreatorStripeTransfer,
+  getAvailablePlatformBalanceForCurrency,
   getCreatorTransferReadiness,
   type CreatorPayoutTransferSource,
   type StripeTransferCreator,
@@ -213,6 +214,30 @@ export async function executeCreatorPayoutTransfer(args: {
     return "requires_review" as const
   }
 
+  const stripe = args.stripe ?? getStripe()
+  const availableBalance = await getAvailablePlatformBalanceForCurrency({
+    currency: args.transfer.currency,
+    stripe,
+  }).catch(() => null)
+
+  if (
+    availableBalance !== null &&
+    availableBalance < args.transfer.amount
+  ) {
+    await args.ctx.runMutation(
+      internal.mutations.staff.payouts.markCreatorPayoutTransferFailed,
+      {
+        failureCode: "balance_insufficient_preflight",
+        failureMessage:
+          "The platform's currently available Stripe balance is below this transfer amount.",
+        payoutTransferId: args.transfer._id,
+        status: "requires_review",
+      }
+    )
+
+    return "requires_review" as const
+  }
+
   try {
     const stripeTransfer = await createCreatorStripeTransfer({
       amount: args.transfer.amount,
@@ -223,7 +248,7 @@ export async function executeCreatorPayoutTransfer(args: {
       ledgerEntryCount: args.transfer.ledgerEntryIds.length,
       payoutRunId: args.transfer.payoutRunId,
       payoutTransferId: args.transfer._id,
-      stripe: args.stripe ?? getStripe(),
+      stripe,
       stripeConnectedAccountId: args.transfer.stripeConnectedAccountId,
     })
 

@@ -155,6 +155,7 @@ Example configuration:
 ```bash
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_replace_me
 STRIPE_SECRET_KEY=sk_test_replace_me
+STRIPE_CONNECT_V2_WEBHOOK_SECRET=whsec_connect_v2_replace_me
 STRIPE_WEBHOOK_SECRET=whsec_replace_me
 ```
 
@@ -163,6 +164,7 @@ Operational notes:
 - The authenticated `/checkout` page, billing API routes, and billing mutations are gated by the `checkout` flag in `apps/web/lib/flags.ts`
 - Keep the Convex `featureFlags` record for `checkout` aligned with the Vercel flag rollout
 - Point Stripe webhook delivery at the Convex HTTP endpoint `/stripe-webhook`
+- Create a separate Stripe Connect v2 thin-event destination at `/stripe-connect-v2-webhook` for `v2.core.account[requirements].updated` and `v2.core.account[configuration.recipient].capability_status_updated`, then store its signing secret as `STRIPE_CONNECT_V2_WEBHOOK_SECRET`
 
 ## OAuth Endpoints For The ChatGPT App
 

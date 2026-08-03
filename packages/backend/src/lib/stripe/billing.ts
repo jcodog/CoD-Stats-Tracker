@@ -200,14 +200,23 @@ export function mapStripeSubscriptionStatus(
 ): BillingSubscriptionStatus {
   switch (status) {
     case "active":
+      return "active"
     case "canceled":
+      return "canceled"
     case "incomplete":
+      return "incomplete"
     case "incomplete_expired":
+      return "incomplete_expired"
     case "past_due":
+      return "past_due"
     case "paused":
+      return "paused"
     case "trialing":
+      return "trialing"
     case "unpaid":
-      return status
+      return "unpaid"
+    default:
+      return "incomplete"
   }
 }
 

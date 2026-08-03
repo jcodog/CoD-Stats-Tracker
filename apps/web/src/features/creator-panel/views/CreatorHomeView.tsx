@@ -121,8 +121,8 @@ export function CreatorHomeView() {
             </div>
             <div className="flex flex-wrap gap-2">
               <Button asChild size="sm">
-                <Link href="/creator/connect/start">
-                  Complete creator onboarding
+                <Link href="/creator/connect/start?country=GB">
+                  Continue as a UK creator
                 </Link>
               </Button>
               <Button asChild size="sm" variant="outline">
@@ -165,7 +165,13 @@ export function CreatorHomeView() {
           <div className="flex flex-wrap gap-2">
             {dashboard.creatorAccount.connectState !== "ready" ? (
               <Button asChild size="sm" variant="outline">
-                <Link href="/creator/connect/start">
+                <Link
+                  href={
+                    dashboard.creatorAccount.stripeConnectedAccountId
+                      ? "/creator/connect/start"
+                      : "/creator/connect/start?country=GB"
+                  }
+                >
                   Continue Stripe setup
                   <IconArrowRight data-icon="inline-end" />
                 </Link>

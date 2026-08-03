@@ -32,6 +32,7 @@ function buildSignInUrl(request: Request) {
 }
 
 export async function GET(request: Request) {
+  const country = new URL(request.url).searchParams.get("country") ?? undefined
   const { userId, getToken } = await auth()
 
   if (!userId) {
@@ -52,7 +53,7 @@ export async function GET(request: Request) {
   try {
     const onboarding = await fetchAction(
       api.actions.creator.connect.onboarding.startHostedOnboarding,
-      {},
+      { country },
       {
         token,
       }

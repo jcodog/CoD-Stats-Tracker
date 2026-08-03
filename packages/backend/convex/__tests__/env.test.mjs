@@ -11,6 +11,7 @@ const ENV_KEYS = [
   "DISCORD_APPLICATION_ID",
   "REDIS_URL",
   "STRIPE_SECRET_KEY",
+  "STRIPE_CONNECT_V2_WEBHOOK_SECRET",
 ]
 
 const previousEnv = Object.fromEntries(
@@ -46,6 +47,7 @@ beforeEach(() => {
     DISCORD_APPLICATION_ID: "1234567890",
     REDIS_URL: "redis://localhost:6379",
     STRIPE_SECRET_KEY: "sk_test_123",
+    STRIPE_CONNECT_V2_WEBHOOK_SECRET: "whsec_connect_v2",
   })
 })
 
@@ -56,6 +58,9 @@ afterAll(() => {
 describe("convex env", () => {
   it("caches values until resetConvexEnvForTests is called", () => {
     expect(getConvexEnv().STRIPE_SECRET_KEY).toBe("sk_test_123")
+    expect(getConvexEnv().STRIPE_CONNECT_V2_WEBHOOK_SECRET).toBe(
+      "whsec_connect_v2"
+    )
 
     process.env.STRIPE_SECRET_KEY = "sk_test_changed"
 

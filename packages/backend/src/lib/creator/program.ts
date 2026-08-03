@@ -13,6 +13,15 @@ export const DEFAULT_CREATOR_PROGRAM_DEFAULTS = {
   defaultPayoutPercent: 20,
 } as const
 
+export const CREATOR_CONNECT_LAUNCH_COUNTRIES = ["GB"] as const
+
+export function isCreatorConnectLaunchCountry(
+  value: string | null | undefined
+): value is (typeof CREATOR_CONNECT_LAUNCH_COUNTRIES)[number] {
+  const country = normalizeCreatorCountry(value)
+  return CREATOR_CONNECT_LAUNCH_COUNTRIES.some((candidate) => candidate === country)
+}
+
 export type CreatorConnectState =
   | "action_required"
   | "not_started"
@@ -205,59 +214,19 @@ export function mapStripeConnectedAccountSnapshot(account: Stripe.Account) {
   }
 }
 
-type StripeAccountV2CapabilityStatus =
-  | "active"
-  | "pending"
-  | "restricted"
-  | "unsupported"
-
-type StripeAccountV2CapabilityStatusDetail = {
-  code?:
-    | "determining_status"
-    | "requirements_past_due"
-    | "requirements_pending_verification"
-    | "restricted_other"
-    | "unsupported_business"
-    | "unsupported_country"
-    | "unsupported_entity_type"
-    | string
-  resolution?: "contact_stripe" | "no_resolution" | "provide_info" | string
-}
-
-type StripeAccountV2Capability = {
-  status?: StripeAccountV2CapabilityStatus | null
-  status_details?: StripeAccountV2CapabilityStatusDetail[] | null
-}
-
-type StripeAccountV2RequirementEntry = {
-  awaiting_action_from?: "stripe" | "user" | null
-  description: string
-  minimum_deadline?: {
-    status?: "currently_due" | "eventually_due" | "past_due" | null
-    time?: string | null
-  } | null
-  requested_reasons?: Array<{
-    code?: "routine_onboarding" | "routine_verification" | string
-  }> | null
-}
-
-type StripeAccountV2 = {
-  configuration?: {
-    recipient?: {
-      capabilities?: {
-        stripe_balance?: {
-          payouts?: StripeAccountV2Capability | null
-          stripe_transfers?: StripeAccountV2Capability | null
-        } | null
-      } | null
-    } | null
-  } | null
-  contact_email?: string | null
-  id: string
-  requirements?: {
-    entries?: StripeAccountV2RequirementEntry[] | null
-  } | null
-}
+type StripeAccountV2 = Stripe.V2.Core.Account
+type StripeAccountV2RequirementEntry = NonNullable<
+  NonNullable<StripeAccountV2["requirements"]>["entries"]
+>[number]
+type StripeAccountV2Capability = NonNullable<
+  NonNullable<
+    NonNullable<
+      NonNullable<
+        NonNullable<StripeAccountV2["configuration"]>["recipient"]
+      >["capabilities"]
+    >["stripe_balance"]
+  >["stripe_transfers"]
+>
 
 function getRecipientTransferCapability(account: StripeAccountV2) {
   return (

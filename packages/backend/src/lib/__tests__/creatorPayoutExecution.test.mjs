@@ -4,6 +4,7 @@ import { executeCreatorPayoutTransfer } from "../../../convex/actions/creator/pa
 import {
   createCreatorPayoutRun,
   markCreatorPayoutTransferExecuting,
+  markCreatorPayoutTransferFailed,
   markCreatorPayoutTransferSucceeded,
 } from "../../../convex/mutations/staff/payouts.ts"
 
@@ -182,6 +183,10 @@ function createActionCtx(initialTables) {
         return await markCreatorPayoutTransferSucceeded._handler({ db }, args)
       }
 
+      if (args.failureCode || args.failureMessage) {
+        return await markCreatorPayoutTransferFailed._handler({ db }, args)
+      }
+
       throw new Error("unexpected mutation")
     },
     async runQuery(_ref, args) {
@@ -230,6 +235,14 @@ describe("creator payout transfer action execution", () => {
     const actionCtx = createActionCtx(mutationCtx.db.tables)
     const calls = []
     const stripe = {
+      balance: {
+        retrieve: async () => ({
+          available: [
+            { amount: 100_000, currency: "gbp" },
+            { amount: 100_000, currency: "usd" },
+          ],
+        }),
+      },
       transfers: {
         create(params, options) {
           calls.push({ options, params })
@@ -301,6 +314,11 @@ describe("creator payout transfer action execution", () => {
     const transfer = actionCtx.db.tables.creatorPayoutTransfers[0]
     let callCount = 0
     const stripe = {
+      balance: {
+        retrieve: async () => ({
+          available: [{ amount: 100_000, currency: "gbp" }],
+        }),
+      },
       transfers: {
         create() {
           callCount += 1
@@ -329,5 +347,49 @@ describe("creator payout transfer action execution", () => {
       })
     ).rejects.toThrow("already succeeded")
     expect(callCount).toBe(1)
+  })
+
+  it("requires review before transfer when the available balance is insufficient", async () => {
+    const mutationCtx = {
+      db: new FakeDb({
+        creatorAccounts: [creatorAccount()],
+        creatorEarningLedger: [ledgerRow()],
+      }),
+    }
+    await createCreatorPayoutRun._handler(mutationCtx, {
+      createdByClerkUserId: "staff_1",
+      createdByName: "Staff One",
+      source: "dry_run_review",
+    })
+    const actionCtx = createActionCtx(mutationCtx.db.tables)
+    const transfer = actionCtx.db.tables.creatorPayoutTransfers[0]
+    let callCount = 0
+    const stripe = {
+      balance: {
+        retrieve: async () => ({ available: [{ amount: 0, currency: "gbp" }] }),
+      },
+      transfers: {
+        create() {
+          callCount += 1
+          return { id: "should_not_exist" }
+        },
+      },
+    }
+
+    const result = await executeCreatorPayoutTransfer({
+      allowedStatuses: ["draft"],
+      ctx: actionCtx,
+      stripe,
+      syncConnectAccount: async () =>
+        createReadyConnectSnapshot(actionCtx.db.tables.creatorAccounts[0]),
+      transfer,
+    })
+
+    expect(result).toBe("requires_review")
+    expect(callCount).toBe(0)
+    expect(actionCtx.db.tables.creatorPayoutTransfers[0]).toMatchObject({
+      failureCode: "balance_insufficient_preflight",
+      status: "requires_review",
+    })
   })
 })

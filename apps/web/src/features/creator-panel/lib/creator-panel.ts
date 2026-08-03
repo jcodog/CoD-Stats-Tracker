@@ -6,7 +6,21 @@ import {
   type Icon,
 } from "@tabler/icons-react"
 
-export const creatorPrimaryNav = [
+type CreatorNavigationItem = {
+  description: string
+  exact?: boolean
+  href: string
+  icon: Icon
+  label: string
+}
+
+type CreatorNavigationSection = {
+  items: readonly CreatorNavigationItem[]
+  key: string
+  label: string
+}
+
+export const creatorPrimaryNav: readonly CreatorNavigationItem[] = [
   {
     description: "Workspace overview, program status, and creator activity.",
     exact: true,
@@ -22,7 +36,7 @@ export const creatorPrimaryNav = [
   },
 ] as const
 
-export const creatorToolNav = [
+export const creatorToolNav: readonly CreatorNavigationItem[] = [
   {
     description: "Queue management for creator-led viewer sessions.",
     href: "/creator/tools/playing-with-viewers",
@@ -31,7 +45,7 @@ export const creatorToolNav = [
   },
 ] as const
 
-export const creatorNavigationSections = [
+export const creatorNavigationSections: readonly CreatorNavigationSection[] = [
   {
     items: creatorPrimaryNav,
     key: "workspace",
@@ -88,7 +102,7 @@ export function resolveCreatorRoute(pathname: string) {
 }
 
 export const CREATOR_WORKSPACE_TITLE = "Creator Workspace"
-export const CREATOR_WORKSPACE_ICON = IconAffiliate
+export const CREATOR_WORKSPACE_ICON: Icon = IconAffiliate
 
 export function getCreatorConnectPresentation(connectState: string) {
   if (connectState === "ready") {

@@ -2,8 +2,10 @@ import { describe, expect, it } from "bun:test"
 
 import {
   buildCreatorPayoutPreview,
+  buildCreatorPayoutTransferGroup,
   buildCreatorPayoutTransferIdempotencyKey,
   createCreatorStripeTransfer,
+  getAvailablePlatformBalanceForCurrency,
   getPreviousCompletedMonthlyPayoutPeriod,
 } from "../creator/payouts/transfers.ts"
 import {
@@ -344,6 +346,31 @@ describe("creator transfer preview", () => {
     ).toBe("cod-stats-tracker:creator-transfer:creatorPayoutTransfers:1")
   })
 
+  it("builds a stable transfer group for a payout run", () => {
+    expect(
+      buildCreatorPayoutTransferGroup({ payoutRunId: "creatorPayoutRuns:1" })
+    ).toBe("cod-stats-tracker:creator-payout-run:creatorPayoutRuns:1")
+  })
+
+  it("reads the available platform balance for the transfer currency", async () => {
+    const available = await getAvailablePlatformBalanceForCurrency({
+      currency: "GBP",
+      stripe: {
+        balance: {
+          retrieve: async () => ({
+            available: [
+              { amount: 500, currency: "usd" },
+              { amount: 1234, currency: "gbp" },
+            ],
+          }),
+        },
+        transfers: { create: async () => ({ id: "unused" }) },
+      },
+    })
+
+    expect(available).toBe(1234)
+  })
+
   it("creates Stripe transfers with strict transfer parameters", async () => {
     const calls = []
     const stripeTransfer = await createCreatorStripeTransfer({
@@ -356,6 +383,9 @@ describe("creator transfer preview", () => {
       payoutRunId: "creatorPayoutRuns:1",
       payoutTransferId: "creatorPayoutTransfers:1",
       stripe: {
+        balance: {
+          retrieve: async () => ({ available: [] }),
+        },
         transfers: {
           create(params, options) {
             calls.push({ options, params })
@@ -382,6 +412,8 @@ describe("creator transfer preview", () => {
             payoutRunId: "creatorPayoutRuns:1",
             payoutTransferId: "creatorPayoutTransfers:1",
           },
+          transfer_group:
+            "cod-stats-tracker:creator-payout-run:creatorPayoutRuns:1",
         },
       },
     ])

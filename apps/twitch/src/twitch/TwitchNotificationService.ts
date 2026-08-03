@@ -1,4 +1,4 @@
-import { buildInviteMessagePreview } from "@workspace/backend/lib/playingWithViewers"
+import { buildInviteMessagePreview } from "@workspace/backend/lib/creator-tools/play-with-viewers/queue-domain"
 import { ConvexService } from "@/convex/ConvexService"
 import { TwitchApiService } from "@/twitch/TwitchApiService"
 

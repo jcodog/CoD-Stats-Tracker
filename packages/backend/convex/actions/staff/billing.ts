@@ -18,7 +18,10 @@ import {
   hasCreatorAccess,
   resolveAppPlanKey,
 } from "../../../src/lib/billingAccess"
-import { isStripeManagedCreatorGrantSubscription } from "../../../src/lib/stripe/billing"
+import {
+  isStripeManagedCreatorGrantSubscription,
+  mapStripeSubscriptionStatus,
+} from "../../../src/lib/stripe/billing"
 import { getClerkBackendClient } from "../../../src/lib/clerk"
 import {
   StaffAuthorizationError,
@@ -1941,7 +1944,7 @@ async function cancelSubscriptionsAtPeriodEnd(args: {
       cancelAtPeriodEnd: updatedSubscription.cancel_at_period_end,
       canceledAt: undefined,
       currentPeriodEnd: subscription.currentPeriodEnd,
-      status: updatedSubscription.status,
+      status: mapStripeSubscriptionStatus(updatedSubscription.status),
       stripeSubscriptionId: subscription.stripeSubscriptionId,
     })
   }
@@ -4572,6 +4575,61 @@ export const refreshCreatorProgramConnectStatus = action({
 
     return {
       summary: `Refreshed Stripe Connect status for ${targetUser.name}.`,
+      syncSummary: null,
+    }
+  },
+})
+
+export const resetRejectedLegacyCreatorConnectAccount = action({
+  args: {
+    targetUserId: v.id("users"),
+  },
+  handler: async (ctx, args): Promise<StaffMutationResponse> => {
+    const operator = await requireAuthorizedStaffAction(ctx, "admin")
+    const [creatorAccount, targetUser] = await Promise.all([
+      ctx.runQuery(
+        internal.queries.creator.accounts.internal.getCreatorAccountByUserId,
+        { userId: args.targetUserId }
+      ),
+      ctx.runQuery(internal.queries.staff.internal.getUserById, {
+        userId: args.targetUserId,
+      }),
+    ])
+
+    if (!targetUser || !creatorAccount) {
+      throw new Error("Creator account not found.")
+    }
+
+    const reset = await ctx.runMutation(
+      internal.mutations.creator.accounts.internal
+        .resetRejectedLegacyStripeAssociation,
+      { creatorAccountId: creatorAccount._id }
+    )
+
+    await recordAuditLog({
+      action: "billing.creator_program.connect.legacy_rejected_reset",
+      actorClerkUserId: operator.actorClerkUserId,
+      actorName: operator.actorDisplayName,
+      actorRole: operator.actorRole,
+      ctx,
+      details: JSON.stringify(
+        {
+          creatorAccountId: creatorAccount._id,
+          previousStripeConnectedAccountId:
+            reset.previousStripeConnectedAccountId,
+        },
+        null,
+        2
+      ),
+      entityId: creatorAccount._id,
+      entityLabel: targetUser.name,
+      entityType: "billingCreatorProgramAccount",
+      result: "success",
+      summary: `Reset the rejected legacy Stripe association for ${targetUser.name}.`,
+    })
+
+    return {
+      summary: `Reset the rejected legacy Stripe association for ${targetUser.name}. The Stripe account was not deleted.`,
       syncSummary: null,
     }
   },

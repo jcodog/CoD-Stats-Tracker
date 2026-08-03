@@ -36,6 +36,7 @@ function createConvexEnv() {
         .optional(),
       CREATOR_AUTO_TRANSFERS_ENABLED: z.string().optional(),
       STRIPE_SECRET_KEY: z.string().optional(),
+      STRIPE_CONNECT_V2_WEBHOOK_SECRET: z.string().optional(),
       STRIPE_WEBHOOK_SECRET: z.string().optional(),
       SUPER_ADMIN_DISCORD_ID: z.string().optional(),
       SUPER_ADMIN_DISCORD_IDS: z.string().optional(),

@@ -3,6 +3,7 @@
 import { internal } from "../../../_generated/api"
 import type { Doc, Id } from "../../../_generated/dataModel"
 import { action, type ActionCtx } from "../../../_generated/server"
+import { v } from "convex/values"
 import { getConvexEnv } from "../../../../src/env"
 import {
   createStripeAccountLinkV2,
@@ -14,6 +15,7 @@ import {
   buildCreatorCodeSeed,
   DEFAULT_CREATOR_PROGRAM_DEFAULTS,
   hasCreatorWorkspaceAccess,
+  isCreatorConnectLaunchCountry,
   mapStripeConnectedAccountV2Snapshot,
   mapStripeConnectedAccountSnapshot,
   normalizeCreatorCode,
@@ -102,6 +104,7 @@ async function buildAvailableCreatorCode(ctx: ActionCtx, base: string) {
 }
 
 async function createCreatorAccountFromDefaults(args: {
+  country: string
   ctx: ActionCtx
   email?: string
   user: Doc<"users">
@@ -111,14 +114,6 @@ async function createCreatorAccountFromDefaults(args: {
       internal.queries.creator.program.internal.getCreatorProgramDefaults,
       {}
     )) ?? DEFAULT_CREATOR_PROGRAM_DEFAULTS
-  const country = normalizeCreatorCountry(defaults.defaultCountry)
-
-  if (!country) {
-    throw new Error(
-      "Creator country is not configured. Update creator program defaults before starting Stripe onboarding."
-    )
-  }
-
   const code = await buildAvailableCreatorCode(
     args.ctx,
     buildCreatorCodeBase({
@@ -133,7 +128,7 @@ async function createCreatorAccountFromDefaults(args: {
       clerkUserId: args.user.clerkUserId,
       code,
       codeActive: defaults.defaultCodeActive,
-      country,
+      country: args.country,
       discountPercent: defaults.defaultDiscountPercent,
       payoutEligible: defaults.defaultPayoutEligible,
       payoutPercent: defaults.defaultPayoutPercent,
@@ -151,7 +146,7 @@ async function createCreatorAccountFromDefaults(args: {
 async function requireCurrentCreatorConnectContext(
   ctx: ActionCtx,
   options?: {
-    createIfMissing?: boolean
+    createIfMissingCountry?: string
   }
 ) {
   const identity = await ctx.auth.getUserIdentity()
@@ -179,7 +174,7 @@ async function requireCurrentCreatorConnectContext(
   )
 
   if (!creatorAccount) {
-    if (!options?.createIfMissing) {
+    if (!options?.createIfMissingCountry) {
       throw new Error("Creator profile not configured.")
     }
 
@@ -206,6 +201,7 @@ async function requireCurrentCreatorConnectContext(
     const creatorEmail = getPrimaryEmail(clerkUser)
 
     creatorAccount = await createCreatorAccountFromDefaults({
+      country: options.createIfMissingCountry,
       ctx,
       email: creatorEmail,
       user,
@@ -283,22 +279,43 @@ export const syncCurrentCreatorConnectAccount = action({
 })
 
 export const startHostedOnboarding = action({
-  args: {},
-  handler: async (ctx) => {
-    const { creatorAccount, identity, user } =
+  args: { country: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    const requestedCountry = normalizeCreatorCountry(args.country)
+
+    if (requestedCountry && !isCreatorConnectLaunchCountry(requestedCountry)) {
+      throw new Error(
+        "Choose a currently supported creator country before starting Stripe onboarding."
+      )
+    }
+
+    let { creatorAccount, identity, user } =
       await requireCurrentCreatorConnectContext(ctx, {
-        createIfMissing: true,
+        createIfMissingCountry: requestedCountry ?? undefined,
       })
     const stripe = getStripe()
     const appOrigin = getAppPublicOrigin()
-    const country =
-      normalizeCreatorCountry(creatorAccount.country) ??
-      normalizeCreatorCountry(DEFAULT_CREATOR_PROGRAM_DEFAULTS.defaultCountry)
 
-    if (!country) {
-      throw new Error(
-        "Creator country is not configured. Update the creator account before starting Stripe onboarding."
+    if (!creatorAccount.stripeConnectedAccountId) {
+      if (!isCreatorConnectLaunchCountry(requestedCountry)) {
+        throw new Error(
+          "Choose a currently supported creator country before starting Stripe onboarding."
+        )
+      }
+
+      const confirmedCreatorAccount = await ctx.runMutation(
+        internal.mutations.creator.accounts.internal.confirmCreatorConnectCountry,
+        {
+          country: requestedCountry,
+          creatorAccountId: creatorAccount._id,
+        }
       )
+
+      if (!confirmedCreatorAccount) {
+        throw new Error("Unable to confirm creator country.")
+      }
+
+      creatorAccount = confirmedCreatorAccount
     }
 
     const clerkUser = await getClerkBackendClient().users.getUser(
@@ -319,7 +336,7 @@ export const startHostedOnboarding = action({
     if (!creatorAccount.stripeConnectedAccountId) {
       const stripeAccount = await createStripeRecipientAccountV2({
         clerkUserId: user.clerkUserId,
-        country,
+        country: creatorAccount.country,
         creatorAccountId: creatorAccount._id,
         creatorCode: creatorAccount.code,
         displayName: user.name ?? creatorAccount.code,

@@ -120,3 +120,121 @@ export const applyStripeConnectedAccountSnapshot = internalMutation({
     return await ctx.db.get(creatorAccount._id)
   },
 })
+
+export const confirmCreatorConnectCountry = internalMutation({
+  args: {
+    country: v.string(),
+    creatorAccountId: v.id("creatorAccounts"),
+  },
+  handler: async (ctx, args) => {
+    const creatorAccount = await ctx.db.get(args.creatorAccountId)
+
+    if (!creatorAccount) {
+      throw new Error("Creator account not found.")
+    }
+
+    if (creatorAccount.stripeConnectedAccountId) {
+      throw new Error("Creator country cannot change after Stripe setup starts.")
+    }
+
+    await ctx.db.patch(creatorAccount._id, {
+      country: args.country,
+      updatedAt: Date.now(),
+    })
+
+    return await ctx.db.get(creatorAccount._id)
+  },
+})
+
+export const resetRejectedLegacyStripeAssociation = internalMutation({
+  args: {
+    creatorAccountId: v.id("creatorAccounts"),
+  },
+  handler: async (ctx, args) => {
+    const creatorAccount = await ctx.db.get(args.creatorAccountId)
+
+    if (!creatorAccount) {
+      throw new Error("Creator account not found.")
+    }
+
+    if (
+      creatorAccount.stripeConnectedAccountVersion !== "v1" ||
+      !creatorAccount.stripeConnectedAccountId ||
+      !creatorAccount.requirementsDisabledReason
+        ?.toLowerCase()
+        .startsWith("rejected")
+    ) {
+      throw new Error(
+        "Only a terminally rejected legacy Stripe association can be reset."
+      )
+    }
+
+    const [ledgerRows, payoutTransfers] = await Promise.all([
+      ctx.db
+        .query("creatorEarningLedger")
+        .withIndex("by_creatorAccountId", (query) =>
+          query.eq("creatorAccountId", creatorAccount._id)
+        )
+        .collect(),
+      ctx.db
+        .query("creatorPayoutTransfers")
+        .withIndex("by_creatorAccountId", (query) =>
+          query.eq("creatorAccountId", creatorAccount._id)
+        )
+        .collect(),
+    ])
+    const hasCompletedTransfer =
+      payoutTransfers.some(
+        (transfer) =>
+          transfer.status === "transferred" ||
+          Boolean(transfer.stripeTransferId) ||
+          Boolean(transfer.transferredAt)
+      ) ||
+      ledgerRows.some(
+        (row) =>
+          row.status === "transferred" ||
+          Boolean(row.stripeTransferId) ||
+          Boolean(row.transferredAt)
+      )
+    const hasActiveReservation =
+      payoutTransfers.some((transfer) => transfer.status !== "cancelled") ||
+      ledgerRows.some(
+        (row) => row.status === "reserved" || Boolean(row.payoutRunId)
+      )
+
+    if (hasCompletedTransfer) {
+      throw new Error(
+        "This association cannot be reset because creator transfers have completed."
+      )
+    }
+
+    if (hasActiveReservation) {
+      throw new Error(
+        "This association cannot be reset while a payout reservation or run exists."
+      )
+    }
+
+    const previousStripeConnectedAccountId =
+      creatorAccount.stripeConnectedAccountId
+
+    await ctx.db.patch(creatorAccount._id, {
+      chargesEnabled: undefined,
+      connectStatusUpdatedAt: undefined,
+      detailsSubmitted: undefined,
+      payoutsEnabled: undefined,
+      requirementsCurrentlyDue: undefined,
+      requirementsDisabledReason: undefined,
+      requirementsDue: undefined,
+      requirementsPastDue: undefined,
+      requirementsPendingVerification: undefined,
+      stripeConnectedAccountId: undefined,
+      stripeConnectedAccountVersion: undefined,
+      updatedAt: Date.now(),
+    })
+
+    return {
+      creatorAccount: await ctx.db.get(creatorAccount._id),
+      previousStripeConnectedAccountId,
+    }
+  },
+})

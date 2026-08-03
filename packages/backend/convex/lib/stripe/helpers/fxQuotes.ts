@@ -17,6 +17,29 @@ type StripeFxQuote = {
 
 const STRIPE_FX_QUOTES_API_VERSION = "2025-07-30.preview"
 
+export function buildGbpEstimateFxQuoteBody(
+  estimateCurrency: Exclude<FxQuoteCurrency, "GBP">
+) {
+  const body = new URLSearchParams()
+  body.set("to_currency", "gbp")
+  body.append("from_currencies[]", estimateCurrency.toLowerCase())
+  body.set("lock_duration", "none")
+  return body
+}
+
+export function getGbpEstimateRate(
+  quote: StripeFxQuote,
+  estimateCurrency: Exclude<FxQuoteCurrency, "GBP">
+) {
+  const rate = quote.rates?.[estimateCurrency.toLowerCase()]?.exchange_rate
+
+  if (typeof rate !== "number" || !Number.isFinite(rate) || rate <= 0) {
+    throw new Error("Stripe FX quote did not include a usable exchange rate.")
+  }
+
+  return rate
+}
+
 function getStripeSecretKey() {
   const stripeSecretKey = getConvexEnv().STRIPE_SECRET_KEY
 
@@ -30,10 +53,7 @@ function getStripeSecretKey() {
 export async function createGbpEstimateFxQuote(args: {
   estimateCurrency: Exclude<FxQuoteCurrency, "GBP">
 }) {
-  const body = new URLSearchParams()
-  body.set("to_currency", args.estimateCurrency.toLowerCase())
-  body.append("from_currencies[]", "gbp")
-  body.set("lock_duration", "none")
+  const body = buildGbpEstimateFxQuoteBody(args.estimateCurrency)
 
   const response = await fetch("https://api.stripe.com/v1/fx_quotes", {
     body,
@@ -50,11 +70,7 @@ export async function createGbpEstimateFxQuote(args: {
   }
 
   const quote = (await response.json()) as StripeFxQuote
-  const rate = quote.rates?.gbp?.exchange_rate ?? null
-
-  if (typeof rate !== "number" || !Number.isFinite(rate) || rate <= 0) {
-    throw new Error("Stripe FX quote did not include a usable exchange rate.")
-  }
+  const rate = getGbpEstimateRate(quote, args.estimateCurrency)
 
   return {
     quoteId: quote.id,
@@ -66,5 +82,9 @@ export function estimateFromGbpMinorUnits(args: {
   amount: number
   rate: number
 }) {
-  return Math.max(0, Math.round(args.amount * args.rate))
+  if (!Number.isFinite(args.rate) || args.rate <= 0) {
+    throw new Error("A positive FX rate is required.")
+  }
+
+  return Math.max(0, Math.round(args.amount / args.rate))
 }

@@ -243,6 +243,23 @@ function getStripeStatusPriority(status: Stripe.Subscription.Status) {
       return 1
     case "incomplete_expired":
       return 0
+    default:
+      return -1
+  }
+}
+
+function normalizeCheckoutPaymentStatus(
+  status: Stripe.Checkout.Session.PaymentStatus
+): CheckoutSessionCompletionSyncResult["paymentStatus"] {
+  switch (status) {
+    case "no_payment_required":
+      return "no_payment_required"
+    case "paid":
+      return "paid"
+    case "unpaid":
+      return "unpaid"
+    default:
+      return null
   }
 }
 
@@ -569,7 +586,9 @@ async function getLiveStripePriceSnapshot<
   return args.fallbackPricing
 }
 
-function getEstimatedPricingSnapshot<TInterval extends "month" | "year">(args: {
+export function getEstimatedPricingSnapshot<
+  TInterval extends "month" | "year",
+>(args: {
   estimateCurrency: SupportedPricingCurrency
   fxRate: number | null
   pricing: {
@@ -592,6 +611,15 @@ function getEstimatedPricingSnapshot<TInterval extends "month" | "year">(args: {
   }
 }
 
+export function resolveDisplayedPricingCurrency(args: {
+  estimateCurrency: SupportedPricingCurrency
+  fxRate: number | null
+}) {
+  return args.estimateCurrency === "GBP" || args.fxRate
+    ? args.estimateCurrency
+    : ("GBP" as const)
+}
+
 async function buildStripeEstimatedPricingCatalog(args: {
   baseCatalog: PricingCatalog
   ctx: PublicActionCtx
@@ -605,10 +633,10 @@ async function buildStripeEstimatedPricingCatalog(args: {
       : await createGbpEstimateFxQuote({
           estimateCurrency: args.estimateCurrency,
         }).catch(() => null)
-  const displayedCurrency =
-    args.estimateCurrency === "GBP" || fxQuote
-      ? args.estimateCurrency
-      : ("GBP" as const)
+  const displayedCurrency = resolveDisplayedPricingCurrency({
+    estimateCurrency: args.estimateCurrency,
+    fxRate: fxQuote?.rate ?? null,
+  })
   const paidPlanKeys = args.baseCatalog.plans
     .filter((plan) => plan.planType === "paid")
     .map((plan) => plan.planKey)
@@ -1847,7 +1875,7 @@ export const syncCheckoutSessionCompletion = action({
       }
 
       return {
-        paymentStatus: session.payment_status,
+        paymentStatus: normalizeCheckoutPaymentStatus(session.payment_status),
         planKey: session.metadata?.planKey ?? null,
         sessionId: session.id,
         status: session.status ?? "open",

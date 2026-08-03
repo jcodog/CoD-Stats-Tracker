@@ -2,9 +2,9 @@
 
 import { v } from "convex/values"
 import { internal } from "../../../_generated/api"
-import type { Id } from "../../../_generated/dataModel"
+import type { Doc, Id } from "../../../_generated/dataModel"
 import { action, type ActionCtx } from "../../../_generated/server"
-import { getConvexEnv } from "../../../env"
+import { getConvexEnv } from "../../../../src/env"
 import {
   participantQueueRankValidator,
   queueNotificationMethodValidator,
@@ -70,7 +70,10 @@ function getDiscordChannelUrl(args: { channelId: string; guildId: string }) {
   return `https://discord.com/channels/${args.guildId}/${args.channelId}`
 }
 
-async function getQueueForWorker(ctx: ActionCtx, queueId: Id<"viewerQueues">) {
+async function getQueueForWorker(
+  ctx: ActionCtx,
+  queueId: Id<"viewerQueues">
+): Promise<Doc<"viewerQueues">> {
   return await ctx.runQuery(
     internal.queries.creatorTools.playingWithViewers.queue.getQueueById,
     {
@@ -226,7 +229,15 @@ export const getDiscordQueueInviteForWorker = action({
     queueId: v.id("viewerQueues"),
     workerSecret: v.string(),
   },
-  handler: async (ctx, args) => {
+  handler: async (
+    ctx,
+    args
+  ): Promise<{
+    channelName: string
+    discordChannelUrl: string
+    discordInviteUrl: string
+    guildName?: string
+  }> => {
     requireValidTwitchWorkerSecret(args.workerSecret)
     requirePlayWithViewersTwitchEnabled()
 

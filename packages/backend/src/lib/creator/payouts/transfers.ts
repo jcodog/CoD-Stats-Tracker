@@ -116,6 +116,11 @@ export type CreatorPayoutPeriod = {
 }
 
 export type StripeTransferCreator = {
+  balance: {
+    retrieve: () => Promise<{
+      available: Array<{ amount: number; currency: string }>
+    }>
+  }
   transfers: {
     create: (
       params: {
@@ -123,6 +128,7 @@ export type StripeTransferCreator = {
         currency: string
         destination: string
         metadata: Record<string, string>
+        transfer_group: string
       },
       options: { idempotencyKey: string }
     ) => Promise<{ id: string }>
@@ -377,6 +383,22 @@ export function buildCreatorPayoutTransferIdempotencyKey(args: {
   )
 }
 
+export function buildCreatorPayoutTransferGroup(args: { payoutRunId: string }) {
+  return [STRIPE_CATALOG_APP, "creator-payout-run", args.payoutRunId].join(":")
+}
+
+export async function getAvailablePlatformBalanceForCurrency(args: {
+  currency: string
+  stripe: Pick<StripeTransferCreator, "balance">
+}) {
+  const balance = await args.stripe.balance.retrieve()
+  const currency = toNormalizedCurrency(args.currency)
+
+  return balance.available
+    .filter((entry) => toNormalizedCurrency(entry.currency) === currency)
+    .reduce((total, entry) => total + entry.amount, 0)
+}
+
 export function buildCreatorPayoutTransferMetadata(args: {
   creatorAccountId: string
   creatorCode: string
@@ -417,6 +439,9 @@ export async function createCreatorStripeTransfer(args: {
         ledgerEntryCount: args.ledgerEntryCount,
         payoutRunId: args.payoutRunId,
         payoutTransferId: args.payoutTransferId,
+      }),
+      transfer_group: buildCreatorPayoutTransferGroup({
+        payoutRunId: args.payoutRunId,
       }),
     },
     {

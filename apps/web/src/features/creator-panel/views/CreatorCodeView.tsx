@@ -163,9 +163,9 @@ export function CreatorCodeView() {
             </div>
             <div className="flex flex-wrap gap-2">
               <Button asChild size="sm">
-                <Link href="/creator/connect/start">
+                <Link href="/creator/connect/start?country=GB">
                   <IconExternalLink data-icon="inline-start" />
-                  Complete creator onboarding
+                  Continue as a UK creator
                 </Link>
               </Button>
               <Button asChild size="sm" variant="outline">
@@ -429,7 +429,13 @@ export function CreatorCodeView() {
 
               <div className="flex flex-wrap gap-2">
                 <Button asChild size="sm">
-                  <Link href="/creator/connect/start">
+                  <Link
+                    href={
+                      creatorAccount.stripeConnectedAccountId
+                        ? "/creator/connect/start"
+                        : "/creator/connect/start?country=GB"
+                    }
+                  >
                     <IconExternalLink data-icon="inline-start" />
                     {connectActionLabel}
                   </Link>
