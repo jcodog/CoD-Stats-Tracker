@@ -1,81 +1,25 @@
 "use client"
 
 import * as React from "react"
+import { cn } from "cn"
 import { Dialog as SheetPrimitive } from "radix-ui"
 
-import { cn } from "@workspace/ui/lib/utils"
 import { Button } from "@workspace/ui/components/button"
-import {
-  Drawer,
-  DrawerClose,
-  DrawerContent,
-  DrawerDescription,
-  DrawerFooter,
-  DrawerHeader,
-  DrawerTitle,
-  DrawerTrigger,
-} from "@workspace/ui/components/drawer"
-import { useIsMobile } from "@workspace/ui/hooks/use-mobile"
 import { IconX } from "@tabler/icons-react"
 
-const SheetViewportContext = React.createContext(false)
-
-type SheetRootProps = React.ComponentProps<typeof SheetPrimitive.Root> & {
-  mobileVariant?: "drawer" | "sheet"
-}
-
-function Sheet({
-  mobileVariant = "drawer",
-  ...props
-}: SheetRootProps) {
-  const isMobile = useIsMobile()
-  const useDrawer = isMobile && mobileVariant === "drawer"
-
-  return (
-    <SheetViewportContext.Provider value={useDrawer}>
-      {useDrawer ? (
-        <Drawer
-          data-slot="sheet"
-          {...(props as React.ComponentProps<typeof Drawer>)}
-        />
-      ) : (
-        <SheetPrimitive.Root data-slot="sheet" {...props} />
-      )}
-    </SheetViewportContext.Provider>
-  )
+function Sheet({ ...props }: React.ComponentProps<typeof SheetPrimitive.Root>) {
+  return <SheetPrimitive.Root data-slot="sheet" {...props} />
 }
 
 function SheetTrigger({
   ...props
 }: React.ComponentProps<typeof SheetPrimitive.Trigger>) {
-  const isMobile = React.useContext(SheetViewportContext)
-
-  if (isMobile) {
-    return (
-      <DrawerTrigger
-        data-slot="sheet-trigger"
-        {...(props as React.ComponentProps<typeof DrawerTrigger>)}
-      />
-    )
-  }
-
   return <SheetPrimitive.Trigger data-slot="sheet-trigger" {...props} />
 }
 
 function SheetClose({
   ...props
 }: React.ComponentProps<typeof SheetPrimitive.Close>) {
-  const isMobile = React.useContext(SheetViewportContext)
-
-  if (isMobile) {
-    return (
-      <DrawerClose
-        data-slot="sheet-close"
-        {...(props as React.ComponentProps<typeof DrawerClose>)}
-      />
-    )
-  }
-
   return <SheetPrimitive.Close data-slot="sheet-close" {...props} />
 }
 
@@ -93,7 +37,7 @@ function SheetOverlay({
     <SheetPrimitive.Overlay
       data-slot="sheet-overlay"
       className={cn(
-        "fixed inset-0 z-50 bg-black/10 duration-100 supports-backdrop-filter:backdrop-blur-xs data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
+        "fixed inset-0 z-50 bg-black/80 duration-100 supports-backdrop-filter:backdrop-blur-xs data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
         className
       )}
       {...props}
@@ -111,32 +55,6 @@ function SheetContent({
   side?: "top" | "right" | "bottom" | "left"
   showCloseButton?: boolean
 }) {
-  const isMobile = React.useContext(SheetViewportContext)
-
-  if (isMobile) {
-    return (
-      <DrawerContent
-        data-slot="sheet-content"
-        className={cn("gap-4", className)}
-        {...(props as React.ComponentProps<typeof DrawerContent>)}
-      >
-        {children}
-        {showCloseButton ? (
-          <DrawerClose asChild>
-            <Button
-              variant="ghost"
-              className="absolute top-3 right-3"
-              size="icon-sm"
-            >
-              <IconX />
-              <span className="sr-only">Close</span>
-            </Button>
-          </DrawerClose>
-        ) : null}
-      </DrawerContent>
-    )
-  }
-
   return (
     <SheetPortal>
       <SheetOverlay />
@@ -144,7 +62,7 @@ function SheetContent({
         data-slot="sheet-content"
         data-side={side}
         className={cn(
-          "fixed z-50 flex flex-col gap-4 bg-background bg-clip-padding text-sm shadow-lg transition duration-200 ease-in-out data-[side=bottom]:inset-x-0 data-[side=bottom]:bottom-0 data-[side=bottom]:h-auto data-[side=bottom]:border-t data-[side=left]:inset-y-0 data-[side=left]:left-0 data-[side=left]:h-full data-[side=left]:w-3/4 data-[side=left]:border-r data-[side=right]:inset-y-0 data-[side=right]:right-0 data-[side=right]:h-full data-[side=right]:w-3/4 data-[side=right]:border-l data-[side=top]:inset-x-0 data-[side=top]:top-0 data-[side=top]:h-auto data-[side=top]:border-b data-[side=left]:sm:max-w-sm data-[side=right]:sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-[side=bottom]:data-open:slide-in-from-bottom-10 data-[side=left]:data-open:slide-in-from-left-10 data-[side=right]:data-open:slide-in-from-right-10 data-[side=top]:data-open:slide-in-from-top-10 data-closed:animate-out data-closed:fade-out-0 data-[side=bottom]:data-closed:slide-out-to-bottom-10 data-[side=left]:data-closed:slide-out-to-left-10 data-[side=right]:data-closed:slide-out-to-right-10 data-[side=top]:data-closed:slide-out-to-top-10",
+          "fixed z-50 flex flex-col bg-popover bg-clip-padding text-xs/relaxed text-popover-foreground shadow-lg transition duration-200 ease-in-out data-[side=bottom]:inset-x-0 data-[side=bottom]:bottom-0 data-[side=bottom]:h-auto data-[side=bottom]:border-t data-[side=left]:inset-y-0 data-[side=left]:left-0 data-[side=left]:h-full data-[side=left]:w-3/4 data-[side=left]:border-r data-[side=right]:inset-y-0 data-[side=right]:right-0 data-[side=right]:h-full data-[side=right]:w-3/4 data-[side=right]:border-l data-[side=top]:inset-x-0 data-[side=top]:top-0 data-[side=top]:h-auto data-[side=top]:border-b data-[side=left]:sm:max-w-sm data-[side=right]:sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-[side=bottom]:data-open:slide-in-from-bottom-10 data-[side=left]:data-open:slide-in-from-left-10 data-[side=right]:data-open:slide-in-from-right-10 data-[side=top]:data-open:slide-in-from-top-10 data-closed:animate-out data-closed:fade-out-0 data-[side=bottom]:data-closed:slide-out-to-bottom-10 data-[side=left]:data-closed:slide-out-to-left-10 data-[side=right]:data-closed:slide-out-to-right-10 data-[side=top]:data-closed:slide-out-to-top-10",
           className
         )}
         {...props}
@@ -154,7 +72,7 @@ function SheetContent({
           <SheetPrimitive.Close data-slot="sheet-close" asChild>
             <Button
               variant="ghost"
-              className="absolute top-3 right-3"
+              className="absolute top-4 right-4"
               size="icon-sm"
             >
               <IconX
@@ -169,44 +87,20 @@ function SheetContent({
 }
 
 function SheetHeader({ className, ...props }: React.ComponentProps<"div">) {
-  const isMobile = React.useContext(SheetViewportContext)
-
-  if (isMobile) {
-    return (
-      <DrawerHeader
-        data-slot="sheet-header"
-        className={className}
-        {...props}
-      />
-    )
-  }
-
   return (
     <div
       data-slot="sheet-header"
-      className={cn("flex flex-col gap-0.5 p-4", className)}
+      className={cn("flex flex-col gap-1.5 p-6", className)}
       {...props}
     />
   )
 }
 
 function SheetFooter({ className, ...props }: React.ComponentProps<"div">) {
-  const isMobile = React.useContext(SheetViewportContext)
-
-  if (isMobile) {
-    return (
-      <DrawerFooter
-        data-slot="sheet-footer"
-        className={className}
-        {...props}
-      />
-    )
-  }
-
   return (
     <div
       data-slot="sheet-footer"
-      className={cn("mt-auto flex flex-col gap-2 p-4", className)}
+      className={cn("mt-auto flex flex-col gap-2 p-6", className)}
       {...props}
     />
   )
@@ -216,22 +110,13 @@ function SheetTitle({
   className,
   ...props
 }: React.ComponentProps<typeof SheetPrimitive.Title>) {
-  const isMobile = React.useContext(SheetViewportContext)
-
-  if (isMobile) {
-    return (
-      <DrawerTitle
-        data-slot="sheet-title"
-        className={className}
-        {...(props as React.ComponentProps<typeof DrawerTitle>)}
-      />
-    )
-  }
-
   return (
     <SheetPrimitive.Title
       data-slot="sheet-title"
-      className={cn("text-base font-medium text-foreground", className)}
+      className={cn(
+        "font-heading text-sm font-medium text-foreground",
+        className
+      )}
       {...props}
     />
   )
@@ -241,22 +126,10 @@ function SheetDescription({
   className,
   ...props
 }: React.ComponentProps<typeof SheetPrimitive.Description>) {
-  const isMobile = React.useContext(SheetViewportContext)
-
-  if (isMobile) {
-    return (
-      <DrawerDescription
-        data-slot="sheet-description"
-        className={className}
-        {...(props as React.ComponentProps<typeof DrawerDescription>)}
-      />
-    )
-  }
-
   return (
     <SheetPrimitive.Description
       data-slot="sheet-description"
-      className={cn("text-sm text-muted-foreground", className)}
+      className={cn("text-xs/relaxed text-muted-foreground", className)}
       {...props}
     />
   )
