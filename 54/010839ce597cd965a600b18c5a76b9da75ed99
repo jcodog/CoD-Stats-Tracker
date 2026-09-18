@@ -1,0 +1,16 @@
+packages/backend/convex/_generated/server.d.ts
+  h_2bc691fceb4fe5 24-34,109-116
+packages/backend/convex/_generated/server.js
+  h_2bc691fceb4fe5 94-101
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "54010839ce597cd965a600b18c5a76b9da75ed99",
+  "prompts": {},
+  "humans": {
+    "h_2bc691fceb4fe5": {
+      "author": "Jason Connolly <jcodog@jconet.co.uk>"
+    }
+  }
+}
