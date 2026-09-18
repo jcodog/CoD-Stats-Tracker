@@ -20,10 +20,7 @@ import {
 import { Databuddy } from "@databuddy/sdk/react"
 import { env } from "@/env/client"
 
-const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-sans",
-})
+const inter = Inter({subsets:['latin'],variable:'--font-sans'})
 
 const fontMono = Geist_Mono({
   subsets: ["latin"],

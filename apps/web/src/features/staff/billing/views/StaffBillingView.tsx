@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, type Dispatch, type SetStateAction } from "react"
-import type { ColumnDef } from "@tanstack/react-table"
+import type { LegacyColumnDef as ColumnDef } from "@tanstack/react-table/legacy"
 import { IconDotsVertical, IconPlugConnected } from "@tabler/icons-react"
 import type {
   StaffAuditLogEntry,

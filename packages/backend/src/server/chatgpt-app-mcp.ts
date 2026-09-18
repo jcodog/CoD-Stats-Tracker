@@ -922,8 +922,10 @@ export function createChatGptAppMcpServer(
       template.title,
       template.resourceUri,
       {
-        description: template.description,
-        _meta: templateResourceMeta,
+        _meta: {
+          ...templateResourceMeta,
+          description: template.description,
+        },
       },
       async () => ({
         contents: [

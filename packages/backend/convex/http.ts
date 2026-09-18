@@ -504,7 +504,8 @@ const validateRequest = async (req: Request): Promise<WebhookEvent | null> => {
   const wh = new Webhook(secret)
 
   try {
-    return wh.verify(payloadString, svixHeaders) as WebhookEvent
+    wh.verify(payloadString, svixHeaders)
+    return JSON.parse(payloadString) as WebhookEvent
   } catch (error) {
     console.error("Error verifying webhook event", error)
     return null

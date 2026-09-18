@@ -248,6 +248,19 @@ function getStripeStatusPriority(status: Stripe.Subscription.Status) {
   }
 }
 
+function normalizeCheckoutSessionStatus(
+  status: Stripe.Checkout.Session.Status | null
+): CheckoutSessionCompletionSyncResult["status"] {
+  switch (status) {
+    case "complete":
+      return "complete"
+    case "expired":
+      return "expired"
+    default:
+      return "open"
+  }
+}
+
 function normalizeCheckoutPaymentStatus(
   status: Stripe.Checkout.Session.PaymentStatus
 ): CheckoutSessionCompletionSyncResult["paymentStatus"] {
@@ -1878,7 +1891,7 @@ export const syncCheckoutSessionCompletion = action({
         paymentStatus: normalizeCheckoutPaymentStatus(session.payment_status),
         planKey: session.metadata?.planKey ?? null,
         sessionId: session.id,
-        status: session.status ?? "open",
+        status: normalizeCheckoutSessionStatus(session.status),
         subscriptionId: sessionSubscriptionId,
         synced: Boolean(sessionCustomerId || sessionSubscriptionId),
       }

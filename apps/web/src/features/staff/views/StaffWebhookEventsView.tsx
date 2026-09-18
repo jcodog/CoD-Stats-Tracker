@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
-import type { ColumnDef } from "@tanstack/react-table"
+import type { LegacyColumnDef as ColumnDef } from "@tanstack/react-table/legacy"
 import { IconCopy, IconReload } from "@tabler/icons-react"
 import type { Id } from "@workspace/backend/convex/_generated/dataModel"
 import type {

@@ -1,15 +1,14 @@
 "use client"
 
 import { useDeferredValue, useState } from "react"
+import { flexRender, type SortingState } from "@tanstack/react-table"
 import {
-  flexRender,
   getCoreRowModel,
   getFilteredRowModel,
   getSortedRowModel,
-  type ColumnDef,
-  type SortingState,
-  useReactTable,
-} from "@tanstack/react-table"
+  type LegacyColumnDef as ColumnDef,
+  useLegacyTable as useReactTable,
+} from "@tanstack/react-table/legacy"
 import { IconArrowsSort, IconSearch } from "@tabler/icons-react"
 
 import {

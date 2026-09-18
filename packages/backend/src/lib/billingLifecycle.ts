@@ -543,7 +543,14 @@ export async function reconcileBillingCustomer(args: {
       billingContext.customer?.phone ??
       undefined,
     stripeCustomerId: args.stripeCustomerId,
-    taxExempt: stripeCustomer?.tax_exempt ?? undefined,
+    taxExempt:
+      stripeCustomer?.tax_exempt === "exempt"
+        ? "exempt"
+        : stripeCustomer?.tax_exempt === "none"
+          ? "none"
+          : stripeCustomer?.tax_exempt === "reverse"
+            ? "reverse"
+            : undefined,
     taxIds,
     userId: billingContext.user._id,
   })
