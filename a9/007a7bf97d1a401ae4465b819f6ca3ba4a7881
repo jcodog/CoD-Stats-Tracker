@@ -1,0 +1,209 @@
+apps/web/src/features/creator-panel/components/CreatorConsoleSidebar.tsx
+  s_24e8dc9509393a::t_607ff9a8c3dd71 90-100
+packages/ui/src/components/sheet.tsx
+  s_24e8dc9509393a::t_607ff9a8c3dd71 73
+  s_24e8dc9509393a::t_f866ab6f8b1439 4,10,14,18,22,26,28,31,45,52,56,63-69,71-72,74,77,102,118
+apps/web/src/features/billing/views/CheckoutView.tsx
+  s_24e8dc9509393a::t_607ff9a8c3dd71 152,204-209,242-243,249-251,273-275,317-329,372-375,379-383,417-419
+  s_24e8dc9509393a::t_522d8863541a0c 16
+packages/ui/src/hooks/use-mobile.ts
+  s_24e8dc9509393a::t_607ff9a8c3dd71 1-19
+apps/web/src/components/providers/theme-provider.tsx
+  s_24e8dc9509393a::t_bc5b1371535bd6 4
+packages/ui/src/components/scroll-area.tsx
+  s_24e8dc9509393a::t_a3d489e39189aa 4,11,34,36,46,50
+packages/backend/package.json
+  s_24e8dc9509393a::t_cb3ae92e0e5717 21,42
+  s_24e8dc9509393a::t_df89b9423506cd 41
+packages/ui/src/components/alert-dialog.tsx
+  s_24e8dc9509393a::t_f866ab6f8b1439 4,9,13,19,28,30,33,45,51,147,149-153,162,165-170
+packages/ui/src/lib/utils.ts
+  s_24e8dc9509393a::t_9dfdc428e0477e 1
+apps/web/src/features/staff/components/StaffConsoleHeader.tsx
+  s_24e8dc9509393a::t_d4b44e11390487 16
+  s_24e8dc9509393a::t_607ff9a8c3dd71 38-40,52-54,83-90
+apps/web/src/features/staff/components/StaffRankedCatalogSection.tsx
+  s_24e8dc9509393a::t_607ff9a8c3dd71 993-996
+  s_24e8dc9509393a::t_efee87b66844e7 997-999
+apps/web/src/features/billing/views/BillingSettingsView.tsx
+  s_24e8dc9509393a::t_607ff9a8c3dd71 180-182,257-258,286-288,307-312
+  s_24e8dc9509393a::t_911d62718dc366 14
+apps/web/src/features/staff/views/StaffManagementView.tsx
+  s_24e8dc9509393a::t_607ff9a8c3dd71 231-242
+apps/web/package.json
+  h_2bc691fceb4fe5 7
+  s_24e8dc9509393a::t_df89b9423506cd 59
+  s_24e8dc9509393a::t_cb3ae92e0e5717 18,60
+packages/ui/components.json
+  s_24e8dc9509393a::t_9c9f73f5d908e2 3,14-16
+apps/twitch/package.json
+  s_24e8dc9509393a::t_cc11286d1bc762 26
+  s_24e8dc9509393a::t_cb3ae92e0e5717 10,27
+packages/eslint-config/package.json
+  s_24e8dc9509393a::t_cc11286d1bc762 15
+  s_24e8dc9509393a::t_cb3ae92e0e5717 16
+packages/ui/src/components/popover.tsx
+  s_24e8dc9509393a::t_a3d489e39189aa 4,7,11,18-19,22-26,29,31-32,34-44,59,61,72,74
+apps/web/src/features/auth/views/AuthFallbackView.tsx
+  s_24e8dc9509393a::t_d4b44e11390487 12
+  s_24e8dc9509393a::t_607ff9a8c3dd71 78-80,82-87,89-97
+apps/web/src/features/creator-panel/views/CreatorHomeView.tsx
+  s_24e8dc9509393a::t_607ff9a8c3dd71 123-134,171-179,182-189,321-327
+  s_24e8dc9509393a::t_d4b44e11390487 26
+packages/ui/src/components/breadcrumb.tsx
+  s_24e8dc9509393a::t_607ff9a8c3dd71 87,107
+  s_24e8dc9509393a::t_08641952710f98 2-3,43,45-58
+apps/web/src/features/creator-panel/views/CreatorCodeView.tsx
+  s_24e8dc9509393a::t_607ff9a8c3dd71 165-177,435-452
+  s_24e8dc9509393a::t_c021abbdd21369 31
+apps/web/src/features/staff/components/StaffDataTable.tsx
+  s_24e8dc9509393a::t_9dfdc428e0477e 36,46
+  s_24e8dc9509393a::t_607ff9a8c3dd71 4-8,147-149
+packages/ui/package.json
+  s_24e8dc9509393a::t_df89b9423506cd 38
+  s_24e8dc9509393a::t_cb3ae92e0e5717 9,39
+apps/web/src/features/billing/views/UpgradePlanView.tsx
+  s_24e8dc9509393a::t_607ff9a8c3dd71 247-259
+  s_24e8dc9509393a::t_2e30e2b61f25cc 12
+docs/modernization-status.md
+  s_24e8dc9509393a::t_1cddb1d7ab69c0 1-44
+packages/backend/convex/actions/billing/customer.ts
+  s_24e8dc9509393a::t_1220053f5f1e8d 1,380-381,1571,1907
+packages/ui/src/components/combobox.tsx
+  s_24e8dc9509393a::t_607ff9a8c3dd71 113-116
+  s_24e8dc9509393a::t_d4c348559585d1 74,78
+packages/ui/src/components/toggle-group.tsx
+  s_24e8dc9509393a::t_f866ab6f8b1439 4-5,31,37,55,65,69,85
+apps/web/src/features/account/components/ChatGptAppSettingsSection.tsx
+  s_24e8dc9509393a::t_607ff9a8c3dd71 185-196,217-227
+  s_24e8dc9509393a::t_a6d20f44fcccfb 21
+apps/web/src/components/theme-toggle.tsx
+  s_24e8dc9509393a::t_607ff9a8c3dd71 19-31
+apps/web/src/features/creator-panel/components/CreatorConsoleHeader.tsx
+  s_24e8dc9509393a::t_d4b44e11390487 16
+  s_24e8dc9509393a::t_607ff9a8c3dd71 33-35,47-49,97-104
+packages/backend/.env.local.example
+  s_24e8dc9509393a::t_1220053f5f1e8d 36-38
+packages/ui/src/components/sidebar.tsx
+  s_24e8dc9509393a::t_695800c837895b 4-5,401,403-420,425,427-444,506,513-517,519-534,537,548,561,564-586,673,678-701
+  s_24e8dc9509393a::t_9dfdc428e0477e 9
+packages/ui/src/components/select.tsx
+  s_24e8dc9509393a::t_607ff9a8c3dd71 6-11,91-92,175,193
+  s_24e8dc9509393a::t_a3d489e39189aa 4,13,15,25-32,40,54-58,66-67,69-70,72-76,79-81,83-85,87-89,94,96-100,108,110,122,132-141,149,165,167,170,176,183,185,188,194
+apps/web/src/app/(protected)/checkout/cancelled/page.tsx
+  s_24e8dc9509393a::t_d4b44e11390487 4
+  s_24e8dc9509393a::t_607ff9a8c3dd71 22-30
+packages/ui/src/components/label.tsx
+  s_24e8dc9509393a::t_a3d489e39189aa 6,8
+apps/web/src/features/staff/billing/views/StaffBillingView.tsx
+  s_24e8dc9509393a::t_607ff9a8c3dd71 1050-1060,1175-1185,1397-1407,2380-2392
+packages/backend/src/env.ts
+  s_24e8dc9509393a::t_1220053f5f1e8d 32
+apps/web/src/components/app-shell/MobileProtectedSidebar.tsx
+  s_24e8dc9509393a::t_607ff9a8c3dd71 71-88
+apps/web/src/app/(protected)/checkout/complete/page.tsx
+  s_24e8dc9509393a::t_d4b44e11390487 6
+  s_24e8dc9509393a::t_607ff9a8c3dd71 13-19,103-105,109-112,120-128
+packages/backend/src/lib/__tests__/checkout-policy.test.mjs
+  s_24e8dc9509393a::t_1220053f5f1e8d 1-11
+apps/web/src/features/pricing/components/PricingSections.tsx
+  s_24e8dc9509393a::t_607ff9a8c3dd71 246-251
+  s_24e8dc9509393a::t_d4b44e11390487 13
+packages/ui/src/components/dropdown-menu.tsx
+  s_24e8dc9509393a::t_607ff9a8c3dd71 43-46,140-143,178,218
+  s_24e8dc9509393a::t_a3d489e39189aa 4,6,8-9,12-13,16-17,22-23,25,27-31,33-35,37-42,47-50,54-60,62-64,66-74,83,88,101-105,108,110,114-115,118,124-125,129-134,136,138-139,144-147,153,156,159,163-164,170,175,177,179,182,186-195,197,200,204-205,208,212-217,219-222,229,231
+packages/backend/convex/queries/billing/catalog.ts
+  s_24e8dc9509393a::t_1220053f5f1e8d 1-2,476-481
+packages/backend/src/lib/checkoutPolicy.ts
+  s_24e8dc9509393a::t_1220053f5f1e8d 1-4
+packages/ui/src/components/dialog.tsx
+  s_24e8dc9509393a::t_f866ab6f8b1439 4,10,14,18,22,29,31,47,53,63-69,71-72,74,77,111-112,119,132
+  s_24e8dc9509393a::t_607ff9a8c3dd71 73
+apps/web/src/features/landing/components/NavbarAuthActions.tsx
+  s_24e8dc9509393a::t_607ff9a8c3dd71 49-57,64-72
+  s_24e8dc9509393a::t_d4b44e11390487 6
+apps/web/src/features/dashboard-stats/components/log-match/LogMatchSheet.tsx
+  s_24e8dc9509393a::t_607ff9a8c3dd71 277-284,286-297,383
+packages/ui/src/components/input.tsx
+  s_24e8dc9509393a::t_a3d489e39189aa 2,7
+apps/web/src/features/creator-tools/play-with-viewers/views/PlayWithViewersDashboardView.tsx
+  s_24e8dc9509393a::t_d4b44e11390487 2914-2919
+  s_24e8dc9509393a::t_607ff9a8c3dd71 319-321,363,443,453-455,592-594,664-672,715,732-736,828-829,1279,1313,1467-1469,1835,1886,1891,2125-2136,2366-2377,2792-2800,2920
+  s_24e8dc9509393a::t_f512b1459de648 83
+packages/ui/src/components/sonner.tsx
+  s_24e8dc9509393a::t_607ff9a8c3dd71 5-11,21-25
+apps/web/components.json
+  s_24e8dc9509393a::t_9c9f73f5d908e2 3
+apps/web/src/features/staff/components/StaffConsoleSidebar.tsx
+  s_24e8dc9509393a::t_607ff9a8c3dd71 103-112,131-141,156-170,184-198,213-224
+apps/web/src/features/landing/components/LandingSections.tsx
+  s_24e8dc9509393a::t_607ff9a8c3dd71 267-272,451-453
+  s_24e8dc9509393a::t_d4b44e11390487 27
+apps/web/src/components/AppSelect.tsx
+  s_24e8dc9509393a::t_607ff9a8c3dd71 53-61
+  s_24e8dc9509393a::t_825af88da66cf7 7,42-46,52,62
+package.json
+  s_24e8dc9509393a::t_cb3ae92e0e5717 14
+  s_24e8dc9509393a::t_df89b9423506cd 13
+  s_24e8dc9509393a::t_9028bca563c3d4 36
+packages/ui/src/components/radio-group.tsx
+  s_24e8dc9509393a::t_a3d489e39189aa 3-4,7,9,17,19,27,32-33
+apps/web/src/features/billing/components/DashboardUpgradeCta.tsx
+  s_24e8dc9509393a::t_607ff9a8c3dd71 40-48,50-52,142-148,150-152,172-178,224-235
+  s_24e8dc9509393a::t_6c3d24f6b7c9e6 12
+apps/web/src/features/staff/components/StaffAccessState.tsx
+  s_24e8dc9509393a::t_607ff9a8c3dd71 73-81
+  s_24e8dc9509393a::t_d4b44e11390487 10
+apps/web/src/components/app-shell/ProtectedNavLinks.tsx
+  s_24e8dc9509393a::t_607ff9a8c3dd71 32,41-54,56-58,61
+  s_24e8dc9509393a::t_d4b44e11390487 10
+apps/web/src/lib/flags.ts
+  s_24e8dc9509393a::t_1220053f5f1e8d 81-87
+apps/web/src/features/dashboard-stats/components/create-session/CreateSessionDialog.tsx
+  s_24e8dc9509393a::t_0bc0568fe8eb94 193,198
+apps/web/src/features/dashboard-stats/components/editor/EditorClient.tsx
+  s_24e8dc9509393a::t_822275ba9a819e 652,665,711-713,715
+bun.lock
+  s_24e8dc9509393a::t_e5150da557e0a4 15,21,38,42,84,88,109,113,123,157,162,693,1457
+packages/ui/src/components/avatar.tsx
+  s_24e8dc9509393a::t_c91c2d2ab3b97d 4,11,27,43
+packages/ui/src/components/badge.tsx
+  s_24e8dc9509393a::t_189adec03a1a8c 1-2,32,34-48
+packages/ui/src/components/button.tsx
+  s_24e8dc9509393a::t_05e4f16aa0a3ad 1,45,47
+packages/ui/src/components/collapsible.tsx
+  s_24e8dc9509393a::t_5d84ccda67303e 3,5,9,11,15,17
+packages/ui/src/components/separator.tsx
+  s_24e8dc9509393a::t_a9e03f13367fea 3,10,12
+packages/ui/src/components/switch.tsx
+  s_24e8dc9509393a::t_1fe6aa55cba625 3,10
+packages/ui/src/components/tabs.tsx
+  s_24e8dc9509393a::t_12989b2dba9eaa 3,11,44,55,57,60,71,73
+packages/ui/src/components/toggle.tsx
+  s_24e8dc9509393a::t_9380e3fed666be 3,34,36
+packages/ui/src/components/tooltip.tsx
+  s_24e8dc9509393a::t_bdf1412ac645f3 3,7,9,13,19,23,29-32,35-39,42-45,47,49-60,65
+packages/ui/src/components/command.tsx
+  s_24e8dc9509393a::t_3cd8d60a3a30cf 43-44
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "a9007a7bf97d1a401ae4465b819f6ca3ba4a7881",
+  "prompts": {},
+  "humans": {
+    "h_2bc691fceb4fe5": {
+      "author": "Jason Connolly <jcodog@jconet.co.uk>"
+    }
+  },
+  "sessions": {
+    "s_24e8dc9509393a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b5b4-2983-7e33-a96d-34e8c29148bf",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Jason Connolly <jcodog@jconet.co.uk>"
+    }
+  }
+}
