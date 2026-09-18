@@ -1,0 +1,16 @@
+bun.lock
+  h_2bc691fceb4fe5 177-180,182-1564,1566,1568,1570,1572,1574,1576,1578-1620,1624-1861
+packages/ui/src/components/sidebar.tsx
+  h_2bc691fceb4fe5 8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "2276e9b670253605d51be4d7e0029326a2359fd1",
+  "prompts": {},
+  "humans": {
+    "h_2bc691fceb4fe5": {
+      "author": "Jason Connolly <jcodog@jconet.co.uk>"
+    }
+  }
+}
