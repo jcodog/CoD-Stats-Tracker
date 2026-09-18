@@ -1,0 +1,14 @@
+bun.lock
+  h_2bc691fceb4fe5 177,179-4164,4166-4171,4173,4175-4177,4179,4181-4183,4185,4187-7775,7779-8806
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "c267c62dc55d923d90b97d3d6b6760a4faf617ca",
+  "prompts": {},
+  "humans": {
+    "h_2bc691fceb4fe5": {
+      "author": "Jason Connolly <jcodog@jconet.co.uk>"
+    }
+  }
+}
