@@ -18,7 +18,6 @@ import type * as actions_creatorTools_playingWithViewers_discord from "../action
 import type * as actions_creatorTools_playingWithViewers_queue from "../actions/creatorTools/playingWithViewers/queue.js";
 import type * as actions_creatorTools_playingWithViewers_twitch from "../actions/creatorTools/playingWithViewers/twitch.js";
 import type * as actions_discord_registerCommands from "../actions/discord/registerCommands.js";
-import type * as actions_featureFlags_sync from "../actions/featureFlags/sync.js";
 import type * as actions_migrations_playingWithViewers from "../actions/migrations/playingWithViewers.js";
 import type * as actions_staff_billing from "../actions/staff/billing.js";
 import type * as actions_staff_management from "../actions/staff/management.js";
@@ -44,7 +43,6 @@ import type * as mutations_creator_attribution_lifecycle from "../mutations/crea
 import type * as mutations_creator_program_defaults from "../mutations/creator/program/defaults.js";
 import type * as mutations_creatorTools_playingWithViewers_notifications from "../mutations/creatorTools/playingWithViewers/notifications.js";
 import type * as mutations_creatorTools_playingWithViewers_queue from "../mutations/creatorTools/playingWithViewers/queue.js";
-import type * as mutations_featureFlags_internal from "../mutations/featureFlags/internal.js";
 import type * as mutations_migrations_playingWithViewers from "../mutations/migrations/playingWithViewers.js";
 import type * as mutations_oauth from "../mutations/oauth.js";
 import type * as mutations_staff_internal from "../mutations/staff/internal.js";
@@ -71,7 +69,6 @@ import type * as queries_creator_program_internal from "../queries/creator/progr
 import type * as queries_creatorTools_playingWithViewers_notifications from "../queries/creatorTools/playingWithViewers/notifications.js";
 import type * as queries_creatorTools_playingWithViewers_queue from "../queries/creatorTools/playingWithViewers/queue.js";
 import type * as queries_creatorTools_playingWithViewers_twitch from "../queries/creatorTools/playingWithViewers/twitch.js";
-import type * as queries_featureFlags_internal from "../queries/featureFlags/internal.js";
 import type * as queries_oauth from "../queries/oauth.js";
 import type * as queries_staff_internal from "../queries/staff/internal.js";
 import type * as queries_stats_daily from "../queries/stats/daily.js";
@@ -98,7 +95,6 @@ declare const fullApi: ApiFromModules<{
   "actions/creatorTools/playingWithViewers/queue": typeof actions_creatorTools_playingWithViewers_queue;
   "actions/creatorTools/playingWithViewers/twitch": typeof actions_creatorTools_playingWithViewers_twitch;
   "actions/discord/registerCommands": typeof actions_discord_registerCommands;
-  "actions/featureFlags/sync": typeof actions_featureFlags_sync;
   "actions/migrations/playingWithViewers": typeof actions_migrations_playingWithViewers;
   "actions/staff/billing": typeof actions_staff_billing;
   "actions/staff/management": typeof actions_staff_management;
@@ -124,7 +120,6 @@ declare const fullApi: ApiFromModules<{
   "mutations/creator/program/defaults": typeof mutations_creator_program_defaults;
   "mutations/creatorTools/playingWithViewers/notifications": typeof mutations_creatorTools_playingWithViewers_notifications;
   "mutations/creatorTools/playingWithViewers/queue": typeof mutations_creatorTools_playingWithViewers_queue;
-  "mutations/featureFlags/internal": typeof mutations_featureFlags_internal;
   "mutations/migrations/playingWithViewers": typeof mutations_migrations_playingWithViewers;
   "mutations/oauth": typeof mutations_oauth;
   "mutations/staff/internal": typeof mutations_staff_internal;
@@ -151,7 +146,6 @@ declare const fullApi: ApiFromModules<{
   "queries/creatorTools/playingWithViewers/notifications": typeof queries_creatorTools_playingWithViewers_notifications;
   "queries/creatorTools/playingWithViewers/queue": typeof queries_creatorTools_playingWithViewers_queue;
   "queries/creatorTools/playingWithViewers/twitch": typeof queries_creatorTools_playingWithViewers_twitch;
-  "queries/featureFlags/internal": typeof queries_featureFlags_internal;
   "queries/oauth": typeof queries_oauth;
   "queries/staff/internal": typeof queries_staff_internal;
   "queries/stats/daily": typeof queries_stats_daily;

@@ -16,17 +16,19 @@ export function ThemeToggle() {
 
   return (
     <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          aria-label={`Switch to ${isDark ? "light" : "dark"} mode`}
-          onClick={() => setTheme(isDark ? "light" : "dark")}
-          size="icon-sm"
-          variant="outline"
-        >
-          <IconMoonStars aria-hidden="true" className="dark:hidden" />
-          <IconSunHigh aria-hidden="true" className="hidden dark:block" />
-        </Button>
-      </TooltipTrigger>
+      <TooltipTrigger
+        render={
+          <Button
+            aria-label={`Switch to ${isDark ? "light" : "dark"} mode`}
+            onClick={() => setTheme(isDark ? "light" : "dark")}
+            size="icon-sm"
+            variant="outline"
+          >
+            <IconMoonStars aria-hidden="true" className="dark:hidden" />
+            <IconSunHigh aria-hidden="true" className="hidden dark:block" />
+          </Button>
+        }
+      />
       <TooltipContent>Click or press D to change theme</TooltipContent>
     </Tooltip>
   )

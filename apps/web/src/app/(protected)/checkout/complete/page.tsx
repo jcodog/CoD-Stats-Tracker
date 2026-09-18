@@ -3,18 +3,20 @@ import { auth } from "@clerk/nextjs/server"
 import { fetchAction } from "convex/nextjs"
 
 import { api } from "@workspace/backend/convex/_generated/api"
-import { Button } from "@workspace/ui/components/button"
+import { buttonVariants } from "@workspace/ui/components/button"
 
 import type { CheckoutSessionSyncResult } from "@/features/billing/lib/billing-types"
 import { createPageMetadata } from "@/lib/metadata/page"
 
 export const metadata = createPageMetadata("Checkout Complete")
 
-function getCompletionCopy(result: {
-  paymentStatus: "no_payment_required" | "paid" | "unpaid" | null
-  status: "complete" | "expired" | "open"
-  synced: boolean
-} | null) {
+function getCompletionCopy(
+  result: {
+    paymentStatus: "no_payment_required" | "paid" | "unpaid" | null
+    status: "complete" | "expired" | "open"
+    synced: boolean
+  } | null
+) {
   if (!result) {
     return {
       description:
@@ -98,11 +100,16 @@ export default async function CheckoutCompletePage({
     <section className="mx-auto flex w-full max-w-3xl flex-1 items-center justify-center">
       <div className="w-full border border-border/70 bg-background px-6 py-6">
         <div className="flex flex-col gap-2">
-          <h1 className="text-2xl font-semibold tracking-tight">{copy.title}</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            {copy.title}
+          </h1>
           <p className="text-sm text-muted-foreground">{copy.description}</p>
           {completionResult?.planKey ? (
             <p className="text-sm text-muted-foreground">
-              Plan: <span className="font-medium text-foreground">{completionResult.planKey}</span>
+              Plan:{" "}
+              <span className="font-medium text-foreground">
+                {completionResult.planKey}
+              </span>
             </p>
           ) : null}
           {completionError ? (
@@ -110,12 +117,15 @@ export default async function CheckoutCompletePage({
           ) : null}
         </div>
         <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-          <Button asChild>
-            <Link href="/settings/billing">Open billing</Link>
-          </Button>
-          <Button asChild variant="outline">
-            <Link href="/settings/billing/plan">Back to plans</Link>
-          </Button>
+          <Link href="/settings/billing" className={buttonVariants({})}>
+            Open billing
+          </Link>
+          <Link
+            href="/settings/billing/plan"
+            className={buttonVariants({ variant: "outline" })}
+          >
+            Back to plans
+          </Link>
         </div>
       </div>
     </section>

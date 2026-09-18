@@ -990,7 +990,13 @@ export function StaffRankedCatalogSection({
               </FieldLabel>
               <Select
                 disabled={titles.length === 0}
-                onValueChange={onCatalogTitleChange}
+                items={titles.map((title) => ({
+                  value: title.key,
+                  label: title.label,
+                }))}
+                onValueChange={(value) => {
+                  if (value !== null) onCatalogTitleChange(value)
+                }}
                 value={catalogTitleKey || undefined}
               >
                 <SelectTrigger

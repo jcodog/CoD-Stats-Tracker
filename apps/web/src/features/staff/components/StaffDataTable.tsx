@@ -1,7 +1,11 @@
 "use client"
 
 import { useDeferredValue, useState } from "react"
-import { flexRender, type SortingState } from "@tanstack/react-table"
+import {
+  flexRender,
+  type RowData,
+  type SortingState,
+} from "@tanstack/react-table"
 import {
   getCoreRowModel,
   getFilteredRowModel,
@@ -29,7 +33,7 @@ import {
 import { ScrollArea } from "@workspace/ui/components/scroll-area"
 import { cn } from "@workspace/ui/lib/utils"
 
-type StaffDataTableProps<TData> = {
+type StaffDataTableProps<TData extends RowData> = {
   columns: Array<ColumnDef<TData>>
   data: TData[]
   emptyDescription: string
@@ -39,7 +43,7 @@ type StaffDataTableProps<TData> = {
   toolbar?: React.ReactNode
 }
 
-export function StaffDataTable<TData>({
+export function StaffDataTable<TData extends RowData>({
   columns,
   data,
   emptyDescription,
@@ -140,7 +144,9 @@ export function StaffDataTable<TData>({
                       <Empty className="rounded-none border-0">
                         <EmptyHeader>
                           <EmptyTitle>{emptyTitle}</EmptyTitle>
-                          <EmptyDescription>{emptyDescription}</EmptyDescription>
+                          <EmptyDescription>
+                            {emptyDescription}
+                          </EmptyDescription>
                         </EmptyHeader>
                       </Empty>
                     </TableCell>

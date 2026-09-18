@@ -7,7 +7,7 @@
     "dev": "cd ../.. && bun --watch apps/twitch/src/index.ts",
     "start": "bun run src/index.ts",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "node node_modules/@typescript/native/bin/tsc --noEmit"
   },
   "dependencies": {
     "@t3-oss/env-core": "^0.13.11",
@@ -23,6 +23,7 @@
     "@workspace/eslint-config": "workspace:*",
     "@workspace/typescript-config": "workspace:*",
     "eslint": "^10.10.0",
-    "typescript": "^7.0.2"
+    "@typescript/native": "npm:typescript@7.0.2",
+    "typescript": "6.0.3"
   }
 }

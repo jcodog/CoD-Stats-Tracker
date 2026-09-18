@@ -10,7 +10,7 @@ import { formatCurrencyAmount } from "@/features/billing/lib/format"
 import { CreatorCodeNotice } from "@/features/creator-attribution/components/CreatorCodeNotice"
 import { PricingCurrencySelect } from "@/features/pricing/components/PricingCurrencySelect"
 import type { PendingCreatorCodeSummary } from "@/lib/server/creator-attribution"
-import { Button } from "@workspace/ui/components/button"
+import { buttonVariants } from "@workspace/ui/components/button"
 
 type PricingFeatureRow = {
   category: string
@@ -243,11 +243,12 @@ export function PricingPlanList({
               </div>
 
               <div className="grid gap-2 border-t border-border/70 pt-3 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-6">
-                <Button asChild>
-                  <Link href={getPlanCtaHref(signedIn)}>
-                    {getPlanCtaLabel(plan)}
-                  </Link>
-                </Button>
+                <Link
+                  href={getPlanCtaHref(signedIn)}
+                  className={buttonVariants({})}
+                >
+                  {getPlanCtaLabel(plan)}
+                </Link>
                 <p className="max-w-[12rem] text-xs leading-5 text-foreground/68">
                   {signedIn
                     ? "Continue through billing settings."

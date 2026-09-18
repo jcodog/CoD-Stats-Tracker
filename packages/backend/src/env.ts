@@ -29,6 +29,7 @@ function createConvexEnv() {
       REDIS_TLS_URL: z.string().optional(),
       REDIS_URL: z.string().optional(),
       APP_PUBLIC_ORIGIN: z.string().optional(),
+      BILLING_CHECKOUT_ENABLED: z.string().optional(),
       CREATOR_AUTO_TRANSFER_MAX_MINOR_UNITS: z.coerce
         .number()
         .int()
@@ -41,9 +42,6 @@ function createConvexEnv() {
       SUPER_ADMIN_DISCORD_ID: z.string().optional(),
       SUPER_ADMIN_DISCORD_IDS: z.string().optional(),
       TWITCH_CONVEX_ADMIN_KEY: z.string().optional(),
-      VERCEL_ACCESS_TOKEN: z.string().optional(),
-      VERCEL_PROJECT_ID_OR_NAME: z.string().optional(),
-      VERCEL_TEAM_ID: z.string().optional(),
     },
     runtimeEnv: process.env,
     emptyStringAsUndefined: true,

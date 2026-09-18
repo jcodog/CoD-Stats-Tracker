@@ -649,7 +649,7 @@ function DashboardStatsEditorLoaded({
                                 ? "grid w-full grid-cols-4"
                                 : "justify-start"
                             }
-                            onValueChange={(value) => {
+                            onValueChange={([value]) => {
                               if (
                                 value === "all" ||
                                 value === "7d" ||
@@ -662,8 +662,7 @@ function DashboardStatsEditorLoaded({
                               }
                             }}
                             size="sm"
-                            type="single"
-                            value={selectedTimeRange}
+                            value={[selectedTimeRange]}
                             variant="outline"
                           >
                             <ToggleGroupItem
@@ -709,10 +708,11 @@ function DashboardStatsEditorLoaded({
                                 ? "grid w-full grid-cols-2"
                                 : "justify-start"
                             }
-                            onValueChange={handleLoggingModeChange}
+                            onValueChange={([value]) => {
+                              if (value) handleLoggingModeChange(value)
+                            }}
                             size="sm"
-                            type="single"
-                            value={effectiveLoggingMode}
+                            value={[effectiveLoggingMode]}
                             variant="outline"
                           >
                             <ToggleGroupItem

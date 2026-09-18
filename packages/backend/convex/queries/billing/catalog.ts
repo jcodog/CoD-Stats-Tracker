@@ -1,3 +1,5 @@
+import { getConvexEnv } from "../../../src/env"
+import { isCheckoutEnabled } from "../../../src/lib/checkoutPolicy"
 import { v } from "convex/values"
 import type { Doc } from "../../_generated/dataModel"
 import { internalQuery, query, type QueryCtx } from "../../_generated/server"
@@ -470,4 +472,10 @@ export const getPublicPricingCatalog = query({
       selectedCurrency: pricingCurrency.selectedCurrency,
     }
   },
+})
+
+export const getCheckoutAvailability = query({
+  args: {},
+  returns: v.boolean(),
+  handler: () => isCheckoutEnabled(getConvexEnv().BILLING_CHECKOUT_ENABLED),
 })

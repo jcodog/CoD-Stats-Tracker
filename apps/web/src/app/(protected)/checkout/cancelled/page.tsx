@@ -1,7 +1,7 @@
 import Link from "next/link"
 
 import { createPageMetadata } from "@/lib/metadata/page"
-import { Button } from "@workspace/ui/components/button"
+import { buttonVariants } from "@workspace/ui/components/button"
 
 export const metadata = createPageMetadata("Checkout Cancelled")
 
@@ -19,12 +19,15 @@ export default function CheckoutCancelledPage() {
           </p>
         </div>
         <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-          <Button asChild>
-            <Link href="/settings/billing/plan">Back to plans</Link>
-          </Button>
-          <Button asChild variant="outline">
-            <Link href="/settings/billing">Open billing</Link>
-          </Button>
+          <Link href="/settings/billing/plan" className={buttonVariants({})}>
+            Back to plans
+          </Link>
+          <Link
+            href="/settings/billing"
+            className={buttonVariants({ variant: "outline" })}
+          >
+            Open billing
+          </Link>
         </div>
       </div>
     </section>

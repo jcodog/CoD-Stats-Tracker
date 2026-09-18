@@ -4,6 +4,7 @@ import type { ReactNode } from "react"
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
@@ -38,22 +39,27 @@ export function AppSelect({
   return (
     <Select
       disabled={disabled}
-      onValueChange={onValueChange}
-      value={value ?? ""}
+      items={options}
+      onValueChange={(nextValue) => {
+        if (nextValue !== null) onValueChange(nextValue)
+      }}
+      value={value ?? null}
     >
       <SelectTrigger className={cn("w-full", className)} id={id} size={size}>
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
       <SelectContent>
-        {options.map((option) => (
-          <SelectItem
-            disabled={option.disabled}
-            key={option.value}
-            value={option.value}
-          >
-            {option.label}
-          </SelectItem>
-        ))}
+        <SelectGroup>
+          {options.map((option) => (
+            <SelectItem
+              disabled={option.disabled}
+              key={option.value}
+              value={option.value}
+            >
+              {option.label}
+            </SelectItem>
+          ))}
+        </SelectGroup>
       </SelectContent>
     </Select>
   )

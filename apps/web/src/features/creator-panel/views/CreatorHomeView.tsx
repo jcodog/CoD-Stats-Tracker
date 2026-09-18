@@ -23,7 +23,7 @@ import {
   AlertDescription,
   AlertTitle,
 } from "@workspace/ui/components/alert"
-import { Button } from "@workspace/ui/components/button"
+import { buttonVariants } from "@workspace/ui/components/button"
 import { Skeleton } from "@workspace/ui/components/skeleton"
 
 function CreatorHomeLoadingState() {
@@ -120,14 +120,18 @@ export function CreatorHomeView() {
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button asChild size="sm">
-                <Link href="/creator/connect/start?country=GB">
-                  Continue as a UK creator
-                </Link>
-              </Button>
-              <Button asChild size="sm" variant="outline">
-                <Link href="/dashboard">Back to dashboard</Link>
-              </Button>
+              <Link
+                href="/creator/connect/start?country=GB"
+                className={buttonVariants({ size: "sm" })}
+              >
+                Continue as a UK creator
+              </Link>
+              <Link
+                href="/dashboard"
+                className={buttonVariants({ size: "sm", variant: "outline" })}
+              >
+                Back to dashboard
+              </Link>
             </div>
           </section>
         </div>
@@ -164,25 +168,25 @@ export function CreatorHomeView() {
 
           <div className="flex flex-wrap gap-2">
             {dashboard.creatorAccount.connectState !== "ready" ? (
-              <Button asChild size="sm" variant="outline">
-                <Link
-                  href={
-                    dashboard.creatorAccount.stripeConnectedAccountId
-                      ? "/creator/connect/start"
-                      : "/creator/connect/start?country=GB"
-                  }
-                >
-                  Continue Stripe setup
-                  <IconArrowRight data-icon="inline-end" />
-                </Link>
-              </Button>
-            ) : null}
-            <Button asChild size="sm">
-              <Link href="/creator/code">
-                Manage creator code
+              <Link
+                href={
+                  dashboard.creatorAccount.stripeConnectedAccountId
+                    ? "/creator/connect/start"
+                    : "/creator/connect/start?country=GB"
+                }
+                className={buttonVariants({ size: "sm", variant: "outline" })}
+              >
+                Continue Stripe setup
                 <IconArrowRight data-icon="inline-end" />
               </Link>
-            </Button>
+            ) : null}
+            <Link
+              href="/creator/code"
+              className={buttonVariants({ size: "sm" })}
+            >
+              Manage creator code
+              <IconArrowRight data-icon="inline-end" />
+            </Link>
           </div>
         </section>
 
@@ -314,12 +318,13 @@ export function CreatorHomeView() {
               </div>
 
               <div className="mt-auto">
-                <Button asChild size="sm">
-                  <Link href="/creator/tools/playing-with-viewers">
-                    Open tool
-                    <IconArrowRight data-icon="inline-end" />
-                  </Link>
-                </Button>
+                <Link
+                  href="/creator/tools/playing-with-viewers"
+                  className={buttonVariants({ size: "sm" })}
+                >
+                  Open tool
+                  <IconArrowRight data-icon="inline-end" />
+                </Link>
               </div>
             </div>
           </section>

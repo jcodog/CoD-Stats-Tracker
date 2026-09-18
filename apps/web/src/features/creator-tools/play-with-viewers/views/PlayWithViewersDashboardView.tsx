@@ -80,7 +80,7 @@ import {
   AvatarImage,
 } from "@workspace/ui/components/avatar"
 import { Badge } from "@workspace/ui/components/badge"
-import { Button } from "@workspace/ui/components/button"
+import { buttonVariants, Button } from "@workspace/ui/components/button"
 import {
   Dialog,
   DialogContent,
@@ -316,7 +316,9 @@ function PlatformBadge({
   )
 }
 
-function normalizeQueueRoundUser(user: QueueRoundUser): NormalizedQueueRoundUser {
+function normalizeQueueRoundUser(
+  user: QueueRoundUser
+): NormalizedQueueRoundUser {
   return normalizeStoredQueueParticipant(user) as NormalizedQueueRoundUser
 }
 
@@ -358,8 +360,7 @@ function getNotificationState(user: QueueRoundUser): {
   return {
     failureReason: user.notificationFailureReason ?? user.dmFailureReason,
     notificationMethod:
-      user.notificationMethod ??
-      (user.dmStatus ? "discord_dm" : undefined),
+      user.notificationMethod ?? (user.dmStatus ? "discord_dm" : undefined),
     notificationStatus: user.notificationStatus ?? user.dmStatus,
   }
 }
@@ -439,10 +440,7 @@ function getSelectionResultUsers(
 function isFailedBotDeliveryUser(user: QueueRoundUser) {
   const { notificationMethod, notificationStatus } = getNotificationState(user)
 
-  return (
-    notificationStatus === "failed" &&
-    notificationMethod === "discord_dm"
-  )
+  return notificationStatus === "failed" && notificationMethod === "discord_dm"
 }
 
 function getFailedBotDeliveryUsers(
@@ -452,7 +450,9 @@ function getFailedBotDeliveryUsers(
     return []
   }
 
-  return getSelectionResultUsers(selectionResult).filter(isFailedBotDeliveryUser)
+  return getSelectionResultUsers(selectionResult).filter(
+    isFailedBotDeliveryUser
+  )
 }
 
 function getInitials(value: string) {
@@ -589,7 +589,9 @@ function ToolbarGroup({
       <span className="text-sm font-medium whitespace-nowrap text-muted-foreground">
         {label}
       </span>
-      <div className={cn("flex flex-wrap items-center gap-2", childrenClassName)}>
+      <div
+        className={cn("flex flex-wrap items-center gap-2", childrenClassName)}
+      >
         {children}
       </div>
     </div>
@@ -659,12 +661,15 @@ function LockedState({ queueTitle }: Readonly<{ queueTitle: string }>) {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <Button asChild size="sm">
-            <Link href="/account">Open account</Link>
-          </Button>
-          <Button asChild size="sm" variant="outline">
-            <Link href="/dashboard">Back to dashboard</Link>
-          </Button>
+          <Link href="/account" className={buttonVariants({ size: "sm" })}>
+            Open account
+          </Link>
+          <Link
+            href="/dashboard"
+            className={buttonVariants({ size: "sm", variant: "outline" })}
+          >
+            Back to dashboard
+          </Link>
         </div>
       </div>
     </Panel>
@@ -707,9 +712,7 @@ function SelectionResultSummary({
   return (
     <div className="flex flex-col">
       <div className="flex flex-wrap items-center gap-2 border-b border-border/70 px-4 py-3">
-        <Badge variant="outline">
-          {selectedUsers.length} selected
-        </Badge>
+        <Badge variant="outline">{selectedUsers.length} selected</Badge>
         <span className="text-sm text-muted-foreground">
           {formatDateTime(selectionResult.createdAt)}
         </span>
@@ -726,7 +729,11 @@ function SelectionResultSummary({
           </Alert>
 
           <div className="flex flex-wrap items-center gap-2">
-            <Button onClick={onCopyFailedContactList} size="sm" variant="outline">
+            <Button
+              onClick={onCopyFailedContactList}
+              size="sm"
+              variant="outline"
+            >
               <IconCopy data-icon="inline-start" />
               Copy failed contact list
             </Button>
@@ -818,7 +825,8 @@ function SelectionResultSummary({
               <div className="flex flex-wrap items-center justify-end gap-2">
                 <Badge variant="outline">{getRankLabel(user.rank)}</Badge>
                 {(() => {
-                  const notificationBadge = getNotificationBadgePresentation(user)
+                  const notificationBadge =
+                    getNotificationBadgePresentation(user)
 
                   if (!notificationBadge) {
                     return null
@@ -1268,10 +1276,7 @@ export function PlayWithViewersDashboardView({
       return
     }
 
-    await handleCopyToClipboard(
-      mentions.join("\n"),
-      "Discord mentions copied."
-    )
+    await handleCopyToClipboard(mentions.join("\n"), "Discord mentions copied.")
   }
 
   async function handleCopyFailedDiscordMentions() {
@@ -1305,10 +1310,7 @@ export function PlayWithViewersDashboardView({
       return
     }
 
-    await handleCopyToClipboard(
-      handles.join("\n"),
-      "Twitch handles copied."
-    )
+    await handleCopyToClipboard(handles.join("\n"), "Twitch handles copied.")
   }
 
   async function handleCopyFailedContactList() {
@@ -1462,8 +1464,9 @@ export function PlayWithViewersDashboardView({
         creatorMessage: queue.creatorMessage,
         gameLabel: queue.gameLabel,
         inviteMode: patch.inviteMode ?? queueInviteMode ?? "bot_dm",
-        matchesPerViewer:
-          Number(patch.matchesPerViewer ?? queue.matchesPerViewer),
+        matchesPerViewer: Number(
+          patch.matchesPerViewer ?? queue.matchesPerViewer
+        ),
         maxRank: normalizedRanks.maxRank,
         minRank: normalizedRanks.minRank,
         playersPerBatch: Number(patch.playersPerBatch ?? queue.playersPerBatch),
@@ -1829,7 +1832,7 @@ export function PlayWithViewersDashboardView({
       <header className="flex flex-col gap-3 border-b border-border/70 pb-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div className="flex min-w-0 items-start gap-2">
-            <SidebarTrigger className="-ml-1 mt-0.5 shrink-0 md:hidden" />
+            <SidebarTrigger className="mt-0.5 -ml-1 shrink-0 md:hidden" />
             <div className="flex min-w-0 flex-col gap-2">
               <h1 className="text-2xl font-semibold tracking-tight">
                 {pageTitle}
@@ -1880,12 +1883,12 @@ export function PlayWithViewersDashboardView({
         </div>
 
         <div className="flex min-w-0 flex-wrap items-center gap-4 text-sm text-muted-foreground">
-          <span className="inline-flex min-w-0 max-w-full items-start gap-1.5">
+          <span className="inline-flex max-w-full min-w-0 items-start gap-1.5">
             <IconBrandDiscord className="mt-0.5 shrink-0" />
             <span className="min-w-0 break-words">{discordContextLabel}</span>
           </span>
           {queue && twitchEnabled ? (
-            <span className="inline-flex min-w-0 max-w-full items-start gap-1.5">
+            <span className="inline-flex max-w-full min-w-0 items-start gap-1.5">
               <IconBrandTwitch className="mt-0.5 shrink-0" />
               <span className="min-w-0 break-words">
                 {hasTwitchLinked ? "Creator tools unlocked" : "Tools locked"}
@@ -2119,16 +2122,18 @@ export function PlayWithViewersDashboardView({
                     {isRefreshing ? "Refreshing..." : "Refresh"}
                   </Button>
                   <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button
-                        disabled={entries.length === 0 || isClearingQueue}
-                        size="sm"
-                        variant="ghost"
-                      >
-                        <IconTrash data-icon="inline-start" />
-                        {isClearingQueue ? "Clearing..." : "Clear queue"}
-                      </Button>
-                    </AlertDialogTrigger>
+                    <AlertDialogTrigger
+                      render={
+                        <Button
+                          disabled={entries.length === 0 || isClearingQueue}
+                          size="sm"
+                          variant="ghost"
+                        >
+                          <IconTrash data-icon="inline-start" />
+                          {isClearingQueue ? "Clearing..." : "Clear queue"}
+                        </Button>
+                      }
+                    />
                     <AlertDialogContent size="sm">
                       <AlertDialogHeader>
                         <AlertDialogTitle>
@@ -2358,16 +2363,18 @@ export function PlayWithViewersDashboardView({
                               the bot is already present.
                             </p>
                             <div className="flex flex-wrap gap-2">
-                              <Button asChild size="sm" variant="outline">
-                                <a
-                                  href={DISCORD_BOT_REINVITE_URL}
-                                  rel="noreferrer"
-                                  target="_blank"
-                                >
-                                  <IconExternalLink data-icon="inline-start" />
-                                  Add bot to a server
-                                </a>
-                              </Button>
+                              <a
+                                href={DISCORD_BOT_REINVITE_URL}
+                                rel="noreferrer"
+                                target="_blank"
+                                className={buttonVariants({
+                                  size: "sm",
+                                  variant: "outline",
+                                })}
+                              >
+                                <IconExternalLink data-icon="inline-start" />
+                                Add bot to a server
+                              </a>
                             </div>
                           </AlertDescription>
                         </Alert>
@@ -2782,16 +2789,15 @@ export function PlayWithViewersDashboardView({
             </Button>
             {permissionsDialogNeedsReinvite ? (
               <>
-                <Button asChild variant="outline">
-                  <a
-                    href={DISCORD_BOT_REINVITE_URL}
-                    rel="noreferrer"
-                    target="_blank"
-                  >
-                    <IconExternalLink data-icon="inline-start" />
-                    Reinvite bot
-                  </a>
-                </Button>
+                <a
+                  href={DISCORD_BOT_REINVITE_URL}
+                  rel="noreferrer"
+                  target="_blank"
+                  className={buttonVariants({ variant: "outline" })}
+                >
+                  <IconExternalLink data-icon="inline-start" />
+                  Reinvite bot
+                </a>
                 <Button
                   disabled={!queue || isFixingChannelPermissions}
                   onClick={handleFixChannelPermissions}
@@ -2905,21 +2911,17 @@ export function PlayWithViewersDashboardView({
       </Dialog>
 
       <Dialog
-        onOpenChange={handleSelectionResultOpenChange}
+        onOpenChange={(open, details) => {
+          if (!open && mustAcknowledgeFailedDeliveries) {
+            details.cancel()
+            return
+          }
+          handleSelectionResultOpenChange(open)
+        }}
         open={selectionResultState !== null}
       >
         <DialogContent
           className="sm:max-w-2xl"
-          onEscapeKeyDown={(event) => {
-            if (mustAcknowledgeFailedDeliveries) {
-              event.preventDefault()
-            }
-          }}
-          onPointerDownOutside={(event) => {
-            if (mustAcknowledgeFailedDeliveries) {
-              event.preventDefault()
-            }
-          }}
           showCloseButton={!mustAcknowledgeFailedDeliveries}
         >
           <DialogHeader>

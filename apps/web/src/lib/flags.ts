@@ -78,10 +78,13 @@ export const flags = {
     "overlays",
     "Enable the user to use the overlays configurator"
   ),
-  checkout: makeBooleanFlag(
-    "checkout",
-    "Enables the new checkout page for the user"
-  ),
+  checkout: async () => {
+    try {
+      return await fetchQuery(api.queries.billing.catalog.getCheckoutAvailability, {})
+    } catch {
+      return false
+    }
+  },
 } as const
 
 export type AppFlagKey = keyof typeof flags

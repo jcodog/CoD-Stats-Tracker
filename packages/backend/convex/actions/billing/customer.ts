@@ -1,3 +1,4 @@
+import { isCheckoutEnabled } from "../../../src/lib/checkoutPolicy"
 "use node"
 
 import Stripe from "stripe"
@@ -376,15 +377,8 @@ async function requireBillingUser(
   }
 }
 
-async function assertCheckoutEnabled(ctx: PublicActionCtx) {
-  const checkoutFlag = await ctx.runQuery(
-    internal.queries.featureFlags.internal.getByKey,
-    {
-      key: "checkout",
-    }
-  )
-
-  if (checkoutFlag && !checkoutFlag.enabled) {
+function assertCheckoutEnabled() {
+  if (!isCheckoutEnabled(getConvexEnv().BILLING_CHECKOUT_ENABLED)) {
     throw new BillingActionError(
       "checkout_disabled",
       "Checkout is currently unavailable.",
@@ -1574,7 +1568,7 @@ export const createSubscriptionCheckoutSession = action({
   },
   handler: async (ctx, args): Promise<SubscriptionCheckoutSessionResult> => {
     try {
-      await assertCheckoutEnabled(ctx)
+      assertCheckoutEnabled()
 
       const userContext = await requireBillingUser(ctx)
       assertCreatorGrantAllowsSelfServeBilling({
@@ -1910,7 +1904,7 @@ export const previewCheckoutQuote = action({
   },
   handler: async (ctx, args) => {
     try {
-      await assertCheckoutEnabled(ctx)
+      assertCheckoutEnabled()
 
       const userContext = await requireBillingUser(ctx)
       assertCreatorGrantAllowsSelfServeBilling({

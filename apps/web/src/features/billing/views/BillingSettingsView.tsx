@@ -11,7 +11,7 @@ import {
   AlertDescription,
   AlertTitle,
 } from "@workspace/ui/components/alert"
-import { Button } from "@workspace/ui/components/button"
+import { buttonVariants, Button } from "@workspace/ui/components/button"
 import { Skeleton } from "@workspace/ui/components/skeleton"
 import { toast } from "sonner"
 
@@ -177,7 +177,9 @@ export function BillingSettingsView({
   }
 
   return (
-    <div className={isMobileView ? "flex flex-col gap-5" : "flex flex-col gap-6"}>
+    <div
+      className={isMobileView ? "flex flex-col gap-5" : "flex flex-col gap-6"}
+    >
       <div
         className={
           isMobileView
@@ -252,8 +254,8 @@ export function BillingSettingsView({
                 label="Billing profile"
                 value={
                   billingCenter.billingProfile.stripeCustomerId
-                    ? billingCenter.billingProfile.email ??
-                      billingCenter.billingProfile.stripeCustomerId
+                    ? (billingCenter.billingProfile.email ??
+                      billingCenter.billingProfile.stripeCustomerId)
                     : "Stripe customer will be created when needed"
                 }
               />
@@ -281,7 +283,9 @@ export function BillingSettingsView({
                 label="Attention state"
                 value={
                   primarySubscription
-                    ? formatBillingStatusLabel(primarySubscription.attentionStatus)
+                    ? formatBillingStatusLabel(
+                        primarySubscription.attentionStatus
+                      )
                     : "None"
                 }
               />
@@ -300,9 +304,12 @@ export function BillingSettingsView({
 
       {!primarySubscription && checkoutEnabled ? (
         <div>
-          <Button asChild variant="outline">
-            <Link href="/settings/billing/plan">View plans</Link>
-          </Button>
+          <Link
+            href="/settings/billing/plan"
+            className={buttonVariants({ variant: "outline" })}
+          >
+            View plans
+          </Link>
         </div>
       ) : null}
     </div>

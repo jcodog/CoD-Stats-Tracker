@@ -18,7 +18,7 @@
     "test:convex": "bun test \"convex/__tests__\" \"src/lib/__tests__\" \"convex/mutations/__tests__\"",
     "test:env": "bun test \"convex/__tests__/env.test.mjs\"",
     "test:server": "bun test \"src/server/__tests__\"",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "node node_modules/@typescript/native/bin/tsc --noEmit"
   },
   "dependencies": {
     "@clerk/backend": "^3.18.1",
@@ -38,7 +38,8 @@
     "@workspace/eslint-config": "workspace:*",
     "@workspace/typescript-config": "workspace:*",
     "eslint": "^10.10.0",
-    "typescript": "^7.0.2"
+    "@typescript/native": "npm:typescript@7.0.2",
+    "typescript": "6.0.3"
   },
   "exports": {
     "./lib/*": "./src/lib/*.ts",

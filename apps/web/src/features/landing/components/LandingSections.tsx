@@ -24,7 +24,7 @@ import {
   AvatarFallback,
   AvatarImage,
 } from "@workspace/ui/components/avatar"
-import { Button } from "@workspace/ui/components/button"
+import { buttonVariants } from "@workspace/ui/components/button"
 import { cn } from "@workspace/ui/lib/utils"
 
 export type LandingViewport = "desktop" | "mobile"
@@ -264,9 +264,12 @@ export function LandingHeroSection({
           context="hero"
           layout={isMobileView ? "stacked" : "inline"}
         />
-        <Button asChild variant="outline">
-          <Link href="/pricing">View pricing</Link>
-        </Button>
+        <Link
+          href="/pricing"
+          className={buttonVariants({ variant: "outline" })}
+        >
+          View pricing
+        </Link>
       </div>
     </section>
   )
@@ -445,9 +448,9 @@ export function LandingPricingTeaser({
           available. Stripe Checkout confirms the final currency, discounts,
           taxes, and total.
         </p>
-        <Button asChild>
-          <Link href="/pricing">View pricing</Link>
-        </Button>
+        <Link href="/pricing" className={buttonVariants({})}>
+          View pricing
+        </Link>
       </div>
     </section>
   )

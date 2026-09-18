@@ -7,7 +7,7 @@ import {
   AlertTitle,
 } from "@workspace/ui/components/alert"
 import { Badge } from "@workspace/ui/components/badge"
-import { Button } from "@workspace/ui/components/button"
+import { buttonVariants } from "@workspace/ui/components/button"
 import {
   Card,
   CardContent,
@@ -70,12 +70,15 @@ export function StaffAccessState({
           <Separator />
 
           <div className="flex flex-wrap items-center gap-3">
-            <Button asChild variant="outline">
-              <Link href="/dashboard">Return to dashboard</Link>
-            </Button>
-            <Button asChild>
-              <Link href="/account">Open account settings</Link>
-            </Button>
+            <Link
+              href="/dashboard"
+              className={buttonVariants({ variant: "outline" })}
+            >
+              Return to dashboard
+            </Link>
+            <Link href="/account" className={buttonVariants({})}>
+              Open account settings
+            </Link>
           </div>
         </CardContent>
       </Card>

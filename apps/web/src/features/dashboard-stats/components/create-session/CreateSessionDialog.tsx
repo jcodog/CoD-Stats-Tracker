@@ -190,13 +190,12 @@ export function DashboardStatsCreateSessionDialog({
               <Field>
                 <FieldLabel>Username source</FieldLabel>
                 <ToggleGroup
-                  onValueChange={(value) => {
+                  onValueChange={([value]) => {
                     if (value === "existing" || value === "new") {
                       setField("selectionMode", value)
                     }
                   }}
-                  type="single"
-                  value={effectiveSelectionMode}
+                  value={[effectiveSelectionMode]}
                   variant="outline"
                 >
                   <ToggleGroupItem

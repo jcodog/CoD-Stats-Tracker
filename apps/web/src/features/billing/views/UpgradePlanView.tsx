@@ -9,7 +9,7 @@ import {
   AlertDescription,
   AlertTitle,
 } from "@workspace/ui/components/alert"
-import { Button } from "@workspace/ui/components/button"
+import { buttonVariants, Button } from "@workspace/ui/components/button"
 import { Skeleton } from "@workspace/ui/components/skeleton"
 
 import {
@@ -244,17 +244,19 @@ export function UpgradePlanView({
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button asChild variant="outline">
-            <Link href="/settings/billing">Back to billing</Link>
-          </Button>
-          <Button asChild>
-            <Link
-              href={`/checkout?plan=${encodeURIComponent(selectedPlan.planKey)}&interval=${selectedInterval}&currency=${catalog?.selectedCurrency ?? preferredCurrency}`}
-            >
-              Continue to checkout
-              <IconArrowRight data-icon="inline-end" />
-            </Link>
-          </Button>
+          <Link
+            href="/settings/billing"
+            className={buttonVariants({ variant: "outline" })}
+          >
+            Back to billing
+          </Link>
+          <Link
+            href={`/checkout?plan=${encodeURIComponent(selectedPlan.planKey)}&interval=${selectedInterval}&currency=${catalog?.selectedCurrency ?? preferredCurrency}`}
+            className={buttonVariants({})}
+          >
+            Continue to checkout
+            <IconArrowRight data-icon="inline-end" />
+          </Link>
         </div>
       </section>
     </div>

@@ -7,14 +7,12 @@ import {
   type ProtectedNavItem,
   isProtectedNavItemActive,
 } from "@/components/app-shell/protected-nav"
-import { Button } from "@workspace/ui/components/button"
-import { DrawerClose } from "@workspace/ui/components/drawer"
+import { buttonVariants } from "@workspace/ui/components/button"
 import { cn } from "@workspace/ui/lib/utils"
 
 type ProtectedNavLinksProps = {
   items: ProtectedNavItem[]
   layout: "desktop" | "mobile"
-  closeOnNavigate?: boolean
 }
 
 function ActiveIndicator({ layout }: { layout: "desktop" | "mobile" }) {
@@ -31,11 +29,7 @@ function ActiveIndicator({ layout }: { layout: "desktop" | "mobile" }) {
   )
 }
 
-export function ProtectedNavLinks({
-  items,
-  layout,
-  closeOnNavigate = false,
-}: ProtectedNavLinksProps) {
+export function ProtectedNavLinks({ items, layout }: ProtectedNavLinksProps) {
   const pathname = usePathname()
 
   return (
@@ -44,34 +38,27 @@ export function ProtectedNavLinks({
         const isActive = isProtectedNavItemActive(pathname, item)
 
         const linkButton = (
-          <Button
-            asChild
-            className={cn(
-              "relative text-sm font-medium",
-              layout === "desktop"
-                ? "h-7 px-2.5 text-foreground/80 hover:text-foreground"
-                : "h-11 w-full justify-start rounded-lg px-3 pl-4 text-foreground/80 hover:text-foreground",
-              isActive && "text-foreground"
-            )}
-            size={layout === "desktop" ? "sm" : "default"}
-            variant="ghost"
+          <Link
+            aria-current={isActive ? "page" : undefined}
+            href={item.href}
+            className={buttonVariants({
+              className: cn(
+                "relative text-sm font-medium",
+                layout === "desktop"
+                  ? "h-7 px-2.5 text-foreground/80 hover:text-foreground"
+                  : "h-11 w-full justify-start rounded-lg px-3 pl-4 text-foreground/80 hover:text-foreground",
+                isActive && "text-foreground"
+              ),
+              size: layout === "desktop" ? "sm" : "default",
+              variant: "ghost",
+            })}
           >
-            <Link aria-current={isActive ? "page" : undefined} href={item.href}>
-              {isActive ? <ActiveIndicator layout={layout} /> : null}
-              <span className="inline-flex items-center gap-2">
-                {item.label}
-              </span>
-            </Link>
-          </Button>
+            {isActive ? <ActiveIndicator layout={layout} /> : null}
+            <span className="inline-flex items-center gap-2">{item.label}</span>
+          </Link>
         )
 
-        return closeOnNavigate ? (
-          <DrawerClose asChild key={item.href}>
-            {linkButton}
-          </DrawerClose>
-        ) : (
-          <div key={item.href}>{linkButton}</div>
-        )
+        return <div key={item.href}>{linkButton}</div>
       })}
     </>
   )

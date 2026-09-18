@@ -97,19 +97,19 @@ export function StaffConsoleSidebar({ role }: { role: UserRole }) {
                     return (
                       <SidebarMenuItem key={item.key}>
                         <SidebarMenuButton
-                          asChild
                           className={primaryButtonClassName}
                           isActive={isActive}
                           tooltip={item.label}
-                        >
-                          <Link
-                            aria-current={isActive ? "page" : undefined}
-                            href={item.href}
-                          >
-                            <item.icon aria-hidden="true" />
-                            <span>{item.label}</span>
-                          </Link>
-                        </SidebarMenuButton>
+                          render={
+                            <Link
+                              aria-current={isActive ? "page" : undefined}
+                              href={item.href}
+                            >
+                              <item.icon aria-hidden="true" />
+                              <span>{item.label}</span>
+                            </Link>
+                          }
+                        />
                       </SidebarMenuItem>
                     )
                   }
@@ -128,15 +128,17 @@ export function StaffConsoleSidebar({ role }: { role: UserRole }) {
                     <SidebarMenuItem key={item.key}>
                       {isCollapsedDesktop ? (
                         <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <SidebarMenuButton
-                              className={primaryButtonClassName}
-                              tooltip={item.label}
-                            >
-                              <item.icon aria-hidden="true" />
-                              <span>{item.label}</span>
-                            </SidebarMenuButton>
-                          </DropdownMenuTrigger>
+                          <DropdownMenuTrigger
+                            render={
+                              <SidebarMenuButton
+                                className={primaryButtonClassName}
+                                tooltip={item.label}
+                              >
+                                <item.icon aria-hidden="true" />
+                                <span>{item.label}</span>
+                              </SidebarMenuButton>
+                            }
+                          />
                           <DropdownMenuContent
                             align="start"
                             className="w-60"
@@ -151,18 +153,21 @@ export function StaffConsoleSidebar({ role }: { role: UserRole }) {
                                 )
 
                                 return (
-                                  <DropdownMenuItem asChild key={subItem.key}>
-                                    <Link
-                                      aria-current={
-                                        isActive ? "page" : undefined
-                                      }
-                                      className="flex items-center gap-2"
-                                      href={subItem.href}
-                                    >
-                                      <subItem.icon aria-hidden="true" />
-                                      <span>{subItem.label}</span>
-                                    </Link>
-                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    key={subItem.key}
+                                    render={
+                                      <Link
+                                        aria-current={
+                                          isActive ? "page" : undefined
+                                        }
+                                        className="flex items-center gap-2"
+                                        href={subItem.href}
+                                      >
+                                        <subItem.icon aria-hidden="true" />
+                                        <span>{subItem.label}</span>
+                                      </Link>
+                                    }
+                                  />
                                 )
                               })}
                             </DropdownMenuGroup>
@@ -176,19 +181,21 @@ export function StaffConsoleSidebar({ role }: { role: UserRole }) {
                             billingGroup
                           )}
                         >
-                          <CollapsibleTrigger asChild>
-                            <SidebarMenuButton
-                              className={primaryButtonClassName}
-                              tooltip={item.label}
-                            >
-                              <item.icon aria-hidden="true" />
-                              <span>{item.label}</span>
-                              <IconChevronRight
-                                aria-hidden="true"
-                                className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-90"
-                              />
-                            </SidebarMenuButton>
-                          </CollapsibleTrigger>
+                          <CollapsibleTrigger
+                            render={
+                              <SidebarMenuButton
+                                className={primaryButtonClassName}
+                                tooltip={item.label}
+                              >
+                                <item.icon aria-hidden="true" />
+                                <span>{item.label}</span>
+                                <IconChevronRight
+                                  aria-hidden="true"
+                                  className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-90"
+                                />
+                              </SidebarMenuButton>
+                            }
+                          />
                           <CollapsibleContent>
                             <SidebarMenuSub>
                               {visibleSubItems.map((subItem) => {
@@ -201,20 +208,20 @@ export function StaffConsoleSidebar({ role }: { role: UserRole }) {
                                 return (
                                   <SidebarMenuSubItem key={subItem.key}>
                                     <SidebarMenuSubButton
-                                      asChild
                                       className={subButtonClassName}
                                       isActive={isActive}
-                                    >
-                                      <Link
-                                        aria-current={
-                                          isActive ? "page" : undefined
-                                        }
-                                        href={subItem.href}
-                                      >
-                                        <subItem.icon aria-hidden="true" />
-                                        <span>{subItem.label}</span>
-                                      </Link>
-                                    </SidebarMenuSubButton>
+                                      render={
+                                        <Link
+                                          aria-current={
+                                            isActive ? "page" : undefined
+                                          }
+                                          href={subItem.href}
+                                        >
+                                          <subItem.icon aria-hidden="true" />
+                                          <span>{subItem.label}</span>
+                                        </Link>
+                                      }
+                                    />
                                   </SidebarMenuSubItem>
                                 )
                               })}

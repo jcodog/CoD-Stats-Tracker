@@ -28,7 +28,7 @@ import {
   AlertDescription,
   AlertTitle,
 } from "@workspace/ui/components/alert"
-import { Button } from "@workspace/ui/components/button"
+import { buttonVariants, Button } from "@workspace/ui/components/button"
 import {
   Field,
   FieldDescription,
@@ -162,15 +162,19 @@ export function CreatorCodeView() {
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button asChild size="sm">
-                <Link href="/creator/connect/start?country=GB">
-                  <IconExternalLink data-icon="inline-start" />
-                  Continue as a UK creator
-                </Link>
-              </Button>
-              <Button asChild size="sm" variant="outline">
-                <Link href="/creator">Back to creator home</Link>
-              </Button>
+              <Link
+                href="/creator/connect/start?country=GB"
+                className={buttonVariants({ size: "sm" })}
+              >
+                <IconExternalLink data-icon="inline-start" />
+                Continue as a UK creator
+              </Link>
+              <Link
+                href="/creator"
+                className={buttonVariants({ size: "sm", variant: "outline" })}
+              >
+                Back to creator home
+              </Link>
             </div>
           </section>
         </div>
@@ -428,24 +432,24 @@ export function CreatorCodeView() {
               </div>
 
               <div className="flex flex-wrap gap-2">
-                <Button asChild size="sm">
-                  <Link
-                    href={
-                      creatorAccount.stripeConnectedAccountId
-                        ? "/creator/connect/start"
-                        : "/creator/connect/start?country=GB"
-                    }
-                  >
-                    <IconExternalLink data-icon="inline-start" />
-                    {connectActionLabel}
-                  </Link>
-                </Button>
-                <Button asChild size="sm" variant="outline">
-                  <Link href="/creator/connect/return?source=manual">
-                    <IconRefresh data-icon="inline-start" />
-                    Refresh status
-                  </Link>
-                </Button>
+                <Link
+                  href={
+                    creatorAccount.stripeConnectedAccountId
+                      ? "/creator/connect/start"
+                      : "/creator/connect/start?country=GB"
+                  }
+                  className={buttonVariants({ size: "sm" })}
+                >
+                  <IconExternalLink data-icon="inline-start" />
+                  {connectActionLabel}
+                </Link>
+                <Link
+                  href="/creator/connect/return?source=manual"
+                  className={buttonVariants({ size: "sm", variant: "outline" })}
+                >
+                  <IconRefresh data-icon="inline-start" />
+                  Refresh status
+                </Link>
               </div>
             </div>
           </div>

@@ -5,13 +5,13 @@
     "@t3-oss/env-core": "^0.13.11",
     "@t3-oss/env-nextjs": "^0.13.11",
     "@types/node": "^26.6.1",
-    "@typescript/native-preview": "^7.0.0-dev.20260707.2",
     "@workspace/eslint-config": "workspace:*",
     "@workspace/typescript-config": "workspace:*",
     "prettier": "^3.9.8",
     "prettier-plugin-tailwindcss": "^0.8.1",
     "turbo": "^2.11.1",
-    "typescript": "7.0.2"
+    "@typescript/native": "npm:typescript@7.0.2",
+    "typescript": "6.0.3"
   },
   "engines": {
     "node": ">=20"
@@ -33,7 +33,7 @@
     "convex:codegen": "turbo run codegen --filter=@workspace/backend",
     "convex:dev": "turbo run dev --filter=@workspace/backend",
     "convex:deploy": "turbo run deploy --filter=@workspace/backend",
-    "dev": "turbo run dev",
+    "dev": "turbo dev --ui=tui",
     "format": "turbo run format",
     "lint": "turbo run lint",
     "test": "bun run test:web && bun run test:backend",

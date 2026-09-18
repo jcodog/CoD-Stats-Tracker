@@ -3,7 +3,7 @@
 import { Authenticated, Unauthenticated } from "convex/react"
 import Link from "next/link"
 
-import { Button } from "@workspace/ui/components/button"
+import { buttonVariants } from "@workspace/ui/components/button"
 import { cn } from "@workspace/ui/lib/utils"
 
 export function NavbarAuthActions({
@@ -46,18 +46,30 @@ export function NavbarAuthActions({
   return (
     <div className={wrapperClassName}>
       <Authenticated>
-        <Button asChild size={compact ? "sm" : "lg"} className={primaryClassName}>
-          <Link href="/dashboard">Go to Dashboard</Link>
-        </Button>
+        <Link
+          href="/dashboard"
+          className={buttonVariants({
+            size: compact ? "sm" : "lg",
+            className: primaryClassName,
+          })}
+        >
+          Go to Dashboard
+        </Link>
       </Authenticated>
 
       <Unauthenticated>
         <Link className={secondaryLinkClassName} href="/sign-in">
           Sign In
         </Link>
-        <Button asChild size={compact ? "sm" : "lg"} className={primaryClassName}>
-          <Link href="/sign-up">{isHero ? "Get Started" : "Sign Up"}</Link>
-        </Button>
+        <Link
+          href="/sign-up"
+          className={buttonVariants({
+            size: compact ? "sm" : "lg",
+            className: primaryClassName,
+          })}
+        >
+          {isHero ? "Get Started" : "Sign Up"}
+        </Link>
       </Unauthenticated>
     </div>
   )

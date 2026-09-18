@@ -13,7 +13,7 @@ import {
   AlertDescription,
   AlertTitle,
 } from "@workspace/ui/components/alert"
-import { Button } from "@workspace/ui/components/button"
+import { buttonVariants, Button } from "@workspace/ui/components/button"
 import {
   Field,
   FieldDescription,
@@ -149,8 +149,7 @@ export function CheckoutView({
   )
 
   function handleApplyCreatorCode() {
-    const nextCreatorCode =
-      creatorCodeInput.trim().toUpperCase() || undefined
+    const nextCreatorCode = creatorCodeInput.trim().toUpperCase() || undefined
     setSubmittedCreatorCode(nextCreatorCode)
   }
 
@@ -202,9 +201,12 @@ export function CheckoutView({
             </p>
           </div>
           <div className="mt-5">
-            <Button asChild variant="outline">
-              <Link href="/dashboard">Return to dashboard</Link>
-            </Button>
+            <Link
+              href="/dashboard"
+              className={buttonVariants({ variant: "outline" })}
+            >
+              Return to dashboard
+            </Link>
           </div>
         </div>
       </section>
@@ -237,15 +239,16 @@ export function CheckoutView({
             <p className="text-sm text-muted-foreground">
               {getCreatorGrantCheckoutMessage({
                 creatorGrantEndsAt: billingState?.creatorGrant?.endsAt,
-                managedGrantEndsAt: billingState?.subscription?.managedGrantEndsAt,
+                managedGrantEndsAt:
+                  billingState?.subscription?.managedGrantEndsAt,
               })}{" "}
               Billing checkout is unavailable while that grant remains active.
             </p>
           </div>
           <div className="mt-5">
-            <Button asChild>
-              <Link href="/settings/billing">Open billing</Link>
-            </Button>
+            <Link href="/settings/billing" className={buttonVariants({})}>
+              Open billing
+            </Link>
           </div>
         </div>
       </div>
@@ -267,9 +270,9 @@ export function CheckoutView({
             </p>
           </div>
           <div className="mt-5">
-            <Button asChild>
-              <Link href="/settings/billing">Open billing</Link>
-            </Button>
+            <Link href="/settings/billing" className={buttonVariants({})}>
+              Open billing
+            </Link>
           </div>
         </div>
       </div>
@@ -311,15 +314,19 @@ export function CheckoutView({
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <Button asChild size="sm" variant="outline">
-              <Link href="/settings/billing/plan">Change plan</Link>
-            </Button>
-            <Button asChild size="sm" variant="outline">
-              <Link href="/settings/billing">
-                Open billing
-                <IconArrowRight data-icon="inline-end" />
-              </Link>
-            </Button>
+            <Link
+              href="/settings/billing/plan"
+              className={buttonVariants({ size: "sm", variant: "outline" })}
+            >
+              Change plan
+            </Link>
+            <Link
+              href="/settings/billing"
+              className={buttonVariants({ size: "sm", variant: "outline" })}
+            >
+              Open billing
+              <IconArrowRight data-icon="inline-end" />
+            </Link>
           </div>
         </div>
       </section>
@@ -362,11 +369,18 @@ export function CheckoutView({
           </Button>
           {submittedCreatorCode ? (
             <>
-              <Button onClick={() => handleCopyCode(submittedCreatorCode)} size="sm">
+              <Button
+                onClick={() => handleCopyCode(submittedCreatorCode)}
+                size="sm"
+              >
                 <IconLink data-icon="inline-start" />
                 Copy code
               </Button>
-              <Button onClick={handleClearCreatorCode} size="sm" variant="ghost">
+              <Button
+                onClick={handleClearCreatorCode}
+                size="sm"
+                variant="ghost"
+              >
                 Remove code
               </Button>
             </>
@@ -400,7 +414,9 @@ export function CheckoutView({
 
       <section className="flex flex-col gap-4 border-y border-border/70 py-5 sm:flex-row sm:items-center sm:justify-between">
         <div className="grid gap-1">
-          <div className="font-medium text-foreground">Stripe-hosted payment</div>
+          <div className="font-medium text-foreground">
+            Stripe-hosted payment
+          </div>
           <p className="text-sm text-muted-foreground">
             Adaptive Pricing may offer local presentment currencies when this
             Checkout Session is eligible.

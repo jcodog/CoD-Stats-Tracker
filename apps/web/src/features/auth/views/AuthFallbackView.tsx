@@ -9,7 +9,7 @@ import {
   AvatarImage,
 } from "@workspace/ui/components/avatar"
 import { Badge } from "@workspace/ui/components/badge"
-import { Button } from "@workspace/ui/components/button"
+import { buttonVariants } from "@workspace/ui/components/button"
 import {
   Card,
   CardContent,
@@ -75,17 +75,26 @@ export function AuthFallbackView({
         </CardContent>
 
         <CardFooter className="flex flex-wrap items-center gap-3">
-          <Button asChild>
-            <Link href={signInHref}>Continue to sign in</Link>
-          </Button>
+          <Link href={signInHref} className={buttonVariants({})}>
+            Continue to sign in
+          </Link>
 
-          <Button asChild variant="outline">
-            <Link href={signUpHref}>Create account</Link>
-          </Button>
+          <Link
+            href={signUpHref}
+            className={buttonVariants({ variant: "outline" })}
+          >
+            Create account
+          </Link>
 
-          <Button asChild variant="ghost" className="ml-auto">
-            <Link href="/">Back to landing page</Link>
-          </Button>
+          <Link
+            href="/"
+            className={buttonVariants({
+              variant: "ghost",
+              className: "ml-auto",
+            })}
+          >
+            Back to landing page
+          </Link>
         </CardFooter>
       </Card>
     </div>

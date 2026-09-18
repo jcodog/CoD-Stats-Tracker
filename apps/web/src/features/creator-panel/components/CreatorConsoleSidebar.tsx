@@ -84,20 +84,20 @@ export function CreatorConsoleSidebar() {
                   return (
                     <SidebarMenuItem key={item.href}>
                       <SidebarMenuButton
-                        asChild
                         className={primaryButtonClassName}
                         isActive={isActive}
                         tooltip={item.label}
-                      >
-                        <Link
-                          aria-current={isActive ? "page" : undefined}
-                          href={item.href}
-                          onClick={() => setOpenMobile(false)}
-                        >
-                          <item.icon aria-hidden="true" />
-                          <span>{item.label}</span>
-                        </Link>
-                      </SidebarMenuButton>
+                        render={
+                          <Link
+                            aria-current={isActive ? "page" : undefined}
+                            href={item.href}
+                            onClick={() => setOpenMobile(false)}
+                          >
+                            <item.icon aria-hidden="true" />
+                            <span>{item.label}</span>
+                          </Link>
+                        }
+                      />
                     </SidebarMenuItem>
                   )
                 })}

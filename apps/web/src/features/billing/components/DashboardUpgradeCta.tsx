@@ -9,7 +9,7 @@ import {
   IconX,
 } from "@tabler/icons-react"
 
-import { Button } from "@workspace/ui/components/button"
+import { buttonVariants, Button } from "@workspace/ui/components/button"
 import { Badge } from "@workspace/ui/components/badge"
 import {
   Dialog,
@@ -37,19 +37,19 @@ export function DashboardUpgradeButton({
   size = "sm",
 }: DashboardUpgradeButtonProps) {
   return (
-    <Button
-      asChild
-      className={cn(
-        "border-primary/40 bg-primary text-primary-foreground hover:bg-primary/90",
-        className
-      )}
-      size={size}
+    <Link
+      href={href}
+      className={buttonVariants({
+        className: cn(
+          "border-primary/40 bg-primary text-primary-foreground hover:bg-primary/90",
+          className
+        ),
+        size: size,
+      })}
     >
-      <Link href={href}>
-        <IconCrown aria-hidden="true" />
-        {label}
-      </Link>
-    </Button>
+      <IconCrown aria-hidden="true" />
+      {label}
+    </Link>
   )
 }
 
@@ -139,16 +139,17 @@ export function DashboardUpgradePrompt({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <Button
-            asChild
-            className="border-primary/40 bg-primary text-primary-foreground hover:bg-primary/90"
-            size="sm"
+          <Link
+            href={href}
+            className={buttonVariants({
+              className:
+                "border-primary/40 bg-primary text-primary-foreground hover:bg-primary/90",
+              size: "sm",
+            })}
           >
-            <Link href={href}>
-              Upgrade
-              <IconArrowRight aria-hidden="true" />
-            </Link>
-          </Button>
+            Upgrade
+            <IconArrowRight aria-hidden="true" />
+          </Link>
 
           <UpgradeDialog href={href} />
           <Button
@@ -168,11 +169,13 @@ export function DashboardUpgradePrompt({
 function UpgradeDialog({ href }: { href: string }) {
   return (
     <Dialog>
-      <DialogTrigger asChild>
-        <Button size="sm" variant="outline">
-          What do I get?
-        </Button>
-      </DialogTrigger>
+      <DialogTrigger
+        render={
+          <Button size="sm" variant="outline">
+            What do I get?
+          </Button>
+        }
+      />
 
       <DialogContent className="overflow-hidden border-border/70 bg-background p-0 sm:max-w-lg">
         <div className="px-5 pt-5 pb-4 sm:px-6 sm:pt-6">
@@ -218,18 +221,18 @@ function UpgradeDialog({ href }: { href: string }) {
         </div>
 
         <DialogFooter className="border-border/60 bg-background/95 px-5 py-4 sm:px-6">
-          <DialogClose asChild>
-            <Button variant="ghost">
-              <IconX aria-hidden="true" />
-              Maybe later
-            </Button>
-          </DialogClose>
-          <Button asChild>
-            <Link href={href}>
-              Compare plans
-              <IconArrowRight aria-hidden="true" />
-            </Link>
-          </Button>
+          <DialogClose
+            render={
+              <Button variant="ghost">
+                <IconX aria-hidden="true" />
+                Maybe later
+              </Button>
+            }
+          />
+          <Link href={href} className={buttonVariants({})}>
+            Compare plans
+            <IconArrowRight aria-hidden="true" />
+          </Link>
         </DialogFooter>
       </DialogContent>
     </Dialog>

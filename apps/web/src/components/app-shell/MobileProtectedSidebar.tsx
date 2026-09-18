@@ -66,26 +66,26 @@ function ProtectedSidebarMenu({
               return (
                 <SidebarMenuItem key={item.href}>
                   <SidebarMenuButton
-                    asChild
                     className="relative h-11 rounded-lg px-3 pl-4 text-sidebar-foreground/80 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground data-[active=true]:bg-transparent data-[active=true]:font-medium data-[active=true]:text-sidebar-foreground"
                     isActive={isActive}
-                  >
-                    <Link
-                      aria-current={isActive ? "page" : undefined}
-                      href={item.href}
-                      onClick={() => setOpenMobile(false)}
-                    >
-                      {isActive ? (
-                        <span
-                          aria-hidden="true"
-                          className={cn(
-                            "absolute top-2 bottom-2 left-0 w-[2px] rounded-full bg-primary shadow-[0_0_0.9rem_hsl(var(--primary)/0.32),0_0_0.18rem_hsl(var(--primary)/0.7)]"
-                          )}
-                        />
-                      ) : null}
-                      <span>{item.label}</span>
-                    </Link>
-                  </SidebarMenuButton>
+                    render={
+                      <Link
+                        aria-current={isActive ? "page" : undefined}
+                        href={item.href}
+                        onClick={() => setOpenMobile(false)}
+                      >
+                        {isActive ? (
+                          <span
+                            aria-hidden="true"
+                            className={cn(
+                              "absolute top-2 bottom-2 left-0 w-[2px] rounded-full bg-primary shadow-[0_0_0.9rem_hsl(var(--primary)/0.32),0_0_0.18rem_hsl(var(--primary)/0.7)]"
+                            )}
+                          />
+                        ) : null}
+                        <span>{item.label}</span>
+                      </Link>
+                    }
+                  />
                 </SidebarMenuItem>
               )
             })}

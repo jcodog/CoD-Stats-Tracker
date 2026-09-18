@@ -18,7 +18,7 @@ import {
   AlertDialogTrigger,
 } from "@workspace/ui/components/alert-dialog"
 import { Badge } from "@workspace/ui/components/badge"
-import { Button } from "@workspace/ui/components/button"
+import { buttonVariants, Button } from "@workspace/ui/components/button"
 import {
   Card,
   CardContent,
@@ -182,16 +182,18 @@ export function ChatGptAppSettingsSection({
         <CardFooter className="border-t border-border/70 pt-4">
           {linked ? (
             <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button
-                  variant="destructive"
-                  disabled={disconnectState === "pending"}
-                >
-                  {disconnectState === "pending"
-                    ? "Disconnecting…"
-                    : "Disconnect"}
-                </Button>
-              </AlertDialogTrigger>
+              <AlertDialogTrigger
+                render={
+                  <Button
+                    variant="destructive"
+                    disabled={disconnectState === "pending"}
+                  >
+                    {disconnectState === "pending"
+                      ? "Disconnecting…"
+                      : "Disconnect"}
+                  </Button>
+                }
+              />
               <AlertDialogContent size="sm">
                 <AlertDialogHeader>
                   <AlertDialogTitle>Disconnect ChatGPT App?</AlertDialogTitle>
@@ -212,18 +214,17 @@ export function ChatGptAppSettingsSection({
               </AlertDialogContent>
             </AlertDialog>
           ) : (
-            <Button asChild>
-              <a
-                href={resolvedConnectHref}
-                onClick={() => {
-                  setConnectStarted(true)
-                }}
-                rel="noopener noreferrer"
-                target="_blank"
-              >
-                Connect
-              </a>
-            </Button>
+            <a
+              href={resolvedConnectHref}
+              onClick={() => {
+                setConnectStarted(true)
+              }}
+              rel="noopener noreferrer"
+              target="_blank"
+              className={buttonVariants({})}
+            >
+              Connect
+            </a>
           )}
         </CardFooter>
       </Card>

@@ -13,7 +13,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@workspace/ui/components/breadcrumb"
-import { Button } from "@workspace/ui/components/button"
+import { buttonVariants } from "@workspace/ui/components/button"
 import { Separator } from "@workspace/ui/components/separator"
 import { SidebarTrigger } from "@workspace/ui/components/sidebar"
 
@@ -35,9 +35,9 @@ function StaffConsoleBreadcrumb({
     <Breadcrumb>
       <BreadcrumbList>
         <BreadcrumbItem>
-          <BreadcrumbLink asChild>
-            <Link href="/staff">{STAFF_CONSOLE_TITLE}</Link>
-          </BreadcrumbLink>
+          <BreadcrumbLink
+            render={<Link href="/staff">{STAFF_CONSOLE_TITLE}</Link>}
+          />
         </BreadcrumbItem>
         {items.map((item, index) => {
           const isLast = index === items.length - 1
@@ -49,9 +49,9 @@ function StaffConsoleBreadcrumb({
                 {isLast || !item.href ? (
                   <BreadcrumbPage>{item.label}</BreadcrumbPage>
                 ) : (
-                  <BreadcrumbLink asChild>
-                    <Link href={item.href}>{item.label}</Link>
-                  </BreadcrumbLink>
+                  <BreadcrumbLink
+                    render={<Link href={item.href}>{item.label}</Link>}
+                  />
                 )}
               </BreadcrumbItem>
             </Fragment>
@@ -80,13 +80,14 @@ export function StaffConsoleHeader({ role }: { role: UserRole }) {
         <div className="flex items-center gap-2">
           <Badge variant="outline">{formatStaffRoleLabel(role)}</Badge>
 
-          <Button asChild size="sm" variant="outline">
-            <Link href="/dashboard">
-              <IconArrowBack aria-hidden="true" data-icon="inline-start" />
-              <span className="hidden sm:inline">Return to App</span>
-              <span className="sm:hidden">Return</span>
-            </Link>
-          </Button>
+          <Link
+            href="/dashboard"
+            className={buttonVariants({ size: "sm", variant: "outline" })}
+          >
+            <IconArrowBack aria-hidden="true" data-icon="inline-start" />
+            <span className="hidden sm:inline">Return to App</span>
+            <span className="sm:hidden">Return</span>
+          </Link>
           <ThemeToggle />
         </div>
       </div>

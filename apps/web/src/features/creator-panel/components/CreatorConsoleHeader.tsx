@@ -13,7 +13,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@workspace/ui/components/breadcrumb"
-import { Button } from "@workspace/ui/components/button"
+import { buttonVariants } from "@workspace/ui/components/button"
 import { SidebarTrigger } from "@workspace/ui/components/sidebar"
 import { ThemeToggle } from "@/components/theme-toggle"
 import {
@@ -30,9 +30,9 @@ function CreatorConsoleBreadcrumb({
     <Breadcrumb>
       <BreadcrumbList>
         <BreadcrumbItem>
-          <BreadcrumbLink asChild>
-            <Link href="/creator">{CREATOR_WORKSPACE_TITLE}</Link>
-          </BreadcrumbLink>
+          <BreadcrumbLink
+            render={<Link href="/creator">{CREATOR_WORKSPACE_TITLE}</Link>}
+          />
         </BreadcrumbItem>
         {items.map((item, index) => {
           const isLast = index === items.length - 1
@@ -44,9 +44,9 @@ function CreatorConsoleBreadcrumb({
                 {isLast || !item.href ? (
                   <BreadcrumbPage>{item.label}</BreadcrumbPage>
                 ) : (
-                  <BreadcrumbLink asChild>
-                    <Link href={item.href}>{item.label}</Link>
-                  </BreadcrumbLink>
+                  <BreadcrumbLink
+                    render={<Link href={item.href}>{item.label}</Link>}
+                  />
                 )}
               </BreadcrumbItem>
             </Fragment>
@@ -94,13 +94,14 @@ export function CreatorConsoleHeader({
 
         <div className="flex flex-wrap items-center gap-2">
           {actions}
-          <Button asChild size="sm" variant="outline">
-            <Link href="/dashboard">
-              <IconArrowBackUp aria-hidden="true" data-icon="inline-start" />
-              <span className="hidden sm:inline">Return to App</span>
-              <span className="sm:hidden">Return</span>
-            </Link>
-          </Button>
+          <Link
+            href="/dashboard"
+            className={buttonVariants({ size: "sm", variant: "outline" })}
+          >
+            <IconArrowBackUp aria-hidden="true" data-icon="inline-start" />
+            <span className="hidden sm:inline">Return to App</span>
+            <span className="sm:hidden">Return</span>
+          </Link>
           <ThemeToggle />
         </div>
       </div>

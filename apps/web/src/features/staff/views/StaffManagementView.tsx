@@ -228,16 +228,18 @@ export function StaffManagementView({
 
         return (
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                aria-label={`Manage ${row.original.displayName}`}
-                disabled={mutation.isPending || !hasActions}
-                size="icon"
-                variant="ghost"
-              >
-                <IconDotsVertical aria-hidden="true" />
-              </Button>
-            </DropdownMenuTrigger>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  aria-label={`Manage ${row.original.displayName}`}
+                  disabled={mutation.isPending || !hasActions}
+                  size="icon"
+                  variant="ghost"
+                >
+                  <IconDotsVertical aria-hidden="true" />
+                </Button>
+              }
+            />
             <DropdownMenuContent align="end">
               <DropdownMenuGroup>
                 {allowedRoleOptions.map((role) => (

@@ -274,22 +274,27 @@ function MapCombobox({
 
   return (
     <Popover onOpenChange={setOpen} open={open}>
-      <PopoverTrigger asChild>
-        <Button
-          aria-expanded={open}
-          className="w-full justify-between"
-          disabled={disabled}
-          type="button"
-          variant="outline"
-        >
-          <span
-            className={cn("truncate", !selectedMap && "text-muted-foreground")}
+      <PopoverTrigger
+        render={
+          <Button
+            aria-expanded={open}
+            className="w-full justify-between"
+            disabled={disabled}
+            type="button"
+            variant="outline"
           >
-            {selectedMap?.name ?? "Search maps…"}
-          </span>
-          <IconChevronDown aria-hidden="true" data-icon="inline-end" />
-        </Button>
-      </PopoverTrigger>
+            <span
+              className={cn(
+                "truncate",
+                !selectedMap && "text-muted-foreground"
+              )}
+            >
+              {selectedMap?.name ?? "Search maps…"}
+            </span>
+            <IconChevronDown aria-hidden="true" data-icon="inline-end" />
+          </Button>
+        }
+      />
       <PopoverContent align="start" className="w-88 p-0">
         <Command>
           <CommandInput placeholder="Search maps…" />
@@ -375,10 +380,7 @@ function ReviewStepPanel({
             value={lossProtected ? "Yes" : "No"}
           />
           {loggingMode === "comprehensive" ? (
-            <ReviewRow
-              label="Notes"
-              value={notes.trim() || "No note added"}
-            />
+            <ReviewRow label="Notes" value={notes.trim() || "No note added"} />
           ) : null}
         </dl>
       </div>
@@ -1145,7 +1147,6 @@ export function DashboardStatsLogMatchSheet({
                     </Field>
                   </FieldGroup>
                 ) : null}
-
               </div>
             ) : null}
 

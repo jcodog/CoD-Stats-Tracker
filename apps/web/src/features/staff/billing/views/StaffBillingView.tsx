@@ -1047,15 +1047,17 @@ export function StaffBillingView({
     {
       cell: ({ row }) => (
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              aria-label={`Manage plan ${row.original.name}`}
-              size="icon"
-              variant="ghost"
-            >
-              <IconDotsVertical aria-hidden="true" />
-            </Button>
-          </DropdownMenuTrigger>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                aria-label={`Manage plan ${row.original.name}`}
+                size="icon"
+                variant="ghost"
+              >
+                <IconDotsVertical aria-hidden="true" />
+              </Button>
+            }
+          />
           <DropdownMenuContent align="end">
             <DropdownMenuGroup>
               <DropdownMenuItem
@@ -1170,15 +1172,17 @@ export function StaffBillingView({
     {
       cell: ({ row }) => (
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              aria-label={`Manage feature ${row.original.name}`}
-              size="icon"
-              variant="ghost"
-            >
-              <IconDotsVertical aria-hidden="true" />
-            </Button>
-          </DropdownMenuTrigger>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                aria-label={`Manage feature ${row.original.name}`}
+                size="icon"
+                variant="ghost"
+              >
+                <IconDotsVertical aria-hidden="true" />
+              </Button>
+            }
+          />
           <DropdownMenuContent align="end">
             <DropdownMenuGroup>
               <DropdownMenuItem
@@ -1390,15 +1394,17 @@ export function StaffBillingView({
     {
       cell: ({ row }) => (
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              aria-label={`Manage creator ${row.original.userName}`}
-              size="icon"
-              variant="ghost"
-            >
-              <IconDotsVertical aria-hidden="true" />
-            </Button>
-          </DropdownMenuTrigger>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                aria-label={`Manage creator ${row.original.userName}`}
+                size="icon"
+                variant="ghost"
+              >
+                <IconDotsVertical aria-hidden="true" />
+              </Button>
+            }
+          />
           <DropdownMenuContent align="end">
             <DropdownMenuGroup>
               <DropdownMenuItem
@@ -2371,19 +2377,19 @@ export function StaffBillingView({
                     ).length,
                   },
                 ]
-            : [
-                { label: "Plans", value: data.plans.length },
-                { label: "Features", value: data.features.length },
-                { label: "Customers", value: data.customers.length },
-                {
-                  label: "Active subscriptions",
-                  value: data.activeSubscriptionCount,
-                },
-                {
-                  label: "Last sync",
-                  value: data.lastSync ? data.lastSync.result : "Never",
-                },
-              ]
+              : [
+                  { label: "Plans", value: data.plans.length },
+                  { label: "Features", value: data.features.length },
+                  { label: "Customers", value: data.customers.length },
+                  {
+                    label: "Active subscriptions",
+                    value: data.activeSubscriptionCount,
+                  },
+                  {
+                    label: "Last sync",
+                    value: data.lastSync ? data.lastSync.result : "Never",
+                  },
+                ]
         }
       />
 
