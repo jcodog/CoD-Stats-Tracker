@@ -77,7 +77,7 @@ export function StaffRankedConfigSection({
       <div className="grid gap-0 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
         <div className="min-w-0">
           <WorkspaceHeading
-            description="Changing the active title or season archives every open session in one backend rollover. Users do not get manual close controls in this rollout."
+            description="Changing the active title or season archives open sessions in batches. Session creation and match logging pause until the rollover completes."
             title="Current ranked config"
           />
           <div className="flex flex-col gap-6 px-6 py-6">

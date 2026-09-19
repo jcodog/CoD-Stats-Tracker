@@ -83,10 +83,15 @@ async function callManagementDashboard(
 }
 
 async function callBillingDashboard(
-  convex: ConvexReactClient
+  convex: ConvexReactClient,
+  scope: NonNullable<StaffBillingDashboard["page"]>["scope"],
+  cursor: string | null
 ): Promise<StaffBillingDashboard> {
   try {
-    return await convex.action(api.actions.staff.billing.getDashboard, {})
+    return await convex.action(api.actions.staff.billing.getDashboard, {
+      scope,
+      cursor,
+    })
   } catch (error) {
     throw toStaffClientError(error)
   }
@@ -390,15 +395,23 @@ export function useStaffManagementDashboard(
   })
 }
 
-export function useStaffBillingDashboard(initialData: StaffBillingDashboard) {
+export function useStaffBillingDashboard(
+  initialData: StaffBillingDashboard,
+  cursor: string | null = null
+) {
   const convex = useConvex()
   const { isAuthenticated, isLoading } = useConvexAuth()
 
   return useQuery({
     enabled: !isLoading && isAuthenticated,
-    initialData,
-    queryFn: () => callBillingDashboard(convex),
-    queryKey: staffQueryKeys.billing,
+    initialData: cursor === null ? initialData : undefined,
+    queryFn: () =>
+      callBillingDashboard(
+        convex,
+        initialData.page?.scope ?? "catalog",
+        cursor
+      ),
+    queryKey: [...staffQueryKeys.billing, initialData.page?.scope, cursor],
     staleTime: STAFF_DASHBOARD_STALE_TIME,
   })
 }
@@ -412,6 +425,10 @@ export function useStaffRankedDashboard(initialData: StaffRankedDashboard) {
     initialData,
     queryFn: () => callRankedDashboard(convex),
     queryKey: staffQueryKeys.ranked,
+    refetchInterval: (query) =>
+      query.state.data?.currentConfig?.rollover?.status === "running"
+        ? 5000
+        : false,
     staleTime: STAFF_DASHBOARD_STALE_TIME,
   })
 }

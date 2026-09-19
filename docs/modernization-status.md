@@ -2,7 +2,7 @@
 
 ## Recovery checkpoint
 
-Resumed from committed `a04e8cb` on `refactor/shadcn-baseui-rebaseline` with a clean tree. Current local changes are authoritative. No builds, codegen, dev servers, subagents, commits, pushes, deployments or external mutations are authorized.
+Resumed from committed `f47b4ee` on `refactor/shadcn-baseui-rebaseline` with a clean tree. Current local changes are authoritative. No builds, codegen, dev servers, subagents, commits, pushes, deployments or external mutations are authorized.
 
 ## Completed source work
 
@@ -90,3 +90,23 @@ Remaining complete billing snapshots now read at most 200 rows/256 KB per databa
 Validation: backend typecheck passed after ranked count/backfill changes. Latest backend suite passed 161 tests with 614 assertions; web feature suite passed 8 tests with 9 assertions. Web/backend lint and typecheck passed before the final ranked count change. Tests cover pagination completeness/no-progress, payout overflow, scoped selected rows, overview counts, creator ownership/conversion semantics and fail-closed role mismatch. Final ranked count regression and lint remain to rerun. Browser remains unverified because the existing localhost server was unavailable.
 
 Next unfinished point: finish staff billing scoped responses and season rollover bounds, validate, then #33 hosted billing. Do not repeat completed TS7/Base UI/viewer/dashboard work. The later #29/#35/visual/#34 phases have not started in this checkpoint.
+## Resume at f47b4ee: rollover and intentional theme shortcut
+
+Verified the clean committed checkpoint with 163 backend regression tests, web/backend lint and web/backend typecheck. No prior tooling, Base UI, checkout, viewer or paginated data work was redone.
+
+Season rollover now uses a persisted resumable job when more than 100 open sessions exist. Writes pause before scheduling. Each transaction archives at most 100 sessions and updates global/user counters atomically; the old title/season remain current until the final batch commits. Stale jobs and completed-job retries are ignored. Conflicting configuration changes are rejected while running. Submitting the identical target configuration resumes scheduling after an interruption. Staff UI displays running/completed progress, refreshes while running and uses the pending target when rebuilding the form. Small rollovers retain immediate completion. No rollover was executed against a deployment.
+
+Restored the deliberate global D/d theme shortcut inside ThemeProvider. It yields to prevented events, repeat, IME composition, modifiers, editing targets, contenteditable ancestors and keyboard-driven composite widgets/overlays. The visible theme button remains and advertises aria-keyshortcuts. A forced theme is respected. This supersedes the earlier removal recorded above.
+
+Validation: 163 backend tests passed with 636 assertions, including multi-batch completion, resume, stale job and conflicting-target checks. Ten web feature/shortcut tests passed with 19 assertions. Web/backend lint and typecheck passed. Browser check remains blocked: the existing http://localhost:3000 endpoint returned an invalid HTTP response. No server was started or debugged. Real DOM shortcut interaction and rollover display still need browser verification.
+
+Next: #31 staff billing section-specific bounded responses remain unfinished; existing readBillingRecords still assembles complete snapshots. Creator lifetime auto-loading still needs the documented aggregate migration/end-state. Do not mark #31 complete or move to #33 until those are addressed.
+## #31 section response checkpoint
+
+Staff billing getDashboard now requires a scope and optional cursor. Catalog pages return catalog/audit data with complete subscription counts reduced from bounded pages. Subscription and customer views page 25 primary records; creator setup/access views page 25 user accounts so unconfigured users remain reachable. Only those accounts are joined through indexes. Related histories have explicit overflow errors rather than silent truncation. The UI labels page-local counts/search, provides Previous/Next, separates cache entries by scope/cursor and clears account selections on page changes. Staff identifier masking remains intact. Creator access retains staff read permission; creator program/payout scopes require admin permission.
+
+Payout scope retains the complete, explicitly guarded period preview and limited operational run/transfer history. Ordinary catalog/account pages no longer load the payout ledger. Financial impact previews and bulk operational actions still use complete records internally; their existing preview output is bounded and is not derived from a displayed account page. They have not been converted to partial-page decisions.
+
+Staff creator referral counts now reduce indexed pages to scalars, with indexed deduplication of historical creator/user pairs. No lifetime referral arrays return to the staff browser. This bounds response size, not total aggregate calculation time. See docs/creator-metrics-migration.md for the bounded transactional aggregate/backfill end state. The creator panel's automatic lifetime loading remains an explicit interim limitation; no partially maintained financial aggregate was introduced.
+
+Backend regression suite passed 169 tests with 653 assertions, including scoped joins, cursor navigation, new-user creator onboarding, account overflow, referral deduplication and complete catalog totals. Web/backend final lint/typecheck and formatting for this section change remain pending. Browser verification remains blocked by the user-owned endpoint's invalid HTTP response.

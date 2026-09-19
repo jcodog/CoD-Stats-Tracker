@@ -715,7 +715,14 @@ export function StaffBillingView({
   initialData: StaffBillingDashboard
   section: StaffBillingSection
 }) {
-  const { data } = useStaffBillingDashboard(initialData)
+  const [pageCursors, setPageCursors] = useState<Array<string | null>>([null])
+  const cursor = pageCursors.at(-1) ?? null
+  const {
+    data: loadedData,
+    isFetching: pagePending,
+    error: pageError,
+  } = useStaffBillingDashboard(initialData, cursor)
+  const data = loadedData ?? initialData
   const sectionConfig = getStaffBillingSectionConfig(section)
   const billingClient = useStaffBillingClient()
   const invalidateStaffQueries = useInvalidateStaffQueries()
@@ -2307,8 +2314,67 @@ export function StaffBillingView({
     }
   }
 
+  function changeBillingPage(next: string | null) {
+    setPageCursors((current) =>
+      next === null ? current.slice(0, -1) : [...current, next]
+    )
+    setCreatorGrantForm((current) => ({ ...current, targetUserIds: [] }))
+    setCreatorGrantConfirmationState(null)
+    setCreatorGrantRevocationState(null)
+    setCreatorProgramAccountForm(
+      buildCreatorProgramAccountFormState({
+        defaults: data.creatorProgramDefaults,
+      })
+    )
+  }
+  if (!loadedData) {
+    return (
+      <div role="status" className="space-y-4 p-6">
+        <p>
+          {pageError
+            ? "Could not load this billing page. Return to the previous page and retry."
+            : "Loading billing page…"}
+        </p>
+        <Button
+          onClick={() => changeBillingPage(null)}
+          disabled={pageCursors.length === 1}
+        >
+          Previous page
+        </Button>
+      </div>
+    )
+  }
+  const paged =
+    data.page?.scope !== "catalog" && data.page?.scope !== "creator-transfers"
   return (
     <div className="flex flex-1 flex-col gap-8">
+      {paged ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 border border-border p-4 text-sm">
+          <p>
+            Page {pageCursors.length}. Counts, search and account choices cover
+            this page only. Financial actions recheck their complete scope.
+          </p>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              disabled={pagePending || pageCursors.length === 1}
+              onClick={() => changeBillingPage(null)}
+            >
+              Previous
+            </Button>
+            <Button
+              variant="outline"
+              disabled={pagePending || !data.page?.continueCursor}
+              onClick={() => {
+                const next = data.page?.continueCursor
+                if (next) changeBillingPage(next)
+              }}
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+      ) : null}
       <StaffPageIntro
         description={sectionConfig.description}
         meta={
@@ -2327,69 +2393,79 @@ export function StaffBillingView({
       <StaffMetricStrip
         columnsClassName="md:grid-cols-2 xl:grid-cols-5"
         items={
-          section === "subscriptions-creator-program"
+          section.startsWith("catalog")
             ? [
+                { label: "Plans", value: data.plans.length },
+                { label: "Features", value: data.features.length },
                 {
-                  label: "Configured creators",
-                  value: creatorProgramProvisionedCount,
-                },
-                {
-                  label: "Live creator codes",
-                  value: creatorProgramActiveCodeCount,
-                },
-                {
-                  label: "Connect ready",
-                  value: creatorProgramReadyCount,
-                },
-                {
-                  label: "Connect action required",
-                  value: creatorProgramActionRequiredCount,
-                },
-                {
-                  label: "Paid conversions",
-                  value: creatorProgramPaidConversionCount,
+                  label: "Active subscriptions",
+                  value: data.activeSubscriptionCount,
                 },
               ]
-            : section === "subscriptions-creator-transfers"
+            : section === "subscriptions-creator-program"
               ? [
                   {
-                    label: "Eligible creators",
-                    value: data.creatorPayoutPreview?.readyCreatorCount ?? 0,
+                    label: "Configured creators",
+                    value: creatorProgramProvisionedCount,
                   },
                   {
-                    label: "Transfer groups",
-                    value: data.creatorPayoutPreview?.transferCount ?? 0,
+                    label: "Live creator codes",
+                    value: creatorProgramActiveCodeCount,
                   },
                   {
-                    label: "Eligible totals",
-                    value: formatCurrencyTotals(
-                      data.creatorPayoutPreview?.currencyTotals ?? []
-                    ),
+                    label: "Connect ready",
+                    value: creatorProgramReadyCount,
                   },
                   {
-                    label: "Blocked groups",
-                    value: data.creatorPayoutPreview?.blockedGroups.length ?? 0,
+                    label: "Connect action required",
+                    value: creatorProgramActionRequiredCount,
                   },
                   {
-                    label: "Draft runs",
-                    value: data.creatorPayoutRuns.filter(
-                      (run) => run.status === "draft"
-                    ).length,
+                    label: "Paid conversions",
+                    value: creatorProgramPaidConversionCount,
                   },
                 ]
-              : [
-                  { label: "Plans", value: data.plans.length },
-                  { label: "Features", value: data.features.length },
-                  { label: "Customers", value: data.customers.length },
-                  {
-                    label: "Active subscriptions",
-                    value: data.activeSubscriptionCount,
-                  },
-                  {
-                    label: "Last sync",
-                    value: data.lastSync ? data.lastSync.result : "Never",
-                  },
-                ]
+              : section === "subscriptions-creator-transfers"
+                ? [
+                    {
+                      label: "Eligible creators",
+                      value: data.creatorPayoutPreview?.readyCreatorCount ?? 0,
+                    },
+                    {
+                      label: "Transfer groups",
+                      value: data.creatorPayoutPreview?.transferCount ?? 0,
+                    },
+                    {
+                      label: "Eligible totals",
+                      value: formatCurrencyTotals(
+                        data.creatorPayoutPreview?.currencyTotals ?? []
+                      ),
+                    },
+                    {
+                      label: "Blocked groups",
+                      value:
+                        data.creatorPayoutPreview?.blockedGroups.length ?? 0,
+                    },
+                    {
+                      label: "Draft runs",
+                      value: data.creatorPayoutRuns.filter(
+                        (run) => run.status === "draft"
+                      ).length,
+                    },
+                  ]
+                : [
+                    { label: "Plans", value: data.plans.length },
+                    { label: "Features", value: data.features.length },
+                    { label: "Customers", value: data.customers.length },
+                    {
+                      label: "Active subscriptions",
+                      value: data.activeSubscriptionCount,
+                    },
+                    {
+                      label: "Last sync",
+                      value: data.lastSync ? data.lastSync.result : "Never",
+                    },
+                  ]
         }
       />
 
@@ -2622,7 +2698,7 @@ export function StaffBillingView({
                       className="py-8 text-center text-sm text-muted-foreground"
                       colSpan={5}
                     >
-                      No subscriptions currently require support attention.
+                      No subscriptions on this page require support attention.
                     </TableCell>
                   </TableRow>
                 )}

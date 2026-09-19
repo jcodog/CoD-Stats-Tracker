@@ -4,21 +4,13 @@ import { UserProfile } from "@clerk/nextjs"
 import { IconBrandOpenai } from "@tabler/icons-react"
 
 import { ChatGptAppSettingsSection } from "@/features/account/components/ChatGptAppSettingsSection"
-import type { RequestViewport } from "@/lib/server/request-viewport"
 
-export function AccountView({
-  viewport = "desktop",
-}: {
-  viewport?: RequestViewport
-}) {
-  const isMobileView = viewport === "mobile"
+export function AccountView() {
 
   return (
     <div
       className={
-        isMobileView
-          ? "flex flex-1 items-start justify-center px-0 py-2"
-          : "flex flex-1 items-center justify-center"
+        "max-md:flex max-md:flex-1 max-md:items-start max-md:justify-center max-md:px-0 max-md:py-2 md:flex md:flex-1 md:items-center md:justify-center"
       }
     >
       <UserProfile path="/account" routing="path">

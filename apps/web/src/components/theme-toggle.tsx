@@ -19,6 +19,7 @@ export function ThemeToggle() {
       <TooltipTrigger
         render={
           <Button
+            aria-keyshortcuts="D"
             aria-label={`Switch to ${isDark ? "light" : "dark"} mode`}
             onClick={() => setTheme(isDark ? "light" : "dark")}
             size="icon-sm"

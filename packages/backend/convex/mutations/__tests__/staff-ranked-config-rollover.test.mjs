@@ -1,6 +1,9 @@
 import { describe, expect, it } from "bun:test"
 
-import { setCurrentRankedConfig } from "../staff/internal.ts"
+import {
+  setCurrentRankedConfig,
+  continueRankedRollover,
+} from "../staff/internal.ts"
 
 const INDEX_FIELDS = {
   landingGlobalStats: {
@@ -254,15 +257,18 @@ describe("ranked config rollover landing metrics", () => {
     const archivedSessions = db.tables.sessions.filter(
       (session) => session._id !== "sessions:4"
     )
-    expect(archivedSessions.every((session) => session.endedAt !== null)).toBe(true)
+    expect(archivedSessions.every((session) => session.endedAt !== null)).toBe(
+      true
+    )
     expect(
       archivedSessions.every(
         (session) => session.archivedReason === "title_and_season_rollover"
       )
     ).toBe(true)
-    expect(db.tables.sessions.find((session) => session._id === "sessions:4")?.endedAt).toBe(
-      1_700_000_000_000
-    )
+    expect(
+      db.tables.sessions.find((session) => session._id === "sessions:4")
+        ?.endedAt
+    ).toBe(1_700_000_000_000)
 
     expect(db.tables.landingGlobalStats[0].activeSessions).toBe(0)
     expect(
@@ -346,15 +352,64 @@ describe("ranked config rollover landing metrics", () => {
   })
 })
 
-it("rejects an oversized rollover before archiving sessions or changing configuration", async () => {
+it("resumes bounded rollover batches and switches configuration only on completion", async () => {
   const { ctx, db } = createTestContext({
-    rankedConfigs: [{ _id: "config", key: "current", activeSeason: 1, activeTitleKey: "title", sessionWritesEnabled: true }],
-    rankedTitles: [{ _id: "title", key: "title", label: "Title", isActive: true }],
-    sessions: Array.from({ length: 501 }, (_, index) => ({ _id: `session:${index}`, userId: "user", endedAt: null })),
+    rankedConfigs: [
+      {
+        _id: "config",
+        key: "current",
+        activeSeason: 1,
+        activeTitleKey: "title",
+        sessionWritesEnabled: true,
+      },
+    ],
+    rankedTitles: [
+      { _id: "title", key: "title", label: "Title", isActive: true },
+    ],
+    sessions: Array.from({ length: 250 }, (_, index) => ({
+      _id: `session:${index}`,
+      userId: "user",
+      endedAt: null,
+    })),
+    landingGlobalStats: [{ _id: "global", key: "global", activeSessions: 250 }],
+    landingUserStats: [
+      { _id: "user-stats", userId: "user", activeSessions: 250 },
+    ],
   })
-  await expect(setCurrentRankedConfig._handler(ctx, {
-    activeSeason: 2, activeTitleKey: "title", sessionWritesEnabled: true, updatedByUserId: "staff",
-  })).rejects.toThrow("batched rollover")
-  expect(db.tables.rankedConfigs[0].activeSeason).toBe(1)
-  expect(db.tables.sessions.every(session => session.endedAt === null)).toBe(true)
+  const target = {
+    activeSeason: 2,
+    activeTitleKey: "title",
+    sessionWritesEnabled: true,
+    updatedByUserId: "staff",
+  }
+  const result = await setCurrentRankedConfig._handler(ctx, target)
+  const config = db.tables.rankedConfigs[0]
+  expect(result.rolloverPending).toBe(true)
+  expect(config.activeSeason).toBe(1)
+  expect(config.sessionWritesEnabled).toBe(false)
+  const args = { startedAt: config.rollover.startedAt }
+  await continueRankedRollover._handler(ctx, { startedAt: args.startedAt - 1 })
+  expect(config.rollover.archivedSessionCount).toBe(0)
+  await continueRankedRollover._handler(ctx, args)
+  expect(config.rollover.archivedSessionCount).toBe(100)
+  expect(config.activeSeason).toBe(1)
+  await expect(
+    setCurrentRankedConfig._handler(ctx, { ...target, activeSeason: 3 })
+  ).rejects.toThrow("still running")
+  const resumed = await setCurrentRankedConfig._handler(ctx, target)
+  expect(resumed.archivedSessionCount).toBe(100)
+  await continueRankedRollover._handler(ctx, args)
+  expect(config.rollover.status).toBe("running")
+  await continueRankedRollover._handler(ctx, args)
+  expect(config.rollover.status).toBe("complete")
+  expect(config.rollover.archivedSessionCount).toBe(250)
+  expect(config.activeSeason).toBe(2)
+  expect(config.sessionWritesEnabled).toBe(true)
+  expect(db.tables.landingGlobalStats[0].activeSessions).toBe(0)
+  expect(db.tables.landingUserStats[0].activeSessions).toBe(0)
+  await continueRankedRollover._handler(ctx, args)
+  expect(config.rollover.archivedSessionCount).toBe(250)
+  expect(
+    db.tables.sessions.every((session) => session.endedAt === args.startedAt)
+  ).toBe(true)
 })

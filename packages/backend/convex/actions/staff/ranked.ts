@@ -36,13 +36,15 @@ export const getDashboard = action({
     let openSessionCount = 0
     let cursor: string | null = null
     for (;;) {
-      const page: { count: number; isDone: boolean; continueCursor: string } = await ctx.runQuery(
-        internal.queries.staff.internal.getOpenSessionCountPage,
-        { paginationOpts: { cursor, numItems: 200 } }
-      )
+      const page: { count: number; isDone: boolean; continueCursor: string } =
+        await ctx.runQuery(
+          internal.queries.staff.internal.getOpenSessionCountPage,
+          { paginationOpts: { cursor, numItems: 200 } }
+        )
       openSessionCount += page.count
       if (page.isDone) break
-      if (page.continueCursor === cursor) throw new Error("Session pagination did not advance.")
+      if (page.continueCursor === cursor)
+        throw new Error("Session pagination did not advance.")
       cursor = page.continueCursor
     }
     const titles = records.titles as Array<{
@@ -81,6 +83,7 @@ export const getDashboard = action({
       actorRole: operator.actorRole,
       currentConfig: records.config
         ? {
+            rollover: records.config.rollover,
             activeSeason: records.config.activeSeason,
             activeTitleKey: records.config.activeTitleKey,
             activeTitleLabel:
@@ -161,13 +164,15 @@ export const setCurrentRankedConfig = action({
       }
     }
 
-    const summary = result.didInitialize
-      ? `Set the current ranked config to ${result.activeTitleLabel} season ${result.activeSeason}. Session creation and match logging are ${writesStateLabel}.`
-      : result.titleChanged || result.seasonChanged
-        ? `Switched the current ranked config to ${result.activeTitleLabel} season ${result.activeSeason} and archived ${formatPlural(result.archivedSessionCount, "open session")}. Session creation and match logging are ${writesStateLabel}.`
-        : result.sessionWritesEnabled
-          ? `Resumed ranked session creation and match logging for ${result.activeTitleLabel} season ${result.activeSeason}.`
-          : `Paused ranked session creation and match logging for ${result.activeTitleLabel} season ${result.activeSeason}.`
+    const summary = result.rolloverPending
+      ? `Season rollover is running. Session creation and match logging are paused. ${result.archivedSessionCount} sessions archived so far. Refresh for progress; submit the same target configuration to resume a stalled rollover.`
+      : result.didInitialize
+        ? `Set the current ranked config to ${result.activeTitleLabel} season ${result.activeSeason}. Session creation and match logging are ${writesStateLabel}.`
+        : result.titleChanged || result.seasonChanged
+          ? `Switched the current ranked config to ${result.activeTitleLabel} season ${result.activeSeason} and archived ${formatPlural(result.archivedSessionCount, "open session")}. Session creation and match logging are ${writesStateLabel}.`
+          : result.sessionWritesEnabled
+            ? `Resumed ranked session creation and match logging for ${result.activeTitleLabel} season ${result.activeSeason}.`
+            : `Paused ranked session creation and match logging for ${result.activeTitleLabel} season ${result.activeSeason}.`
 
     await ctx.runMutation(internal.mutations.staff.internal.insertAuditLog, {
       action: result.didInitialize
@@ -337,7 +342,6 @@ export const upsertRankedMode = action({
     return { summary }
   },
 })
-
 
 async function requireAuthorizedStaffAction(
   ctx: ActionCtx,

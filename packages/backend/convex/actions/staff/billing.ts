@@ -1,7 +1,13 @@
 "use node"
 
 import Stripe from "stripe"
-import { readBillingRecords } from "../../../src/lib/staffBillingRecords"
+import { staffBillingScopeValidator } from "../../../src/lib/staffBillingScope"
+import {
+  readBillingRecords,
+  readBillingSectionRecords,
+  readCreatorReferralCounts,
+  readCatalogBillingCounts,
+} from "../../../src/lib/staffBillingRecords"
 import { v } from "convex/values"
 import { action, type ActionCtx } from "../../_generated/server"
 import type { Id } from "../../_generated/dataModel"
@@ -1936,19 +1942,92 @@ async function cancelSubscriptionsAtPeriodEnd(args: {
 }
 
 export const getDashboard = action({
-  args: {},
-  handler: async (ctx): Promise<StaffBillingDashboard> => {
-    const operator = await requireAuthorizedStaffAction(ctx, "staff")
-    const payoutPeriod = getPreviousCompletedMonthlyPayoutPeriod()
-    const records = await readBillingRecords(ctx, {
-      creatorPayoutPeriodEnd: payoutPeriod.periodEnd,
-      creatorPayoutPeriodStart: payoutPeriod.periodStart,
+  args: {
+    scope: staffBillingScopeValidator,
+    cursor: v.optional(v.union(v.string(), v.null())),
+  },
+  handler: async (ctx, args): Promise<StaffBillingDashboard> => {
+    const operator = await requireAuthorizedStaffAction(
+      ctx,
+      args.scope === "creator-program" || args.scope === "creator-transfers"
+        ? "admin"
+        : "staff"
+    )
+    const period = getPreviousCompletedMonthlyPayoutPeriod()
+    const records = await readBillingSectionRecords(ctx, {
+      scope: args.scope,
+      cursor: args.cursor ?? null,
+      periodStart: period.periodStart,
+      periodEnd: period.periodEnd,
     })
-
-    return buildBillingDashboard(records, operator.actorRole)
+    const dashboard = buildBillingDashboard(records, operator.actorRole)
+    // The selected subscription page defines visible rows; joined account
+    // history is only used to resolve each account's effective access.
+    if (args.scope === "subscriptions") {
+      const ids = new Set(records.primarySubscriptionIds)
+      dashboard.subscriptions = buildSubscriptionRows({
+        ...records,
+        subscriptions: records.subscriptions.filter((row) => ids.has(row._id)),
+        fullIdentifiers: canViewFullBillingIdentifiers(operator.actorRole),
+      })
+      dashboard.attentionSubscriptions = dashboard.subscriptions.filter(
+        (row) => row.attentionStatus !== "none"
+      )
+      dashboard.activeSubscriptionCount = dashboard.subscriptions.length
+    }
+    if (args.scope === "creator-program") {
+      dashboard.creatorProgramAccounts = await Promise.all(
+        dashboard.creatorProgramAccounts.map(async (account) => {
+          const creator = records.creatorAccounts.find(
+            (row) => row._id === account.id
+          )
+          if (!creator)
+            throw new Error("Creator account missing from its page.")
+          return {
+            ...account,
+            ...(await readCreatorReferralCounts(ctx, creator._id)),
+          }
+        })
+      )
+    } else {
+      dashboard.creatorProgramAccounts = []
+    }
+    if (args.scope !== "creator-transfers")
+      dashboard.creatorPayoutPreview = null
+    if (args.scope === "creator-access") {
+      dashboard.creatorGrants = buildCreatorGrantRows({
+        customers: records.customers,
+        grants: records.accessGrants,
+        users: records.users,
+      })
+    } else {
+      dashboard.creatorGrants = []
+    }
+    if (args.scope !== "subscriptions") dashboard.subscriptions = []
+    if (args.scope !== "subscriptions" && args.scope !== "customers")
+      dashboard.customers = []
+    if (args.scope === "catalog") {
+      const metrics = await readCatalogBillingCounts(ctx, records.plans)
+      dashboard.activeSubscriptionCount = metrics.activeSubscriptionCount
+      dashboard.plans = dashboard.plans.map((plan) => ({
+        ...plan,
+        ...metrics.counts.get(plan.key),
+      }))
+      dashboard.features = dashboard.features.map((feature) => ({
+        ...feature,
+        activeSubscriptionCount: feature.linkedPlanKeys.reduce(
+          (count, key) =>
+            count + (metrics.counts.get(key)?.activeSubscriptionCount ?? 0),
+          0
+        ),
+      }))
+    }
+    return {
+      ...dashboard,
+      page: { scope: args.scope, continueCursor: records.continueCursor },
+    }
   },
 })
-
 export const previewCreatorPayoutTransfers = action({
   args: {
     ledgerEntryIds: v.optional(v.array(v.id("creatorEarningLedger"))),

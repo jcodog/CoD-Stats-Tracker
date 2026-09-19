@@ -5,7 +5,6 @@ import { isFlagEnabled } from "@/lib/flags"
 import { normalizeCreatorCode } from "@/lib/creator-attribution-cookie"
 import { normalizePricingCurrency } from "@/lib/pricing-currency"
 import { getPreferredPricingCurrency } from "@/lib/server/pricing-currency"
-import { resolveRequestViewport } from "@/lib/server/request-viewport"
 import { redirect } from "next/navigation"
 
 export const metadata = createPageMetadata("Checkout")
@@ -40,10 +39,9 @@ export default async function CheckoutPage({
     redirect("/settings/billing/plan")
   }
 
-  const [checkoutEnabled, defaultPreferredCurrency, viewport] = await Promise.all([
+  const [checkoutEnabled, defaultPreferredCurrency] = await Promise.all([
     isFlagEnabled("checkout"),
     getPreferredPricingCurrency(),
-    resolveRequestViewport(),
   ])
   const preferredCurrency =
     (typeof resolvedSearchParams.currency === "string"
@@ -57,7 +55,6 @@ export default async function CheckoutPage({
       initialCreatorCode={initialCreatorCode}
       initialPlanKey={requestedPlan}
       preferredCurrency={preferredCurrency}
-      viewport={viewport}
     />
   )
 }

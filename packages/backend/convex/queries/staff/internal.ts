@@ -1,3 +1,4 @@
+import { staffBillingScopeValidator } from "../../../src/lib/staffBillingScope"
 import type { Doc, TableNames } from "../../_generated/dataModel"
 import { internalQuery, type QueryCtx } from "../../_generated/server"
 import { v } from "convex/values"
@@ -317,6 +318,7 @@ export const getCreatorPayoutPreviewRecords = internalQuery({
 })
 export const getBillingContextRecords = internalQuery({
   args: {
+    includePayouts: v.optional(v.boolean()),
     creatorPayoutPeriodEnd: v.optional(v.number()),
     creatorPayoutPeriodStart: v.optional(v.number()),
     creatorPayoutRunCreatedAfter: v.optional(v.number()),
@@ -349,9 +351,15 @@ export const getBillingContextRecords = internalQuery({
         .withIndex("by_createdAt")
         .order("desc")
         .take(200),
-      listEligibleCreatorPayoutLedgerRows(ctx, args),
-      listCreatorPayoutRunsForDashboard(ctx, args),
-      listCreatorPayoutTransfersForDashboard(ctx, args),
+      args.includePayouts === false
+        ? []
+        : listEligibleCreatorPayoutLedgerRows(ctx, args),
+      args.includePayouts === false
+        ? []
+        : listCreatorPayoutRunsForDashboard(ctx, args),
+      args.includePayouts === false
+        ? []
+        : listCreatorPayoutTransfersForDashboard(ctx, args),
       ctx.db
         .query("creatorProgramDefaults")
         .withIndex("by_key", (query) => query.eq("key", "global"))
@@ -639,9 +647,187 @@ export const getBillingCreatorAttributionsPage = paginatedBillingTable(
 export const getOpenSessionCountPage = internalQuery({
   args: { paginationOpts: paginationOptsValidator },
   handler: async (ctx, args) => {
-    const result = await ctx.db.query("sessions")
-      .withIndex("by_endedAt", query => query.eq("endedAt", null))
-      .paginate({ ...args.paginationOpts, numItems: Math.min(args.paginationOpts.numItems, 200), maximumRowsRead: 200, maximumBytesRead: 256_000 })
-    return { count: result.page.length, isDone: result.isDone, continueCursor: result.continueCursor }
+    const result = await ctx.db
+      .query("sessions")
+      .withIndex("by_endedAt", (query) => query.eq("endedAt", null))
+      .paginate({
+        ...args.paginationOpts,
+        numItems: Math.min(args.paginationOpts.numItems, 200),
+        maximumRowsRead: 200,
+        maximumBytesRead: 256_000,
+      })
+    return {
+      count: result.page.length,
+      isDone: result.isDone,
+      continueCursor: result.continueCursor,
+    }
+  },
+})
+export const getBillingSectionRecords = internalQuery({
+  args: {
+    scope: staffBillingScopeValidator,
+    cursor: v.union(v.string(), v.null()),
+  },
+  handler: async (ctx, args) => {
+    const options = {
+      cursor: args.cursor,
+      numItems: 25,
+      maximumRowsRead: 25,
+      maximumBytesRead: 128_000,
+    }
+    let continueCursor: string | null = null
+    const userIds = new Set<Doc<"users">["_id"]>()
+    let primarySubscriptions: Doc<"billingSubscriptions">[] = []
+    let primaryCustomers: Doc<"billingCustomers">[] = []
+    let creatorAccounts: Doc<"creatorAccounts">[] = []
+    if (args.scope === "subscriptions") {
+      const page = await ctx.db
+        .query("billingSubscriptions")
+        .order("desc")
+        .paginate(options)
+      primarySubscriptions = page.page
+      for (const row of page.page) userIds.add(row.userId)
+      continueCursor = page.isDone ? null : page.continueCursor
+    } else if (args.scope === "customers") {
+      const page = await ctx.db
+        .query("billingCustomers")
+        .order("desc")
+        .paginate(options)
+      primaryCustomers = page.page
+      for (const row of page.page) userIds.add(row.userId)
+      continueCursor = page.isDone ? null : page.continueCursor
+    } else if (args.scope === "creator-program") {
+      const page = await ctx.db.query("users").order("desc").paginate(options)
+      for (const row of page.page) userIds.add(row._id)
+      const accounts = await Promise.all(
+        page.page.map((user) =>
+          ctx.db
+            .query("creatorAccounts")
+            .withIndex("by_userId", (q) => q.eq("userId", user._id))
+            .unique()
+        )
+      )
+      creatorAccounts = accounts.filter(
+        (row): row is Doc<"creatorAccounts"> => row !== null
+      )
+      continueCursor = page.isDone ? null : page.continueCursor
+    } else if (args.scope === "creator-access") {
+      const page = await ctx.db.query("users").order("desc").paginate(options)
+      for (const row of page.page) userIds.add(row._id)
+      continueCursor = page.isDone ? null : page.continueCursor
+    }
+    const users: Doc<"users">[] = []
+    const customers: Doc<"billingCustomers">[] = []
+    const subscriptions: Doc<"billingSubscriptions">[] = []
+    const accessGrants: Doc<"billingAccessGrants">[] = []
+    for (const userId of userIds) {
+      const [user, userCustomers, userSubscriptions, userGrants] =
+        await Promise.all([
+          ctx.db.get(userId),
+          ctx.db
+            .query("billingCustomers")
+            .withIndex("by_userId", (q) => q.eq("userId", userId))
+            .take(21),
+          ctx.db
+            .query("billingSubscriptions")
+            .withIndex("by_userId", (q) => q.eq("userId", userId))
+            .take(101),
+          ctx.db
+            .query("billingAccessGrants")
+            .withIndex("by_userId", (q) => q.eq("userId", userId))
+            .take(101),
+        ])
+      if (
+        userCustomers.length > 20 ||
+        userSubscriptions.length > 100 ||
+        userGrants.length > 100
+      ) {
+        throw new Error(
+          "Account history exceeds the safe billing page limit. No partial billing data was returned."
+        )
+      }
+      if (user) users.push(user)
+      customers.push(...userCustomers)
+      subscriptions.push(...userSubscriptions)
+      accessGrants.push(...userGrants)
+    }
+    return {
+      users,
+      customers: args.scope === "customers" ? primaryCustomers : customers,
+      subscriptions,
+      primarySubscriptionIds: primarySubscriptions.map((row) => row._id),
+      accessGrants,
+      creatorAccounts,
+      continueCursor,
+    }
+  },
+})
+export const getBillingCreatorReferralCountPage = internalQuery({
+  args: {
+    creatorAccountId: v.id("creatorAccounts"),
+    paginationOpts: paginationOptsValidator,
+  },
+  handler: async (ctx, args) => {
+    const page = await ctx.db
+      .query("creatorAttributions")
+      .withIndex("by_creatorAccountId", (q) =>
+        q.eq("creatorAccountId", args.creatorAccountId)
+      )
+      .paginate({
+        ...args.paginationOpts,
+        numItems: 50,
+        maximumRowsRead: 50,
+        maximumBytesRead: 128_000,
+      })
+    let signupCount = 0
+    let paidConversionCount = 0
+    for (const attribution of page.page) {
+      // Count the first attribution per creator/user, including inactive history.
+      const first = await ctx.db
+        .query("creatorAttributions")
+        .withIndex("by_creatorAccountId_userId", (q) =>
+          q
+            .eq("creatorAccountId", args.creatorAccountId)
+            .eq("userId", attribution.userId)
+        )
+        .first()
+      if (first?._id !== attribution._id) continue
+      signupCount += 1
+      for (const status of [
+        "active",
+        "canceled",
+        "past_due",
+        "paused",
+        "trialing",
+        "unpaid",
+      ] as const) {
+        const subscription = await ctx.db
+          .query("billingSubscriptions")
+          .withIndex("by_userId_status", (q) =>
+            q.eq("userId", attribution.userId).eq("status", status)
+          )
+          .first()
+        if (subscription) {
+          paidConversionCount += 1
+          break
+        }
+      }
+    }
+    return {
+      signupCount,
+      paidConversionCount,
+      isDone: page.isDone,
+      continueCursor: page.continueCursor,
+    }
+  },
+})
+
+export const getBillingCreatorAccountsById = internalQuery({
+  args: { ids: v.array(v.id("creatorAccounts")) },
+  handler: async (ctx, args) => {
+    if (args.ids.length > 200)
+      throw new Error("Creator account batches are limited to 200.")
+    const rows = await Promise.all(args.ids.map((id) => ctx.db.get(id)))
+    return rows.filter((row): row is Doc<"creatorAccounts"> => row !== null)
   },
 })

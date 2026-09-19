@@ -169,18 +169,6 @@ const supportedPricingCurrencyValidator = v.union(
   v.literal("CAD"),
   v.literal("EUR")
 )
-const subscriptionCancellationModeValidator = v.union(
-  v.literal("immediately"),
-  v.literal("period_end")
-)
-const billingProfileAddressValidator = v.object({
-  city: v.optional(v.string()),
-  country: v.optional(v.string()),
-  line1: v.optional(v.string()),
-  line2: v.optional(v.string()),
-  postalCode: v.optional(v.string()),
-  state: v.optional(v.string()),
-})
 
 function getAppPublicOrigin() {
   const rawOrigin = getConvexEnv().APP_PUBLIC_ORIGIN?.trim()
@@ -1343,13 +1331,6 @@ function createBillingLifecycleOps(
   }
 }
 
-function throwManagedInCustomerPortal(): never {
-  throw new BillingActionError(
-    "managed_in_stripe_customer_portal",
-    "This billing operation is managed in Stripe Customer Portal.",
-    409
-  )
-}
 
 export const syncBillingCenter = action({
   args: {},
@@ -1475,59 +1456,9 @@ export const createBillingPortalSession = action({
   },
 })
 
-export const updateBillingProfile = action({
-  args: {
-    address: v.optional(billingProfileAddressValidator),
-    businessName: v.optional(v.string()),
-    email: v.optional(v.string()),
-    name: v.optional(v.string()),
-    phone: v.optional(v.string()),
-  },
-  handler: async (): Promise<never> => {
-    try {
-      throwManagedInCustomerPortal()
-    } catch (error) {
-      throw sanitizeBillingError(error)
-    }
-  },
-})
 
-export const createPaymentMethodSetupIntent = action({
-  args: {},
-  handler: async (): Promise<never> => {
-    try {
-      throwManagedInCustomerPortal()
-    } catch (error) {
-      throw sanitizeBillingError(error)
-    }
-  },
-})
 
-export const setDefaultPaymentMethod = action({
-  args: {
-    paymentMethodId: v.string(),
-  },
-  handler: async (): Promise<never> => {
-    try {
-      throwManagedInCustomerPortal()
-    } catch (error) {
-      throw sanitizeBillingError(error)
-    }
-  },
-})
 
-export const removePaymentMethod = action({
-  args: {
-    paymentMethodId: v.string(),
-  },
-  handler: async (): Promise<never> => {
-    try {
-      throwManagedInCustomerPortal()
-    } catch (error) {
-      throw sanitizeBillingError(error)
-    }
-  },
-})
 export const createSubscriptionCheckoutSession = action({
   args: {
     creatorCode: v.optional(v.string()),
@@ -1995,61 +1926,6 @@ export const abandonPendingCheckout = action({
   },
 })
 
-export const previewSubscriptionChange = action({
-  args: {
-    interval: billingIntervalValidator,
-    planKey: v.string(),
-    prorationDate: v.optional(v.number()),
-    stripeSubscriptionId: v.optional(v.string()),
-  },
-  handler: async (): Promise<never> => {
-    try {
-      throwManagedInCustomerPortal()
-    } catch (error) {
-      throw sanitizeBillingError(error)
-    }
-  },
-})
 
-export const changeSubscriptionPlan = action({
-  args: {
-    interval: billingIntervalValidator,
-    planKey: v.string(),
-    prorationDate: v.optional(v.number()),
-    stripeSubscriptionId: v.optional(v.string()),
-  },
-  handler: async (): Promise<never> => {
-    try {
-      throwManagedInCustomerPortal()
-    } catch (error) {
-      throw sanitizeBillingError(error)
-    }
-  },
-})
 
-export const cancelCurrentSubscription = action({
-  args: {
-    mode: subscriptionCancellationModeValidator,
-    stripeSubscriptionId: v.optional(v.string()),
-  },
-  handler: async (): Promise<never> => {
-    try {
-      throwManagedInCustomerPortal()
-    } catch (error) {
-      throw sanitizeBillingError(error)
-    }
-  },
-})
 
-export const reactivateCurrentSubscription = action({
-  args: {
-    stripeSubscriptionId: v.optional(v.string()),
-  },
-  handler: async (): Promise<never> => {
-    try {
-      throwManagedInCustomerPortal()
-    } catch (error) {
-      throw sanitizeBillingError(error)
-    }
-  },
-})

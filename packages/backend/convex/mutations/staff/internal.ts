@@ -1043,6 +1043,37 @@ export const setCurrentRankedConfig = internalMutation({
       }
     }
 
+    if (currentConfig.rollover?.status === "running") {
+      const rollover = currentConfig.rollover
+      if (
+        rollover.targetTitleKey !== activeTitleKey ||
+        rollover.targetSeason !== activeSeason ||
+        rollover.targetWritesEnabled !== args.sessionWritesEnabled
+      ) {
+        throw new Error(
+          "A season rollover is still running. Finish it before changing the ranked configuration."
+        )
+      }
+      await ctx.scheduler.runAfter(
+        0,
+        internal.mutations.staff.internal.continueRankedRollover,
+        { startedAt: rollover.startedAt }
+      )
+      return {
+        activeSeason,
+        activeTitleKey,
+        activeTitleLabel: title.label,
+        archivedSessionCount: rollover.archivedSessionCount,
+        archiveReason: null,
+        configId: currentConfig._id,
+        didChange: true,
+        didInitialize: false,
+        seasonChanged: currentConfig.activeSeason !== activeSeason,
+        titleChanged: currentConfig.activeTitleKey !== activeTitleKey,
+        sessionWritesEnabled: false,
+        rolloverPending: true,
+      }
+    }
     const titleChanged = currentConfig.activeTitleKey !== activeTitleKey
     const seasonChanged = currentConfig.activeSeason !== activeSeason
     const currentSessionWritesEnabled =
@@ -1078,10 +1109,41 @@ export const setCurrentRankedConfig = internalMutation({
         ? await ctx.db
             .query("sessions")
             .withIndex("by_endedAt", (query) => query.eq("endedAt", null))
-            .take(501)
+            .take(101)
         : []
-    if (openSessions.length > 500) {
-      throw new Error("Season rollover exceeds 500 open sessions. A batched rollover is required before changing the season or title.")
+    if (openSessions.length > 100) {
+      await ctx.db.patch(currentConfig._id, {
+        sessionWritesEnabled: false,
+        rollover: {
+          status: "running",
+          targetTitleKey: activeTitleKey,
+          targetSeason: activeSeason,
+          targetWritesEnabled: args.sessionWritesEnabled,
+          startedAt: now,
+          archivedSessionCount: 0,
+        },
+        updatedAt: now,
+        updatedByUserId: args.updatedByUserId,
+      })
+      await ctx.scheduler.runAfter(
+        0,
+        internal.mutations.staff.internal.continueRankedRollover,
+        { startedAt: now }
+      )
+      return {
+        activeSeason,
+        activeTitleKey,
+        activeTitleLabel: title.label,
+        archivedSessionCount: 0,
+        archiveReason,
+        configId: currentConfig._id,
+        didChange: true,
+        didInitialize: false,
+        seasonChanged,
+        sessionWritesEnabled: false,
+        titleChanged,
+        rolloverPending: true,
+      }
     }
     const openSessionCountsByUserId = countSessionsByUserId(openSessions)
 
@@ -1097,6 +1159,7 @@ export const setCurrentRankedConfig = internalMutation({
     }
 
     await ctx.db.patch(currentConfig._id, {
+      rollover: undefined,
       activeSeason,
       activeTitleKey,
       sessionWritesEnabled: args.sessionWritesEnabled,
@@ -1140,5 +1203,80 @@ export const setCurrentRankedConfig = internalMutation({
       sessionWritesEnabled: args.sessionWritesEnabled,
       titleChanged,
     }
+  },
+})
+
+// Each successful batch commits its counter updates with the archived rows.
+// Retrying or scheduling this twice is safe: the next batch reads only open rows.
+export const continueRankedRollover = internalMutation({
+  args: { startedAt: v.number() },
+  handler: async (ctx, args): Promise<void> => {
+    const config = await ctx.db
+      .query("rankedConfigs")
+      .withIndex("by_key", (query) => query.eq("key", "current"))
+      .unique()
+    const rollover = config?.rollover
+    if (
+      !config ||
+      !rollover ||
+      rollover.status !== "running" ||
+      rollover.startedAt !== args.startedAt
+    )
+      return
+    const sessions = await ctx.db
+      .query("sessions")
+      .withIndex("by_endedAt", (query) => query.eq("endedAt", null))
+      .take(100)
+    const archiveReason = resolveArchiveReason({
+      titleChanged: config.activeTitleKey !== rollover.targetTitleKey,
+      seasonChanged: config.activeSeason !== rollover.targetSeason,
+    })
+    const now = Date.now()
+    for (const session of sessions) {
+      await ctx.db.patch(session._id, {
+        endedAt: rollover.startedAt,
+        archivedReason: archiveReason,
+      })
+    }
+    if (sessions.length > 0) {
+      await applyGlobalLandingStatsDelta(ctx, {
+        activeSessions: -sessions.length,
+      })
+      for (const [userId, count] of countSessionsByUserId(sessions)) {
+        await applyUserLandingStatsDelta(ctx, userId, {
+          activeSessions: -count,
+        })
+      }
+    }
+    const archivedSessionCount = rollover.archivedSessionCount + sessions.length
+    if (sessions.length === 100) {
+      await ctx.db.patch(config._id, {
+        rollover: { ...rollover, archivedSessionCount },
+        updatedAt: now,
+      })
+      await ctx.scheduler.runAfter(
+        0,
+        internal.mutations.staff.internal.continueRankedRollover,
+        args
+      )
+      return
+    }
+    await ctx.db.patch(config._id, {
+      activeTitleKey: rollover.targetTitleKey,
+      activeSeason: rollover.targetSeason,
+      sessionWritesEnabled: rollover.targetWritesEnabled,
+      updatedAt: now,
+      rollover: {
+        ...rollover,
+        status: "complete",
+        archivedSessionCount,
+        completedAt: now,
+      },
+    })
+    await ctx.scheduler.runAfter(
+      0,
+      internal.actions.stats.cache.invalidateLandingMetricsCache,
+      { invalidateAll: true }
+    )
   },
 })

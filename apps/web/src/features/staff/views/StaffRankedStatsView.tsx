@@ -66,13 +66,25 @@ function parseRequiredInteger(value: string, fieldLabel: string) {
 }
 
 function buildDefaultConfigForm(data: StaffRankedDashboard): ConfigFormState {
+  const rollover =
+    data.currentConfig?.rollover?.status === "running"
+      ? data.currentConfig.rollover
+      : undefined
   const fallbackTitleKey =
     data.titles.find((title) => title.isActive)?.key ?? ""
 
   return {
-    activeSeason: String(data.currentConfig?.activeSeason ?? 1),
-    activeTitleKey: data.currentConfig?.activeTitleKey ?? fallbackTitleKey,
-    sessionWritesEnabled: data.currentConfig?.sessionWritesEnabled ?? true,
+    activeSeason: String(
+      rollover?.targetSeason ?? data.currentConfig?.activeSeason ?? 1
+    ),
+    activeTitleKey:
+      rollover?.targetTitleKey ??
+      data.currentConfig?.activeTitleKey ??
+      fallbackTitleKey,
+    sessionWritesEnabled:
+      rollover?.targetWritesEnabled ??
+      data.currentConfig?.sessionWritesEnabled ??
+      true,
   }
 }
 
@@ -408,6 +420,16 @@ export function StaffRankedStatsView({
         openSessionCount={data.openSessionCount}
       />
 
+      {data.currentConfig?.rollover ? (
+        <div
+          role="status"
+          className="border border-border bg-muted/30 p-4 text-sm"
+        >
+          {data.currentConfig.rollover.status === "running"
+            ? `Rollover in progress: ${data.currentConfig.rollover.archivedSessionCount} sessions archived. Writes remain paused until completion. Save the same target configuration to resume if progress stops.`
+            : `Rollover complete: ${data.currentConfig.rollover.archivedSessionCount} sessions archived.`}
+        </div>
+      ) : null}
       <StaffRankedConfigSection
         activeTitleOptions={activeTitleOptions}
         configForm={configForm}

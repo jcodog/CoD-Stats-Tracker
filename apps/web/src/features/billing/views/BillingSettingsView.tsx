@@ -26,7 +26,6 @@ import type {
   BillingCenterSubscription,
   BillingResolvedState,
 } from "@/features/billing/lib/billing-types"
-import type { RequestViewport } from "@/lib/server/request-viewport"
 import {
   formatBillingInterval,
   formatBillingStatusLabel,
@@ -101,12 +100,9 @@ function StateRow(args: { label: string; value: string }) {
 
 export function BillingSettingsView({
   checkoutEnabled,
-  viewport = "desktop",
 }: {
   checkoutEnabled: boolean
-  viewport?: RequestViewport
 }) {
-  const isMobileView = viewport === "mobile"
   const billingCenterQuery = useBillingCenter()
   const billingStateQuery = useBillingState()
   const syncBillingCenter = useSyncBillingCenter()
@@ -140,7 +136,7 @@ export function BillingSettingsView({
 
   if (billingCenterQuery.isPending || billingStateQuery.isPending) {
     return (
-      <div className={isMobileView ? "grid gap-5" : "grid gap-6"}>
+      <div className={"max-md:grid max-md:gap-5 md:grid md:gap-6"}>
         <Skeleton className="h-20 rounded-lg" />
         <Skeleton className="h-64 rounded-lg" />
       </div>
@@ -178,13 +174,11 @@ export function BillingSettingsView({
 
   return (
     <div
-      className={isMobileView ? "flex flex-col gap-5" : "flex flex-col gap-6"}
+      className={"max-md:flex max-md:flex-col max-md:gap-5 md:flex md:flex-col md:gap-6"}
     >
       <div
         className={
-          isMobileView
-            ? "grid gap-3"
-            : "flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between"
+          "max-md:grid max-md:gap-3 md:flex md:flex-col md:gap-4 md:lg:flex-row md:lg:items-start md:lg:justify-between"
         }
       >
         <div className="flex flex-col gap-2">
@@ -196,9 +190,7 @@ export function BillingSettingsView({
         </div>
         <div
           className={
-            isMobileView
-              ? "grid gap-2"
-              : "flex flex-col items-start gap-2 lg:items-end"
+            "max-md:grid max-md:gap-2 md:flex md:flex-col md:items-start md:gap-2 md:lg:items-end"
           }
         >
           <div className="text-sm text-muted-foreground">

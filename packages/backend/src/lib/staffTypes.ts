@@ -1,3 +1,5 @@
+import type { StaffBillingScope } from "./staffBillingScope"
+import type { Doc } from "../../convex/_generated/dataModel"
 import type { AppPlanKey } from "./billingAccess"
 import type { CreatorConnectState } from "./creator/program"
 import type {
@@ -354,6 +356,7 @@ export type StaffBillingSyncSummary = {
 }
 
 export type StaffBillingDashboard = {
+  page?: { scope: StaffBillingScope; continueCursor: string | null }
   activeSubscriptionCount: number
   attentionSubscriptions: StaffSubscriptionImpactRow[]
   activeCustomerCount: number
@@ -462,6 +465,7 @@ export type StaffRankedMapRecord = {
 }
 
 export type StaffRankedCurrentConfig = {
+  rollover?: Doc<"rankedConfigs">["rollover"]
   activeSeason: number
   activeTitleKey: string
   activeTitleLabel: string

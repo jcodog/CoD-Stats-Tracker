@@ -1,3 +1,4 @@
+import type { StaffBillingScope } from "@workspace/backend/lib/staffBillingScope"
 import {
   IconActivity,
   IconArrowsExchange,
@@ -314,4 +315,22 @@ export function resolveStaffBillingSectionFromPathname(
   }
 
   return "catalog-overview"
+}
+
+export function getStaffBillingScope(
+  section: StaffBillingSection
+): StaffBillingScope {
+  if (section.startsWith("catalog")) return "catalog"
+  switch (section) {
+    case "subscriptions-customers":
+      return "customers"
+    case "subscriptions-creator-program":
+      return "creator-program"
+    case "subscriptions-creator-access":
+      return "creator-access"
+    case "subscriptions-creator-transfers":
+      return "creator-transfers"
+    default:
+      return "subscriptions"
+  }
 }

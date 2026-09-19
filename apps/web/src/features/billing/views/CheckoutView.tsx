@@ -36,7 +36,6 @@ import type {
   PricingCatalogPlan,
   SupportedPricingCurrency,
 } from "@/features/billing/lib/billing-types"
-import type { RequestViewport } from "@/lib/server/request-viewport"
 
 function getSelectedPlan(
   plans: PricingCatalogPlan[],
@@ -98,16 +97,13 @@ export function CheckoutView({
   initialCreatorCode,
   initialPlanKey,
   preferredCurrency,
-  viewport = "desktop",
 }: {
   checkoutEnabled: boolean
   initialInterval: BillingInterval
   initialCreatorCode?: string | null
   initialPlanKey: string
   preferredCurrency: SupportedPricingCurrency
-  viewport?: RequestViewport
 }) {
-  const isMobileView = viewport === "mobile"
   const catalogQuery = usePricingCatalog(preferredCurrency)
   const billingStateQuery = useBillingState()
   const createCheckoutSession = useCreateSubscriptionCheckoutSession()
@@ -294,15 +290,13 @@ export function CheckoutView({
   const creatorState = creatorDiscount?.entryState ?? "eligible_but_not_entered"
 
   return (
-    <div className={isMobileView ? "grid gap-6" : "grid gap-8"}>
+    <div className={"max-md:grid max-md:gap-6 md:grid md:gap-8"}>
       <section className="grid gap-3 border-b border-border/70 pb-6">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div className="grid gap-3">
             <h1
               className={
-                isMobileView
-                  ? "text-3xl font-semibold tracking-tight"
-                  : "text-4xl font-semibold tracking-tight"
+                "max-md:text-3xl max-md:font-semibold max-md:tracking-tight md:text-4xl md:font-semibold md:tracking-tight"
               }
             >
               Checkout
@@ -423,7 +417,7 @@ export function CheckoutView({
           </p>
         </div>
         <Button
-          className={isMobileView ? "w-full justify-center" : undefined}
+          className={"max-md:w-full max-md:justify-center"}
           disabled={createCheckoutSession.isPending}
           onClick={() => void handleStartHostedCheckout()}
         >

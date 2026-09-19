@@ -18,4 +18,5 @@ export const creatorAttributions = defineTable({
   .index("by_clerkUserId", ["clerkUserId"])
   .index("by_userId_active", ["userId", "active"])
   .index("by_creatorAccountId", ["creatorAccountId"])
+  .index("by_creatorAccountId_userId", ["creatorAccountId", "userId"])
   .index("by_normalizedCode", ["normalizedCode"])

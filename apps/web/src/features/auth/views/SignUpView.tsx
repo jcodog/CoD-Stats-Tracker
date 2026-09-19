@@ -1,7 +1,6 @@
 import { SignUp } from "@clerk/nextjs"
 
 import { CreatorCodeNotice } from "@/features/creator-attribution/components/CreatorCodeNotice"
-import type { RequestViewport } from "@/lib/server/request-viewport"
 import type { PendingCreatorCodeSummary } from "@/lib/server/creator-attribution"
 
 const signUpAppearance = {
@@ -14,20 +13,15 @@ const signUpAppearance = {
 
 export function SignUpView({
   pendingCreatorCode,
-  viewport = "desktop",
 }: {
   pendingCreatorCode?: PendingCreatorCodeSummary | null
-  viewport?: RequestViewport
 }) {
-  const isMobileView = viewport === "mobile"
 
   return (
     <main className="flex min-h-screen flex-1 items-center justify-center bg-background">
       <div
         className={
-          isMobileView
-            ? "mx-auto flex w-full max-w-sm px-4 py-6"
-            : "mx-auto flex w-full max-w-md px-6 py-10"
+          "max-md:mx-auto max-md:flex max-md:w-full max-md:max-w-sm max-md:px-4 max-md:py-6 md:mx-auto md:flex md:w-full md:max-w-md md:px-6 md:py-10"
         }
       >
         <div className="grid w-full gap-4">

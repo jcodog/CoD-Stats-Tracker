@@ -154,22 +154,17 @@ function ChartPanel({
   children,
   description,
   title,
-  viewport = "desktop",
 }: {
   children: React.ReactNode
   description: string
   title: string
-  viewport?: "desktop" | "mobile"
 }) {
-  const isMobileView = viewport === "mobile"
 
   return (
     <div
       className={cn(
         "bg-background",
-        isMobileView
-          ? "border-t border-border/60 pt-5 first:border-t-0"
-          : "px-6 py-6"
+        "max-md:border-t max-md:border-border/60 max-md:pt-5 max-md:first:border-t-0 md:px-6 md:py-6"
       )}
     >
       <div className="mb-4 grid gap-1">
@@ -184,17 +179,15 @@ function ChartPanel({
 function ChartEmptyState({
   description,
   title,
-  viewport = "desktop",
 }: {
   description: string
   title: string
-  viewport?: "desktop" | "mobile"
 }) {
   return (
     <div
       className={cn(
         "flex flex-col items-center justify-center border border-dashed border-border/50 bg-background px-6 text-center",
-        viewport === "mobile" ? "min-h-55" : "min-h-65"
+        "max-md:min-h-55 md:min-h-65"
       )}
     >
       <div className="font-medium">{title}</div>
@@ -212,7 +205,6 @@ export const DashboardStatsCharts = memo(function DashboardStatsCharts({
   selectedTimeRange,
   showHeader = true,
   srTimeline,
-  viewport = "desktop",
   winLossBreakdown,
 }: {
   className?: string
@@ -221,10 +213,8 @@ export const DashboardStatsCharts = memo(function DashboardStatsCharts({
   selectedTimeRange: DashboardTimeRange
   showHeader?: boolean
   srTimeline: DashboardSessionSrTimeline
-  viewport?: "desktop" | "mobile"
   winLossBreakdown: DashboardSessionWinLossBreakdown
 }) {
-  const isMobileView = viewport === "mobile"
   const timelinePoints = srTimeline.points as Array<{
     createdAt: number
     matchNumber: number
@@ -334,9 +324,7 @@ export const DashboardStatsCharts = memo(function DashboardStatsCharts({
     <section
       className={cn(
         embedded
-          ? isMobileView
-            ? "overflow-visible"
-            : "overflow-hidden"
+          ? "max-md:overflow-visible md:overflow-hidden"
           : "overflow-hidden rounded-xl border border-border/60 bg-background",
         className
       )}
@@ -353,25 +341,21 @@ export const DashboardStatsCharts = memo(function DashboardStatsCharts({
 
       <div
         className={cn(
-          isMobileView
-            ? "grid gap-4"
-            : "grid gap-px bg-border/40 xl:grid-cols-2"
+          "max-md:grid max-md:gap-4 md:grid md:gap-px md:bg-border/40 md:xl:grid-cols-2"
         )}
       >
         <ChartPanel
           description="Session SR change across logged matches."
           title="SR progression"
-          viewport={viewport}
         >
           {filteredTimeline.length <= 1 ? (
             <ChartEmptyState
               description="Log at least one match to chart SR movement."
               title="No SR trend yet"
-              viewport={viewport}
             />
           ) : (
             <ChartContainer
-              className={cn("w-full min-w-0", isMobileView ? "h-52.5" : "h-65")}
+              className={cn("w-full min-w-0", "max-md:h-52.5 md:h-65")}
               config={srChartConfig}
             >
               <LineChart data={filteredTimeline}>
@@ -450,20 +434,18 @@ export const DashboardStatsCharts = memo(function DashboardStatsCharts({
         <ChartPanel
           description="Outcome breakdown for the active filter window."
           title="Win-loss split"
-          viewport={viewport}
         >
           {winLossBreakdown.total === 0 ? (
             <ChartEmptyState
               description="Your first logged match will appear here."
               title="No matches yet"
-              viewport={viewport}
             />
           ) : (
             <div className="flex flex-col gap-4">
               <ChartContainer
                 className={cn(
                   "w-full min-w-0",
-                  isMobileView ? "h-52.5" : "h-65"
+                  "max-md:h-52.5 md:h-65"
                 )}
                 config={winLossChartConfig}
               >
@@ -490,7 +472,7 @@ export const DashboardStatsCharts = memo(function DashboardStatsCharts({
               <div
                 className={cn(
                   "flex flex-wrap items-center gap-6",
-                  isMobileView ? "justify-start" : "justify-center"
+                  "max-md:justify-start md:justify-center"
                 )}
               >
                 {winLossSummaryItems.map((item) => (
@@ -519,17 +501,15 @@ export const DashboardStatsCharts = memo(function DashboardStatsCharts({
         <ChartPanel
           description="Session outcomes grouped by day."
           title="Daily wins and losses"
-          viewport={viewport}
         >
           {dailyWinLossData.length === 0 ? (
             <ChartEmptyState
               description="Daily performance fills in once matches are logged."
               title="No daily activity"
-              viewport={viewport}
             />
           ) : (
             <ChartContainer
-              className={cn("w-full min-w-0", isMobileView ? "h-52.5" : "h-65")}
+              className={cn("w-full min-w-0", "max-md:h-52.5 md:h-65")}
               config={winLossChartConfig}
             >
               <BarChart data={dailyWinLossData}>
@@ -566,17 +546,15 @@ export const DashboardStatsCharts = memo(function DashboardStatsCharts({
         <ChartPanel
           description="Net SR change grouped by day."
           title="Daily SR gain"
-          viewport={viewport}
         >
           {dailySrData.length === 0 ? (
             <ChartEmptyState
               description="SR totals appear after matches are logged."
               title="No SR data yet"
-              viewport={viewport}
             />
           ) : (
             <ChartContainer
-              className={cn("w-full min-w-0", isMobileView ? "h-52.5" : "h-65")}
+              className={cn("w-full min-w-0", "max-md:h-52.5 md:h-65")}
               config={dailySrChartConfig}
             >
               <BarChart data={dailySrData}>

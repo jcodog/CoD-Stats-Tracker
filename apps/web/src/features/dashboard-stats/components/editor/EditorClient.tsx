@@ -27,7 +27,6 @@ import {
 import { useCreateSessionFlowStore } from "@/features/dashboard-stats/stores/create-session-flow-store"
 import { useDashboardUiStore } from "@/features/dashboard-stats/stores/dashboard-ui-store"
 import { useLogMatchWizardStore } from "@/features/dashboard-stats/stores/log-match-wizard-store"
-import type { RequestViewport } from "@/lib/server/request-viewport"
 import {
   Alert,
   AlertDescription,
@@ -145,11 +144,9 @@ function ToolbarGroup({
 export function DashboardStatsEditorClient({
   authFailed = false,
   initialDashboardState,
-  viewport = "desktop",
 }: {
   authFailed?: boolean
   initialDashboardState: DashboardState | null
-  viewport?: RequestViewport
 }) {
   if (authFailed || !initialDashboardState) {
     return (
@@ -170,19 +167,15 @@ export function DashboardStatsEditorClient({
   return (
     <DashboardStatsEditorLoaded
       initialDashboardState={initialDashboardState}
-      viewport={viewport}
     />
   )
 }
 
 function DashboardStatsEditorLoaded({
   initialDashboardState,
-  viewport,
 }: {
   initialDashboardState: DashboardState
-  viewport: RequestViewport
 }) {
-  const isMobileView = viewport === "mobile"
   const initialSessions = initialDashboardState.activeSessions
   const [createSessionOpen, setCreateSessionOpen] = useState(false)
   const [logMatchOpen, setLogMatchOpen] = useState(false)
@@ -360,18 +353,14 @@ function DashboardStatsEditorLoaded({
       <div className="flex flex-1 flex-col gap-8">
         <header
           className={
-            isMobileView
-              ? "grid gap-4 border-b border-border/60 pb-5"
-              : "flex flex-col gap-5 border-b border-border/60 pb-6 lg:flex-row lg:items-end lg:justify-between"
+            "max-md:grid max-md:gap-4 max-md:border-b max-md:border-border/60 max-md:pb-5 md:flex md:flex-col md:gap-5 md:border-b md:border-border/60 md:pb-6 md:lg:flex-row md:lg:items-end md:lg:justify-between"
           }
         >
           <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-2">
               <h1
                 className={
-                  isMobileView
-                    ? "text-3xl font-semibold tracking-tight text-balance"
-                    : "text-4xl font-semibold tracking-tight text-balance"
+                  "max-md:text-3xl max-md:font-semibold max-md:tracking-tight max-md:text-balance md:text-4xl md:font-semibold md:tracking-tight md:text-balance"
                 }
               >
                 Ranked stats
@@ -385,22 +374,20 @@ function DashboardStatsEditorLoaded({
 
           <div
             className={
-              isMobileView
-                ? "grid gap-2 sm:grid-cols-2"
-                : "flex flex-wrap items-center gap-2"
+              "max-md:grid max-md:gap-2 max-md:sm:grid-cols-2 md:flex md:flex-wrap md:items-center md:gap-2"
             }
           >
             {showUpgradeCta ? (
               <DashboardUpgradeButton
                 className={
-                  isMobileView ? "h-11 w-full justify-center" : undefined
+                  "max-md:h-11 max-md:w-full max-md:justify-center"
                 }
               />
             ) : null}
             {showCreateSessionButton ? (
               <Button
                 className={
-                  isMobileView ? "h-11 w-full justify-center" : undefined
+                  "max-md:h-11 max-md:w-full max-md:justify-center"
                 }
                 disabled={!canCreateSession}
                 onClick={handleOpenCreateSessionDialog}
@@ -411,7 +398,7 @@ function DashboardStatsEditorLoaded({
             ) : null}
             <Button
               className={
-                isMobileView ? "h-11 w-full justify-center" : undefined
+                "max-md:h-11 max-md:w-full max-md:justify-center"
               }
               disabled={!canLogMatches}
               onClick={handleOpenLogMatchSheet}
@@ -436,27 +423,23 @@ function DashboardStatsEditorLoaded({
         ) : null}
 
         {showUpgradeCta ? (
-          <DashboardUpgradePrompt compact={isMobileView} />
+          <DashboardUpgradePrompt compact />
         ) : null}
 
         {activeSessions.length === 0 ? (
           <SurfaceFrame
             className={
-              isMobileView
-                ? "overflow-visible rounded-none border-none bg-transparent"
-                : undefined
+              "max-md:overflow-visible max-md:rounded-none max-md:border-none max-md:bg-transparent"
             }
           >
             <div
               className={
-                isMobileView
-                  ? "grid gap-5"
-                  : "grid gap-0 xl:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]"
+                "max-md:grid max-md:gap-5 md:grid md:gap-0 md:xl:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]"
               }
             >
               <div
                 className={
-                  isMobileView ? "border-y border-border/60 py-5" : "px-6 py-6"
+                  "max-md:border-y max-md:border-border/60 max-md:py-5 md:px-6 md:py-6"
                 }
               >
                 <Empty className="border-none bg-transparent p-0">
@@ -476,17 +459,13 @@ function DashboardStatsEditorLoaded({
               </div>
               <div
                 className={
-                  isMobileView
-                    ? "border-y border-border/60 py-5"
-                    : "border-t border-border/60 px-6 py-6 xl:border-t-0 xl:border-l"
+                  "max-md:border-y max-md:border-border/60 max-md:py-5 md:border-t md:border-border/60 md:px-6 md:py-6 md:xl:border-t-0 md:xl:border-l"
                 }
               >
                 <div className="grid gap-3 text-sm text-muted-foreground">
-                  {isMobileView ? (
-                    <h2 className="text-base font-semibold tracking-tight text-foreground">
+                  <h2 className="text-base font-semibold tracking-tight text-foreground">
                       Session capacity
                     </h2>
-                  ) : null}
                   <p>
                     Free users can keep one active session for the current title
                     and season.
@@ -499,9 +478,7 @@ function DashboardStatsEditorLoaded({
                     <div className="pt-2">
                       <Button
                         className={
-                          isMobileView
-                            ? "h-11 w-full justify-center"
-                            : undefined
+                          "max-md:h-11 max-md:w-full max-md:justify-center"
                         }
                         disabled={!canCreateSession}
                         onClick={handleOpenCreateSessionDialog}
@@ -518,24 +495,18 @@ function DashboardStatsEditorLoaded({
           <div className="grid gap-6">
             <SurfaceFrame
               className={
-                isMobileView
-                  ? "overflow-visible rounded-none border-none bg-transparent"
-                  : undefined
+                "max-md:overflow-visible max-md:rounded-none max-md:border-none max-md:bg-transparent"
               }
             >
               <div className="grid gap-0">
                 <div
                   className={
-                    isMobileView
-                      ? "border-y border-border/60 py-5"
-                      : "px-6 py-7"
+                    "max-md:border-y max-md:border-border/60 max-md:py-5 md:px-6 md:py-7"
                   }
                 >
                   <div
                     className={
-                      isMobileView
-                        ? "grid gap-5"
-                        : "grid gap-6 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-start"
+                      "max-md:grid max-md:gap-5 md:grid md:gap-6 md:xl:grid-cols-[minmax(0,1fr)_auto] md:xl:items-start"
                     }
                   >
                     <div className="grid min-w-0 gap-2">
@@ -550,25 +521,19 @@ function DashboardStatsEditorLoaded({
 
                     <div
                       className={
-                        isMobileView
-                          ? "grid gap-3"
-                          : "grid gap-4 sm:grid-cols-2 xl:grid-cols-[minmax(17rem,19rem)_auto_auto_auto] xl:items-start"
+                        "max-md:grid max-md:gap-3 md:grid md:gap-4 md:sm:grid-cols-2 md:xl:grid-cols-[minmax(17rem,19rem)_auto_auto_auto] md:xl:items-start"
                       }
                     >
                       <div
                         className={
-                          isMobileView
-                            ? "border-b border-border/60 pb-4"
-                            : undefined
+                          "max-md:border-b max-md:border-border/60 max-md:pb-4"
                         }
                       >
                         <ToolbarGroup label="Session">
                           <AppSelect
                             className="w-full min-w-0"
                             id={
-                              isMobileView
-                                ? "dashboard-session-mobile"
-                                : "dashboard-session"
+                              "dashboard-session"
                             }
                             onValueChange={(value) =>
                               startTransition(() => setSelectedSessionId(value))
@@ -584,17 +549,13 @@ function DashboardStatsEditorLoaded({
 
                       <div
                         className={
-                          isMobileView
-                            ? "border-b border-border/60 pb-4"
-                            : undefined
+                          "max-md:border-b max-md:border-border/60 max-md:pb-4"
                         }
                       >
                         <ToolbarGroup label="Time range">
                           <ToggleGroup
                             className={
-                              isMobileView
-                                ? "grid w-full grid-cols-4"
-                                : "justify-start"
+                              "max-md:grid max-md:w-full max-md:grid-cols-4 md:justify-start"
                             }
                             onValueChange={([value]) => {
                               if (
@@ -613,25 +574,25 @@ function DashboardStatsEditorLoaded({
                             variant="outline"
                           >
                             <ToggleGroupItem
-                              className={isMobileView ? "w-full" : undefined}
+                              className={"max-md:w-full"}
                               value="7d"
                             >
                               7d
                             </ToggleGroupItem>
                             <ToggleGroupItem
-                              className={isMobileView ? "w-full" : undefined}
+                              className={"max-md:w-full"}
                               value="14d"
                             >
                               14d
                             </ToggleGroupItem>
                             <ToggleGroupItem
-                              className={isMobileView ? "w-full" : undefined}
+                              className={"max-md:w-full"}
                               value="30d"
                             >
                               30d
                             </ToggleGroupItem>
                             <ToggleGroupItem
-                              className={isMobileView ? "w-full" : undefined}
+                              className={"max-md:w-full"}
                               value="all"
                             >
                               All
@@ -642,18 +603,14 @@ function DashboardStatsEditorLoaded({
 
                       <div
                         className={
-                          isMobileView
-                            ? "border-b border-border/60 pb-4"
-                            : undefined
+                          "max-md:border-b max-md:border-border/60 max-md:pb-4"
                         }
                       >
                         <ToolbarGroup label="Logging mode">
                           <ToggleGroup
                             aria-label="Match logging mode"
                             className={
-                              isMobileView
-                                ? "grid w-full grid-cols-2"
-                                : "justify-start"
+                              "max-md:grid max-md:w-full max-md:grid-cols-2 md:justify-start"
                             }
                             onValueChange={([value]) => {
                               if (value) handleLoggingModeChange(value)
@@ -663,14 +620,14 @@ function DashboardStatsEditorLoaded({
                             variant="outline"
                           >
                             <ToggleGroupItem
-                              className={isMobileView ? "w-full" : undefined}
+                              className={"max-md:w-full"}
                               disabled={updateLoggingModeMutation.isPending}
                               value="comprehensive"
                             >
                               Comprehensive
                             </ToggleGroupItem>
                             <ToggleGroupItem
-                              className={isMobileView ? "w-full" : undefined}
+                              className={"max-md:w-full"}
                               disabled={updateLoggingModeMutation.isPending}
                               value="basic"
                             >
@@ -682,14 +639,12 @@ function DashboardStatsEditorLoaded({
 
                       <div
                         className={
-                          isMobileView
-                            ? "flex items-center justify-between gap-4 pt-1"
-                            : undefined
+                          "max-md:flex max-md:items-center max-md:justify-between max-md:gap-4 max-md:pt-1"
                         }
                       >
                         <ToolbarGroup label="Loss protection">
                           <span className="text-sm text-muted-foreground">
-                            {isMobileView ? "Show protected losses" : "Show"}
+                            {"Show protected losses"}
                           </span>
                           <Switch
                             aria-label="Show loss protected matches"
@@ -709,9 +664,7 @@ function DashboardStatsEditorLoaded({
                 {!effectiveSelectedSessionId || !selectedSession ? (
                   <div
                     className={
-                      isMobileView
-                        ? "mt-6 border-t border-border/60"
-                        : "border-t border-border/50"
+                      "max-md:mt-6 max-md:border-t max-md:border-border/60 md:border-t md:border-border/50"
                     }
                   >
                     <SurfaceSkeleton />
@@ -719,9 +672,7 @@ function DashboardStatsEditorLoaded({
                 ) : sessionDetailsLoading ? (
                   <div
                     className={
-                      isMobileView
-                        ? "mt-6 border-t border-border/60"
-                        : "border-t border-border/50"
+                      "max-md:mt-6 max-md:border-t max-md:border-border/60 md:border-t md:border-border/50"
                     }
                   >
                     <SurfaceSkeleton />
@@ -729,9 +680,7 @@ function DashboardStatsEditorLoaded({
                 ) : !sessionDetailsReady ? (
                   <div
                     className={
-                      isMobileView
-                        ? "mt-6 border-t border-border/60 pt-5"
-                        : "border-t border-border/50 px-6 py-6"
+                      "max-md:mt-6 max-md:border-t max-md:border-border/60 max-md:pt-5 md:border-t md:border-border/50 md:px-6 md:py-6"
                     }
                   >
                     <Alert variant="destructive">
@@ -746,9 +695,7 @@ function DashboardStatsEditorLoaded({
                   <>
                     <div
                       className={
-                        isMobileView
-                          ? "mt-6 border-t border-border/60 pt-5"
-                          : "border-t border-border/50 px-6 pt-6"
+                        "max-md:mt-6 max-md:border-t max-md:border-border/60 max-md:pt-5 md:border-t md:border-border/50 md:px-6 md:pt-6"
                       }
                     >
                       <div className="mb-3 grid gap-1">
@@ -765,16 +712,13 @@ function DashboardStatsEditorLoaded({
                         embedded
                         overview={analytics!.overview}
                         showHeader={false}
-                        viewport={isMobileView ? "mobile" : "desktop"}
                         winRate={filteredWinRate}
                       />
                     </div>
 
                     <div
                       className={
-                        isMobileView
-                          ? "mt-6 border-t border-border/60 pt-5"
-                          : "border-t border-border/50 px-6 pt-6"
+                        "max-md:mt-6 max-md:border-t max-md:border-border/60 max-md:pt-5 md:border-t md:border-border/50 md:px-6 md:pt-6"
                       }
                     >
                       <div className="mb-3 grid gap-1">
@@ -811,16 +755,13 @@ function DashboardStatsEditorLoaded({
                         selectedTimeRange={selectedTimeRange}
                         showHeader={false}
                         srTimeline={analytics!.srTimeline}
-                        viewport={isMobileView ? "mobile" : "desktop"}
                         winLossBreakdown={filteredWinLossBreakdown}
                       />
                     </div>
 
                     <div
                       className={
-                        isMobileView
-                          ? "mt-6 border-t border-border/60 pt-5"
-                          : "border-t border-border/50 px-6 py-6"
+                        "max-md:mt-6 max-md:border-t max-md:border-border/60 max-md:pt-5 md:border-t md:border-border/50 md:px-6 md:py-6"
                       }
                     >
                       <div className="mb-3 grid gap-1">
