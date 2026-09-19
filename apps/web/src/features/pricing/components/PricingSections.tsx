@@ -18,7 +18,6 @@ import {
   CardDescription,
   CardFooter,
   CardHeader,
-  CardTitle,
 } from "@workspace/ui/components/card"
 import { cn } from "@workspace/ui/lib/utils"
 
@@ -319,7 +318,7 @@ export function PricingPlanList({
           </p>
         </div>
         <Badge className="w-fit" variant="secondary">
-          {activePlans.length} active {activePlans.length === 1 ? "plan" : "plans"}
+          Monthly + yearly where available
         </Badge>
       </div>
 
@@ -375,9 +374,9 @@ export function PricingPlanList({
                 </div>
 
                 <div className="grid gap-2">
-                  <CardTitle className="text-2xl font-semibold tracking-tight">
+                  <h3 className="text-2xl font-semibold tracking-tight">
                     {plan.name}
-                  </CardTitle>
+                  </h3>
                   <CardDescription className="min-h-12 text-sm leading-6 text-foreground/72">
                     {plan.description}
                   </CardDescription>
