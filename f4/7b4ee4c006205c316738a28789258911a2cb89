@@ -1,0 +1,108 @@
+packages/backend/convex/__tests__/staff-directory.test.mjs
+  s_24e8dc9509393a::t_a8cb549dd9c352 2,5-7,11-43,46-47,49-55,58-59,64-66,70-72,74-76,80-82,84-88,91-95,97,100-102,107-110,117-121,126-129,132-135,143-158,164-181
+  s_24e8dc9509393a::t_03b1e81def30c7 1,8-10,56-57,60-63,67-69,73,77-79,83,89-90,96
+  s_24e8dc9509393a::t_d8fc6b094e60e8 3-4,44-45,48,182-195
+  s_24e8dc9509393a::t_5339818c828f63 98-99,103-106,111-116,122-125,130-131,136-142,159-163
+apps/web/src/features/creator-panel/lib/use-creator-dashboard.ts
+  s_24e8dc9509393a::t_a8cb549dd9c352 10-13,16-28,36-52,54-62
+  s_24e8dc9509393a::t_9b155c8af77083 1-9,14-15,29-35,53
+apps/web/src/features/creator-panel/views/CreatorCodeView.tsx
+  s_24e8dc9509393a::t_a8cb549dd9c352 381-383,395-397
+  s_24e8dc9509393a::t_9b155c8af77083 5,20,109,197
+packages/backend/convex/__tests__/creator-metrics.test.mjs
+  s_24e8dc9509393a::t_6fe26478608eae 1-11,60,63-67,94-95,100-101,106-108,116,122-124,132-137,151-152,168-170,174-175
+  s_24e8dc9509393a::t_a8cb549dd9c352 12-59,61-62,68-93,96-99,102-105,109-115,117-121,125-131,138-150,153-167,171-173,176
+packages/backend/convex/actions/creator/payouts/scheduled.ts
+  s_24e8dc9509393a::t_a8cb549dd9c352 69-75,77-78,81-137,141-142,144,146-149,151-156,158-171,173,175,187-188,190,192-201,203,205-208,210-214,216-218,221-222,224-230,233-238,240-272
+packages/backend/src/lib/__tests__/staffActionAuth.test.mjs
+  s_24e8dc9509393a::t_a8cb549dd9c352 16-21,24-37,41-46,49
+  s_24e8dc9509393a::t_03b1e81def30c7 1-15,22-23,38-40,47-48
+docs/modernization-status.md
+  s_24e8dc9509393a::t_383ff255ccb90c 67-80
+  s_24e8dc9509393a::t_eddae33db40361 5,81-92
+apps/web/src/features/creator-panel/lib/__tests__/creator-panel.test.mjs
+  s_24e8dc9509393a::t_a8cb549dd9c352 32,34-43
+  s_24e8dc9509393a::t_383ff255ccb90c 33
+apps/web/src/features/staff/lib/staff-client.ts
+  s_24e8dc9509393a::t_348f928c54eb0a 72,374-375
+  s_24e8dc9509393a::t_a8cb549dd9c352 73,76-79,188,196,205,376,383-388
+  s_24e8dc9509393a::t_a66530432f7087 71
+packages/backend/convex/mutations/__tests__/staff-ranked-config-rollover.test.mjs
+  s_24e8dc9509393a::t_231247eee7eed3 57-60,348-360
+packages/backend/convex/actions/staff/management.ts
+  s_24e8dc9509393a::t_5a8e3df1d2bce1 378-382,384-390,398,407,412,419-421,428-429,450,464-465,515
+  s_24e8dc9509393a::t_a8cb549dd9c352 17-20,145-148,178,391-397,399-406,408-411,413-418,445-449,451-463,478-481,633-640
+  s_24e8dc9509393a::t_40f2d3d5e3d2ed 466
+packages/backend/convex/actions/staff/overview.ts
+  s_24e8dc9509393a::t_6ef9f260bc2607 170-172,181-182,185-187,206,209
+  s_24e8dc9509393a::t_a8cb549dd9c352 5-9,166-169,173-180,183-184,207-208,211,222,224-226,229-230,232
+packages/backend/src/lib/staffActionAuth.ts
+  s_24e8dc9509393a::t_a8cb549dd9c352 77-79
+  s_24e8dc9509393a::t_03b1e81def30c7 103
+packages/backend/convex/queries/staff/internal.ts
+  s_24e8dc9509393a::t_e201b63b30736b 62,73,276,279-282,284-286,288-294,297,301
+  s_24e8dc9509393a::t_5b607cde04530a 235-236,593,638-647
+  s_24e8dc9509393a::t_6ef9f260bc2607 4,514-516,522,531,536-537,544-547,552-554,560-564,572,581
+  s_24e8dc9509393a::t_d8c180c95d5c45 611-614,622-624,628,632
+  s_24e8dc9509393a::t_5a8e3df1d2bce1 233-234,244
+  s_24e8dc9509393a::t_a8cb549dd9c352 1,5,54,63-67,70,74-78,94,232,237-243,245-273,295-296,298-300,302-309,311-314,318,517-521,532-535,538-543,548-551,555-559,565-571,573-580,582-589,615-621,625-627,629-631,633-637
+  s_24e8dc9509393a::t_8748bdb225ba35 231
+packages/backend/convex/actions/staff/ranked.ts
+  s_24e8dc9509393a::t_5b607cde04530a 36-47,89,119
+packages/backend/src/lib/creator/dashboardMetrics.ts
+  s_24e8dc9509393a::t_a8cb549dd9c352 9-12,17-20,22
+  s_24e8dc9509393a::t_9b155c8af77083 1-8,13-16,21
+packages/backend/convex/queries/creator/dashboard/current.ts
+  s_24e8dc9509393a::t_9b155c8af77083 1,3,77-79,84,89-92,102-103,114,125-129,135-138,145,184
+  s_24e8dc9509393a::t_a8cb549dd9c352 4,11-13,80-83,85-88,93-101,104-107,110-113,115-124,130-134,139-144,146-151,153-160,163-183
+  s_24e8dc9509393a::t_ebefaadba839e0 2
+apps/web/src/features/creator-panel/views/CreatorHomeView.tsx
+  s_24e8dc9509393a::t_a8cb549dd9c352 220-222,228-230
+  s_24e8dc9509393a::t_9b155c8af77083 13,75,147
+packages/backend/convex/mutations/staff/internal.ts
+  s_24e8dc9509393a::t_231247eee7eed3 1081,1083-1085
+packages/backend/convex/actions/staff/billing.ts
+  s_24e8dc9509393a::t_e201b63b30736b 1961,1963,2571,2861,3180
+  s_24e8dc9509393a::t_d8c180c95d5c45 4
+  s_24e8dc9509393a::t_a8cb549dd9c352 1943-1946,2368,2405,2480,2524,2667,2699,2776,2814,2934,3025,4809
+packages/backend/src/lib/__tests__/staffBillingRecords.test.mjs
+  s_24e8dc9509393a::t_a8cb549dd9c352 1-26
+packages/backend/src/db/tables/billing/subscriptions.ts
+  s_24e8dc9509393a::t_9b155c8af77083 70
+packages/backend/src/lib/__tests__/staffPayoutQueries.test.mjs
+  s_24e8dc9509393a::t_a8cb549dd9c352 13-15,21,23,40-42,63
+packages/backend/convex/actions/users.ts
+  s_24e8dc9509393a::t_a8cb549dd9c352 30,35-43,46-53,55,78
+  s_24e8dc9509393a::t_32d9fe8a96f3cb 44
+  s_24e8dc9509393a::t_078f593bdcee0b 45
+packages/backend/src/lib/staffTypes.ts
+  s_24e8dc9509393a::t_a8cb549dd9c352 74,80,93,292,328
+  s_24e8dc9509393a::t_5a8e3df1d2bce1 79
+packages/backend/src/lib/staffMetrics.ts
+  s_24e8dc9509393a::t_a8cb549dd9c352 2-12,16-29
+  s_24e8dc9509393a::t_6ef9f260bc2607 1,13-15
+apps/web/src/features/creator-panel/lib/creator-panel.ts
+  s_24e8dc9509393a::t_a8cb549dd9c352 145,154-158
+packages/backend/src/lib/staffBillingRecords.ts
+  s_24e8dc9509393a::t_a8cb549dd9c352 1-5,11-13,20-21,26-31,33-41,43-60,65-69,71
+  s_24e8dc9509393a::t_d8c180c95d5c45 6-10,14-19,22-25,32,42,61-64,70
+apps/web/src/features/staff/views/StaffManagementView.tsx
+  s_24e8dc9509393a::t_a8cb549dd9c352 149-161,373-418
+  s_24e8dc9509393a::t_348f928c54eb0a 147-148,361-364,369,372,425,553
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "f47b4ee4c006205c316738a28789258911a2cb89",
+  "prompts": {},
+  "sessions": {
+    "s_24e8dc9509393a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b5b4-2983-7e33-a96d-34e8c29148bf",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Jason Connolly <jcodog@jconet.co.uk>"
+    }
+  }
+}
