@@ -34,7 +34,7 @@ export function LandingView() {
           <LandingProductSection />
         </section>
 
-        <div className="grid gap-14 pt-14 sm:gap-18 sm:pt-16">
+        <div className="grid gap-14 pt-14 sm:gap-16 sm:pt-16">
           <LandingFeatureList />
           <LandingCreatorToolsSection />
           <LandingPricingTeaser />

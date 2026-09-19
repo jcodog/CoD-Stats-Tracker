@@ -12,13 +12,6 @@ import { PricingCurrencySelect } from "@/features/pricing/components/PricingCurr
 import type { PendingCreatorCodeSummary } from "@/lib/server/creator-attribution"
 import { Badge } from "@workspace/ui/components/badge"
 import { buttonVariants } from "@workspace/ui/components/button"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-} from "@workspace/ui/components/card"
 import { cn } from "@workspace/ui/lib/utils"
 
 type PricingFeatureRow = {
@@ -315,13 +308,13 @@ export function PricingPlanList({
     <section className="grid gap-5">
       <div
         className={cn(
-          "grid overflow-hidden rounded-lg border border-border bg-card",
+          "grid gap-px overflow-hidden rounded-lg border border-border bg-border",
           activePlans.length >= 3
             ? "md:grid-cols-2 xl:grid-cols-3"
             : "md:grid-cols-2"
         )}
       >
-        {activePlans.map((plan, index) => {
+        {activePlans.map((plan) => {
           const isCurrent =
             signedIn &&
             (catalog.currentPlanKey === plan.planKey ||
@@ -339,9 +332,7 @@ export function PricingPlanList({
           return (
             <article
               className={cn(
-                "relative flex min-w-0 flex-col border-border p-5 sm:p-6",
-                index > 0 && "border-t md:border-t-0 md:border-l",
-                index === 2 && "md:border-t xl:border-t-0",
+                "relative flex min-w-0 flex-col bg-card p-5 sm:p-6",
                 isRecommended && "bg-primary/[0.045]",
                 isCurrent && "bg-muted/35"
               )}
