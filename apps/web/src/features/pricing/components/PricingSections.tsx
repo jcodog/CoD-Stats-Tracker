@@ -36,8 +36,7 @@ function getPlanPriceLabel(args: {
   currency: string
   interval: "month" | "year"
 }) {
-  const prefix = args.currency === "GBP" ? "" : "Est. "
-  return `${prefix}${formatCurrencyAmount(args.amount, args.currency)} / ${args.interval}`
+  return formatCurrencyAmount(args.amount, args.currency) + " / " + args.interval
 }
 
 function getPlanCtaLabel(plan: PricingCatalogPlan) {
@@ -62,6 +61,35 @@ function getRecommendedPlanKey(plans: PricingCatalogPlan[]) {
   })
 
   return premiumPlan?.planKey ?? paidPlans[0]?.planKey ?? null
+}
+
+function getPlanHighlights(
+  plan: PricingCatalogPlan,
+  plans: PricingCatalogPlan[]
+) {
+  const previousPlan = plans
+    .filter((candidate) => candidate.sortOrder < plan.sortOrder)
+    .sort((left, right) => right.sortOrder - left.sortOrder)[0]
+
+  if (!previousPlan) {
+    return {
+      lead: null,
+      features: plan.features.slice(0, 5),
+    }
+  }
+
+  const previousFeatureKeys = new Set(
+    previousPlan.features.map((feature) => feature.featureKey)
+  )
+  const addedFeatures = plan.features.filter(
+    (feature) => !previousFeatureKeys.has(feature.featureKey)
+  )
+
+  return {
+    lead: "Everything in " + previousPlan.name + ", plus",
+    features:
+      (addedFeatures.length > 0 ? addedFeatures : plan.features).slice(0, 5),
+  }
 }
 
 function getAnnualSavingsPercent(plan: PricingCatalogPlan) {
@@ -98,12 +126,8 @@ function getPrimaryPrice(plan: PricingCatalogPlan) {
   if (plan.pricing.month) {
     const monthly = plan.pricing.month
     return {
-      amount:
-        (monthly.currency === "GBP" ? "" : "Est. ") +
-        formatCurrencyAmount(monthly.amount, monthly.currency),
-      detail: plan.pricing.year
-        ? "Pay monthly, or choose yearly billing for a lower effective rate when offered."
-        : "Billed monthly through Stripe.",
+      amount: formatCurrencyAmount(monthly.amount, monthly.currency),
+      detail: plan.pricing.year ? "Monthly billing" : "Billed monthly",
       suffix: "/ month",
     }
   }
@@ -111,10 +135,8 @@ function getPrimaryPrice(plan: PricingCatalogPlan) {
   if (plan.pricing.year) {
     const yearly = plan.pricing.year
     return {
-      amount:
-        (yearly.currency === "GBP" ? "" : "Est. ") +
-        formatCurrencyAmount(yearly.amount, yearly.currency),
-      detail: "Billed yearly through Stripe.",
+      amount: formatCurrencyAmount(yearly.amount, yearly.currency),
+      detail: "Yearly billing",
       suffix: "/ year",
     }
   }
@@ -221,17 +243,17 @@ function buildPricingFeatureRows(plans: PricingCatalogPlan[]) {
 
 export function PricingIntro({
   availableCurrencies,
-  currencyNotice,
   pendingCreatorCode,
   selectedCurrency,
 }: {
   availableCurrencies: PricingCatalogResponse["availableCurrencies"]
-  currencyNotice: PricingCatalogResponse["currencyNotice"]
   pendingCreatorCode?: PendingCreatorCodeSummary | null
   selectedCurrency: PricingCatalogResponse["selectedCurrency"]
 }) {
+  const isReferenceCurrency = selectedCurrency !== "GBP"
+
   return (
-    <section className="grid gap-6 border-b border-border/70 pb-8 sm:pb-10">
+    <section className="grid gap-7 border-b border-border/80 pb-9 sm:pb-11">
       {pendingCreatorCode ? (
         <CreatorCodeNotice
           code={pendingCreatorCode.code}
@@ -239,41 +261,29 @@ export function PricingIntro({
         />
       ) : null}
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
-        <div className="grid max-w-[48rem] gap-4">
-          <Badge className="w-fit" variant="outline">
-            Simple plans, clear upgrade path
-          </Badge>
-          <h1 className="text-4xl leading-[0.94] font-semibold tracking-tight text-balance sm:text-5xl lg:text-6xl">
-            Start with what you need. Pay for the depth you actually use.
+      <div className="flex flex-col gap-7 md:flex-row md:items-end md:justify-between">
+        <div className="max-w-[46rem]">
+          <h1 className="text-4xl leading-[1] font-semibold tracking-[-0.035em] text-balance sm:text-5xl">
+            Pick the CodStats plan that fits how you play.
           </h1>
-          <p className="max-w-[42rem] text-base leading-8 text-pretty text-foreground/80 sm:text-lg">
-            Track ranked with the essentials, unlock deeper review when you want
-            more context, and add creator tooling when your workflow grows.
+          <p className="mt-4 max-w-[40rem] text-base leading-7 text-muted-foreground sm:text-lg">
+            Start free, move up when you want deeper tracking, and add creator
+            tools when your community becomes part of the workflow.
           </p>
         </div>
 
-        <div className="rounded-lg border border-border/70 bg-card/70 p-4 shadow-sm">
-          <div className="mb-3 text-xs font-medium tracking-wide text-muted-foreground uppercase">
-            Pricing currency
-          </div>
-          <PricingCurrencySelect
-            currencies={availableCurrencies}
-            value={selectedCurrency}
-          />
-        </div>
+        <PricingCurrencySelect
+          currencies={availableCurrencies}
+          value={selectedCurrency}
+        />
       </div>
 
-      <div className="grid gap-3 rounded-lg border border-border/70 bg-muted/30 p-4 text-sm leading-6 text-foreground/76 sm:grid-cols-2 sm:gap-6">
-        <p>
-          Stripe Checkout confirms the final currency, taxes, discounts, and
-          total before you pay.
+      {isReferenceCurrency ? (
+        <p className="max-w-[46rem] text-xs leading-5 text-muted-foreground">
+          Converted prices are shown for reference. Checkout charges the GBP
+          price; your card provider may apply its own exchange rate or fees.
         </p>
-        <p>
-          {currencyNotice ??
-            "Converted currencies are estimates and may move with exchange rates."}
-        </p>
-      </div>
+      ) : null}
     </section>
   )
 }
@@ -290,13 +300,12 @@ export function PricingPlanList({
 
   if (activePlans.length === 0) {
     return (
-      <section className="rounded-lg border border-border/70 bg-card/60 p-6">
+      <section className="border-y border-border py-8">
         <h2 className="text-xl font-semibold tracking-tight">
           Plans are being updated
         </h2>
-        <p className="mt-2 max-w-[40rem] text-sm leading-7 text-foreground/76 sm:text-base">
-          No public plans are active right now. Pricing will appear here as soon
-          as the current billing catalog has an active public plan.
+        <p className="mt-2 max-w-[40rem] text-sm leading-7 text-muted-foreground">
+          No public plans are active right now. Check back shortly.
         </p>
       </section>
     )
@@ -304,148 +313,125 @@ export function PricingPlanList({
 
   return (
     <section className="grid gap-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div className="grid gap-2">
-          <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-            Choose your plan
-          </h2>
-          <p className="max-w-[42rem] text-sm leading-7 text-foreground/76 sm:text-base">
-            The important differences are up front. The full feature breakdown
-            is below when you want the details.
-          </p>
-        </div>
-        <Badge className="w-fit" variant="secondary">
-          Monthly + yearly where available
-        </Badge>
-      </div>
-
       <div
         className={cn(
-          "grid gap-4",
+          "grid overflow-hidden rounded-lg border border-border bg-card",
           activePlans.length >= 3
             ? "md:grid-cols-2 xl:grid-cols-3"
             : "md:grid-cols-2"
         )}
       >
-        {activePlans.map((plan) => {
+        {activePlans.map((plan, index) => {
           const isCurrent =
-            catalog.currentPlanKey === plan.planKey ||
-            plan.relationship === "current"
+            signedIn &&
+            (catalog.currentPlanKey === plan.planKey ||
+              plan.relationship === "current")
           const isRecommended =
             plan.planKey === recommendedPlanKey && !isCurrent
           const primaryPrice = getPrimaryPrice(plan)
           const annualSavings = getAnnualSavingsPercent(plan)
-          const highlightedFeatures = plan.features.slice(0, 5)
+          const highlights = getPlanHighlights(plan, activePlans)
           const remainingFeatureCount = Math.max(
             0,
-            plan.features.length - highlightedFeatures.length
+            plan.features.length - highlights.features.length
           )
 
           return (
-            <Card
+            <article
               className={cn(
-                "relative h-full justify-between bg-card/75 shadow-sm",
-                isRecommended && "ring-2 ring-primary/55",
-                isCurrent && "bg-primary/5 ring-primary/35"
+                "relative flex min-w-0 flex-col border-border p-5 sm:p-6",
+                index > 0 && "border-t md:border-t-0 md:border-l",
+                index === 2 && "md:border-t xl:border-t-0",
+                isRecommended && "bg-primary/[0.045]",
+                isCurrent && "bg-muted/35"
               )}
               key={plan.planKey}
             >
-              <CardHeader className="gap-4">
-                <div className="flex min-h-5 flex-wrap items-center gap-2">
+              <div className="flex min-h-6 items-center justify-between gap-3">
+                <div>
                   {isCurrent ? (
-                    <Badge variant="default">Current plan</Badge>
+                    <Badge>Current Plan</Badge>
                   ) : isRecommended ? (
-                    <Badge variant="default">Recommended</Badge>
-                  ) : plan.planType === "free" ? (
-                    <Badge variant="outline">Start here</Badge>
-                  ) : (
-                    <Badge variant="outline">Paid plan</Badge>
-                  )}
-                  {annualSavings ? (
-                    <Badge variant="secondary">
-                      Save {annualSavings}% yearly
-                    </Badge>
+                    <Badge>Recommended</Badge>
                   ) : null}
                 </div>
+                {annualSavings ? (
+                  <span className="text-xs font-medium text-primary">
+                    Save {annualSavings}% yearly
+                  </span>
+                ) : null}
+              </div>
 
-                <div className="grid gap-2">
-                  <h3 className="text-2xl font-semibold tracking-tight">
-                    {plan.name}
-                  </h3>
-                  <CardDescription className="min-h-12 text-sm leading-6 text-foreground/72">
-                    {plan.description}
-                  </CardDescription>
-                </div>
-              </CardHeader>
+              <div className="mt-5">
+                <h2 className="text-2xl font-semibold tracking-tight">
+                  {plan.name}
+                </h2>
+                <p className="mt-2 min-h-12 text-sm leading-6 text-muted-foreground">
+                  {plan.description}
+                </p>
+              </div>
 
-              <CardContent className="grid gap-5">
-                <div className="border-y border-border/70 py-4">
-                  <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                    <span className="text-3xl font-semibold tracking-tight sm:text-4xl">
-                      {primaryPrice.amount}
+              <div className="mt-7 border-b border-border pb-6">
+                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                  <span className="text-4xl font-semibold tracking-[-0.035em] tabular-nums">
+                    {primaryPrice.amount}
+                  </span>
+                  {primaryPrice.suffix ? (
+                    <span className="text-sm text-muted-foreground">
+                      {primaryPrice.suffix}
                     </span>
-                    {primaryPrice.suffix ? (
-                      <span className="text-sm text-muted-foreground">
-                        {primaryPrice.suffix}
-                      </span>
-                    ) : null}
-                  </div>
-                  <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                    {primaryPrice.detail}
+                  ) : null}
+                </div>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {primaryPrice.detail}
+                </p>
+
+                {plan.pricing.year && plan.pricing.month ? (
+                  <p className="mt-3 text-xs leading-5 text-muted-foreground">
+                    Yearly:{" "}
+                    <span className="font-medium text-foreground">
+                      {getPlanPriceLabel(plan.pricing.year)}
+                    </span>
                   </p>
+                ) : null}
+              </div>
 
-                  {plan.pricing.year && plan.pricing.month ? (
-                    <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
-                      <span className="font-medium text-foreground">
-                        Yearly
-                      </span>
-                      <span className="text-muted-foreground">
-                        {getPlanPriceLabel(plan.pricing.year)}
-                      </span>
-                      {annualSavings ? (
-                        <span className="text-primary">
-                          {annualSavings}% less than 12 monthly payments
-                        </span>
-                      ) : null}
-                    </div>
-                  ) : null}
-                </div>
+              <div className="flex-1 py-6">
+                {highlights.lead ? (
+                  <p className="mb-3 text-sm font-medium">{highlights.lead}</p>
+                ) : null}
 
-                <div className="grid gap-3">
-                  <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                    What you get
-                  </div>
-                  {highlightedFeatures.length > 0 ? (
-                    <ul className="grid gap-2.5">
-                      {highlightedFeatures.map((feature) => (
-                        <li
-                          className="flex gap-2.5 text-sm leading-6"
-                          key={feature.featureKey}
-                        >
-                          <IconCheck
-                            aria-hidden="true"
-                            className="mt-1 size-4 shrink-0 text-primary"
-                          />
-                          <span>{feature.name}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="text-sm leading-6 text-muted-foreground">
-                      No public feature list is configured for this plan yet.
-                    </p>
-                  )}
-                  {remainingFeatureCount > 0 ? (
-                    <p className="text-xs leading-5 text-muted-foreground">
-                      Plus {remainingFeatureCount} more{" "}
-                      {remainingFeatureCount === 1 ? "feature" : "features"} in
-                      the comparison below.
-                    </p>
-                  ) : null}
-                </div>
-              </CardContent>
+                {highlights.features.length > 0 ? (
+                  <ul className="grid gap-2.5">
+                    {highlights.features.map((feature) => (
+                      <li
+                        className="flex gap-2.5 text-sm leading-6"
+                        key={feature.featureKey}
+                      >
+                        <IconCheck
+                          aria-hidden="true"
+                          className="mt-1 size-4 shrink-0 text-primary"
+                        />
+                        <span>{feature.name}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-sm leading-6 text-muted-foreground">
+                    Core CodStats access.
+                  </p>
+                )}
 
-              <CardFooter className="grid gap-2 border-t border-border/70">
+                {remainingFeatureCount > 0 ? (
+                  <p className="mt-3 text-xs leading-5 text-muted-foreground">
+                    {remainingFeatureCount} more{" "}
+                    {remainingFeatureCount === 1 ? "feature" : "features"} in the
+                    comparison below.
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="border-t border-border pt-5">
                 <Link
                   href={getContextualPlanCtaHref(plan, signedIn, isCurrent)}
                   className={buttonVariants({
@@ -456,18 +442,22 @@ export function PricingPlanList({
                 >
                   {getContextualPlanCtaLabel(plan, signedIn, isCurrent)}
                 </Link>
-                <p className="text-center text-[0.6875rem] leading-5 text-muted-foreground">
-                  {isCurrent
-                    ? "You already have this plan."
-                    : plan.planType === "free"
-                      ? "Create an account and start with the included features."
-                      : "Final pricing and eligible discounts are confirmed in Stripe."}
-                </p>
-              </CardFooter>
-            </Card>
+                {isCurrent ? (
+                  <p className="mt-2 text-center text-xs text-muted-foreground">
+                    This is your active plan.
+                  </p>
+                ) : null}
+              </div>
+            </article>
           )
         })}
       </div>
+
+      <p className="text-xs leading-5 text-muted-foreground">
+        {catalog.selectedCurrency === "GBP"
+          ? "Prices shown in GBP. Applicable taxes are confirmed in checkout."
+          : "Converted prices are for reference; checkout charges the GBP price."}
+      </p>
     </section>
   )
 }
@@ -483,17 +473,14 @@ export function PricingComparison({
   return (
     <section className="grid gap-5" aria-labelledby="pricing-comparison-title">
       <div className="grid gap-2">
-        <Badge className="w-fit" variant="outline">
-          Full breakdown
-        </Badge>
         <h2
           id="pricing-comparison-title"
           className="text-2xl font-semibold tracking-tight sm:text-3xl"
         >
-          Compare the details
+          Compare Plans
         </h2>
         <p className="text-sm leading-7 text-muted-foreground">
-          Compare every included feature. Scroll the table on smaller screens.
+          Exact feature availability across every active plan.
         </p>
       </div>
       <div

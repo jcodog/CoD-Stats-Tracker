@@ -21,7 +21,6 @@ export async function PricingView() {
       <div className="grid gap-8 md:gap-10 lg:gap-12">
         <PricingIntro
           availableCurrencies={catalog.availableCurrencies}
-          currencyNotice={catalog.currencyNotice}
           pendingCreatorCode={pendingCreatorCode}
           selectedCurrency={catalog.selectedCurrency}
         />

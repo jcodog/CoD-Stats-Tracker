@@ -145,3 +145,12 @@ Added test:modernization and included it in the web test chain. It follows actua
 
 
 Final source validation for this run: web lint/typecheck passed; the complete web test chain passed 84 tests with 679 assertions and five existing snapshots. Backend test:convex passed 169 tests with 653 assertions. No backend logic changed. Browser/visual/shader/accessibility/hydration/performance acceptance remains blocked by connection refused at localhost:3000. #32/#34 are not complete. No builds, codegen, server starts, external mutations, commits or pushes occurred.
+
+
+## Landing and pricing visual correction
+
+The first public visual pass was too sparse and too implementation-oriented. Landing has been tightened around a competitive ranked-session story: a denser product preview, session workflow, creator queue preview and clearer product/pricing progression. Threads remains decorative and bounded to the hero.
+
+Pricing no longer prefixes converted values with "Est." on every price or leads with Stripe/FX implementation copy. The currency selector is customer-facing ("Currency"), converted values are presented normally, and the reference/GBP checkout caveat is stated once at page level. Public signed-out users are no longer incorrectly shown the free plan as "Current". Paid-plan highlights now emphasize the features added over the preceding tier, keeping the detailed comparison as supporting information.
+
+Design references reviewed for this correction included Linear and Vercel pricing hierarchy, Stripe's UK pricing clarity, and Mobalytics/Tracker Network's product-first competitive gaming presentation. Mobbin remained unavailable because the connected account requires a paid Mobbin plan.

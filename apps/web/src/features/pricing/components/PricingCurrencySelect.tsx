@@ -62,8 +62,8 @@ export function PricingCurrencySelect({
   }
 
   return (
-    <div className="flex items-center gap-3 sm:justify-end">
-      <span className="text-sm text-foreground/72">Show estimate in</span>
+    <div className="flex items-center gap-2.5 sm:justify-end">
+      <span className="text-sm text-muted-foreground">Currency</span>
       <Select
         onValueChange={(nextValue) =>
           updateCurrency(nextValue as SupportedPricingCurrency)
@@ -71,8 +71,8 @@ export function PricingCurrencySelect({
         value={value}
       >
         <SelectTrigger
-          aria-label="Estimate currency"
-          className="w-[7.5rem] bg-background/75"
+          aria-label="Display currency"
+          className="w-[7rem] bg-background"
         >
           <SelectValue />
         </SelectTrigger>

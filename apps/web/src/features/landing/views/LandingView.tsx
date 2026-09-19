@@ -1,12 +1,12 @@
 import { ProductBackground } from "@/components/backgrounds/ProductBackground"
 import {
-  LandingHeroSection,
-  LandingProductSection,
-  LandingFeatureList,
   LandingCreatorToolsSection,
-  LandingPricingTeaser,
+  LandingFeatureList,
   LandingFooter,
   LandingHeader,
+  LandingHeroSection,
+  LandingPricingTeaser,
+  LandingProductSection,
   MARKETING_SHELL_MAX_WIDTH,
 } from "@/features/landing/components/LandingSections"
 
@@ -19,24 +19,28 @@ export function LandingView() {
       >
         Skip to main content
       </a>
+
       <LandingHeader />
+
       <main
         id="main-content"
-        className={`mx-auto w-full ${MARKETING_SHELL_MAX_WIDTH} flex-1 px-5 pb-16 sm:px-8 lg:px-10`}
+        className={"mx-auto w-full " + MARKETING_SHELL_MAX_WIDTH + " flex-1 px-5 pb-16 sm:px-8 lg:px-10"}
       >
-        <section className="relative grid items-center gap-10 py-12 sm:py-20 lg:grid-cols-[1.1fr_1fr] lg:gap-12">
-          <div className="pointer-events-none absolute -inset-x-5 inset-y-0 [mask-image:linear-gradient(to_bottom,transparent,black_30%,transparent)] opacity-25">
+        <section className="relative grid items-center gap-9 overflow-hidden border-b border-border/80 py-12 sm:py-16 lg:grid-cols-[0.9fr_1.1fr] lg:gap-12 lg:py-20">
+          <div className="pointer-events-none absolute -inset-x-10 inset-y-0 [mask-image:linear-gradient(to_bottom,black_5%,black_70%,transparent)] opacity-40">
             <ProductBackground effect="threads" />
           </div>
           <LandingHeroSection />
           <LandingProductSection />
         </section>
-        <div className="grid gap-12 sm:gap-16">
+
+        <div className="grid gap-14 pt-14 sm:gap-18 sm:pt-16">
           <LandingFeatureList />
           <LandingCreatorToolsSection />
           <LandingPricingTeaser />
         </div>
       </main>
+
       <LandingFooter />
     </div>
   )
