@@ -55,12 +55,6 @@ function getPlanCtaLabel(plan: PricingCatalogPlan) {
   return `Choose ${plan.name}`
 }
 
-function getPlanCtaHref(signedIn: boolean) {
-  return signedIn
-    ? "/settings/billing/plan"
-    : buildAuthHref("/sign-up", "/settings/billing/plan")
-}
-
 function getRecommendedPlanKey(plans: PricingCatalogPlan[]) {
   const paidPlans = plans.filter((plan) => plan.planType === "paid")
   const premiumPlan = paidPlans.find((plan) => {
@@ -224,25 +218,6 @@ function buildPricingFeatureRows(plans: PricingCatalogPlan[]) {
 
       return left.category.localeCompare(right.category)
     })
-}
-
-function getPlanFeatureGridClassName(
-  featureCount: number,
-  isMobileView: boolean
-) {
-  if (isMobileView) {
-    return "grid gap-3"
-  }
-
-  if (featureCount <= 2) {
-    return "grid gap-3 md:grid-cols-2"
-  }
-
-  if (featureCount === 4) {
-    return "grid gap-3 md:grid-cols-2"
-  }
-
-  return "grid gap-3 md:grid-cols-2 xl:grid-cols-3"
 }
 
 export function PricingIntro({
