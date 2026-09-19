@@ -1,0 +1,115 @@
+apps/web/src/app/(staff-protected)/staff/layout.tsx
+  s_24e8dc9509393a::t_c52353550ef9c3 2,20-22
+apps/web/src/lib/server/creator-attribution.ts
+  s_24e8dc9509393a::t_9287f496b10fa5 4,51
+apps/web/src/lib/flags.ts
+  s_24e8dc9509393a::t_9287f496b10fa5 6,66-69,73
+  s_24e8dc9509393a::t_c389e6fa8a6a28 5,24-25,29-30,64
+  s_24e8dc9509393a::t_b23395a79c5dfc 55,60-63
+apps/web/src/lib/server/viewer.ts
+  s_24e8dc9509393a::t_2d14598a5dd68d 1-21,27-30
+  s_24e8dc9509393a::t_9287f496b10fa5 22-26
+apps/web/src/app/.well-known/(flags-sdk)/vercel/flags/route.ts
+  s_24e8dc9509393a::t_611537b79a5129 2,6
+packages/backend/src/lib/statsDashboard.ts
+  s_24e8dc9509393a::t_56a6e9803ef5c1 132,165,172-173,176,180-183,187-188
+  s_24e8dc9509393a::t_9eeac79000cc9b 5,105,125,128-131,189-190
+apps/web/src/features/dashboard-stats/lib/client/dashboard-state.ts
+  s_24e8dc9509393a::t_a7c78c9791acba 60-61
+  s_24e8dc9509393a::t_9287f496b10fa5 3-8,11-15,22-26,31-39,43-44,48-49,52-53,57-58,62-64,68-70,76-77,92-95,98-99,103-136,140-143,178-180
+  s_24e8dc9509393a::t_e8cb4e4a8e281f 16,42,46-47,55-56,67,72-75,78-83,86-88
+  s_24e8dc9509393a::t_a2f05dd616b342 9-10,51,102,137-139,144-148
+  s_24e8dc9509393a::t_3f1a926d9ca820 91
+apps/web/src/features/dashboard-stats/components/editor/EditorClient.tsx
+  s_24e8dc9509393a::t_6a76e9ff16afcc 789-791,796,805-807
+  s_24e8dc9509393a::t_9287f496b10fa5 221-223,258,267-268,270,792-795,797-804
+  s_24e8dc9509393a::t_53932a08542b32 16,255-256,262-264,271,279,282,766,809,813,828,837,864-865
+  s_24e8dc9509393a::t_e0ede74b861e4d 265
+packages/backend/src/db/tables/sessions.ts
+  s_24e8dc9509393a::t_56a6e9803ef5c1 39-40
+packages/backend/convex/actions/creatorTools/playingWithViewers/queue.ts
+  s_24e8dc9509393a::t_9287f496b10fa5 296,365-370
+apps/web/src/features/dashboard-stats/views/DashboardStatsEditorView.tsx
+  s_24e8dc9509393a::t_c389e6fa8a6a28 3,10
+apps/web/src/app/(protected)/layout.tsx
+  s_24e8dc9509393a::t_36854fb0240d87 13-15
+apps/web/src/lib/server/creator-tools-access.ts
+  s_24e8dc9509393a::t_c389e6fa8a6a28 3,5-9,11
+packages/backend/convex/queries/users.ts
+  s_24e8dc9509393a::t_2d14598a5dd68d 3-22,25
+  s_24e8dc9509393a::t_9287f496b10fa5 23-24
+  s_24e8dc9509393a::t_8167a70c25654b 26-28
+packages/backend/convex/mutations/__tests__/stats-dashboard-security.test.mjs
+  s_24e8dc9509393a::t_232bd544bba89b 4,959-992
+  s_24e8dc9509393a::t_76ffa6c0f6ca02 81-82,136,155-156,816-817,824,849,853-854,869-877,893-894,905-908,924-926,930
+  s_24e8dc9509393a::t_56a6e9803ef5c1 66-67
+  s_24e8dc9509393a::t_9287f496b10fa5 9-14,19-26,110,137,144-152,157-158,179-193,195-197,199-201,203-204,815,818-823,825-848,850-852,855-868,879-890,892,896-900,902-904,909-923,927-929,931,936-941,943-949,952-955,958
+  s_24e8dc9509393a::t_6a76e9ff16afcc 15,141-143,153-154,878,891,895,901,932-935,942,950-951,956-957
+apps/web/src/app/(staff-protected)/layout.tsx
+  s_24e8dc9509393a::t_9287f496b10fa5 3,5
+  s_24e8dc9509393a::t_c52353550ef9c3 6
+packages/backend/convex/actions/staff/billing.ts
+  s_24e8dc9509393a::t_9287f496b10fa5 369,525,588,647,700,1230-1231,1259-1260,1305-1306,1629,1664,2131-2133,2202-2203,4451-4452,5022-5023
+packages/backend/convex/actions/creatorTools/playingWithViewers/discord.ts
+  s_24e8dc9509393a::t_9287f496b10fa5 374,758,1136-1140,1444-1451,1531,1865-1870
+apps/web/src/lib/server/staff-auth.ts
+  s_24e8dc9509393a::t_c389e6fa8a6a28 4-5,103,127,130,142
+packages/backend/convex/__tests__/viewer-access.test.mjs
+  s_24e8dc9509393a::t_9287f496b10fa5 6-9,12-15,23-37,45-50,65-70,75-83,86-91,93
+  s_24e8dc9509393a::t_511e2ee66460a1 1-5,10-11,16-22,38-44,51-64,71-74,84-85,92
+packages/backend/src/db/tables/games.ts
+  s_24e8dc9509393a::t_9287f496b10fa5 1-2,28-32,34
+packages/backend/convex/actions/billing/customer.ts
+  s_24e8dc9509393a::t_9287f496b10fa5 158,731-734,752-753,795-796,944-945,1047-1050,1295-1296,1618-1619
+  s_24e8dc9509393a::t_00dcd890ac7dff 3
+packages/backend/src/lib/statsAnalytics.ts
+  s_24e8dc9509393a::t_a2f05dd616b342 1-16,29-32,39-40,47-53,60-61
+  s_24e8dc9509393a::t_9287f496b10fa5 17-28,33-38,41-46,54-59,62
+packages/backend/convex/__tests__/checkout-policy.test.mjs
+  s_24e8dc9509393a::t_9287f496b10fa5 53-55,57-59,62
+  s_24e8dc9509393a::t_a948ab0183b7a4 1-52,56,60-61
+packages/backend/convex/mutations/creator/attribution/lifecycle.ts
+  s_24e8dc9509393a::t_1e5ee335a1ae2a 282
+packages/backend/convex/actions/creator/connect/onboarding.ts
+  s_24e8dc9509393a::t_9287f496b10fa5 92-93,245-246,294-301,313-314,356-357
+apps/web/src/components/app-shell/AppShell.tsx
+  s_24e8dc9509393a::t_9287f496b10fa5 1,16,18,20-25,28
+packages/backend/convex/queries/stats/dashboard.ts
+  s_24e8dc9509393a::t_a2f05dd616b342 311,313,327,335
+  s_24e8dc9509393a::t_38abc09249285a 192,323
+  s_24e8dc9509393a::t_9287f496b10fa5 2,98,193-200,271,275,278,296-305,307,324-326,328-333,336-342
+  s_24e8dc9509393a::t_a7c78c9791acba 293-295,306
+  s_24e8dc9509393a::t_56a6e9803ef5c1 7,159
+  s_24e8dc9509393a::t_f11b8b3ef04088 15,233,260,282,317
+packages/backend/convex/actions/stats/cache.ts
+  s_24e8dc9509393a::t_cc079fd4fdbd99 14-18,61
+  s_24e8dc9509393a::t_1e5ee335a1ae2a 3
+docs/session-ownership-migration.md
+  s_24e8dc9509393a::t_2e20a356b211a0 1-14
+docs/modernization-status.md
+  s_24e8dc9509393a::t_e712ecd9e82ca1 55-66
+  s_24e8dc9509393a::t_6df912f31764d7 45-54
+  s_24e8dc9509393a::t_9f5fe934821adb 1-38
+  s_24e8dc9509393a::t_c52353550ef9c3 39-44
+packages/backend/convex/mutations/stats/dashboard.ts
+  s_24e8dc9509393a::t_2e20a356b211a0 2,6,514-557
+  s_24e8dc9509393a::t_56a6e9803ef5c1 13,257
+packages/backend/src/lib/userIds.ts
+  s_24e8dc9509393a::t_72fc8984c88db3 34-40,50
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "a04e8cbc6109505f418b5e3601c4dcb290890868",
+  "prompts": {},
+  "sessions": {
+    "s_24e8dc9509393a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b5b4-2983-7e33-a96d-34e8c29148bf",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Jason Connolly <jcodog@jconet.co.uk>"
+    }
+  }
+}
