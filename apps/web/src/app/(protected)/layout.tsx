@@ -10,8 +10,8 @@ export default async function ProtectedLayout({
   await canonicalizePendingCreatorAttribution()
 
   return (
-    <AppAuthGate>
-      <AppShell>{children}</AppShell>
-    </AppAuthGate>
+    <AppShell>
+      <AppAuthGate>{children}</AppAuthGate>
+    </AppShell>
   )
 }

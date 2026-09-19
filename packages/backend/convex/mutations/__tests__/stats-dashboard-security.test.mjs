@@ -1,14 +1,29 @@
 import { describe, expect, it } from "bun:test"
 
 import {
+  backfillSessionOwners,
   createSession as createDashboardSession,
   logMatch as logDashboardMatch,
   updatePreferredMatchLoggingMode,
 } from "../stats/dashboard.ts"
-import { getCurrentDashboardState } from "../../queries/stats/dashboard.ts"
+import {
+  getCurrentDashboardState,
+  getSessionHistoryPage,
+  getSessionOverview,
+  getRecentSessionMatches,
+} from "../../queries/stats/dashboard.ts"
+import { projectSessionHistory } from "../../../src/lib/statsAnalytics.ts"
 import { logMatch as logLegacyMatch } from "../stats/games.ts"
 
 const INDEX_FIELDS = {
+  games: {
+    by_session_createdat: ["sessionId", "createdAt"],
+    by_session_lossProtected_createdAt: [
+      "sessionId",
+      "lossProtected",
+      "createdAt",
+    ],
+  },
   activisionUsernames: {
     by_owner: ["ownerUserId"],
     by_owner_normalized: ["ownerUserId", "normalizedUsername"],
@@ -48,6 +63,8 @@ const INDEX_FIELDS = {
   },
   sessions: {
     by_owner_startedAt: ["ownerUserId", "startedAt"],
+    by_owner_ended_startedAt: ["ownerUserId", "endedAt", "startedAt"],
+    by_legacy_user_ended_startedAt: ["userId", "ownerUserId", "endedAt", "startedAt"],
     by_user: ["userId"],
     by_uuid: ["uuid"],
   },
@@ -61,6 +78,8 @@ class FakeQuery {
   #db
   #filters = []
   #filterExpression = null
+  #sortFields = []
+  #direction = "asc"
   #table
 
   constructor(db, table) {
@@ -88,6 +107,7 @@ class FakeQuery {
 
     selector(builder)
     this.#filters = filters
+    this.#sortFields = indexFields
 
     return this
   }
@@ -113,8 +133,27 @@ class FakeQuery {
     return this
   }
 
-  order() {
+  order(direction) {
+    this.#direction = direction
     return this
+  }
+
+  async paginate(options) {
+    const offset = Number(options.cursor ?? 0)
+    const rows = this.#applyFilters()
+    const page = rows.slice(
+      offset,
+      offset + Math.min(options.numItems, options.maximumRowsRead)
+    )
+    return {
+      page,
+      isDone: offset + page.length >= rows.length,
+      continueCursor: String(offset + page.length),
+    }
+  }
+
+  async take(limit) {
+    return this.#applyFilters().slice(0, limit)
   }
 
   async collect() {
@@ -137,21 +176,32 @@ class FakeQuery {
   #applyFilters() {
     const table = this.#db.tables[this.#table] ?? []
 
-    return table.filter((doc) => {
-      const matchesIndexFilters = this.#filters.every(
-        ([field, value]) => doc[field] === value
-      )
+    return [...table]
+      .sort((a, b) => {
+        for (const field of this.#sortFields) {
+          if (a[field] !== b[field])
+            return (
+              (a[field] < b[field] ? -1 : 1) *
+              (this.#direction === "desc" ? -1 : 1)
+            )
+        }
+        return 0
+      })
+      .filter((doc) => {
+        const matchesIndexFilters = this.#filters.every(
+          ([field, value]) => doc[field] === value
+        )
 
-      if (!matchesIndexFilters) {
-        return false
-      }
+        if (!matchesIndexFilters) {
+          return false
+        }
 
-      if (!this.#filterExpression) {
-        return true
-      }
+        if (!this.#filterExpression) {
+          return true
+        }
 
-      return this.#evaluateExpression(doc, this.#filterExpression)
-    })
+        return this.#evaluateExpression(doc, this.#filterExpression)
+      })
   }
 
   #evaluateExpression(doc, expression) {
@@ -761,4 +811,182 @@ describe("legacy stats match logging security", () => {
     expect(db.tables.games).toHaveLength(0)
     expect(db.tables.sessions[0].deaths).toBe(4)
   })
+})
+
+describe("dashboard projection reads", () => {
+  function fixture() {
+    const session = createSessionDoc({
+      wins: 2,
+      losses: 1,
+      matchCount: 3,
+      currentSr: 125,
+    })
+    const games = [
+      {
+        _id: "games:1",
+        sessionId: session.uuid,
+        createdAt: 1000,
+        srChange: 20,
+        outcome: "win",
+        lossProtected: false,
+      },
+      {
+        _id: "games:2",
+        sessionId: session.uuid,
+        createdAt: 2000,
+        srChange: -5,
+        outcome: "loss",
+        lossProtected: true,
+      },
+      {
+        _id: "games:3",
+        sessionId: session.uuid,
+        createdAt: 3000,
+        srChange: 10,
+        outcome: "win",
+        lossProtected: false,
+      },
+    ]
+    const { ctx } = createMutationContext({
+      initialTables: { users: [createUser()], sessions: [session], games },
+    })
+    const query = ctx.db.query.bind(ctx.db)
+    const reads = []
+    ctx.db.query = (table) => {
+      reads.push(table)
+      return query(table)
+    }
+    return {
+      ctx,
+      reads,
+      args: {
+        sessionId: session._id,
+        includeLossProtected: true,
+        paginationOpts: { numItems: 200, cursor: null },
+      },
+    }
+  }
+  it("reads session counters without reading games", async () => {
+    const { ctx, reads, args } = fixture()
+    const overview = await getSessionOverview._handler(ctx, args)
+    expect(overview.matchCount).toBe(3)
+    expect(overview.currentSr).toBe(125)
+    expect(reads).not.toContain("games")
+  })
+  it("projects charts from one history read with stable chronological SR", async () => {
+    const { ctx, reads, args } = fixture()
+    const page = await getSessionHistoryPage._handler(ctx, args)
+    const result = projectSessionHistory(
+      { id: args.sessionId, startSr: 100, startedAt: 10 },
+      page.page,
+      true
+    )
+    expect(reads.filter((table) => table === "games")).toHaveLength(1)
+    expect(result.srTimeline.points.map((point) => point.sr)).toEqual([
+      100, 120, 115, 125,
+    ])
+    expect(result.dailyPerformance.days).toEqual([
+      { dateKey: "1970-01-01", wins: 2, losses: 1, netSr: 25 },
+    ])
+    expect(page.isDone).toBe(true)
+  })
+  it("filters loss-protected charts without changing authoritative counters", async () => {
+    const { ctx, args } = fixture()
+    const page = await getSessionHistoryPage._handler(ctx, args)
+    const result = projectSessionHistory(
+      { id: args.sessionId, startSr: 100, startedAt: 10 },
+      page.page,
+      false
+    )
+    expect((await getSessionOverview._handler(ctx, args)).currentSr).toBe(125)
+    expect(result.srTimeline.points.map((point) => point.sr)).toEqual([
+      100, 120, 130,
+    ])
+    expect(result.dailyPerformance.days[0].losses).toBe(0)
+  })
+  it("honors the recent limit and indexed loss-protection filter", async () => {
+    const { ctx, args } = fixture()
+    expect(
+      (await getRecentSessionMatches._handler(ctx, { ...args, limit: 1 })).map(
+        (game) => game.id
+      )
+    ).toEqual(["games:3"])
+    expect(
+      (
+        await getRecentSessionMatches._handler(ctx, {
+          ...args,
+          includeLossProtected: false,
+          limit: 2,
+        })
+      ).map((game) => game.id)
+    ).toEqual(["games:3", "games:1"])
+  })
+  it("rejects a foreign session before reading its games", async () => {
+    const { ctx, reads, args } = fixture()
+    ctx.db.tables.sessions[0].ownerUserId = "users:another"
+    await expect(getSessionHistoryPage._handler(ctx, args)).rejects.toThrow(
+      "Session not found"
+    )
+    expect(reads).not.toContain("games")
+  })
+})
+it("bounds history pages and preserves cursor continuity", async () => {
+  const session = createSessionDoc()
+  const games = Array.from({ length: 450 }, (_, i) => ({
+    _id: `games:${i}`,
+    sessionId: session.uuid,
+    createdAt: i,
+    srChange: 1,
+    outcome: "win",
+    lossProtected: false,
+  }))
+  const { ctx } = createMutationContext({
+    initialTables: { users: [createUser()], sessions: [session], games },
+  })
+  const first = await getSessionHistoryPage._handler(ctx, {
+    sessionId: session._id,
+    paginationOpts: { numItems: 10000, cursor: null },
+  })
+  expect(first.page).toHaveLength(200)
+  expect(first.isDone).toBe(false)
+  const second = await getSessionHistoryPage._handler(ctx, {
+    sessionId: session._id,
+    paginationOpts: { numItems: 200, cursor: first.continueCursor },
+  })
+  expect(second.page[0].createdAt).toBe(200)
+  expect(second.page).toHaveLength(200)
+})
+
+it("dry-runs and idempotently backfills only unambiguous session owners", async () => {
+  const { ctx, db } = createMutationContext({ initialTables: {
+    users: [createUser()],
+    sessions: [createSessionDoc({ ownerUserId: undefined }), createSessionDoc({ _id: "sessions:2", ownerUserId: undefined, userId: "missing" })],
+  } })
+  const args = { paginationOpts: { numItems: 100, cursor: null }, dryRun: true }
+  const preview = await backfillSessionOwners._handler(ctx, args)
+  expect(preview.matched).toBe(1)
+  expect(preview.unresolved).toEqual([{ sessionId: "sessions:2", reason: "missing" }])
+  expect(db.tables.sessions[0].ownerUserId).toBeUndefined()
+  await expect(backfillSessionOwners._handler(ctx, { ...args, dryRun: false })).rejects.toThrow("Explicit confirmation")
+  await backfillSessionOwners._handler(ctx, { ...args, dryRun: false, confirmation: "backfill_session_owners" })
+  expect(db.tables.sessions[0].ownerUserId).toBe("users:1")
+  expect((await backfillSessionOwners._handler(ctx, args)).matched).toBe(0)
+})
+
+it("does not guess ownership when Clerk and Discord identifiers conflict", async () => {
+  const { ctx, db } = createMutationContext({ initialTables: {
+    users: [createUser(), createUser({ _id: "users:2", clerkUserId: "discord-user-1", discordId: "other" })],
+    sessions: [createSessionDoc({ ownerUserId: undefined })],
+  } })
+  const result = await backfillSessionOwners._handler(ctx, { paginationOpts: { numItems: 100, cursor: null }, dryRun: false, confirmation: "backfill_session_owners" })
+  expect(result.unresolved).toEqual([{ sessionId: "sessions:1", reason: "ambiguous" }])
+  expect(db.tables.sessions[0].ownerUserId).toBeUndefined()
+})
+
+it("does not include archived sessions in dashboard bootstrap", async () => {
+  const { ctx } = createMutationContext({ initialTables: {
+    users: [createUser()], rankedConfigs: [createRankedConfig()], rankedTitles: [createRankedTitle()],
+    sessions: [createSessionDoc(), ...Array.from({ length: 600 }, (_, i) => createSessionDoc({ _id: `archived:${i}`, endedAt: i + 1 }))],
+  } })
+  expect((await getCurrentDashboardState._handler(ctx, {})).activeSessions).toHaveLength(1)
 })

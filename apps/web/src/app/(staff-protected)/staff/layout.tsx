@@ -1,4 +1,5 @@
 import type { ReactNode } from "react"
+import { AppAuthGate } from "@/features/auth/components/AppAuthGate"
 
 import { StaffAccessState } from "@/features/staff/components/StaffAccessState"
 import { StaffConsoleShell } from "@/features/staff/components/StaffConsoleShell"
@@ -16,6 +17,8 @@ export default async function StaffLayout({
   }
 
   return (
-    <StaffConsoleShell role={access.convexRole}>{children}</StaffConsoleShell>
+    <StaffConsoleShell role={access.convexRole}>
+      <AppAuthGate>{children}</AppAuthGate>
+    </StaffConsoleShell>
   )
 }

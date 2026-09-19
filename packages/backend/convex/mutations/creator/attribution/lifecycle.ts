@@ -279,7 +279,7 @@ export const bindUsageLockToSubscription = internalMutation({
       ? await ctx.db.get(args.creatorUsageLockId)
       : null
     const existingByUserId = await getCreatorUsageLockByUserId(ctx, args.userId)
-    let usageLock = existingById ?? existingByUserId
+    const usageLock = existingById ?? existingByUserId
 
     const normalizedCode = args.normalizedCode
     const creatorCode = args.creatorCode

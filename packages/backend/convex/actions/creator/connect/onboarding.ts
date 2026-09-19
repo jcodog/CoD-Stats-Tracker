@@ -89,7 +89,8 @@ async function buildAvailableCreatorCode(ctx: ActionCtx, base: string) {
     }
 
     const existingAccount = await ctx.runQuery(
-      internal.queries.creator.accounts.internal.getCreatorAccountByNormalizedCode,
+      internal.queries.creator.accounts.internal
+        .getCreatorAccountByNormalizedCode,
       {
         normalizedCode: candidate,
       }
@@ -241,7 +242,8 @@ async function syncCreatorStripeAccount(args: {
   }
 
   await args.ctx.runMutation(
-    internal.mutations.creator.accounts.internal.applyStripeConnectedAccountSnapshot,
+    internal.mutations.creator.accounts.internal
+      .applyStripeConnectedAccountSnapshot,
     {
       ...snapshot,
       creatorAccountId: args.creatorAccountId,
@@ -289,10 +291,14 @@ export const startHostedOnboarding = action({
       )
     }
 
-    let { creatorAccount, identity, user } =
-      await requireCurrentCreatorConnectContext(ctx, {
-        createIfMissingCountry: requestedCountry ?? undefined,
-      })
+    const {
+      creatorAccount: initialCreatorAccount,
+      identity,
+      user,
+    } = await requireCurrentCreatorConnectContext(ctx, {
+      createIfMissingCountry: requestedCountry ?? undefined,
+    })
+    let creatorAccount = initialCreatorAccount
     const stripe = getStripe()
     const appOrigin = getAppPublicOrigin()
 
@@ -304,7 +310,8 @@ export const startHostedOnboarding = action({
       }
 
       const confirmedCreatorAccount = await ctx.runMutation(
-        internal.mutations.creator.accounts.internal.confirmCreatorConnectCountry,
+        internal.mutations.creator.accounts.internal
+          .confirmCreatorConnectCountry,
         {
           country: requestedCountry,
           creatorAccountId: creatorAccount._id,
@@ -346,7 +353,8 @@ export const startHostedOnboarding = action({
       const snapshot = mapStripeConnectedAccountV2Snapshot(stripeAccount)
 
       await ctx.runMutation(
-        internal.mutations.creator.accounts.internal.applyStripeConnectedAccountSnapshot,
+        internal.mutations.creator.accounts.internal
+          .applyStripeConnectedAccountSnapshot,
         {
           ...snapshot,
           creatorAccountId: creatorAccount._id,

@@ -2,7 +2,7 @@ import type { Doc, Id } from "../../convex/_generated/dataModel"
 import type { MutationCtx, QueryCtx } from "../../convex/_generated/server"
 import { buildResolvedBillingState } from "../../convex/queries/billing/resolution"
 import { resolveAppPlanKeyFromState, type AppPlanKey } from "./billingAccess"
-import { getStatsUserIdCandidatesForIdentity } from "./userIds"
+import { getStatsUserIdCandidates } from "./userIds"
 
 type StatsDashboardCtx =
   | Pick<QueryCtx, "auth" | "db">
@@ -102,9 +102,7 @@ export function sessionMatchesRankedConfig(args: {
   )
 }
 
-export async function requireAuthenticatedStatsActor(
-  ctx: StatsDashboardCtx
-): Promise<AuthenticatedStatsActor> {
+export async function requireAuthenticatedStatsIdentity(ctx: StatsDashboardCtx) {
   const identity = await ctx.auth.getUserIdentity()
 
   if (!identity) {
@@ -124,22 +122,14 @@ export async function requireAuthenticatedStatsActor(
     throw new Error("Unable to resolve your CodStats account.")
   }
 
-  const billingState = await buildResolvedBillingState(ctx, user)
-  const statsUserIdCandidates = await getStatsUserIdCandidatesForIdentity(
-    ctx,
-    identity
-  )
-
-  return {
-    planKey: resolveAppPlanKeyFromState({
-      fallbackPlanKey: user.plan,
-      state: billingState,
-    }),
-    statsUserIdCandidates,
-    user,
-  }
+  return { user, statsUserIdCandidates: getStatsUserIdCandidates(identity, user) }
 }
 
+export async function requireAuthenticatedStatsActor(ctx: StatsDashboardCtx): Promise<AuthenticatedStatsActor> {
+  const actor = await requireAuthenticatedStatsIdentity(ctx)
+  const billingState = await buildResolvedBillingState(ctx, actor.user)
+  return { ...actor, planKey: resolveAppPlanKeyFromState({ fallbackPlanKey: actor.user.plan, state: billingState }) }
+}
 export async function getCurrentRankedConfig(
   ctx: Pick<QueryCtx | MutationCtx, "db">
 ) {
@@ -172,25 +162,31 @@ export function isRankedSessionWritesEnabled(
   return config?.sessionWritesEnabled !== false
 }
 
-export async function collectOwnedSessions(
+export async function collectActiveOwnedSessions(
   ctx: Pick<QueryCtx | MutationCtx, "db">,
   actor: Pick<AuthenticatedStatsActor, "statsUserIdCandidates" | "user">
 ) {
   const [ownerSessions, ...legacySessionGroups] = await Promise.all([
     ctx.db
       .query("sessions")
-      .withIndex("by_owner_startedAt", (query) =>
-        query.eq("ownerUserId", actor.user._id)
+      .withIndex("by_owner_ended_startedAt", (query) =>
+        query.eq("ownerUserId", actor.user._id).eq("endedAt", null)
       )
       .order("desc")
-      .collect(),
+      .take(501),
     ...actor.statsUserIdCandidates.map((candidate) =>
       ctx.db
         .query("sessions")
-        .withIndex("by_user", (query) => query.eq("userId", candidate))
-        .collect()
+        .withIndex("by_legacy_user_ended_startedAt", (query) =>
+          query.eq("userId", candidate).eq("ownerUserId", undefined).eq("endedAt", null)
+        )
+        .take(501)
     ),
   ])
+
+  if ([ownerSessions, ...legacySessionGroups].some((sessions) => sessions.length > 500)) {
+    throw new Error("Too many active sessions to load safely. Contact support to archive older sessions.")
+  }
 
   const dedupedSessions = new Map<Id<"sessions">, Doc<"sessions">>()
 
@@ -227,15 +223,3 @@ export async function getOwnedSessionById(args: {
   return session
 }
 
-export async function getOwnedSessionGames(
-  ctx: Pick<QueryCtx | MutationCtx, "db">,
-  session: Pick<Doc<"sessions">, "uuid">
-) {
-  return await ctx.db
-    .query("games")
-    .withIndex("by_session_createdat", (query) =>
-      query.eq("sessionId", session.uuid)
-    )
-    .order("asc")
-    .collect()
-}

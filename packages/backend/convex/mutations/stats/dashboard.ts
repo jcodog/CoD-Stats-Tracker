@@ -1,15 +1,16 @@
 import { v } from "convex/values"
+import { paginationOptsValidator } from "convex/server"
 
 import { internal } from "../../_generated/api"
 import type { Doc } from "../../_generated/dataModel"
-import { mutation, type MutationCtx } from "../../_generated/server"
+import { internalMutation, mutation, type MutationCtx } from "../../_generated/server"
 import {
   applyGlobalLandingStatsDelta,
   applyUserLandingStatsDelta,
 } from "../../../src/lib/landingMetrics"
 import {
   buildTitleSeasonKey,
-  collectOwnedSessions,
+  collectActiveOwnedSessions,
   getCurrentRankedConfig,
   getOwnedSessionById,
   isRankedSessionWritesEnabled,
@@ -253,7 +254,7 @@ export const createSession = mutation({
       config.activeTitleKey,
       config.activeSeason
     )
-    const ownedSessions = await collectOwnedSessions(ctx, actor)
+    const ownedSessions = await collectActiveOwnedSessions(ctx, actor)
     const activeCurrentSessions = ownedSessions.filter(
       (session) =>
         session.endedAt === null &&
@@ -508,5 +509,49 @@ export const logMatch = mutation({
       matchId,
       sessionId: session._id,
     }
+  },
+})
+
+// Run manually in cursor batches after a dry run. Never infer an ambiguous owner.
+export const backfillSessionOwners = internalMutation({
+  args: {
+    paginationOpts: paginationOptsValidator,
+    dryRun: v.boolean(),
+    confirmation: v.optional(v.literal("backfill_session_owners")),
+  },
+  handler: async (ctx, args) => {
+    if (!args.dryRun && args.confirmation !== "backfill_session_owners") {
+      throw new Error("Explicit confirmation is required to backfill session owners.")
+    }
+    const batch = await ctx.db.query("sessions").paginate({
+      ...args.paginationOpts, numItems: Math.min(args.paginationOpts.numItems, 100), maximumRowsRead: 100,
+    })
+    let matched = 0
+    const unresolved = []
+    for (const session of batch.page) {
+      if (session.ownerUserId) continue
+      const candidates = [session.userId]
+      const issuer = process.env.CLERK_JWT_ISSUER_URL
+      if (issuer && session.userId.startsWith(`${issuer}|`)) {
+        candidates.push(session.userId.slice(issuer.length + 1))
+      }
+      const matches = new Map<string, Doc<"users">>()
+      for (const candidate of candidates) {
+        const users = await Promise.all([
+          ctx.db.query("users").withIndex("by_clerkUserId", q => q.eq("clerkUserId", candidate)).unique(),
+          ctx.db.query("users").withIndex("by_discordId", q => q.eq("discordId", candidate)).unique(),
+        ])
+        for (const user of users) if (user) matches.set(user._id, user)
+      }
+      if (matches.size !== 1) {
+        unresolved.push({ sessionId: session._id, reason: matches.size ? "ambiguous" : "missing" })
+        continue
+      }
+      const owner = matches.values().next().value
+      if (!owner) continue
+      matched += 1
+      if (!args.dryRun) await ctx.db.patch(session._id, { ownerUserId: owner._id })
+    }
+    return { continueCursor: batch.continueCursor, isDone: batch.isDone, scanned: batch.page.length, matched, unresolved }
   },
 })

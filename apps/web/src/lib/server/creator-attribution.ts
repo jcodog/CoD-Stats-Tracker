@@ -1,7 +1,7 @@
 import "server-only"
 
 import { cache } from "react"
-import { auth } from "@clerk/nextjs/server"
+import { getViewerSession } from "@/lib/server/viewer"
 import { fetchAction, fetchQuery } from "convex/nextjs"
 import { cookies } from "next/headers"
 
@@ -48,13 +48,11 @@ export async function canonicalizePendingCreatorAttribution() {
     return null
   }
 
-  const { getToken, userId } = await auth()
+  const { convexToken: token, userId } = await getViewerSession()
 
   if (!userId) {
     return null
   }
-
-  const token = await getToken({ template: "convex" }).catch(() => null)
 
   if (!token) {
     return null

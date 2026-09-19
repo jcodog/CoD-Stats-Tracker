@@ -1,5 +1,31 @@
 import { resolveConfiguredUserRole } from "../../src/lib/staffRoleConfig"
 import { query, QueryCtx } from "../_generated/server"
+import { buildResolvedBillingState } from "./billing/resolution"
+import { hasCreatorWorkspaceAccess } from "../../src/lib/creator/program"
+
+// Server presentation snapshot. Actions and mutations enforce their own access.
+export const getViewerAccess = query({
+  args: {},
+  handler: async (ctx) => {
+    const user = await getCurrentUser(ctx)
+    if (!user) return null
+    const role = resolveConfiguredUserRole({
+      discordId: user.discordId,
+      role: user.role ?? null,
+    })
+    const billing = await buildResolvedBillingState(ctx, user)
+    return {
+      role,
+      plan: billing.appPlanKey,
+      hasCreatorAccess: hasCreatorWorkspaceAccess({
+        state: billing,
+        userRole: role,
+        fallbackPlanKey:
+          billing.accessSource === "legacy_plan" ? user.plan : undefined,
+      }),
+    }
+  },
+})
 
 export const current = query({
   args: {},

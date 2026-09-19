@@ -1,14 +1,13 @@
 import "server-only"
 
-import { auth } from "@clerk/nextjs/server"
+import { getViewerSession } from "@/lib/server/viewer"
 
 import { DashboardStatsEditorClient } from "@/features/dashboard-stats/components/editor/EditorClient"
 import { resolveDashboardStatsEditorInitialState } from "@/features/dashboard-stats/lib/server/initial-state"
 import { resolveRequestViewport } from "@/lib/server/request-viewport"
 
 export async function DashboardStatsEditorView() {
-  const { getToken } = await auth()
-  const token = await getToken({ template: "convex" }).catch(() => null)
+  const { convexToken: token } = await getViewerSession()
   const viewport = await resolveRequestViewport()
   const initialState = await resolveDashboardStatsEditorInitialState({
     token,

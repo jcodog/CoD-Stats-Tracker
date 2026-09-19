@@ -12,13 +12,8 @@ import {
 import type { DashboardState } from "@/features/dashboard-stats/lib/client/dashboard-state"
 import {
   DashboardStatsClientError,
-  useDashboardAvailableMaps,
-  useDashboardAvailableModes,
-  useDashboardRecentSessionMatches,
-  useDashboardSessionDailyPerformance,
-  useDashboardSessionOverview,
-  useDashboardSessionSrTimeline,
   useDashboardStatsState,
+  useDashboardSessionAnalytics,
   useUpdateDashboardPreferredMatchLoggingMode,
 } from "@/features/dashboard-stats/lib/client/dashboard-state"
 import { DashboardStatsRecentMatches } from "@/features/dashboard-stats/components/recent-matches/RecentMatches"
@@ -147,11 +142,6 @@ function ToolbarGroup({
   )
 }
 
-type DashboardWindowedMatch = {
-  createdAt: number
-  outcome: "loss" | "win"
-}
-
 export function DashboardStatsEditorClient({
   authFailed = false,
   initialDashboardState,
@@ -221,8 +211,6 @@ function DashboardStatsEditorLoaded({
   const dashboardStateQuery = useDashboardStatsState(initialDashboardState)
   const updateLoggingModeMutation =
     useUpdateDashboardPreferredMatchLoggingMode()
-  const availableModesQuery = useDashboardAvailableModes()
-  const availableMapsQuery = useDashboardAvailableMaps()
   const dashboardState = dashboardStateQuery.data
   const persistedLoggingMode =
     dashboardState.preferredMatchLoggingMode ??
@@ -230,10 +218,9 @@ function DashboardStatsEditorLoaded({
   const effectiveLoggingMode = selectedLoggingMode ?? persistedLoggingMode
   const activeSessions = dashboardState.activeSessions ?? initialSessions
   const effectiveSelectedSessionId =
-    selectedSessionId &&
-    activeSessions.some((session) => session.id === selectedSessionId)
-      ? selectedSessionId
-      : (activeSessions[0]?.id ?? null)
+    activeSessions.find((session) => session.id === selectedSessionId)?.id ??
+    activeSessions[0]?.id ??
+    null
   const selectedSession =
     activeSessions.find(
       (session) => session.id === effectiveSelectedSessionId
@@ -265,63 +252,23 @@ function DashboardStatsEditorLoaded({
     setupMessage === null &&
     !sessionWritesPaused &&
     selectedSession !== null &&
-    (availableModesQuery.data?.length ?? 0) > 0 &&
-    (availableMapsQuery.data?.length ?? 0) > 0
+    (dashboardState.availableModes?.length ?? 0) > 0 &&
+    (dashboardState.availableMaps?.length ?? 0) > 0
 
-  const overviewQuery = useDashboardSessionOverview(
+  const analyticsQuery = useDashboardSessionAnalytics(
     effectiveSelectedSessionId,
     includeLossProtected
   )
-  const srTimelineQuery = useDashboardSessionSrTimeline(
-    effectiveSelectedSessionId,
-    includeLossProtected
-  )
-  const dailyPerformanceQuery = useDashboardSessionDailyPerformance(
-    effectiveSelectedSessionId,
-    includeLossProtected
-  )
-  const recentMatchesQuery = useDashboardRecentSessionMatches(
-    effectiveSelectedSessionId,
-    includeLossProtected
-  )
-  const sessionDetailsReady =
-    !!overviewQuery.data &&
-    !!srTimelineQuery.data &&
-    !!dailyPerformanceQuery.data &&
-    !!recentMatchesQuery.data
-  const sessionDetailsLoading =
-    !sessionDetailsReady &&
-    (overviewQuery.isPending ||
-      srTimelineQuery.isPending ||
-      dailyPerformanceQuery.isPending ||
-      recentMatchesQuery.isPending)
-  const sessionDetailsRefreshError =
-    sessionDetailsReady &&
-    (overviewQuery.isError ||
-      srTimelineQuery.isError ||
-      dailyPerformanceQuery.isError ||
-      recentMatchesQuery.isError)
-  const sessionDetailsRefreshing =
-    sessionDetailsReady &&
-    (overviewQuery.isFetching ||
-      srTimelineQuery.isFetching ||
-      dailyPerformanceQuery.isFetching ||
-      recentMatchesQuery.isFetching)
-  const filteredRecentMatches = useMemo(() => {
-    const recentMatches = (recentMatchesQuery.data ??
-      []) as DashboardWindowedMatch[]
-    const timeRangeStart = getTimeRangeStart(selectedTimeRange)
-
-    return recentMatches.filter(
-      (match: DashboardWindowedMatch) =>
-        timeRangeStart === null || match.createdAt >= timeRangeStart
-    )
-  }, [recentMatchesQuery.data, selectedTimeRange])
+  const analytics = analyticsQuery.data
+  const sessionDetailsReady = analytics !== undefined
+  const sessionDetailsLoading = analyticsQuery.isPending
   const filteredWinLossBreakdown = useMemo(() => {
-    const wins = filteredRecentMatches.filter(
-      (match: DashboardWindowedMatch) => match.outcome === "win"
-    ).length
-    const losses = filteredRecentMatches.length - wins
+    const timeRangeStart = getTimeRangeStart(selectedTimeRange)
+    const outcomes = (analytics?.outcomes ?? []).filter(
+      (match) => timeRangeStart === null || match.createdAt >= timeRangeStart
+    )
+    const wins = outcomes.filter((match) => match.outcome === "win").length
+    const losses = outcomes.length - wins
 
     return {
       items: [
@@ -329,10 +276,10 @@ function DashboardStatsEditorLoaded({
         { key: "losses", label: "Losses", value: losses },
       ],
       losses,
-      total: filteredRecentMatches.length,
+      total: outcomes.length,
       wins,
     }
-  }, [filteredRecentMatches])
+  }, [analytics?.outcomes, selectedTimeRange])
   const filteredWinRate =
     filteredWinLossBreakdown.total > 0
       ? filteredWinLossBreakdown.wins / filteredWinLossBreakdown.total
@@ -797,36 +744,6 @@ function DashboardStatsEditorLoaded({
                   </div>
                 ) : (
                   <>
-                    {sessionDetailsRefreshing ? (
-                      <div
-                        className={
-                          isMobileView
-                            ? "mt-5 text-sm text-muted-foreground"
-                            : "border-t border-border/50 px-6 py-3 text-sm text-muted-foreground"
-                        }
-                      >
-                        Refreshing session data…
-                      </div>
-                    ) : null}
-
-                    {sessionDetailsRefreshError ? (
-                      <div
-                        className={
-                          isMobileView
-                            ? "mt-5"
-                            : "border-t border-border/50 px-6 py-6"
-                        }
-                      >
-                        <Alert variant="destructive">
-                          <AlertTitle>Session refresh failed</AlertTitle>
-                          <AlertDescription>
-                            Showing the last available session results while the
-                            latest refresh is unavailable.
-                          </AlertDescription>
-                        </Alert>
-                      </div>
-                    ) : null}
-
                     <div
                       className={
                         isMobileView
@@ -846,7 +763,7 @@ function DashboardStatsEditorLoaded({
                       <DashboardStatsSummary
                         description="Start SR, Current SR, and Net SR reflect the stored session. Win rate follows the active time range."
                         embedded
-                        overview={overviewQuery.data!}
+                        overview={analytics!.overview}
                         showHeader={false}
                         viewport={isMobileView ? "mobile" : "desktop"}
                         winRate={filteredWinRate}
@@ -869,12 +786,31 @@ function DashboardStatsEditorLoaded({
                           the active filter window.
                         </p>
                       </div>
+                      {!analyticsQuery.historyComplete ? (
+                        <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-3 text-sm">
+                          <p className="text-muted-foreground">
+                            Charts show the first {analyticsQuery.historyCount}{" "}
+                            matches. Load the remaining history for complete
+                            chart statistics. Session totals and recent matches
+                            are current.
+                          </p>
+                          <Button
+                            variant="outline"
+                            disabled={analyticsQuery.historyLoading}
+                            onClick={analyticsQuery.loadMoreHistory}
+                          >
+                            {analyticsQuery.historyLoading
+                              ? "Loading history…"
+                              : "Load more history"}
+                          </Button>
+                        </div>
+                      ) : null}
                       <DashboardStatsCharts
-                        dailyPerformance={dailyPerformanceQuery.data!}
+                        dailyPerformance={analytics!.dailyPerformance}
                         embedded
                         selectedTimeRange={selectedTimeRange}
                         showHeader={false}
-                        srTimeline={srTimelineQuery.data!}
+                        srTimeline={analytics!.srTimeline}
                         viewport={isMobileView ? "mobile" : "desktop"}
                         winLossBreakdown={filteredWinLossBreakdown}
                       />
@@ -889,7 +825,7 @@ function DashboardStatsEditorLoaded({
                     >
                       <div className="mb-3 grid gap-1">
                         <h2 className="text-base font-semibold">
-                          Recent matches
+                          Latest 50 matches
                         </h2>
                         <p className="text-sm text-muted-foreground">
                           All logged matches for the selected session within the
@@ -898,7 +834,7 @@ function DashboardStatsEditorLoaded({
                       </div>
                       <DashboardStatsRecentMatches
                         embedded
-                        matches={recentMatchesQuery.data!}
+                        matches={analytics!.recentMatches}
                         selectedTimeRange={selectedTimeRange}
                         showHeader={false}
                       />
@@ -925,8 +861,8 @@ function DashboardStatsEditorLoaded({
 
       <DashboardStatsLogMatchSheet
         activeSessions={activeSessions}
-        availableMaps={availableMapsQuery.data ?? []}
-        availableModes={availableModesQuery.data ?? []}
+        availableMaps={dashboardState.availableMaps ?? []}
+        availableModes={dashboardState.availableModes ?? []}
         loggingMode={effectiveLoggingMode}
         onOpenChange={handleLogMatchOpenChange}
         onSessionSelected={(sessionId) =>

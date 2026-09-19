@@ -1,35 +1,23 @@
 import { v } from "convex/values"
+import { paginationOptsValidator } from "convex/server"
 
 import type { Doc } from "../../_generated/dataModel"
 import { query } from "../../_generated/server"
 import {
-  collectOwnedSessions,
+  collectActiveOwnedSessions,
   getCurrentRankedConfig,
   getOwnedSessionById,
-  getOwnedSessionGames,
   isRankedSessionWritesEnabled,
   getSessionDisplayTitle,
   getSessionMatchCount,
   getSessionUsernameLabel,
   requireAuthenticatedStatsActor,
+  requireAuthenticatedStatsIdentity,
   sessionMatchesRankedConfig,
 } from "../../../src/lib/statsDashboard"
 
 function getNumericValue(value: number | null | undefined) {
   return typeof value === "number" && Number.isFinite(value) ? value : 0
-}
-
-function toDateKey(epochMs: number) {
-  return new Date(epochMs).toISOString().slice(0, 10)
-}
-
-function getFilteredGames(
-  games: Doc<"games">[],
-  includeLossProtected: boolean
-) {
-  return includeLossProtected
-    ? games
-    : games.filter((game) => game.lossProtected !== true)
 }
 
 function buildDashboardSessionSummary(session: Doc<"sessions">) {
@@ -107,11 +95,7 @@ function buildRecentMatchSummary(game: Doc<"games">) {
   }
 }
 
-function buildOverview(args: {
-  games: Doc<"games">[]
-  includeLossProtected: boolean
-  session: Doc<"sessions">
-}) {
+function buildOverview(args: { session: Doc<"sessions"> }) {
   const matchCount = getSessionMatchCount(args.session)
   const wins = args.session.wins
   const losses = args.session.losses
@@ -172,7 +156,7 @@ export const getCurrentDashboardState = query({
     const actor = await requireAuthenticatedStatsActor(ctx)
     const [{ config, title }, sessions] = await Promise.all([
       getCurrentRankedConfig(ctx),
-      collectOwnedSessions(ctx, actor),
+      collectActiveOwnedSessions(ctx, actor),
     ])
 
     const [activeTitleModes, activeTitleMaps] = config
@@ -202,14 +186,18 @@ export const getCurrentDashboardState = query({
             .map(buildDashboardSessionSummary)
         : []
 
-    const archivedSessions = sessions
-      .filter((session) => session.endedAt !== null)
-      .slice(0, 24)
-      .map(buildDashboardSessionSummary)
 
     return {
       activeSessions,
-      archivedSessions,
+      availableModes: activeTitleModes.map(buildAvailableModeSummary),
+      availableMaps: activeLoggableMaps.map((map) =>
+        buildAvailableMapSummary({
+          map,
+          supportedModes: activeTitleModes.filter((mode) =>
+            map.supportedModeIds?.includes(mode._id)
+          ),
+        })
+      ),
       currentConfig:
         config && title
           ? {
@@ -221,7 +209,6 @@ export const getCurrentDashboardState = query({
           : null,
       hasCurrentTitleMaps: activeLoggableMaps.length > 0,
       hasCurrentTitleModes: activeTitleModes.length > 0,
-      hasTrackedHistory: sessions.length > 0,
       planKey: actor.planKey,
       preferredMatchLoggingMode:
         actor.user.preferredMatchLoggingMode ?? "comprehensive",
@@ -243,7 +230,7 @@ export const getCurrentDashboardState = query({
 export const getAvailableActivisionUsernames = query({
   args: {},
   handler: async (ctx) => {
-    const actor = await requireAuthenticatedStatsActor(ctx)
+    const actor = await requireAuthenticatedStatsIdentity(ctx)
     const usernames = await ctx.db
       .query("activisionUsernames")
       .withIndex("by_owner", (query) => query.eq("ownerUserId", actor.user._id))
@@ -264,58 +251,13 @@ export const getAvailableActivisionUsernames = query({
   },
 })
 
-export const getAvailableModesForCurrentTitle = query({
-  args: {},
-  handler: async (ctx) => {
-    await requireAuthenticatedStatsActor(ctx)
-    const { config } = await getCurrentRankedConfig(ctx)
-
-    if (!config) {
-      return []
-    }
-
-    const modes = await getActiveRankedModesForTitle(ctx, config.activeTitleKey)
-    return modes.map(buildAvailableModeSummary)
-  },
-})
-
-export const getAvailableMapsForCurrentTitle = query({
-  args: {},
-  handler: async (ctx) => {
-    await requireAuthenticatedStatsActor(ctx)
-    const { config } = await getCurrentRankedConfig(ctx)
-
-    if (!config) {
-      return []
-    }
-
-    const [modes, maps] = await Promise.all([
-      getActiveRankedModesForTitle(ctx, config.activeTitleKey),
-      getActiveRankedMapsForTitle(ctx, config.activeTitleKey),
-    ])
-    const modesById = new Map(modes.map((mode) => [mode._id, mode]))
-
-    return maps.flatMap((map) => {
-      const supportedModes = (map.supportedModeIds ?? [])
-        .map((modeId) => modesById.get(modeId) ?? null)
-        .filter((mode): mode is Doc<"rankedModes"> => mode !== null)
-
-      if (supportedModes.length === 0) {
-        return []
-      }
-
-      return [buildAvailableMapSummary({ map, supportedModes })]
-    })
-  },
-})
-
 export const getSessionOverview = query({
   args: {
     includeLossProtected: v.boolean(),
     sessionId: v.id("sessions"),
   },
   handler: async (ctx, args) => {
-    const actor = await requireAuthenticatedStatsActor(ctx)
+    const actor = await requireAuthenticatedStatsIdentity(ctx)
     const session = await getOwnedSessionById({
       actor,
       ctx,
@@ -326,152 +268,7 @@ export const getSessionOverview = query({
       throw new Error("Session not found.")
     }
 
-    const games = await getOwnedSessionGames(ctx, session)
-    return buildOverview({
-      games,
-      includeLossProtected: args.includeLossProtected,
-      session,
-    })
-  },
-})
-
-export const getSessionSrTimeline = query({
-  args: {
-    includeLossProtected: v.boolean(),
-    sessionId: v.id("sessions"),
-  },
-  handler: async (ctx, args) => {
-    const actor = await requireAuthenticatedStatsActor(ctx)
-    const session = await getOwnedSessionById({
-      actor,
-      ctx,
-      sessionId: args.sessionId,
-    })
-
-    if (!session) {
-      throw new Error("Session not found.")
-    }
-
-    const games = getFilteredGames(
-      await getOwnedSessionGames(ctx, session),
-      args.includeLossProtected
-    )
-    let currentSr = session.startSr
-
-    const points = [
-      {
-        createdAt: session.startedAt,
-        matchNumber: 0,
-        sr: session.startSr,
-        srChange: 0,
-      },
-    ]
-
-    for (const [index, game] of games.entries()) {
-      currentSr += game.srChange
-      points.push({
-        createdAt: game.createdAt,
-        matchNumber: index + 1,
-        sr: currentSr,
-        srChange: game.srChange,
-      })
-    }
-
-    return {
-      points,
-      sessionId: session._id,
-      startSr: session.startSr,
-    }
-  },
-})
-
-export const getSessionWinLossBreakdown = query({
-  args: {
-    includeLossProtected: v.boolean(),
-    sessionId: v.id("sessions"),
-  },
-  handler: async (ctx, args) => {
-    const actor = await requireAuthenticatedStatsActor(ctx)
-    const session = await getOwnedSessionById({
-      actor,
-      ctx,
-      sessionId: args.sessionId,
-    })
-
-    if (!session) {
-      throw new Error("Session not found.")
-    }
-
-    const games = getFilteredGames(
-      await getOwnedSessionGames(ctx, session),
-      args.includeLossProtected
-    )
-    const wins = games.filter((game) => game.outcome === "win").length
-    const losses = games.length - wins
-
-    return {
-      items: [
-        { key: "wins", label: "Wins", value: wins },
-        { key: "losses", label: "Losses", value: losses },
-      ],
-      total: games.length,
-      wins,
-      losses,
-    }
-  },
-})
-
-export const getSessionDailyPerformance = query({
-  args: {
-    includeLossProtected: v.boolean(),
-    sessionId: v.id("sessions"),
-  },
-  handler: async (ctx, args) => {
-    const actor = await requireAuthenticatedStatsActor(ctx)
-    const session = await getOwnedSessionById({
-      actor,
-      ctx,
-      sessionId: args.sessionId,
-    })
-
-    if (!session) {
-      throw new Error("Session not found.")
-    }
-
-    const dailyBuckets = new Map<
-      string,
-      { dateKey: string; losses: number; netSr: number; wins: number }
-    >()
-    const games = getFilteredGames(
-      await getOwnedSessionGames(ctx, session),
-      args.includeLossProtected
-    )
-
-    for (const game of games) {
-      const dateKey = toDateKey(game.createdAt)
-      const existingBucket = dailyBuckets.get(dateKey) ?? {
-        dateKey,
-        losses: 0,
-        netSr: 0,
-        wins: 0,
-      }
-
-      existingBucket.netSr += game.srChange
-      if (game.outcome === "win") {
-        existingBucket.wins += 1
-      } else {
-        existingBucket.losses += 1
-      }
-
-      dailyBuckets.set(dateKey, existingBucket)
-    }
-
-    return {
-      days: Array.from(dailyBuckets.values()).sort((left, right) =>
-        left.dateKey.localeCompare(right.dateKey)
-      ),
-      sessionId: session._id,
-    }
+    return buildOverview({ session })
   },
 })
 
@@ -482,7 +279,7 @@ export const getRecentSessionMatches = query({
     sessionId: v.id("sessions"),
   },
   handler: async (ctx, args) => {
-    const actor = await requireAuthenticatedStatsActor(ctx)
+    const actor = await requireAuthenticatedStatsIdentity(ctx)
     const session = await getOwnedSessionById({
       actor,
       ctx,
@@ -493,11 +290,57 @@ export const getRecentSessionMatches = query({
       throw new Error("Session not found.")
     }
 
-    const games = getFilteredGames(
-      await getOwnedSessionGames(ctx, session),
-      args.includeLossProtected
-    ).sort((left, right) => right.createdAt - left.createdAt)
-
+    const limit = Math.max(1, Math.min(100, Math.floor(args.limit ?? 50)))
+    if (!Number.isFinite(limit)) throw new Error("Match limit must be finite.")
+    const gamesQuery = args.includeLossProtected
+      ? ctx.db
+          .query("games")
+          .withIndex("by_session_createdat", (q) =>
+            q.eq("sessionId", session.uuid)
+          )
+      : ctx.db
+          .query("games")
+          .withIndex("by_session_lossProtected_createdAt", (q) =>
+            q.eq("sessionId", session.uuid).eq("lossProtected", false)
+          )
+    const games = await gamesQuery.order("desc").take(limit)
     return games.map(buildRecentMatchSummary)
+  },
+})
+
+export const getSessionHistoryPage = query({
+  args: {
+    paginationOpts: paginationOptsValidator,
+    sessionId: v.id("sessions"),
+  },
+  handler: async (ctx, args) => {
+    const actor = await requireAuthenticatedStatsIdentity(ctx)
+    const session = await getOwnedSessionById({
+      actor,
+      ctx,
+      sessionId: args.sessionId,
+    })
+    if (!session) throw new Error("Session not found.")
+    const result = await ctx.db
+      .query("games")
+      .withIndex("by_session_createdat", (q) => q.eq("sessionId", session.uuid))
+      .order("asc")
+      .paginate({
+        ...args.paginationOpts,
+        numItems: Math.min(args.paginationOpts.numItems, 200),
+        maximumRowsRead: 200,
+        maximumBytesRead: 512_000,
+      })
+    return {
+      ...result,
+      page: result.page.map(
+        ({ createdAt, srChange, outcome, lossProtected }) => ({
+          createdAt,
+          srChange,
+          outcome,
+          lossProtected,
+        })
+      ),
+    }
   },
 })

@@ -31,23 +31,23 @@ function addUserDocumentCandidates(
   addCandidate(candidates, user.discordId)
 }
 
+export function getStatsUserIdCandidates(identity: UserIdentity, user: Doc<"users"> | null) {
+  const candidates = new Set<string>()
+  addCandidate(candidates, identity.subject)
+  addCandidate(candidates, identity.tokenIdentifier)
+  addUserDocumentCandidates(candidates, user)
+  return Array.from(candidates)
+}
 export async function getStatsUserIdCandidatesForIdentity(
   ctx: UserLookupCtx,
   identity: UserIdentity
 ) {
-  const candidates = new Set<string>()
-
-  addCandidate(candidates, identity.subject)
-  addCandidate(candidates, identity.tokenIdentifier)
-
   const linkedUser = await ctx.db
     .query("users")
     .withIndex("by_clerkUserId", (q) => q.eq("clerkUserId", identity.subject))
     .unique()
 
-  addUserDocumentCandidates(candidates, linkedUser)
-
-  return Array.from(candidates)
+  return getStatsUserIdCandidates(identity, linkedUser)
 }
 
 export async function getStatsUserIdCandidatesForInvalidation(

@@ -1,6 +1,6 @@
-import { isCheckoutEnabled } from "../../../src/lib/checkoutPolicy"
 "use node"
 
+import { isCheckoutEnabled } from "../../../src/lib/checkoutPolicy"
 import Stripe from "stripe"
 import { v } from "convex/values"
 
@@ -69,25 +69,6 @@ type BillingPlanRecord = {
   yearlyPriceIdCad?: string
   yearlyPriceIdEur?: string
   yearlyPriceIdUsd?: string
-}
-type BillingSubscriptionRecord = {
-  cancelAtPeriodEnd: boolean
-  currentPeriodEnd?: number
-  interval: "month" | "year"
-  managedGrantEndsAt?: number
-  planKey: string
-  status:
-    | "active"
-    | "canceled"
-    | "incomplete"
-    | "incomplete_expired"
-    | "past_due"
-    | "paused"
-    | "trialing"
-    | "unpaid"
-  stripeCustomerId: string
-  stripeSubscriptionId: string
-  stripeSubscriptionItemId?: string
 }
 type CreatorAccountRecord = {
   _id: string
@@ -174,10 +155,7 @@ type CheckoutSessionCompletionSyncResult = {
 type PublicActionCtx = ActionCtx
 type SupportedPricingCurrency = "GBP" | "USD" | "CAD" | "EUR"
 type CheckoutCreatorEntryState =
-  | "applied"
-  | "eligible_but_not_entered"
-  | "not_eligible"
-  | "rejected"
+  "applied" | "eligible_but_not_entered" | "not_eligible" | "rejected"
 type BillingUserContext = UserBillingContext & {
   actorName: string
   email?: string
@@ -275,15 +253,6 @@ function normalizeCheckoutPaymentStatus(
     default:
       return null
   }
-}
-
-function normalizeOptionalString(value: string | null | undefined) {
-  if (typeof value !== "string") {
-    return undefined
-  }
-
-  const trimmedValue = value.trim()
-  return trimmedValue.length > 0 ? trimmedValue : undefined
 }
 
 function getMetadataStripeCustomerId(value: unknown) {
@@ -759,12 +728,10 @@ async function ensureCreatorDiscountCoupon(args: {
       return existingCoupon.id
     }
   } catch (error) {
-    if (
-      !(
-        error instanceof Stripe.errors.StripeInvalidRequestError &&
-        error.code === "resource_missing"
-      )
-    ) {
+    if (!(
+      error instanceof Stripe.errors.StripeInvalidRequestError &&
+      error.code === "resource_missing"
+    )) {
       throw error
     }
   }
@@ -782,7 +749,8 @@ async function finalizeCreatorAttribution(args: {
 }) {
   const attributionResult: CreatorAttributionResult =
     await args.ctx.runMutation(
-      internal.mutations.creator.attribution.lifecycle.ensureCanonicalAttribution,
+      internal.mutations.creator.attribution.lifecycle
+        .ensureCanonicalAttribution,
       {
         clerkUserId: args.userContext.user.clerkUserId,
         creatorAccountId: args.creatorAccount._id as Id<"creatorAccounts">,
@@ -824,7 +792,8 @@ async function resolveCheckoutCreatorDiscount(args: {
   )
   const activeAttribution: CreatorAttributionRecord | null =
     await args.ctx.runQuery(
-      internal.queries.creator.attribution.internal.getActiveAttributionByUserId,
+      internal.queries.creator.attribution.internal
+        .getActiveAttributionByUserId,
       {
         userId: args.userContext.user._id,
       }
@@ -972,7 +941,8 @@ async function resolveCheckoutCreatorDiscount(args: {
   }
 
   const creatorAccount: CreatorAccountRecord | null = await args.ctx.runQuery(
-    internal.queries.creator.accounts.internal.getCreatorAccountByNormalizedCode,
+    internal.queries.creator.accounts.internal
+      .getCreatorAccountByNormalizedCode,
     {
       normalizedCode: normalizedEnteredCode,
     }
@@ -1074,12 +1044,10 @@ async function ensureStripeCustomer(args: {
         return existingCustomer.id
       }
     } catch (error) {
-      if (
-        !(
-          error instanceof Stripe.errors.StripeInvalidRequestError &&
-          error.code === "resource_missing"
-        )
-      ) {
+      if (!(
+        error instanceof Stripe.errors.StripeInvalidRequestError &&
+        error.code === "resource_missing"
+      )) {
         throw error
       }
     }
@@ -1324,7 +1292,8 @@ function createBillingLifecycleOps(
   return {
     bindCreatorCodeUsageLock: (args) =>
       ctx.runMutation(
-        internal.mutations.creator.attribution.lifecycle.bindUsageLockToSubscription,
+        internal.mutations.creator.attribution.lifecycle
+          .bindUsageLockToSubscription,
         {
           ...args,
           creatorUsageLockId: args.creatorUsageLockId
@@ -1646,7 +1615,8 @@ export const createSubscriptionCheckoutSession = action({
 
       const creatorUsageLock = creatorDiscount.appliedDiscount
         ? await ctx.runMutation(
-            internal.mutations.creator.attribution.lifecycle.ensureCreatorCodeUsageLock,
+            internal.mutations.creator.attribution.lifecycle
+              .ensureCreatorCodeUsageLock,
             {
               clerkUserId: userContext.user.clerkUserId,
               creatorAccountId:

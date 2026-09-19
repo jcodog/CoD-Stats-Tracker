@@ -1,473 +1,154 @@
 "use client"
 
-import { useConvex, useConvexAuth } from "convex/react"
-import type { ConvexReactClient } from "convex/react"
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-
+import {
+  useConvex,
+  useConvexAuth,
+  useQueries,
+  usePaginatedQuery,
+} from "convex/react"
+import { useMemo } from "react"
+import { projectSessionHistory } from "@workspace/backend/lib/statsAnalytics"
+import type {
+  FunctionArgs,
+  FunctionReference,
+  FunctionReturnType,
+} from "convex/server"
+import { useMutation } from "@tanstack/react-query"
 import { api } from "@workspace/backend/convex/_generated/api"
 import type { Id } from "@workspace/backend/convex/_generated/dataModel"
 import type { DashboardMatchLoggingMode } from "@/features/dashboard-stats/lib/log-match/mode"
 
 export class DashboardStatsClientError extends Error {
-  data: unknown
-  status: number
-
-  constructor(message: string, status: number, data: unknown) {
+  constructor(
+    message: string,
+    public status: number,
+    public data: unknown
+  ) {
     super(message)
-    this.data = data
-    this.status = status
   }
 }
-
 function toDashboardStatsClientError(error: unknown) {
-  if (error instanceof DashboardStatsClientError) {
-    return error
-  }
-
-  const message =
-    error instanceof Error ? error.message : "Dashboard stats request failed."
-  const status =
-    typeof error === "object" &&
-    error !== null &&
-    "status" in error &&
-    typeof error.status === "number"
-      ? error.status
-      : 500
-
-  return new DashboardStatsClientError(message, status, error)
+  return error instanceof DashboardStatsClientError
+    ? error
+    : new DashboardStatsClientError(
+        error instanceof Error
+          ? error.message
+          : "Dashboard stats request failed.",
+        500,
+        error
+      )
 }
 
-export const dashboardStatsQueryKeys = {
-  all: ["dashboard-stats"] as const,
-  dailyPerformance: (sessionId: string | null, includeLossProtected: boolean) =>
-    [
-      ...dashboardStatsQueryKeys.all,
-      "daily-performance",
-      sessionId,
-      includeLossProtected,
-    ] as const,
-  maps: ["dashboard-stats", "maps"] as const,
-  modes: ["dashboard-stats", "modes"] as const,
-  recentMatches: (sessionId: string | null, includeLossProtected: boolean) =>
-    [
-      ...dashboardStatsQueryKeys.all,
-      "recent-matches",
-      sessionId,
-      includeLossProtected,
-    ] as const,
-  sessionOverview: (sessionId: string | null, includeLossProtected: boolean) =>
-    [
-      ...dashboardStatsQueryKeys.all,
-      "session-overview",
-      sessionId,
-      includeLossProtected,
-    ] as const,
-  srTimeline: (sessionId: string | null, includeLossProtected: boolean) =>
-    [
-      ...dashboardStatsQueryKeys.all,
-      "sr-timeline",
-      sessionId,
-      includeLossProtected,
-    ] as const,
-  state: ["dashboard-stats", "state"] as const,
-  usernames: ["dashboard-stats", "usernames"] as const,
-  winLossBreakdown: (sessionId: string | null, includeLossProtected: boolean) =>
-    [
-      ...dashboardStatsQueryKeys.all,
-      "win-loss-breakdown",
-      sessionId,
-      includeLossProtected,
-    ] as const,
-}
-
-const DASHBOARD_REFERENCE_STALE_TIME = 10 * 60_000
-const DASHBOARD_SESSION_STALE_TIME = 60_000
-const DASHBOARD_STATE_STALE_TIME = 60_000
-
-function asSessionId(sessionId: string | null) {
-  return sessionId as Id<"sessions"> | null
-}
-
-async function queryCurrentDashboardState(convex: ConvexReactClient) {
-  try {
-    return await convex.query(
-      api.queries.stats.dashboard.getCurrentDashboardState,
-      {}
-    )
-  } catch (error) {
-    throw toDashboardStatsClientError(error)
-  }
-}
-
-async function mutatePreferredMatchLoggingMode(args: {
-  convex: ConvexReactClient
-  preferredMatchLoggingMode: DashboardMatchLoggingMode
-}) {
-  try {
-    return await args.convex.mutation(
-      api.mutations.stats.dashboard.updatePreferredMatchLoggingMode,
-      {
-        preferredMatchLoggingMode: args.preferredMatchLoggingMode,
-      }
-    )
-  } catch (error) {
-    throw toDashboardStatsClientError(error)
-  }
-}
-
-async function queryAvailableUsernames(convex: ConvexReactClient) {
-  try {
-    return await convex.query(
-      api.queries.stats.dashboard.getAvailableActivisionUsernames,
-      {}
-    )
-  } catch (error) {
-    throw toDashboardStatsClientError(error)
-  }
-}
-
-async function queryAvailableMaps(convex: ConvexReactClient) {
-  try {
-    return await convex.query(
-      api.queries.stats.dashboard.getAvailableMapsForCurrentTitle,
-      {}
-    )
-  } catch (error) {
-    throw toDashboardStatsClientError(error)
-  }
-}
-
-async function queryAvailableModes(convex: ConvexReactClient) {
-  try {
-    return await convex.query(
-      api.queries.stats.dashboard.getAvailableModesForCurrentTitle,
-      {}
-    )
-  } catch (error) {
-    throw toDashboardStatsClientError(error)
-  }
-}
-
-async function querySessionOverview(args: {
-  convex: ConvexReactClient
-  includeLossProtected: boolean
-  sessionId: Id<"sessions">
-}) {
-  try {
-    return await args.convex.query(
-      api.queries.stats.dashboard.getSessionOverview,
-      {
-        includeLossProtected: args.includeLossProtected,
-        sessionId: args.sessionId,
-      }
-    )
-  } catch (error) {
-    throw toDashboardStatsClientError(error)
-  }
-}
-
-async function querySessionSrTimeline(args: {
-  convex: ConvexReactClient
-  includeLossProtected: boolean
-  sessionId: Id<"sessions">
-}) {
-  try {
-    return await args.convex.query(
-      api.queries.stats.dashboard.getSessionSrTimeline,
-      {
-        includeLossProtected: args.includeLossProtected,
-        sessionId: args.sessionId,
-      }
-    )
-  } catch (error) {
-    throw toDashboardStatsClientError(error)
-  }
-}
-
-async function querySessionWinLossBreakdown(args: {
-  convex: ConvexReactClient
-  includeLossProtected: boolean
-  sessionId: Id<"sessions">
-}) {
-  try {
-    return await args.convex.query(
-      api.queries.stats.dashboard.getSessionWinLossBreakdown,
-      {
-        includeLossProtected: args.includeLossProtected,
-        sessionId: args.sessionId,
-      }
-    )
-  } catch (error) {
-    throw toDashboardStatsClientError(error)
-  }
-}
-
-async function querySessionDailyPerformance(args: {
-  convex: ConvexReactClient
-  includeLossProtected: boolean
-  sessionId: Id<"sessions">
-}) {
-  try {
-    return await args.convex.query(
-      api.queries.stats.dashboard.getSessionDailyPerformance,
-      {
-        includeLossProtected: args.includeLossProtected,
-        sessionId: args.sessionId,
-      }
-    )
-  } catch (error) {
-    throw toDashboardStatsClientError(error)
-  }
-}
-
-async function queryRecentSessionMatches(args: {
-  convex: ConvexReactClient
-  includeLossProtected: boolean
-  sessionId: Id<"sessions">
-}) {
-  try {
-    return await args.convex.query(
-      api.queries.stats.dashboard.getRecentSessionMatches,
-      {
-        includeLossProtected: args.includeLossProtected,
-        sessionId: args.sessionId,
-      }
-    )
-  } catch (error) {
-    throw toDashboardStatsClientError(error)
-  }
-}
-
-export type DashboardState = Awaited<
-  ReturnType<typeof queryCurrentDashboardState>
+const queries = api.queries.stats.dashboard
+export type DashboardState = FunctionReturnType<
+  typeof queries.getCurrentDashboardState
 >
-export type DashboardAvailableMaps = Awaited<
-  ReturnType<typeof queryAvailableMaps>
+export type DashboardAvailableMaps = DashboardState["availableMaps"]
+export type DashboardAvailableModes = DashboardState["availableModes"]
+export type DashboardAvailableUsernames = FunctionReturnType<
+  typeof queries.getAvailableActivisionUsernames
 >
-export type DashboardAvailableModes = Awaited<
-  ReturnType<typeof queryAvailableModes>
+type Analytics = ReturnType<typeof projectSessionHistory>
+export type DashboardSessionOverview = FunctionReturnType<
+  typeof queries.getSessionOverview
 >
-export type DashboardAvailableUsernames = Awaited<
-  ReturnType<typeof queryAvailableUsernames>
+export type DashboardSessionSrTimeline = Analytics["srTimeline"]
+export type DashboardSessionDailyPerformance = Analytics["dailyPerformance"]
+export type DashboardRecentSessionMatches = FunctionReturnType<
+  typeof queries.getRecentSessionMatches
 >
-export type DashboardSessionOverview = Awaited<
-  ReturnType<typeof querySessionOverview>
->
-export type DashboardSessionSrTimeline = Awaited<
-  ReturnType<typeof querySessionSrTimeline>
->
-export type DashboardSessionWinLossBreakdown = Awaited<
-  ReturnType<typeof querySessionWinLossBreakdown>
->
-export type DashboardSessionDailyPerformance = Awaited<
-  ReturnType<typeof querySessionDailyPerformance>
->
-export type DashboardRecentSessionMatches = Awaited<
-  ReturnType<typeof queryRecentSessionMatches>
->
+export type DashboardSessionWinLossBreakdown = {
+  items: { key: string; label: string; value: number }[]
+  total: number
+  wins: number
+  losses: number
+}
+
+// Convex owns subscription lifetime and freshness. Keep errors local to the dashboard UI.
+function useDashboardQuery<Query extends FunctionReference<"query">>(
+  query: Query,
+  args: FunctionArgs<Query> | "skip"
+) {
+  const { isAuthenticated } = useConvexAuth()
+  const result: FunctionReturnType<Query> | Error | undefined = useQueries(
+    isAuthenticated && args !== "skip" ? { result: { query, args } } : {}
+  ).result
+  const error =
+    result instanceof Error ? toDashboardStatsClientError(result) : null
+  return {
+    data: result instanceof Error ? undefined : result,
+    error,
+    isError: error !== null,
+    isPending: result === undefined,
+  }
+}
 
 export function useDashboardStatsState(initialData: DashboardState) {
-  const convex = useConvex()
-  const { isAuthenticated, isLoading } = useConvexAuth()
-
-  return useQuery({
-    enabled: !isLoading && isAuthenticated,
-    initialData,
-    queryFn: () => queryCurrentDashboardState(convex),
-    queryKey: dashboardStatsQueryKeys.state,
-    staleTime: DASHBOARD_STATE_STALE_TIME,
-  })
+  const result = useDashboardQuery(queries.getCurrentDashboardState, {})
+  return { ...result, data: result.data ?? initialData }
 }
 
 export function useDashboardAvailableUsernames(enabled = true) {
-  const convex = useConvex()
-  const { isAuthenticated, isLoading } = useConvexAuth()
-
-  return useQuery({
-    enabled: enabled && !isLoading && isAuthenticated,
-    queryFn: () => queryAvailableUsernames(convex),
-    queryKey: dashboardStatsQueryKeys.usernames,
-    staleTime: DASHBOARD_REFERENCE_STALE_TIME,
-  })
+  return useDashboardQuery(
+    queries.getAvailableActivisionUsernames,
+    enabled ? {} : "skip"
+  )
 }
 
-export function useDashboardAvailableMaps() {
-  const convex = useConvex()
-  const { isAuthenticated, isLoading } = useConvexAuth()
-
-  return useQuery({
-    enabled: !isLoading && isAuthenticated,
-    queryFn: () => queryAvailableMaps(convex),
-    queryKey: dashboardStatsQueryKeys.maps,
-    staleTime: DASHBOARD_REFERENCE_STALE_TIME,
-  })
-}
-
-export function useDashboardAvailableModes() {
-  const convex = useConvex()
-  const { isAuthenticated, isLoading } = useConvexAuth()
-
-  return useQuery({
-    enabled: !isLoading && isAuthenticated,
-    queryFn: () => queryAvailableModes(convex),
-    queryKey: dashboardStatsQueryKeys.modes,
-    staleTime: DASHBOARD_REFERENCE_STALE_TIME,
-  })
-}
-
-export function useDashboardSessionOverview(
-  sessionId: string | null,
+export function useDashboardSessionAnalytics(
+  sessionId: Id<"sessions"> | null,
   includeLossProtected: boolean
 ) {
-  const convex = useConvex()
-  const { isAuthenticated, isLoading } = useConvexAuth()
-
-  return useQuery({
-    enabled: !isLoading && isAuthenticated && sessionId !== null,
-    queryFn: () => {
-      const resolvedSessionId = asSessionId(sessionId)
-
-      if (!resolvedSessionId) {
-        throw new Error("A session must be selected.")
-      }
-
-      return querySessionOverview({
-        convex,
-        includeLossProtected,
-        sessionId: resolvedSessionId,
-      })
-    },
-    queryKey: dashboardStatsQueryKeys.sessionOverview(
-      sessionId,
-      includeLossProtected
-    ),
-    staleTime: DASHBOARD_SESSION_STALE_TIME,
-  })
+  const { isAuthenticated } = useConvexAuth()
+  const overview = useDashboardQuery(
+    queries.getSessionOverview,
+    sessionId ? { sessionId, includeLossProtected } : "skip"
+  )
+  const recent = useDashboardQuery(
+    queries.getRecentSessionMatches,
+    sessionId ? { sessionId, includeLossProtected, limit: 50 } : "skip"
+  )
+  const history = usePaginatedQuery(
+    queries.getSessionHistoryPage,
+    isAuthenticated && sessionId ? { sessionId } : "skip",
+    { initialNumItems: 200 }
+  )
+  const data = useMemo(
+    () =>
+      overview.data && recent.data && history.status !== "LoadingFirstPage"
+        ? {
+            overview: overview.data,
+            recentMatches: recent.data,
+            ...projectSessionHistory(
+              overview.data,
+              history.results,
+              includeLossProtected
+            ),
+          }
+        : undefined,
+    [
+      overview.data,
+      recent.data,
+      history.results,
+      history.status,
+      includeLossProtected,
+    ]
+  )
+  return {
+    data,
+    isError: overview.isError || recent.isError,
+    isPending:
+      overview.isPending ||
+      recent.isPending ||
+      history.status === "LoadingFirstPage",
+    historyComplete: history.status === "Exhausted",
+    historyCount: history.results.length,
+    historyLoading: history.isLoading,
+    loadMoreHistory: () => history.loadMore(200),
+  }
 }
-
-export function useDashboardSessionSrTimeline(
-  sessionId: string | null,
-  includeLossProtected: boolean
-) {
-  const convex = useConvex()
-  const { isAuthenticated, isLoading } = useConvexAuth()
-
-  return useQuery({
-    enabled: !isLoading && isAuthenticated && sessionId !== null,
-    queryFn: () => {
-      const resolvedSessionId = asSessionId(sessionId)
-
-      if (!resolvedSessionId) {
-        throw new Error("A session must be selected.")
-      }
-
-      return querySessionSrTimeline({
-        convex,
-        includeLossProtected,
-        sessionId: resolvedSessionId,
-      })
-    },
-    queryKey: dashboardStatsQueryKeys.srTimeline(
-      sessionId,
-      includeLossProtected
-    ),
-    staleTime: DASHBOARD_SESSION_STALE_TIME,
-  })
-}
-
-export function useDashboardSessionWinLossBreakdown(
-  sessionId: string | null,
-  includeLossProtected: boolean
-) {
-  const convex = useConvex()
-  const { isAuthenticated, isLoading } = useConvexAuth()
-
-  return useQuery({
-    enabled: !isLoading && isAuthenticated && sessionId !== null,
-    queryFn: () => {
-      const resolvedSessionId = asSessionId(sessionId)
-
-      if (!resolvedSessionId) {
-        throw new Error("A session must be selected.")
-      }
-
-      return querySessionWinLossBreakdown({
-        convex,
-        includeLossProtected,
-        sessionId: resolvedSessionId,
-      })
-    },
-    queryKey: dashboardStatsQueryKeys.winLossBreakdown(
-      sessionId,
-      includeLossProtected
-    ),
-    staleTime: DASHBOARD_SESSION_STALE_TIME,
-  })
-}
-
-export function useDashboardSessionDailyPerformance(
-  sessionId: string | null,
-  includeLossProtected: boolean
-) {
-  const convex = useConvex()
-  const { isAuthenticated, isLoading } = useConvexAuth()
-
-  return useQuery({
-    enabled: !isLoading && isAuthenticated && sessionId !== null,
-    queryFn: () => {
-      const resolvedSessionId = asSessionId(sessionId)
-
-      if (!resolvedSessionId) {
-        throw new Error("A session must be selected.")
-      }
-
-      return querySessionDailyPerformance({
-        convex,
-        includeLossProtected,
-        sessionId: resolvedSessionId,
-      })
-    },
-    queryKey: dashboardStatsQueryKeys.dailyPerformance(
-      sessionId,
-      includeLossProtected
-    ),
-    staleTime: DASHBOARD_SESSION_STALE_TIME,
-  })
-}
-
-export function useDashboardRecentSessionMatches(
-  sessionId: string | null,
-  includeLossProtected: boolean
-) {
-  const convex = useConvex()
-  const { isAuthenticated, isLoading } = useConvexAuth()
-
-  return useQuery({
-    enabled: !isLoading && isAuthenticated && sessionId !== null,
-    queryFn: () => {
-      const resolvedSessionId = asSessionId(sessionId)
-
-      if (!resolvedSessionId) {
-        throw new Error("A session must be selected.")
-      }
-
-      return queryRecentSessionMatches({
-        convex,
-        includeLossProtected,
-        sessionId: resolvedSessionId,
-      })
-    },
-    queryKey: dashboardStatsQueryKeys.recentMatches(
-      sessionId,
-      includeLossProtected
-    ),
-    staleTime: DASHBOARD_SESSION_STALE_TIME,
-  })
-}
-
 export function useCreateDashboardSession() {
   const convex = useConvex()
-  const queryClient = useQueryClient()
 
   return useMutation({
     mutationFn: async (input: {
@@ -484,67 +165,26 @@ export function useCreateDashboardSession() {
         throw toDashboardStatsClientError(error)
       }
     },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: dashboardStatsQueryKeys.all,
-      })
-    },
   })
 }
 
 export function useUpdateDashboardPreferredMatchLoggingMode() {
   const convex = useConvex()
-  const queryClient = useQueryClient()
 
   return useMutation({
     mutationFn: async (
       preferredMatchLoggingMode: DashboardMatchLoggingMode
     ) => {
-      return await mutatePreferredMatchLoggingMode({
-        convex,
-        preferredMatchLoggingMode,
-      })
-    },
-    onMutate: async (preferredMatchLoggingMode) => {
-      await queryClient.cancelQueries({
-        queryKey: dashboardStatsQueryKeys.state,
-      })
-
-      const previousDashboardState = queryClient.getQueryData<DashboardState>(
-        dashboardStatsQueryKeys.state
+      return await convex.mutation(
+        api.mutations.stats.dashboard.updatePreferredMatchLoggingMode,
+        { preferredMatchLoggingMode }
       )
-
-      if (previousDashboardState) {
-        queryClient.setQueryData<DashboardState>(
-          dashboardStatsQueryKeys.state,
-          {
-            ...previousDashboardState,
-            preferredMatchLoggingMode,
-          }
-        )
-      }
-
-      return { previousDashboardState }
-    },
-    onError: (_error, _preferredMatchLoggingMode, context) => {
-      if (context?.previousDashboardState) {
-        queryClient.setQueryData<DashboardState>(
-          dashboardStatsQueryKeys.state,
-          context.previousDashboardState
-        )
-      }
-    },
-    onSettled: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: dashboardStatsQueryKeys.state,
-      })
     },
   })
 }
 
 export function useLogDashboardMatch() {
   const convex = useConvex()
-  const queryClient = useQueryClient()
 
   return useMutation({
     mutationFn: async (input: {
@@ -572,11 +212,6 @@ export function useLogDashboardMatch() {
       } catch (error) {
         throw toDashboardStatsClientError(error)
       }
-    },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: dashboardStatsQueryKeys.all,
-      })
     },
   })
 }

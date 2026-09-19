@@ -2,10 +2,10 @@ import "server-only"
 
 import { flag, dedupe } from "flags/next"
 import { vercelAdapter } from "@flags-sdk/vercel"
-import { auth, currentUser } from "@clerk/nextjs/server"
+import { cache } from "react"
+import { getViewer } from "@/lib/server/viewer"
 import { fetchQuery } from "convex/nextjs"
 import { api } from "@workspace/backend/convex/_generated/api"
-import { resolveAppPlanKeyFromState } from "@workspace/backend/lib/billingAccess"
 import type { UserRole } from "@workspace/backend/lib/staffRoles"
 
 export type Plan = "free" | "premium" | "creator"
@@ -21,34 +21,13 @@ type FlagEntities = {
 }
 
 const identify = dedupe(async (): Promise<FlagEntities> => {
-  const { userId, getToken } = await auth()
-
-  if (!userId) {
-    return {}
-  }
-
-  const token = (await getToken()) ?? undefined
-
-  const [dbUser, billingState, clerkUser] = await Promise.all([
-    fetchQuery(api.queries.users.current, {}, { token }),
-    fetchQuery(
-      api.queries.billing.resolution.getCurrentUserResolvedBillingState,
-      {},
-      { token }
-    ),
-    currentUser(),
-  ])
-
+  const { userId, clerkUser, access } = await getViewer()
+  if (!userId || !access) return {}
   const email =
     clerkUser?.primaryEmailAddress?.emailAddress ??
     clerkUser?.emailAddresses?.[0]?.emailAddress
-
-  const role: Role = dbUser?.role ?? "user"
-  const resolvedPlan: Plan = resolveAppPlanKeyFromState({
-    fallbackPlanKey: dbUser?.plan,
-    state: billingState,
-  })
-
+  const role: Role = access.role ?? "user"
+  const resolvedPlan: Plan = access.plan
   return {
     user: {
       id: userId,
@@ -73,18 +52,25 @@ function makeBooleanFlag(key: string, description?: string) {
   })
 }
 
-export const flags = {
+export const presentationFlags = {
   overlays: makeBooleanFlag(
     "overlays",
     "Enable the user to use the overlays configurator"
   ),
-  checkout: async () => {
+} as const
+
+export const flags = {
+  ...presentationFlags,
+  checkout: cache(async () => {
     try {
-      return await fetchQuery(api.queries.billing.catalog.getCheckoutAvailability, {})
+      return await fetchQuery(
+        api.queries.billing.catalog.getCheckoutAvailability,
+        {}
+      )
     } catch {
       return false
     }
-  },
+  }),
 } as const
 
 export type AppFlagKey = keyof typeof flags

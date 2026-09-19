@@ -1,6 +1,6 @@
 "use node"
 
-import { createClient, type RedisClientType } from "redis"
+import { createClient } from "redis"
 import { v } from "convex/values"
 
 import { internalAction } from "../../_generated/server"
@@ -11,7 +11,11 @@ const LANDING_METRICS_TRACE_LIST_KEY = `${LANDING_METRICS_CACHE_PREFIX}:trace`
 
 const REDIS_URL_ENV_KEYS = ["REDIS_URL", "REDIS_TLS_URL", "KV_URL"] as const
 
-type ActionRedisClient = RedisClientType<{}, {}, {}, 3, {}>
+function createActionRedisClient(url: string) {
+  return createClient({ url })
+}
+
+type ActionRedisClient = ReturnType<typeof createActionRedisClient>
 
 let redisClient: ActionRedisClient | null = null
 let redisClientPromise: Promise<ActionRedisClient | null> | null = null
@@ -54,9 +58,7 @@ async function getRedisClient(): Promise<ActionRedisClient | null> {
     return null
   }
 
-  const client = createClient({
-    url: redisUrl,
-  })
+  const client = createActionRedisClient(redisUrl)
 
   client.on("error", (error) => {
     console.error("Landing metrics invalidation Redis error", error)

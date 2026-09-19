@@ -36,6 +36,8 @@ export const sessions = defineTable({
   .index("by_user_cod_season", ["userId", "codTitle", "season"]) // group sessions by user & game title & season
   .index("by_endedAt", ["endedAt"])
   .index("by_owner_startedAt", ["ownerUserId", "startedAt"])
+  .index("by_owner_ended_startedAt", ["ownerUserId", "endedAt", "startedAt"])
+  .index("by_legacy_user_ended_startedAt", ["userId", "ownerUserId", "endedAt", "startedAt"])
   .index("by_owner_titleSeason", ["ownerUserId", "titleSeasonKey"])
   .index("by_owner_titleSeason_username", [
     "ownerUserId",

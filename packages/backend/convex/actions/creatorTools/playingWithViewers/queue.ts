@@ -11,7 +11,6 @@ import {
   inviteCodeTypeValidator,
   inviteModeValidator,
   queueConfigRankValidator,
-  type InviteMode,
   type ParticipantRankValue,
   type QueuePlatform,
   type StoredInviteMode,
@@ -294,10 +293,7 @@ export const inviteQueueEntryNowAndNotify = action({
     inviteCode: v.optional(v.string()),
     inviteCodeType: v.optional(inviteCodeTypeValidator),
   },
-  handler: async (
-    ctx,
-    args
-  ): Promise<InviteQueueEntryNowAndNotifyResult> => {
+  handler: async (ctx, args): Promise<InviteQueueEntryNowAndNotifyResult> => {
     await requireOwnedQueueEntryActionAccess(ctx, args.entryId)
 
     const result: QueueSelectionResult = await ctx.runMutation(
@@ -337,7 +333,6 @@ export const inviteQueueEntryNowAndNotify = action({
   },
 })
 
-
 async function requireCreatorToolsActionAccess(
   ctx: ActionCtx,
   options?: { requireTwitchLinked?: boolean }
@@ -367,9 +362,12 @@ async function requireCreatorToolsActionAccess(
     ctx.runQuery(internal.queries.billing.resolution.resolveUserPlanState, {
       userId,
     }),
-    ctx.runQuery(internal.queries.creator.accounts.internal.getCreatorAccountByUserId, {
-      userId,
-    }),
+    ctx.runQuery(
+      internal.queries.creator.accounts.internal.getCreatorAccountByUserId,
+      {
+        userId,
+      }
+    ),
   ])
   const shouldLoadTwitchAccount =
     (options?.requireTwitchLinked ?? true) && isPlayWithViewersTwitchEnabled()

@@ -1,10 +1,9 @@
-import { currentUser } from "@clerk/nextjs/server"
+import { getViewer } from "@/lib/server/viewer"
 
 import {
   getParsedUserRoleState,
   roleMeetsRequirement,
 } from "@workspace/backend/lib/staffRoles"
-import { getCreatorToolsAccessState } from "@/lib/server/creator-tools-access"
 import { AppShellFrame } from "@/components/app-shell/AppShellFrame"
 import { isFlagEnabled } from "@/lib/flags"
 import type { ProtectedNavItem } from "@/components/app-shell/protected-nav"
@@ -14,18 +13,19 @@ type AppShellProps = {
 }
 
 export async function AppShell({ children }: AppShellProps) {
-  const [checkoutEnabled, creatorToolsAccess, clerkUser] = await Promise.all([
+  const [checkoutEnabled, viewer] = await Promise.all([
     isFlagEnabled("checkout"),
-    getCreatorToolsAccessState(),
-    currentUser(),
+    getViewer(),
   ])
-  const showStaffConsoleLink = roleMeetsRequirement(
-    getParsedUserRoleState(clerkUser?.publicMetadata?.role).role ?? "user",
-    "staff"
-  )
+  const clerkRole = getParsedUserRoleState(
+    viewer.clerkUser?.publicMetadata?.role
+  ).role
+  const showStaffConsoleLink =
+    clerkRole === viewer.access?.role &&
+    roleMeetsRequirement(viewer.access?.role ?? "user", "staff")
   const protectedNavItems: ProtectedNavItem[] = [
     { href: "/dashboard", label: "Home", matchPaths: ["/dashboard"] },
-    ...(creatorToolsAccess.hasCreatorAccess
+    ...(viewer.access?.hasCreatorAccess
       ? [
           {
             href: "/creator",

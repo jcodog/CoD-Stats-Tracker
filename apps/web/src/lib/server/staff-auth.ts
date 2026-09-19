@@ -1,12 +1,10 @@
 import "server-only"
 
 import { cache } from "react"
-import { auth, currentUser } from "@clerk/nextjs/server"
-import { fetchQuery } from "convex/nextjs"
+import type { currentUser } from "@clerk/nextjs/server"
+import { getViewer } from "@/lib/server/viewer"
 import { redirect } from "next/navigation"
 
-import { api } from "@workspace/backend/convex/_generated/api"
-import { syncClerkPublicMetadataRole } from "@workspace/backend/lib/clerk"
 import type { StaffAccessViewState } from "@workspace/backend/lib/staffTypes"
 import {
   getParsedUserRoleState,
@@ -102,16 +100,12 @@ const getStaffAccessContext = cache(
   async (
     requiredRole: RequiredStaffRole
   ): Promise<AuthorizedStaffContext | RestrictedStaffContext> => {
-    const { userId, getToken } = await auth()
+    const { userId, convexToken, clerkUser, access } = await getViewer()
 
     if (!userId) {
       redirect("/sign-in")
     }
 
-    const [clerkUser, convexToken] = await Promise.all([
-      currentUser(),
-      getToken({ template: "convex" }).catch(() => null),
-    ])
     const displayName = getDisplayName(clerkUser)
     const email = getEmail(clerkUser)
     const clerkRoleState = getParsedUserRoleState(
@@ -130,15 +124,10 @@ const getStaffAccessContext = cache(
       })
     }
 
-    const dbUser = await fetchQuery(
-      api.queries.users.current,
-      {},
-      { token: convexToken }
-    )
-    const convexRoleState = getParsedUserRoleState(dbUser?.role)
+    const convexRoleState = getParsedUserRoleState(access?.role)
     const convexRole = convexRoleState.role
 
-    if (!dbUser) {
+    if (!access) {
       return buildRestrictedContext({
         clerkRole: clerkRoleState.role,
         clerkUserId: userId,
@@ -150,20 +139,7 @@ const getStaffAccessContext = cache(
       })
     }
 
-    let resolvedClerkRole = clerkRoleState.role
-
-    if (clerkUser && convexRole && resolvedClerkRole !== convexRole) {
-      try {
-        await syncClerkPublicMetadataRole({
-          clerkUserId: userId,
-          currentPublicMetadata: clerkUser.publicMetadata,
-          role: convexRole,
-        })
-        resolvedClerkRole = convexRole
-      } catch {
-        resolvedClerkRole = clerkRoleState.role
-      }
-    }
+    const resolvedClerkRole = clerkRoleState.role
 
     if (!resolvedClerkRole) {
       return buildRestrictedContext({

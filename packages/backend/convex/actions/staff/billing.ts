@@ -46,7 +46,6 @@ import type {
   StaffCreatorPayoutRunRecord,
   StaffCreatorPayoutTransferRecord,
   StaffCreatorProgramAccountRecord,
-  StaffCreatorProgramDefaultsRecord,
   StaffImpactPreview,
   StaffMutationResponse,
   StaffSubscriptionImpactRow,
@@ -77,7 +76,6 @@ import type { StripeCatalogSyncResult } from "../billing/syncCatalogToStripe"
 import {
   buildCreatorPayoutPreview,
   getPreviousCompletedMonthlyPayoutPeriod,
-  getCreatorTransferReadiness,
   type CreatorPayoutPreview,
 } from "../../../src/lib/creator/payouts/transfers"
 import { executeCreatorPayoutTransfer } from "../creator/payouts/execution"
@@ -368,11 +366,7 @@ function buildSubscriptionRows(args: {
   }>
   subscriptions: Array<{
     attentionStatus:
-      | "none"
-      | "past_due"
-      | "paused"
-      | "payment_failed"
-      | "requires_action"
+      "none" | "past_due" | "paused" | "payment_failed" | "requires_action"
     cancelAt?: number
     cancelAtPeriodEnd: boolean
     clerkUserId: string
@@ -528,11 +522,7 @@ function buildWebhookMetrics(args: {
   events: Array<{
     processedAt?: number
     processingStatus:
-      | "failed"
-      | "ignored"
-      | "processed"
-      | "processing"
-      | "received"
+      "failed" | "ignored" | "processed" | "processing" | "received"
     receivedAt: number
   }>
 }) {
@@ -595,11 +585,7 @@ function buildWebhookEventRows(args: {
     paymentIntentId?: string
     processedAt?: number
     processingStatus:
-      | "failed"
-      | "ignored"
-      | "processed"
-      | "processing"
-      | "received"
+      "failed" | "ignored" | "processed" | "processing" | "received"
     receivedAt: number
     safeSummary: string
     subscriptionId?: string
@@ -658,11 +644,7 @@ function buildWebhookLedgerRows(args: {
     payloadUnavailableReason?: string
     processedAt?: number
     processingStatus:
-      | "failed"
-      | "ignored"
-      | "processed"
-      | "processing"
-      | "received"
+      "failed" | "ignored" | "processed" | "processing" | "received"
     receivedAt: number
     safeSummary: string
     stripeEventId: string
@@ -715,11 +697,7 @@ function buildWebhookEventDetail(args: {
     payloadUnavailableReason?: string
     processedAt?: number
     processingStatus:
-      | "failed"
-      | "ignored"
-      | "processed"
-      | "processing"
-      | "received"
+      "failed" | "ignored" | "processed" | "processing" | "received"
     receivedAt: number
     safeSummary: string
     stripeEventId: string
@@ -1249,7 +1227,8 @@ async function resolveCreatorProgramCode(args: {
     }
 
     const conflictingAccount = await args.ctx.runQuery(
-      internal.queries.creator.accounts.internal.getCreatorAccountByNormalizedCode,
+      internal.queries.creator.accounts.internal
+        .getCreatorAccountByNormalizedCode,
       {
         normalizedCode: normalizedRequestedCode,
       }
@@ -1277,7 +1256,8 @@ async function resolveCreatorProgramCode(args: {
     }
 
     const conflictingAccount = await args.ctx.runQuery(
-      internal.queries.creator.accounts.internal.getCreatorAccountByNormalizedCode,
+      internal.queries.creator.accounts.internal
+        .getCreatorAccountByNormalizedCode,
       {
         normalizedCode: candidateCode,
       }
@@ -1322,7 +1302,8 @@ async function syncCreatorProgramConnectAccount(args: {
   }
 
   await args.ctx.runMutation(
-    internal.mutations.creator.accounts.internal.applyStripeConnectedAccountSnapshot,
+    internal.mutations.creator.accounts.internal
+      .applyStripeConnectedAccountSnapshot,
     {
       ...snapshot,
       creatorAccountId: args.creatorAccountId,
@@ -1645,11 +1626,7 @@ function buildBillingDashboard(
     }>
     subscriptions: Array<{
       attentionStatus:
-        | "none"
-        | "past_due"
-        | "paused"
-        | "payment_failed"
-        | "requires_action"
+        "none" | "past_due" | "paused" | "payment_failed" | "requires_action"
       cancelAt?: number
       cancelAtPeriodEnd: boolean
       clerkUserId: string
@@ -1684,11 +1661,7 @@ function buildBillingDashboard(
       paymentIntentId?: string
       processedAt?: number
       processingStatus:
-        | "failed"
-        | "ignored"
-        | "processed"
-        | "processing"
-        | "received"
+        "failed" | "ignored" | "processed" | "processing" | "received"
       receivedAt: number
       safeSummary: string
       subscriptionId?: string
@@ -2155,7 +2128,9 @@ export const retryCreatorPayoutTransfer = action({
     }
 
     if (transfer.status !== "failed" && transfer.status !== "requires_review") {
-      throw new Error("Only failed or review-required transfers can be retried.")
+      throw new Error(
+        "Only failed or review-required transfers can be retried."
+      )
     }
 
     const result = await executeCreatorPayoutTransfer({
@@ -2224,7 +2199,8 @@ export const cancelCreatorPayoutRun = action({
     })
 
     return {
-      summary: "Cancelled creator transfer run and released reserved ledger rows.",
+      summary:
+        "Cancelled creator transfer run and released reserved ledger rows.",
     }
   },
 })
@@ -4472,7 +4448,8 @@ export const prepareCreatorProgramConnectAccount = action({
     }
 
     await ctx.runMutation(
-      internal.mutations.creator.accounts.internal.applyStripeConnectedAccountSnapshot,
+      internal.mutations.creator.accounts.internal
+        .applyStripeConnectedAccountSnapshot,
       {
         ...snapshot,
         creatorAccountId: creatorAccount._id,
@@ -5042,7 +5019,8 @@ function createBillingLifecycleOps(
   return {
     bindCreatorCodeUsageLock: (args) =>
       ctx.runMutation(
-        internal.mutations.creator.attribution.lifecycle.bindUsageLockToSubscription,
+        internal.mutations.creator.attribution.lifecycle
+          .bindUsageLockToSubscription,
         {
           ...args,
           creatorUsageLockId: args.creatorUsageLockId

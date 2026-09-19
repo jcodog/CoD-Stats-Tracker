@@ -28,7 +28,6 @@ import {
 } from "../../../../src/lib/creator-tools/play-with-viewers/config"
 import {
   assertOwnedQueueActionAccess,
-  assertOwnedQueueEntryActionAccess,
   resolveCreatorToolsActionAccess,
   type CreatorActionActor,
 } from "../../../../src/lib/creator-tools/play-with-viewers/action-access"
@@ -134,11 +133,6 @@ type ViewerQueueRecord = {
   minRank: string
   rulesText?: string
   title: string
-}
-
-type ViewerQueueEntryRecord = {
-  _id: string
-  queueId: string
 }
 
 type ViewerQueueRoundRecord = {
@@ -377,10 +371,7 @@ function sanitizeOperationalLogMessage(value: string | undefined) {
 
   const redacted = normalized
     .replace(/\b(Bot|Bearer)\s+[A-Za-z0-9._~-]+/giu, "$1 [redacted]")
-    .replace(
-      /\b(authorization\s*[:=]\s*)[^\s,;}]+/giu,
-      "$1[redacted]"
-    )
+    .replace(/\b(authorization\s*[:=]\s*)[^\s,;}]+/giu, "$1[redacted]")
     .replace(
       /\b((?:invite|lobby|party|private match)\s*(?:code)?\s*[:=]\s*)[^\s,;}]+/giu,
       "$1[redacted]"
@@ -764,8 +755,7 @@ function renderQueueMessage({
   queue,
   queueSize,
 }: RenderQueueMessageArgs):
-  | RESTPostAPIChannelMessageJSONBody
-  | RESTPatchAPIChannelMessageJSONBody {
+  RESTPostAPIChannelMessageJSONBody | RESTPatchAPIChannelMessageJSONBody {
   const descriptionLines = [
     `**Status:** ${queue.isActive ? "Open" : "Closed"}`,
     `**Game:** ${queue.gameLabel}`,
@@ -1143,10 +1133,11 @@ async function publishQueueMessageForQueue(
     }
 
     const createdMessage = (await response.json()) as { id: string }
-    const latestQueue: Pick<ViewerQueueRecord, "messageId"> = await ctx.runQuery(
-      internal.queries.creatorTools.playingWithViewers.queue.getQueueById,
-      { queueId }
-    )
+    const latestQueue: Pick<ViewerQueueRecord, "messageId"> =
+      await ctx.runQuery(
+        internal.queries.creatorTools.playingWithViewers.queue.getQueueById,
+        { queueId }
+      )
 
     if (latestQueue.messageId && latestQueue.messageId !== createdMessage.id) {
       const deleteResponse = await discordBotRequest(
@@ -1450,13 +1441,14 @@ async function deliverDiscordRoundNotifications(args: {
     )
   }
 
-  const notifications: ViewerQueueNotificationRecord[] = await args.ctx.runQuery(
-    internal.queries.creatorTools.playingWithViewers.notifications
-      .getRoundNotifications,
-    {
-      roundId: args.roundId,
-    }
-  )
+  const notifications: ViewerQueueNotificationRecord[] =
+    await args.ctx.runQuery(
+      internal.queries.creatorTools.playingWithViewers.notifications
+        .getRoundNotifications,
+      {
+        roundId: args.roundId,
+      }
+    )
   const discordNotifications = notifications.filter(
     (notification) =>
       notification.platform === "discord" &&
@@ -1536,8 +1528,7 @@ async function deliverDiscordRoundNotifications(args: {
             discordHttpStatus: discordErrorDetails.status,
             displayName: notification.displayName,
             internalErrorMessage,
-            notificationId:
-              notification._id as Id<"viewerQueueNotifications">,
+            notificationId: notification._id as Id<"viewerQueueNotifications">,
             platformUserId: notification.platformUserId,
             queueId: queue._id as Id<"viewerQueues">,
             roundId: args.roundId,
@@ -1842,7 +1833,6 @@ export const syncQueueMessageAfterViewerInteraction = internalAction({
   },
 })
 
-
 async function requireCreatorToolsActionAccess(
   ctx: ActionCtx,
   options?: { requireTwitchLinked?: boolean }
@@ -1872,9 +1862,12 @@ async function requireCreatorToolsActionAccess(
     ctx.runQuery(internal.queries.billing.resolution.resolveUserPlanState, {
       userId,
     }),
-    ctx.runQuery(internal.queries.creator.accounts.internal.getCreatorAccountByUserId, {
-      userId,
-    }),
+    ctx.runQuery(
+      internal.queries.creator.accounts.internal.getCreatorAccountByUserId,
+      {
+        userId,
+      }
+    ),
   ])
   const shouldLoadTwitchAccount =
     (options?.requireTwitchLinked ?? true) && isPlayWithViewersTwitchEnabled()
@@ -1907,30 +1900,4 @@ async function requireOwnedQueueActionAccess(
   )
 
   return assertOwnedQueueActionAccess(actor, queue)
-}
-
-async function requireOwnedQueueEntryActionAccess(
-  ctx: ActionCtx,
-  entryId: Id<"viewerQueueEntries">
-) {
-  const actor = await requireCreatorToolsActionAccess(ctx)
-  const entry: ViewerQueueEntryRecord | null = await ctx.runQuery(
-    internal.queries.creatorTools.playingWithViewers.queue.getQueueEntryById,
-    {
-      entryId,
-    }
-  )
-
-  if (!entry) {
-    throw new Error("Queue entry not found")
-  }
-
-  const queue: ViewerQueueRecord = await ctx.runQuery(
-    internal.queries.creatorTools.playingWithViewers.queue.getQueueById,
-    {
-      queueId: entry.queueId as Id<"viewerQueues">,
-    }
-  )
-
-  return assertOwnedQueueEntryActionAccess(actor, entry, queue)
 }
