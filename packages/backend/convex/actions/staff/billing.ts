@@ -1,6 +1,7 @@
 "use node"
 
 import Stripe from "stripe"
+import { readBillingRecords } from "../../../src/lib/staffBillingRecords"
 import { v } from "convex/values"
 import { action, type ActionCtx } from "../../_generated/server"
 import type { Id } from "../../_generated/dataModel"
@@ -1939,13 +1940,10 @@ export const getDashboard = action({
   handler: async (ctx): Promise<StaffBillingDashboard> => {
     const operator = await requireAuthorizedStaffAction(ctx, "staff")
     const payoutPeriod = getPreviousCompletedMonthlyPayoutPeriod()
-    const records = await ctx.runQuery(
-      internal.queries.staff.internal.getBillingRecords,
-      {
-        creatorPayoutPeriodEnd: payoutPeriod.periodEnd,
-        creatorPayoutPeriodStart: payoutPeriod.periodStart,
-      }
-    )
+    const records = await readBillingRecords(ctx, {
+      creatorPayoutPeriodEnd: payoutPeriod.periodEnd,
+      creatorPayoutPeriodStart: payoutPeriod.periodStart,
+    })
 
     return buildBillingDashboard(records, operator.actorRole)
   },
@@ -1960,8 +1958,9 @@ export const previewCreatorPayoutTransfers = action({
   handler: async (ctx, args): Promise<CreatorPayoutPreview> => {
     await requireAuthorizedStaffAction(ctx, "staff")
     const records = await ctx.runQuery(
-      internal.queries.staff.internal.getBillingRecords,
+      internal.queries.staff.internal.getCreatorPayoutPreviewRecords,
       {
+        ledgerEntryIds: args.ledgerEntryIds,
         creatorPayoutPeriodEnd: args.periodEnd,
         creatorPayoutPeriodStart: args.periodStart,
       }
@@ -2366,10 +2365,7 @@ export const previewPlanArchive = action({
   },
   handler: async (ctx, args): Promise<StaffImpactPreview> => {
     await requireAuthorizedStaffAction(ctx, "staff")
-    const records = await ctx.runQuery(
-      internal.queries.staff.internal.getBillingRecords,
-      {}
-    )
+    const records = await readBillingRecords(ctx, {})
     const dashboard = buildBillingDashboard(records)
     const plan = dashboard.plans.find((entry) => entry.key === args.planKey)
 
@@ -2406,10 +2402,7 @@ export const archivePlan = action({
   },
   handler: async (ctx, args): Promise<StaffMutationResponse> => {
     const operator = await requireAuthorizedStaffAction(ctx, "staff")
-    const records = await ctx.runQuery(
-      internal.queries.staff.internal.getBillingRecords,
-      {}
-    )
+    const records = await readBillingRecords(ctx, {})
     const dashboard = buildBillingDashboard(records)
     const plan = dashboard.plans.find((entry) => entry.key === args.planKey)
 
@@ -2484,10 +2477,7 @@ export const previewPriceReplacement = action({
   },
   handler: async (ctx, args): Promise<StaffImpactPreview> => {
     await requireAuthorizedStaffAction(ctx, "staff")
-    const records = await ctx.runQuery(
-      internal.queries.staff.internal.getBillingRecords,
-      {}
-    )
+    const records = await readBillingRecords(ctx, {})
     const dashboard = buildBillingDashboard(records)
     const plan = dashboard.plans.find((entry) => entry.key === args.planKey)
 
@@ -2531,10 +2521,7 @@ export const previewPlanFeatureSync = action({
   },
   handler: async (ctx, args): Promise<StaffImpactPreview> => {
     await requireAuthorizedStaffAction(ctx, "staff")
-    const records = await ctx.runQuery(
-      internal.queries.staff.internal.getBillingRecords,
-      {}
-    )
+    const records = await readBillingRecords(ctx, {})
     const dashboard = buildBillingDashboard(records)
     const plan = dashboard.plans.find((entry) => entry.key === args.planKey)
 
@@ -2581,7 +2568,7 @@ export const replacePlanPrice = action({
   handler: async (ctx, args): Promise<StaffMutationResponse> => {
     const operator = await requireAuthorizedStaffAction(ctx, "staff")
     const records = await ctx.runQuery(
-      internal.queries.staff.internal.getBillingRecords,
+      internal.queries.staff.internal.getBillingCatalogRecords,
       {}
     )
     const plan = records.plans.find(
@@ -2677,10 +2664,7 @@ export const previewFeatureArchive = action({
   },
   handler: async (ctx, args): Promise<StaffImpactPreview> => {
     await requireAuthorizedStaffAction(ctx, "staff")
-    const records = await ctx.runQuery(
-      internal.queries.staff.internal.getBillingRecords,
-      {}
-    )
+    const records = await readBillingRecords(ctx, {})
     const dashboard = buildBillingDashboard(records)
     const feature = dashboard.features.find(
       (entry) => entry.key === args.featureKey
@@ -2712,10 +2696,7 @@ export const archiveFeature = action({
   },
   handler: async (ctx, args): Promise<StaffMutationResponse> => {
     const operator = await requireAuthorizedStaffAction(ctx, "staff")
-    const records = await ctx.runQuery(
-      internal.queries.staff.internal.getBillingRecords,
-      {}
-    )
+    const records = await readBillingRecords(ctx, {})
     const feature = records.features.find(
       (entry: { key: string }) => entry.key === args.featureKey
     )
@@ -2792,10 +2773,7 @@ export const previewFeatureAssignmentChange = action({
   },
   handler: async (ctx, args): Promise<StaffImpactPreview> => {
     await requireAuthorizedStaffAction(ctx, "staff")
-    const records = await ctx.runQuery(
-      internal.queries.staff.internal.getBillingRecords,
-      {}
-    )
+    const records = await readBillingRecords(ctx, {})
     const dashboard = buildBillingDashboard(records)
     const feature = dashboard.features.find(
       (entry) => entry.key === args.featureKey
@@ -2833,10 +2811,7 @@ export const previewFeatureAssignmentSync = action({
   },
   handler: async (ctx, args): Promise<StaffImpactPreview> => {
     await requireAuthorizedStaffAction(ctx, "staff")
-    const records = await ctx.runQuery(
-      internal.queries.staff.internal.getBillingRecords,
-      {}
-    )
+    const records = await readBillingRecords(ctx, {})
     const dashboard = buildBillingDashboard(records)
     const feature = dashboard.features.find(
       (entry) => entry.key === args.featureKey
@@ -2883,7 +2858,7 @@ export const setFeatureAssignment = action({
   handler: async (ctx, args): Promise<StaffMutationResponse> => {
     const operator = await requireAuthorizedStaffAction(ctx, "staff")
     const records = await ctx.runQuery(
-      internal.queries.staff.internal.getBillingRecords,
+      internal.queries.staff.internal.getBillingCatalogRecords,
       {}
     )
     const feature = records.features.find(
@@ -2956,10 +2931,7 @@ export const syncFeatureAssignments = action({
   },
   handler: async (ctx, args): Promise<StaffMutationResponse> => {
     const operator = await requireAuthorizedStaffAction(ctx, "staff")
-    const records = await ctx.runQuery(
-      internal.queries.staff.internal.getBillingRecords,
-      {}
-    )
+    const records = await readBillingRecords(ctx, {})
     const dashboard = buildBillingDashboard(records)
     const feature = dashboard.features.find(
       (entry) => entry.key === args.featureKey
@@ -3050,10 +3022,7 @@ export const upsertPlan = action({
   },
   handler: async (ctx, args): Promise<StaffMutationResponse> => {
     const operator = await requireAuthorizedStaffAction(ctx, "staff")
-    const records = await ctx.runQuery(
-      internal.queries.staff.internal.getBillingRecords,
-      {}
-    )
+    const records = await readBillingRecords(ctx, {})
     const normalizedKey = validateCatalogKey(args.key, "Plan key")
     const existingPlan = records.plans.find(
       (plan: { key: string }) => plan.key === normalizedKey
@@ -3208,7 +3177,7 @@ export const upsertFeature = action({
   handler: async (ctx, args): Promise<StaffMutationResponse> => {
     const operator = await requireAuthorizedStaffAction(ctx, "staff")
     const records = await ctx.runQuery(
-      internal.queries.staff.internal.getBillingRecords,
+      internal.queries.staff.internal.getBillingCatalogRecords,
       {}
     )
     const normalizedKey = validateCatalogKey(args.key, "Feature key")
@@ -4837,10 +4806,7 @@ export const backfillCreatorGrantStripeSubscriptions = action({
   args: {},
   handler: async (ctx): Promise<StaffMutationResponse> => {
     const operator = await requireAuthorizedStaffAction(ctx, "admin")
-    const records = await ctx.runQuery(
-      internal.queries.staff.internal.getBillingRecords,
-      {}
-    )
+    const records = await readBillingRecords(ctx, {})
     const plan =
       records.plans.find(
         (entry: (typeof records.plans)[number]) =>

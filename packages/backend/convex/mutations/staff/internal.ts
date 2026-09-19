@@ -1078,8 +1078,11 @@ export const setCurrentRankedConfig = internalMutation({
         ? await ctx.db
             .query("sessions")
             .withIndex("by_endedAt", (query) => query.eq("endedAt", null))
-            .collect()
+            .take(501)
         : []
+    if (openSessions.length > 500) {
+      throw new Error("Season rollover exceeds 500 open sessions. A batched rollover is required before changing the season or title.")
+    }
     const openSessionCountsByUserId = countSessionsByUserId(openSessions)
 
     if (openSessions.length > 0) {

@@ -71,15 +71,13 @@ export type StaffManagementUserRecord = {
   isReservedSuperAdmin: boolean
   isCurrentUser: boolean
   roleStatus:
-    | "matched"
-    | "mismatch"
-    | "missing_clerk"
-    | "missing_convex"
-    | "missing_both"
+    "matched" | "mismatch" | "missing_clerk" | "missing_convex" | "missing_both"
   status: "active" | "disabled" | "unknown"
 }
 
 export type StaffManagementDashboard = {
+  directorySource: "local" | "clerk"
+  continueCursor: string | null
   adminCount: number
   auditLogs: StaffAuditLogEntry[]
   currentActorClerkUserId: string
@@ -92,11 +90,7 @@ export type StaffManagementDashboard = {
 
 export type StaffSubscriptionImpactRow = {
   attentionStatus?:
-    | "none"
-    | "past_due"
-    | "paused"
-    | "payment_failed"
-    | "requires_action"
+    "none" | "past_due" | "paused" | "payment_failed" | "requires_action"
   cancelAt?: number
   cancelAtPeriodEnd: boolean
   clerkUserId: string
@@ -295,11 +289,7 @@ export type StaffWebhookEventRecord = {
   paymentIntentId?: string
   processedAt?: number
   processingStatus:
-    | "failed"
-    | "ignored"
-    | "processed"
-    | "processing"
-    | "received"
+    "failed" | "ignored" | "processed" | "processing" | "received"
   receivedAt: number
   safeSummary: string
   subscriptionId?: string
@@ -335,11 +325,7 @@ export type StaffWebhookLedgerRecord = {
   paymentIntentId?: string
   processedAt?: number
   processingStatus:
-    | "failed"
-    | "ignored"
-    | "processed"
-    | "processing"
-    | "received"
+    "failed" | "ignored" | "processed" | "processing" | "received"
   receivedAt: number
   safeSummary: string
   stripeEventId: string

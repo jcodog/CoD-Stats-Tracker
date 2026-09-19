@@ -1,6 +1,5 @@
 "use node"
 
-import { syncClerkPublicMetadataRole } from "./clerk"
 import { resolveConfiguredUserRole } from "./staffRoleConfig"
 import {
   getParsedUserRoleState,
@@ -75,7 +74,9 @@ export async function resolveAuthorizedStaffAction(args: {
   dbUser: ConvexStaffUserLike | null
   requiredRole: RequiredStaffRole
 }): Promise<AuthorizedStaffActionContext> {
-  const clerkRoleState = getParsedUserRoleState(args.clerkUser.publicMetadata?.role)
+  const clerkRoleState = getParsedUserRoleState(
+    args.clerkUser.publicMetadata?.role
+  )
 
   if (!args.dbUser) {
     throw new StaffAuthorizationError(
@@ -99,20 +100,7 @@ export async function resolveAuthorizedStaffAction(args: {
     )
   }
 
-  let resolvedClerkRole = clerkRoleState.role
-
-  if (resolvedClerkRole !== convexRole) {
-    try {
-      await syncClerkPublicMetadataRole({
-        clerkUserId: args.clerkUserId,
-        currentPublicMetadata: args.clerkUser.publicMetadata,
-        role: convexRole,
-      })
-      resolvedClerkRole = convexRole
-    } catch {
-      resolvedClerkRole = clerkRoleState.role
-    }
-  }
+  const resolvedClerkRole = clerkRoleState.role
 
   if (!resolvedClerkRole) {
     throw new StaffAuthorizationError(

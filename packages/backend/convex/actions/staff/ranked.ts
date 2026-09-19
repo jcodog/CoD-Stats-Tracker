@@ -33,6 +33,18 @@ export const getDashboard = action({
       internal.queries.staff.internal.getRankedRecords,
       {}
     )
+    let openSessionCount = 0
+    let cursor: string | null = null
+    for (;;) {
+      const page: { count: number; isDone: boolean; continueCursor: string } = await ctx.runQuery(
+        internal.queries.staff.internal.getOpenSessionCountPage,
+        { paginationOpts: { cursor, numItems: 200 } }
+      )
+      openSessionCount += page.count
+      if (page.isDone) break
+      if (page.continueCursor === cursor) throw new Error("Session pagination did not advance.")
+      cursor = page.continueCursor
+    }
     const titles = records.titles as Array<{
       isActive: boolean
       key: string
@@ -74,7 +86,7 @@ export const getDashboard = action({
             activeTitleLabel:
               titleLabelByKey.get(records.config.activeTitleKey) ??
               records.config.activeTitleKey,
-            openSessionCount: records.openSessionCount,
+            openSessionCount: openSessionCount,
             sessionWritesEnabled: isRankedSessionWritesEnabled(records.config),
             updatedAt: records.config.updatedAt,
           }
@@ -104,7 +116,7 @@ export const getDashboard = action({
         titleLabel: titleLabelByKey.get(mode.titleKey) ?? mode.titleKey,
         updatedAt: mode.updatedAt,
       })),
-      openSessionCount: records.openSessionCount,
+      openSessionCount: openSessionCount,
       titles: titles.map((title) => {
         const titleModes = modes.filter((mode) => mode.titleKey === title.key)
         const titleMaps = maps.filter((map) => map.titleKey === title.key)

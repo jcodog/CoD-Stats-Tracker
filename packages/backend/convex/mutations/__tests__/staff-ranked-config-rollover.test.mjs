@@ -54,6 +54,10 @@ class FakeQuery {
     return this
   }
 
+  async take(limit) {
+    return this.#applyFilters().slice(0, limit)
+  }
+
   async collect() {
     return this.#applyFilters()
   }
@@ -340,4 +344,17 @@ describe("ranked config rollover landing metrics", () => {
     expect(db.tables.landingUserStats[0].activeSessions).toBe(0)
     expect(schedulerCalls).toHaveLength(0)
   })
+})
+
+it("rejects an oversized rollover before archiving sessions or changing configuration", async () => {
+  const { ctx, db } = createTestContext({
+    rankedConfigs: [{ _id: "config", key: "current", activeSeason: 1, activeTitleKey: "title", sessionWritesEnabled: true }],
+    rankedTitles: [{ _id: "title", key: "title", label: "Title", isActive: true }],
+    sessions: Array.from({ length: 501 }, (_, index) => ({ _id: `session:${index}`, userId: "user", endedAt: null })),
+  })
+  await expect(setCurrentRankedConfig._handler(ctx, {
+    activeSeason: 2, activeTitleKey: "title", sessionWritesEnabled: true, updatedByUserId: "staff",
+  })).rejects.toThrow("batched rollover")
+  expect(db.tables.rankedConfigs[0].activeSeason).toBe(1)
+  expect(db.tables.sessions.every(session => session.endedAt === null)).toBe(true)
 })

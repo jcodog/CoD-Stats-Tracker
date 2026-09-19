@@ -27,18 +27,32 @@ export const syncProvisionedClerkRole = internalAction({
 export const backfillConnectedAccountsFromClerk = internalAction({
   args: {
     limit: v.optional(v.number()),
+    cursor: v.optional(v.union(v.string(), v.null())),
   },
   handler: async (
     ctx,
     args
-  ): Promise<{ syncedCount: number; totalUsers: number }> => {
-    const users: Array<{ _id: string; clerkUserId?: string }> =
-      await ctx.runQuery(
-      internal.queries.staff.internal.listUsers,
-      {}
+  ): Promise<{
+    syncedCount: number
+    totalUsers: number
+    continueCursor: string | null
+  }> => {
+    if (
+      args.limit !== undefined &&
+      (!Number.isSafeInteger(args.limit) || args.limit < 1 || args.limit > 200)
+    ) {
+      throw new Error("Backfill batches must contain 1 to 200 users.")
+    }
+    const result = await ctx.runQuery(
+      internal.queries.staff.internal.getBillingUsersPage,
+      {
+        paginationOpts: {
+          cursor: args.cursor ?? null,
+          numItems: args.limit ?? 100,
+        },
+      }
     )
-    const targetUsers =
-      typeof args.limit === "number" ? users.slice(0, args.limit) : users
+    const targetUsers = result.page
     const clerk = getClerkBackendClient()
     let syncedCount = 0
 
@@ -61,6 +75,7 @@ export const backfillConnectedAccountsFromClerk = internalAction({
     return {
       syncedCount,
       totalUsers: targetUsers.length,
+      continueCursor: result.isDone ? null : result.continueCursor,
     }
   },
 })

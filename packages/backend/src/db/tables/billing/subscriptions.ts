@@ -67,6 +67,7 @@ export const billingSubscriptions = defineTable({
   updatedAt: v.number(),
 })
   .index("by_userId", ["userId"])
+  .index("by_userId_status", ["userId", "status"])
   .index("by_clerkUserId", ["clerkUserId"])
   .index("by_stripeCustomerId", ["stripeCustomerId"])
   .index("by_stripeSubscriptionId", ["stripeSubscriptionId"])

@@ -1,7 +1,6 @@
 "use client"
 
 import Link from "next/link"
-import { useQuery } from "convex/react"
 import {
   IconArrowRight,
   IconCircleCheck,
@@ -11,7 +10,7 @@ import {
   IconUsers,
 } from "@tabler/icons-react"
 
-import { api } from "@workspace/backend/convex/_generated/api"
+import { useCreatorDashboard } from "@/features/creator-panel/lib/use-creator-dashboard"
 import { CreatorConsoleHeader } from "@/features/creator-panel/components/CreatorConsoleHeader"
 import {
   formatCreatorProgramSummary,
@@ -73,9 +72,7 @@ const pageDescription =
   "Track creator-code performance, payout setup, and the tools that run inside your creator workspace."
 
 export function CreatorHomeView() {
-  const dashboard = useQuery(
-    api.queries.creator.dashboard.current.getCurrentCreatorDashboard
-  )
+  const dashboard = useCreatorDashboard()
 
   if (dashboard === undefined) {
     return (
@@ -147,6 +144,7 @@ export function CreatorHomeView() {
       dashboard.creatorAccount.connectState === "ready" &&
       dashboard.creatorAccount.payoutsEnabled === true,
     estimatedEarningsByCurrency: dashboard.estimatedEarningsByCurrency,
+    metricsComplete: dashboard.metricsComplete,
     paidConversionCount: dashboard.paidConversionCount,
     payoutEligible: dashboard.creatorAccount.payoutEligible,
   })
@@ -219,13 +217,17 @@ export function CreatorHomeView() {
                 detail: "Users attributed to your creator code.",
                 icon: IconUsers,
                 label: "Attributed signups",
-                value: String(dashboard.signupCount),
+                value: dashboard.metricsComplete
+                  ? String(dashboard.signupCount)
+                  : "Calculating…",
               },
               {
                 detail: "Attributed users with a paid subscription.",
                 icon: IconCircleCheck,
                 label: "Paid conversions",
-                value: String(dashboard.paidConversionCount),
+                value: dashboard.metricsComplete
+                  ? String(dashboard.paidConversionCount)
+                  : "Calculating…",
               },
             ].map((item) => {
               const Icon = item.icon

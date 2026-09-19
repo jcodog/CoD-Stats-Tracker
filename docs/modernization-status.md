@@ -2,7 +2,7 @@
 
 ## Recovery checkpoint
 
-Resumed from committed `a9007a7` on `refactor/shadcn-baseui-rebaseline` with a clean tree. Current local changes are authoritative. No builds, codegen, dev servers, subagents, commits, pushes, deployments or external mutations are authorized.
+Resumed from committed `a04e8cb` on `refactor/shadcn-baseui-rebaseline` with a clean tree. Current local changes are authoritative. No builds, codegen, dev servers, subagents, commits, pushes, deployments or external mutations are authorized.
 
 ## Completed source work
 
@@ -64,3 +64,29 @@ Added internal cursor-batched backfillSessionOwners with dry run, explicit write
 Remaining #31: staff-wide user/billing scans and creator aggregate scans still need scoped/paginated interfaces. Staff actions legitimately use external Clerk/Stripe state, so their TanStack action caches are not automatically redundant. Do not replace financial aggregates with truncated totals.
 
 Latest browser retry: localhost:3000 returned ERR_CONNECTION_REFUSED. No browser validation completed.
+
+## Resume at a04e8cb: staff and creator reads
+
+Verified the clean committed checkpoint first: web/backend lint and typecheck passed; backend tests 144/144 passed. Existing TS7/ESLint, Base UI/Mira, checkout and dashboard implementations retained.
+
+Staff directory now fetches 50 local or Clerk accounts per page, with explicit source selection, cursor navigation, page-local search and labeled page-local counts. The two sources retain visibility of orphan records on either side. Clerk rows resolve local counterparts through indexed IDs. Role changes and bans resolve only their target, independently of pagination. Removed all-user scans from those operations. Self-edit prohibition plus freshly verified admin authorization ensures an admin operator remains; the old all-directory last-admin count and page-dependent UI restriction were redundant.
+
+Completed #28 consistency fix found during this work: backend staff action authorization also denies mismatched roles without attempting a Clerk metadata write, matching the already-updated server guard. Explicit role repair remains an authorized management action.
+
+Creator account/setup data no longer scans referrals, subscriptions and earnings. Separate authenticated cursor pages read at most 50 rows, with owner indexes and bounded subscription existence checks. A shared aggregator deduplicates attribution/lock users and keeps currencies separate. Client totals remain marked Calculating until every reactive page has loaded, so partial earnings never appear as complete payout estimates. This still scales client work with lifetime history; a future materialized aggregate can remove that cost without changing current financial semantics.
+
+Validation: 155 backend tests passed (598 assertions), plus 7 existing web feature tests. Added directory pagination, owner isolation, earnings-status, locked-subscription and role-mismatch cases. Web/backend lint and typecheck passed. A new frontend incomplete-estimate test still needs its final rerun after formatting.
+
+Remaining next: staff billing/overview still contain global scans. Scope those interfaces without truncating global aggregates or financial decisions, then proceed to #33. Browser validation remains outstanding.
+
+## Staff billing and aggregate read checkpoint
+
+Staff overview reduces bounded user/subscription pages to complete totals. Staff ranked-session counts now page the open-session index. The connected-account backfill now processes 100 users by default, at most 200, and returns continueCursor; callers must resume with that cursor until null. No backfill was executed.
+
+Catalog-only billing operations read the small catalog directly. Manual and scheduled payout previews read eligible ledger rows and only their creator accounts. Eligible previews detect overflow above 5,000 rows and fail explicitly instead of returning a truncated financial total. Explicit selection is limited to 500 rows. No payout or Stripe action was executed.
+
+Remaining complete billing snapshots now read at most 200 rows/256 KB per database invocation, preserving all records across short or empty pages. This bounds each query but does NOT bound the final action response or provide one transactional snapshot across tables/pages. Staff billing section-specific response contracts remain unfinished. The season rollover mutation also still reads/archives all open sessions atomically; it needs a guarded bounded or resumable design before claiming #31 complete.
+
+Validation: backend typecheck passed after ranked count/backfill changes. Latest backend suite passed 161 tests with 614 assertions; web feature suite passed 8 tests with 9 assertions. Web/backend lint and typecheck passed before the final ranked count change. Tests cover pagination completeness/no-progress, payout overflow, scoped selected rows, overview counts, creator ownership/conversion semantics and fail-closed role mismatch. Final ranked count regression and lint remain to rerun. Browser remains unverified because the existing localhost server was unavailable.
+
+Next unfinished point: finish staff billing scoped responses and season rollover bounds, validate, then #33 hosted billing. Do not repeat completed TS7/Base UI/viewer/dashboard work. The later #29/#35/visual/#34 phases have not started in this checkpoint.

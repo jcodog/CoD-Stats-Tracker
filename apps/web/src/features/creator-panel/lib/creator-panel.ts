@@ -142,6 +142,7 @@ export function getCreatorConnectPresentation(connectState: string) {
 }
 
 export function getEstimatedPayoutPresentation(args: {
+  metricsComplete?: boolean
   connectPayoutReady: boolean
   estimatedEarningsByCurrency: Array<{
     amount: number
@@ -150,6 +151,11 @@ export function getEstimatedPayoutPresentation(args: {
   paidConversionCount: number
   payoutEligible: boolean
 }) {
+  if (args.metricsComplete === false)
+    return {
+      detail: "Calculating across your complete creator history.",
+      value: "Calculating…",
+    }
   const detail = args.connectPayoutReady
     ? "This is an estimation of your next monthly payout."
     : "This is an estimation of what you could have been paid if you had connected Stripe."

@@ -2,6 +2,11 @@
 
 import { action, type ActionCtx } from "../../_generated/server"
 import { internal } from "../../_generated/api"
+import {
+  emptyStaffMetrics,
+  STAFF_METRIC_KEYS,
+  type StaffMetrics,
+} from "../../../src/lib/staffMetrics"
 import { getClerkBackendClient } from "../../../src/lib/clerk"
 import {
   StaffAuthorizationError,
@@ -43,19 +48,10 @@ type OverviewPlanRecord = {
   stripeProductId?: string
   yearlyPriceId?: string
 }
-type OverviewSubscriptionRecord = {
-  cancelAtPeriodEnd: boolean
-  status: string
-}
-type OverviewUserRecord = {
-  role?: UserRole
-}
 type OverviewRecords = {
   auditLogs: OverviewAuditLogRecord[]
   features: unknown[]
   plans: OverviewPlanRecord[]
-  subscriptions: OverviewSubscriptionRecord[]
-  users: OverviewUserRecord[]
 }
 
 const OVERVIEW_SUBSCRIPTION_STATUSES = [
@@ -80,14 +76,6 @@ function mapAuditLogEntry(log: OverviewAuditLogRecord): StaffAuditLogEntry {
     result: log.result,
     summary: log.summary,
   }
-}
-
-function isOverviewSubscriptionStatus(
-  value: string
-): value is OverviewSubscriptionStatus {
-  return OVERVIEW_SUBSCRIPTION_STATUSES.includes(
-    value as OverviewSubscriptionStatus
-  )
 }
 
 function getPlanNeedsAttention(plan: {
@@ -175,6 +163,28 @@ function buildActivityTimeline(logs: Array<{ createdAt: number }>) {
     .sort((left, right) => left.dayStart - right.dayStart)
 }
 
+async function readOverviewMetrics(
+  ctx: ActionCtx,
+  kind: "users" | "subscriptions"
+) {
+  const totals = emptyStaffMetrics()
+  let cursor: string | null = null
+  for (;;) {
+    const page: {
+      totals: StaffMetrics
+      isDone: boolean
+      continueCursor: string
+    } = await ctx.runQuery(
+      internal.queries.staff.internal.getOverviewMetricsPage,
+      { kind, paginationOpts: { cursor, numItems: 200 } }
+    )
+    for (const key of STAFF_METRIC_KEYS) totals[key] += page.totals[key]
+    if (page.isDone) return totals
+    if (page.continueCursor === cursor)
+      throw new Error("Overview pagination did not advance.")
+    cursor = page.continueCursor
+  }
+}
 export const getDashboard = action({
   args: {},
   handler: async (ctx): Promise<StaffOverviewDashboard> => {
@@ -193,35 +203,12 @@ export const getDashboard = action({
           ? true
           : canReviewManagement && log.entityType === "user"
     )
-    const subscriptions = records.subscriptions.filter(
-      (
-        subscription
-      ): subscription is OverviewSubscriptionRecord & {
-        status: OverviewSubscriptionStatus
-      } => isOverviewSubscriptionStatus(subscription.status)
-    )
-    const activeSubscriptionCount = subscriptions.filter(
-      (subscription: OverviewSubscriptionRecord) =>
-        subscription.status === "active" || subscription.status === "trialing"
-    ).length
-    const attentionSubscriptionCount = subscriptions.filter(
-      (subscription: OverviewSubscriptionRecord) =>
-        subscription.status === "past_due" ||
-        subscription.status === "paused" ||
-        subscription.cancelAtPeriodEnd
-    ).length
-    const cancelAtPeriodEndCount = subscriptions.filter(
-      (subscription: OverviewSubscriptionRecord) =>
-        subscription.cancelAtPeriodEnd
-    ).length
+    const [userMetrics, subscriptionMetrics] = await Promise.all([
+      readOverviewMetrics(ctx, "users"),
+      readOverviewMetrics(ctx, "subscriptions"),
+    ])
     const subscriptionStatusCounts = OVERVIEW_SUBSCRIPTION_STATUSES.map(
-      (status) => ({
-        count: subscriptions.filter(
-          (subscription: OverviewSubscriptionRecord) =>
-            subscription.status === status
-        ).length,
-        status,
-      })
+      (status) => ({ status, count: subscriptionMetrics[status] })
     )
     const lastSync = parseSyncSummary(
       accessibleAuditLogs.find(
@@ -232,23 +219,17 @@ export const getDashboard = action({
     return {
       actorRole: operator.actorRole,
       activityTimeline: buildActivityTimeline(accessibleAuditLogs),
-      cancelAtPeriodEndCount,
+      cancelAtPeriodEndCount: subscriptionMetrics.cancelAtPeriodEndCount,
       counts: {
-        activeSubscriptions: activeSubscriptionCount,
-        adminUsers: records.users.filter(
-          (user: OverviewUserRecord) => user.role === "admin"
-        ).length,
-        attentionSubscriptions: attentionSubscriptionCount,
+        activeSubscriptions: subscriptionMetrics.activeSubscriptions,
+        adminUsers: userMetrics.adminUsers,
+        attentionSubscriptions: subscriptionMetrics.attentionSubscriptions,
         billingFeatures: records.features.length,
         billingPlans: records.plans.length,
-        staffUsers: records.users.filter(
-          (user: OverviewUserRecord) => user.role === "staff"
-        ).length,
-        superAdminUsers: records.users.filter(
-          (user: OverviewUserRecord) => user.role === "super_admin"
-        ).length,
+        staffUsers: userMetrics.staffUsers,
+        superAdminUsers: userMetrics.superAdminUsers,
         syncAttentionPlans: records.plans.filter(getPlanNeedsAttention).length,
-        trackedUsers: records.users.length,
+        trackedUsers: userMetrics.trackedUsers,
       },
       generatedAt: Date.now(),
       lastSync,
@@ -257,7 +238,6 @@ export const getDashboard = action({
     }
   },
 })
-
 
 async function requireAuthorizedStaffAction(
   ctx: ActionCtx,

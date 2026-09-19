@@ -1,10 +1,11 @@
-import type { Doc } from "../../_generated/dataModel"
+import type { Doc, TableNames } from "../../_generated/dataModel"
 import { internalQuery, type QueryCtx } from "../../_generated/server"
 import { v } from "convex/values"
+import { paginationOptsValidator } from "convex/server"
+import { emptyStaffMetrics } from "../../../src/lib/staffMetrics"
 import { getWebhookObjectIdsFromPayloadJson } from "../../../src/lib/stripe/billing"
 import { resolveConfiguredUserRole } from "../../../src/lib/staffRoleConfig"
 
-type UserRecord = Doc<"users">
 type BillingPlanRecord = Doc<"billingPlans">
 type BillingFeatureRecord = Doc<"billingFeatures">
 type RankedTitleRecord = Doc<"rankedTitles">
@@ -50,7 +51,7 @@ async function listEligibleCreatorPayoutLedgerRows(
     const periodStart = args.creatorPayoutPeriodStart
     const periodEnd = args.creatorPayoutPeriodEnd
 
-    return await ctx.db
+    const rows = await ctx.db
       .query("creatorEarningLedger")
       .withIndex("by_status_invoiceIssuedAt", (query) =>
         query
@@ -58,13 +59,23 @@ async function listEligibleCreatorPayoutLedgerRows(
           .gte("invoiceIssuedAt", periodStart)
           .lte("invoiceIssuedAt", periodEnd)
       )
-      .take(5000)
+      .take(5001)
+    if (rows.length > 5000)
+      throw new Error(
+        "Too many eligible ledger rows. Choose a narrower payout period or explicit entries."
+      )
+    return rows
   }
 
-  return await ctx.db
+  const rows = await ctx.db
     .query("creatorEarningLedger")
     .withIndex("by_status", (query) => query.eq("status", "eligible"))
-    .take(5000)
+    .take(5001)
+  if (rows.length > 5000)
+    throw new Error(
+      "Too many eligible ledger rows. Choose a narrower payout period or explicit entries."
+    )
+  return rows
 }
 
 async function listCreatorPayoutTransfersForDashboard(
@@ -80,9 +91,7 @@ async function listCreatorPayoutTransfersForDashboard(
 
     return await ctx.db
       .query("creatorPayoutTransfers")
-      .withIndex("by_status_updatedAt", (query) =>
-        query.eq("status", status)
-      )
+      .withIndex("by_status_updatedAt", (query) => query.eq("status", status))
       .order("desc")
       .take(100)
   }
@@ -148,10 +157,6 @@ async function listCreatorPayoutRunsForDashboard(
     .withIndex("by_createdAt")
     .order("desc")
     .take(50)
-}
-
-function sortUsers(left: UserRecord, right: UserRecord) {
-  return left.name.localeCompare(right.name)
 }
 
 function sortBySortOrderAndKey<
@@ -223,45 +228,94 @@ export const getUserById = internalQuery({
   },
 })
 
-export const listUsers = internalQuery({
-  args: {},
-  handler: async (ctx) => {
-    return await ctx.db.query("users").collect()
-  },
-})
-
 export const getManagementRecords = internalQuery({
-  args: {},
-  handler: async (ctx) => {
-    const [users, roleAuditLogs] = await Promise.all([
-      ctx.db.query("users").collect(),
-      ctx.db
-        .query("staffAuditLogs")
-        .withIndex("by_entityType_createdAt", (query) =>
-          query.eq("entityType", "user")
+  args: {
+    cursor: v.optional(v.union(v.string(), v.null())),
+    clerkUserIds: v.optional(v.array(v.string())),
+  },
+  handler: async (ctx, args) => {
+    if (args.clerkUserIds && args.clerkUserIds.length > 50)
+      throw new Error("Directory pages are limited to 50 users.")
+    const roleAuditLogs = await ctx.db
+      .query("staffAuditLogs")
+      .withIndex("by_entityType_createdAt", (q) => q.eq("entityType", "user"))
+      .order("desc")
+      .take(75)
+    if (args.clerkUserIds) {
+      const users = await Promise.all(
+        args.clerkUserIds.map((clerkUserId) =>
+          ctx.db
+            .query("users")
+            .withIndex("by_clerkUserId", (q) =>
+              q.eq("clerkUserId", clerkUserId)
+            )
+            .unique()
         )
-        .order("desc")
-        .take(75),
-    ])
-
+      )
+      return {
+        roleAuditLogs,
+        users: users.filter((user): user is Doc<"users"> => user !== null),
+        continueCursor: null,
+      }
+    }
+    const result = await ctx.db
+      .query("users")
+      .order("desc")
+      .paginate({
+        cursor: args.cursor ?? null,
+        numItems: 50,
+        maximumRowsRead: 50,
+      })
     return {
       roleAuditLogs,
-      users: users.sort(sortUsers).map((user) => ({
-        clerkUserId: user.clerkUserId,
-        discordId: user.discordId,
-        name: user.name,
-        role:
-          resolveConfiguredUserRole({
-            discordId: user.discordId,
-            role: user.role ?? null,
-          }) ?? undefined,
-        status: user.status,
-      })),
+      users: result.page,
+      continueCursor: result.isDone ? null : result.continueCursor,
     }
   },
 })
+export const getBillingCatalogRecords = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const [plans, features, planFeatures] = await Promise.all([
+      ctx.db.query("billingPlans").collect(),
+      ctx.db.query("billingFeatures").collect(),
+      ctx.db.query("billingPlanFeatures").collect(),
+    ])
+    return { plans, features, planFeatures }
+  },
+})
 
-export const getBillingRecords = internalQuery({
+export const getCreatorPayoutPreviewRecords = internalQuery({
+  args: {
+    creatorPayoutPeriodEnd: v.optional(v.number()),
+    creatorPayoutPeriodStart: v.optional(v.number()),
+    ledgerEntryIds: v.optional(v.array(v.id("creatorEarningLedger"))),
+  },
+  handler: async (ctx, args) => {
+    if (args.ledgerEntryIds && args.ledgerEntryIds.length > 500)
+      throw new Error("Select at most 500 ledger entries per preview.")
+    const selectedRows = args.ledgerEntryIds
+      ? await Promise.all(
+          [...new Set(args.ledgerEntryIds)].map((id) => ctx.db.get(id))
+        )
+      : await listEligibleCreatorPayoutLedgerRows(ctx, args)
+    const creatorEarningLedger = selectedRows.filter(
+      (row): row is Doc<"creatorEarningLedger"> => row !== null
+    )
+    const accounts = await Promise.all(
+      [...new Set(creatorEarningLedger.map((row) => row.creatorAccountId))].map(
+        (id) => ctx.db.get(id)
+      )
+    )
+    return {
+      creatorEarningLedger,
+      creatorAccounts: accounts.filter(
+        (account): account is Doc<"creatorAccounts"> => account !== null
+      ),
+    }
+  },
+})
+export const getBillingContextRecords = internalQuery({
   args: {
     creatorPayoutPeriodEnd: v.optional(v.number()),
     creatorPayoutPeriodStart: v.optional(v.number()),
@@ -275,14 +329,8 @@ export const getBillingRecords = internalQuery({
       plans,
       features,
       planFeatures,
-      subscriptions,
-      customers,
-      accessGrants,
       webhookEvents,
-      users,
       auditLogs,
-      creatorAccounts,
-      creatorAttributions,
       creatorEarningLedger,
       creatorPayoutRuns,
       creatorPayoutTransfers,
@@ -291,22 +339,16 @@ export const getBillingRecords = internalQuery({
       ctx.db.query("billingPlans").collect(),
       ctx.db.query("billingFeatures").collect(),
       ctx.db.query("billingPlanFeatures").collect(),
-      ctx.db.query("billingSubscriptions").collect(),
-      ctx.db.query("billingCustomers").collect(),
-      ctx.db.query("billingAccessGrants").collect(),
       ctx.db
         .query("billingWebhookEvents")
         .withIndex("by_receivedAt")
         .order("desc")
         .take(200),
-      ctx.db.query("users").collect(),
       ctx.db
         .query("staffAuditLogs")
         .withIndex("by_createdAt")
         .order("desc")
         .take(200),
-      ctx.db.query("creatorAccounts").collect(),
-      ctx.db.query("creatorAttributions").collect(),
       listEligibleCreatorPayoutLedgerRows(ctx, args),
       listCreatorPayoutRunsForDashboard(ctx, args),
       listCreatorPayoutTransfersForDashboard(ctx, args),
@@ -320,21 +362,13 @@ export const getBillingRecords = internalQuery({
       auditLogs: auditLogs.filter((log) =>
         log.entityType.startsWith("billing")
       ),
-      accessGrants,
-      creatorAccounts,
-      creatorAttributions,
       creatorEarningLedger,
       creatorPayoutRuns,
       creatorPayoutTransfers,
       creatorProgramDefaults,
-      customers,
       features: features.sort(sortBySortOrderAndKey),
       planFeatures,
       plans: plans.sort(sortBySortOrderAndKey),
-      subscriptions: subscriptions.sort(
-        (left, right) => right.updatedAt - left.updatedAt
-      ),
-      users: users.sort(sortUsers),
       webhookEvents,
     }
   },
@@ -477,43 +511,86 @@ export const getBillingWebhookEventById = internalQuery({
 export const getOverviewRecords = internalQuery({
   args: {},
   handler: async (ctx) => {
-    const [users, plans, features, subscriptions, auditLogs] =
-      await Promise.all([
-        ctx.db.query("users").collect(),
-        ctx.db.query("billingPlans").collect(),
-        ctx.db.query("billingFeatures").collect(),
-        ctx.db.query("billingSubscriptions").collect(),
-        ctx.db
-          .query("staffAuditLogs")
-          .withIndex("by_createdAt")
-          .order("desc")
-          .take(200),
-      ])
-
+    const [plans, features, auditLogs] = await Promise.all([
+      ctx.db.query("billingPlans").collect(),
+      ctx.db.query("billingFeatures").collect(),
+      ctx.db
+        .query("staffAuditLogs")
+        .withIndex("by_createdAt")
+        .order("desc")
+        .take(200),
+    ])
     return {
       auditLogs,
       features: features.sort(sortBySortOrderAndKey),
       plans: plans.sort(sortBySortOrderAndKey),
-      subscriptions: subscriptions.sort(
-        (left, right) => right.updatedAt - left.updatedAt
-      ),
-      users: users.sort(sortUsers).map((user) => ({
-        clerkUserId: user.clerkUserId,
-        role:
-          resolveConfiguredUserRole({
-            discordId: user.discordId,
-            role: user.role ?? null,
-          }) ?? undefined,
-        status: user.status,
-      })),
     }
   },
 })
 
+export const getOverviewMetricsPage = internalQuery({
+  args: {
+    kind: v.union(v.literal("users"), v.literal("subscriptions")),
+    paginationOpts: paginationOptsValidator,
+  },
+  handler: async (ctx, args) => {
+    const totals = emptyStaffMetrics()
+    const options = {
+      ...args.paginationOpts,
+      numItems: Math.min(args.paginationOpts.numItems, 200),
+      maximumRowsRead: 200,
+      maximumBytesRead: 256_000,
+    }
+    if (args.kind === "users") {
+      const result = await ctx.db.query("users").paginate(options)
+      for (const user of result.page) {
+        totals.trackedUsers += 1
+        const role = resolveConfiguredUserRole({
+          role: user.role ?? null,
+          discordId: user.discordId,
+        })
+        if (role === "admin") totals.adminUsers += 1
+        if (role === "staff") totals.staffUsers += 1
+        if (role === "super_admin") totals.superAdminUsers += 1
+      }
+      return {
+        totals,
+        isDone: result.isDone,
+        continueCursor: result.continueCursor,
+      }
+    }
+    const result = await ctx.db.query("billingSubscriptions").paginate(options)
+    for (const subscription of result.page) {
+      const status = subscription.status
+      if (
+        status !== "active" &&
+        status !== "trialing" &&
+        status !== "past_due" &&
+        status !== "paused"
+      )
+        continue
+      totals[status] += 1
+      if (status === "active" || status === "trialing")
+        totals.activeSubscriptions += 1
+      if (
+        status === "past_due" ||
+        status === "paused" ||
+        subscription.cancelAtPeriodEnd
+      )
+        totals.attentionSubscriptions += 1
+      if (subscription.cancelAtPeriodEnd) totals.cancelAtPeriodEndCount += 1
+    }
+    return {
+      totals,
+      isDone: result.isDone,
+      continueCursor: result.continueCursor,
+    }
+  },
+})
 export const getRankedRecords = internalQuery({
   args: {},
   handler: async (ctx) => {
-    const [titles, modes, maps, config, openSessions] = await Promise.all([
+    const [titles, modes, maps, config] = await Promise.all([
       ctx.db.query("rankedTitles").collect(),
       ctx.db.query("rankedModes").collect(),
       ctx.db.query("rankedMaps").collect(),
@@ -521,18 +598,50 @@ export const getRankedRecords = internalQuery({
         .query("rankedConfigs")
         .withIndex("by_key", (query) => query.eq("key", "current"))
         .unique(),
-      ctx.db
-        .query("sessions")
-        .withIndex("by_endedAt", (query) => query.eq("endedAt", null))
-        .collect(),
     ])
 
     return {
       config,
       maps: maps.sort(sortRankedMaps),
       modes: modes.sort(sortRankedModes),
-      openSessionCount: openSessions.length,
       titles: titles.sort(sortRankedTitles),
     }
+  },
+})
+
+function paginatedBillingTable<Table extends TableNames>(table: Table) {
+  return internalQuery({
+    args: { paginationOpts: paginationOptsValidator },
+    handler: async (ctx, args) =>
+      ctx.db.query(table).paginate({
+        ...args.paginationOpts,
+        numItems: Math.min(args.paginationOpts.numItems, 200),
+        maximumRowsRead: 200,
+        maximumBytesRead: 256_000,
+      }),
+  })
+}
+
+export const getBillingSubscriptionsPage = paginatedBillingTable(
+  "billingSubscriptions"
+)
+export const getBillingCustomersPage = paginatedBillingTable("billingCustomers")
+export const getBillingAccessGrantsPage = paginatedBillingTable(
+  "billingAccessGrants"
+)
+export const getBillingUsersPage = paginatedBillingTable("users")
+export const getBillingCreatorAccountsPage =
+  paginatedBillingTable("creatorAccounts")
+export const getBillingCreatorAttributionsPage = paginatedBillingTable(
+  "creatorAttributions"
+)
+
+export const getOpenSessionCountPage = internalQuery({
+  args: { paginationOpts: paginationOptsValidator },
+  handler: async (ctx, args) => {
+    const result = await ctx.db.query("sessions")
+      .withIndex("by_endedAt", query => query.eq("endedAt", null))
+      .paginate({ ...args.paginationOpts, numItems: Math.min(args.paginationOpts.numItems, 200), maximumRowsRead: 200, maximumBytesRead: 256_000 })
+    return { count: result.page.length, isDone: result.isDone, continueCursor: result.continueCursor }
   },
 })

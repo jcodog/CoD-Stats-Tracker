@@ -29,3 +29,15 @@ describe("creator payout presentation", () => {
     )
   })
 })
+
+it("does not show a partial financial estimate as a complete payout", () => {
+  expect(
+    getEstimatedPayoutPresentation({
+      metricsComplete: false,
+      connectPayoutReady: true,
+      payoutEligible: true,
+      paidConversionCount: 10,
+      estimatedEarningsByCurrency: [{ amount: 10000, currency: "GBP" }],
+    }).value
+  ).toBe("Calculating…")
+})

@@ -68,10 +68,15 @@ const STAFF_DASHBOARD_STALE_TIME = 2 * 60_000
 const STAFF_WEBHOOK_DETAIL_STALE_TIME = 60_000
 
 async function callManagementDashboard(
-  convex: ConvexReactClient
+  convex: ConvexReactClient,
+  source: "local" | "clerk",
+  cursor: string | null
 ): Promise<StaffManagementDashboard> {
   try {
-    return await convex.action(api.actions.staff.management.getDashboard, {})
+    return await convex.action(api.actions.staff.management.getDashboard, {
+      source,
+      cursor,
+    })
   } catch (error) {
     throw toStaffClientError(error)
   }
@@ -180,8 +185,7 @@ async function callBillingAction<T>(
         return (await convex.action(
           api.actions.staff.billing.cancelCreatorPayoutRun,
           {
-            payoutRunId: action.input
-              .payoutRunId as Id<"creatorPayoutRuns">,
+            payoutRunId: action.input.payoutRunId as Id<"creatorPayoutRuns">,
           }
         )) as T
       case "createCreatorPayoutRun":
@@ -189,8 +193,7 @@ async function callBillingAction<T>(
           api.actions.staff.billing.createCreatorPayoutRun,
           {
             ledgerEntryIds: action.input.ledgerEntryIds as
-              | Id<"creatorEarningLedger">[]
-              | undefined,
+              Id<"creatorEarningLedger">[] | undefined,
             periodEnd: action.input.periodEnd,
             periodStart: action.input.periodStart,
           }
@@ -199,8 +202,7 @@ async function callBillingAction<T>(
         return (await convex.action(
           api.actions.staff.billing.executeCreatorPayoutRun,
           {
-            payoutRunId: action.input
-              .payoutRunId as Id<"creatorPayoutRuns">,
+            payoutRunId: action.input.payoutRunId as Id<"creatorPayoutRuns">,
           }
         )) as T
       case "prepareCreatorProgramConnectAccount":
@@ -369,16 +371,21 @@ async function callRankedAction<T>(
 }
 
 export function useStaffManagementDashboard(
-  initialData: StaffManagementDashboard
+  initialData: StaffManagementDashboard,
+  source: "local" | "clerk",
+  cursor: string | null
 ) {
   const convex = useConvex()
   const { isAuthenticated, isLoading } = useConvexAuth()
 
   return useQuery({
     enabled: !isLoading && isAuthenticated,
-    initialData,
-    queryFn: () => callManagementDashboard(convex),
-    queryKey: staffQueryKeys.management,
+    initialData:
+      source === initialData.directorySource && cursor === null
+        ? initialData
+        : undefined,
+    queryFn: () => callManagementDashboard(convex, source, cursor),
+    queryKey: [...staffQueryKeys.management, source, cursor],
     staleTime: STAFF_DASHBOARD_STALE_TIME,
   })
 }

@@ -144,7 +144,21 @@ export function StaffManagementView({
 }: {
   initialData: StaffManagementDashboard
 }) {
-  const { data } = useStaffManagementDashboard(initialData)
+  const [source, setSource] = useState<"local" | "clerk">("local")
+  const [cursors, setCursors] = useState<(string | null)[]>([null])
+  const directory = useStaffManagementDashboard(
+    initialData,
+    source,
+    cursors[cursors.length - 1] ?? null
+  )
+  const data = directory.data ?? {
+    ...initialData,
+    users: [],
+    adminCount: 0,
+    staffCount: 0,
+    superAdminCount: 0,
+    continueCursor: null,
+  }
   const managementClient = useStaffManagementClient()
   const [pendingRoleChange, setPendingRoleChange] = useState<{
     nextRole: AssignableUserRole
@@ -344,24 +358,71 @@ export function StaffManagementView({
 
       <StaffMetricStrip
         items={[
-          { label: "Aligned operators", value: alignedAdminCount },
-          { label: "Admins", value: data.adminCount },
-          { label: "Super-admins", value: data.superAdminCount },
-          { label: "Elevated users", value: data.staffCount },
+          { label: "Aligned operators on page", value: alignedAdminCount },
+          { label: "Admins on page", value: data.adminCount },
+          { label: "Super-admins on page", value: data.superAdminCount },
+          { label: "Elevated users on page", value: data.staffCount },
         ]}
       />
 
       <StaffSection
-        description="Search by name, email, or Clerk ID. The menu only shows role transitions that your current operator role is allowed to apply."
+        description="Browse 50 accounts per page. Switch directories to find local records without a Clerk account, or Clerk accounts without a local record."
         title="Directory"
       >
+        <div className="mb-4 flex flex-wrap items-center gap-3">
+          <Button
+            variant={source === "local" ? "default" : "outline"}
+            onClick={() => {
+              setSource("local")
+              setCursors([null])
+            }}
+          >
+            Local accounts
+          </Button>
+          <Button
+            variant={source === "clerk" ? "default" : "outline"}
+            onClick={() => {
+              setSource("clerk")
+              setCursors([null])
+            }}
+          >
+            Clerk accounts
+          </Button>
+          <span className="text-sm text-muted-foreground">
+            Page {cursors.length}
+          </span>
+          <Button
+            variant="outline"
+            disabled={cursors.length === 1 || directory.isFetching}
+            onClick={() => setCursors((previous) => previous.slice(0, -1))}
+          >
+            Previous
+          </Button>
+          <Button
+            variant="outline"
+            disabled={!data.continueCursor || directory.isFetching}
+            onClick={() =>
+              setCursors((previous) => [...previous, data.continueCursor])
+            }
+          >
+            Next
+          </Button>
+          {directory.isFetching ? (
+            <span role="status">Loading accounts…</span>
+          ) : null}
+          {directory.isError ? (
+            <span role="alert" className="text-destructive">
+              Could not load this directory page.
+            </span>
+          ) : null}
+        </div>{" "}
         <StaffDataTable
           columns={columns}
           data={data.users}
           emptyDescription="No staff-manageable users are currently available."
           emptyTitle="No users found"
           getRowId={(row) => row.clerkUserId}
-          searchPlaceholder="Search users, emails, or Clerk IDs"
+          searchPlaceholder="Search this page by name, email, or Clerk ID"
         />
       </StaffSection>
 
@@ -454,16 +515,6 @@ export function StaffManagementView({
                 </div>
               ) : null}
 
-              {pendingRoleChange.user.roleStatus === "matched" &&
-              isAdminCapableRole(pendingRoleChange.user.convexRole) &&
-              !isAdminCapableRole(pendingRoleChange.nextRole) &&
-              alignedAdminCount <= 1 ? (
-                <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-3 text-sm text-destructive">
-                  This is the last aligned admin-capable account. Promote
-                  another admin first.
-                </div>
-              ) : null}
-
               {pendingRoleChange.user.isReservedSuperAdmin ? (
                 <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-3 text-sm text-amber-950 dark:text-amber-100">
                   <div className="flex items-center gap-2 font-medium">
@@ -499,15 +550,7 @@ export function StaffManagementView({
               Cancel
             </Button>
             <Button
-              disabled={
-                mutation.isPending ||
-                Boolean(
-                  pendingRoleChange?.user.roleStatus === "matched" &&
-                  isAdminCapableRole(pendingRoleChange.user.convexRole) &&
-                  !isAdminCapableRole(pendingRoleChange.nextRole) &&
-                  alignedAdminCount <= 1
-                )
-              }
+              disabled={mutation.isPending}
               onClick={() => {
                 void confirmRoleChange()
               }}

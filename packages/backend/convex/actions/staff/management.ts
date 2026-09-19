@@ -13,9 +13,11 @@ import {
   type AuthorizedStaffActionContext,
   type RequiredStaffRole,
 } from "../../../src/lib/staffActionAuth"
-import { isConfiguredSuperAdminDiscordId } from "../../../src/lib/staffRoleConfig"
 import {
-  isAdminCapableRole,
+  isConfiguredSuperAdminDiscordId,
+  resolveConfiguredUserRole,
+} from "../../../src/lib/staffRoleConfig"
+import {
   parseUserRole,
   type AssignableUserRole,
   type UserRole,
@@ -113,31 +115,6 @@ function getRoleStatus(args: {
   return "matched" as const
 }
 
-async function listAllClerkUsers() {
-  const clerkClient = getClerkBackendClient()
-  const users: ClerkListUserRecord[] = []
-  const pageSize = 100
-
-  for (let offset = 0; ; offset += pageSize) {
-    const page = await clerkClient.users.getUserList({
-      limit: pageSize,
-      offset,
-    })
-
-    if (!page.data.length) {
-      break
-    }
-
-    users.push(...page.data)
-
-    if (page.data.length < pageSize) {
-      break
-    }
-  }
-
-  return users
-}
-
 function buildManagementUsers(args: {
   clerkUsers: ClerkListUserRecord[]
   currentActorClerkUserId: string
@@ -165,7 +142,10 @@ function buildManagementUsers(args: {
     const clerkUser = clerkUsersById.get(clerkUserId)
     const convexUser = convexUsersById.get(clerkUserId)
     const clerkRole = parseUserRole(clerkUser?.publicMetadata?.role)
-    const convexRole = parseUserRole(convexUser?.role)
+    const convexRole = resolveConfiguredUserRole({
+      role: parseUserRole(convexUser?.role),
+      discordId: convexUser?.discordId,
+    })
     const displayName =
       (clerkUser && getClerkDisplayName(clerkUser)) ||
       convexUser?.name ||
@@ -195,6 +175,7 @@ function buildManagementUsers(args: {
 }
 
 type ManagementRecords = {
+  continueCursor: string | null
   roleAuditLogs: Array<Parameters<typeof mapAuditLogEntry>[0]>
   users: Parameters<typeof buildManagementUsers>[0]["convexUsers"]
 }
@@ -218,13 +199,6 @@ function buildRoleChangeDetails(args: {
     null,
     2
   )
-}
-
-function countAlignedAdmins(users: StaffManagementUserRecord[]) {
-  return users.filter(
-    (user) =>
-      user.roleStatus === "matched" && isAdminCapableRole(user.convexRole)
-  ).length
 }
 
 function getMetadataStripeCustomerId(value: unknown) {
@@ -401,24 +375,58 @@ async function recordAuditLog(args: {
 }
 
 export const getDashboard = action({
-  args: {},
-  handler: async (ctx): Promise<StaffManagementDashboard> => {
+  args: {
+    source: v.optional(v.union(v.literal("local"), v.literal("clerk"))),
+    cursor: v.optional(v.union(v.string(), v.null())),
+  },
+  handler: async (ctx, args): Promise<StaffManagementDashboard> => {
     const operator = await requireAuthorizedStaffAction(ctx, "staff")
-    const recordsPromise: Promise<ManagementRecords> = ctx.runQuery(
-      internal.queries.staff.internal.getManagementRecords,
-      {}
-    )
-    const [records, clerkUsers] = await Promise.all([
-      recordsPromise,
-      listAllClerkUsers(),
-    ])
+    const source = args.source ?? "local"
+    const clerk = getClerkBackendClient()
+    let records: ManagementRecords
+    let clerkUsers: ClerkListUserRecord[]
+    let continueCursor: string | null
+    if (source === "clerk") {
+      const offset = Number(args.cursor ?? 0)
+      if (!Number.isSafeInteger(offset) || offset < 0)
+        throw new Error("Invalid directory cursor.")
+      const page = await clerk.users.getUserList({
+        limit: 50,
+        offset,
+        orderBy: "-created_at",
+      })
+      clerkUsers = page.data
+      records = await ctx.runQuery(
+        internal.queries.staff.internal.getManagementRecords,
+        { clerkUserIds: page.data.map((user) => user.id) }
+      )
+      continueCursor =
+        offset + page.data.length < page.totalCount
+          ? String(offset + page.data.length)
+          : null
+    } else {
+      records = await ctx.runQuery(
+        internal.queries.staff.internal.getManagementRecords,
+        { cursor: args.cursor }
+      )
+      clerkUsers = records.users.length
+        ? (
+            await clerk.users.getUserList({
+              userId: records.users.map((user) => user.clerkUserId),
+              limit: 50,
+            })
+          ).data
+        : []
+      continueCursor = records.continueCursor
+    }
     const users = buildManagementUsers({
       clerkUsers,
       convexUsers: records.users,
       currentActorClerkUserId: operator.actorClerkUserId,
     })
-
     return {
+      directorySource: source,
+      continueCursor,
       adminCount: users.filter((user) => user.convexRole === "admin").length,
       auditLogs: records.roleAuditLogs.map(mapAuditLogEntry),
       currentActorClerkUserId: operator.actorClerkUserId,
@@ -434,6 +442,28 @@ export const getDashboard = action({
   },
 })
 
+async function getManagementTarget(
+  ctx: ActionCtx,
+  targetClerkUserId: string,
+  actorClerkUserId: string
+) {
+  const [dbUser, clerkPage] = await Promise.all([
+    ctx.runQuery(internal.queries.staff.internal.getUserByClerkUserId, {
+      clerkUserId: targetClerkUserId,
+    }),
+    getClerkBackendClient().users.getUserList({
+      userId: [targetClerkUserId],
+      limit: 1,
+    }),
+  ])
+  const targetUser = buildManagementUsers({
+    clerkUsers: clerkPage.data,
+    convexUsers: dbUser ? [dbUser] : [],
+    currentActorClerkUserId: actorClerkUserId,
+  })[0]
+  if (!targetUser) throw new Error(`Unable to find user ${targetClerkUserId}`)
+  return { targetUser, dbUser, clerkUser: clerkPage.data[0] }
+}
 export const updateUserRole = action({
   args: {
     nextRole: v.union(
@@ -445,26 +475,11 @@ export const updateUserRole = action({
   },
   handler: async (ctx, args): Promise<StaffMutationResponse> => {
     const operator = await requireAuthorizedStaffAction(ctx, "admin")
-    const recordsPromise: Promise<ManagementRecords> = ctx.runQuery(
-      internal.queries.staff.internal.getManagementRecords,
-      {}
+    const { targetUser, clerkUser } = await getManagementTarget(
+      ctx,
+      args.targetClerkUserId,
+      operator.actorClerkUserId
     )
-    const [records, clerkUsers] = await Promise.all([
-      recordsPromise,
-      listAllClerkUsers(),
-    ])
-    const users = buildManagementUsers({
-      clerkUsers,
-      convexUsers: records.users,
-      currentActorClerkUserId: operator.actorClerkUserId,
-    })
-    const targetUser = users.find(
-      (user) => user.clerkUserId === args.targetClerkUserId
-    )
-
-    if (!targetUser) {
-      throw new Error(`Unable to find Clerk user ${args.targetClerkUserId}`)
-    }
 
     if (!targetUser.hasConvexUser) {
       throw new Error(
@@ -497,20 +512,7 @@ export const updateUserRole = action({
       )
     }
 
-    const alignedAdminCount = countAlignedAdmins(users)
-    const targetIsAlignedAdmin =
-      targetUser.roleStatus === "matched" &&
-      isAdminCapableRole(targetUser.convexRole)
-
-    if (
-      targetIsAlignedAdmin &&
-      !isAdminCapableRole(args.nextRole) &&
-      alignedAdminCount <= 1
-    ) {
-      throw new Error(
-        "The last aligned admin-capable user cannot be demoted. Promote another admin first."
-      )
-    }
+    // The authorized admin operator cannot edit themselves, so an aligned administrator remains.
 
     if (
       targetUser.clerkRole === args.nextRole &&
@@ -522,9 +524,6 @@ export const updateUserRole = action({
     }
 
     const clerkClient = getClerkBackendClient()
-    const clerkUser = clerkUsers.find(
-      (user) => user.id === args.targetClerkUserId
-    )
 
     if (!clerkUser) {
       throw new Error(`Unable to load Clerk user ${args.targetClerkUserId}`)
@@ -631,26 +630,15 @@ export const banUser = action({
   },
   handler: async (ctx, args): Promise<StaffMutationResponse> => {
     const operator = await requireAuthorizedStaffAction(ctx, "staff")
-    const recordsPromise: Promise<ManagementRecords> = ctx.runQuery(
-      internal.queries.staff.internal.getManagementRecords,
-      {}
+    const {
+      targetUser,
+      clerkUser,
+      dbUser: targetDbUser,
+    } = await getManagementTarget(
+      ctx,
+      args.targetClerkUserId,
+      operator.actorClerkUserId
     )
-    const [records, clerkUsers] = await Promise.all([
-      recordsPromise,
-      listAllClerkUsers(),
-    ])
-    const users = buildManagementUsers({
-      clerkUsers,
-      convexUsers: records.users,
-      currentActorClerkUserId: operator.actorClerkUserId,
-    })
-    const targetUser = users.find(
-      (user) => user.clerkUserId === args.targetClerkUserId
-    )
-
-    if (!targetUser) {
-      throw new Error(`Unable to find Clerk user ${args.targetClerkUserId}`)
-    }
 
     if (
       !canActorBanManagementUser({
@@ -666,15 +654,6 @@ export const banUser = action({
       )
     }
 
-    const clerkUser = clerkUsers.find(
-      (user) => user.id === args.targetClerkUserId
-    )
-    const targetDbUser = await ctx.runQuery(
-      internal.queries.staff.internal.getUserByClerkUserId,
-      {
-        clerkUserId: args.targetClerkUserId,
-      }
-    )
     const localSubscriptions: Array<{
       stripeCustomerId: string
     }> = targetDbUser
@@ -815,7 +794,6 @@ export const banUser = action({
     }
   },
 })
-
 
 async function requireAuthorizedStaffAction(
   ctx: ActionCtx,

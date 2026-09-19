@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { startTransition, useEffect, useState } from "react"
-import { useMutation, useQuery } from "convex/react"
+import { useMutation } from "convex/react"
 import { useSearchParams } from "next/navigation"
 import {
   IconArrowRight,
@@ -17,6 +17,7 @@ import {
 
 import { api } from "@workspace/backend/convex/_generated/api"
 import { formatCreatorRequirementLabel } from "@workspace/backend/lib/creator/program"
+import { useCreatorDashboard } from "@/features/creator-panel/lib/use-creator-dashboard"
 import { CreatorConsoleHeader } from "@/features/creator-panel/components/CreatorConsoleHeader"
 import {
   formatCreatorProgramSummary,
@@ -105,9 +106,7 @@ const pageDescription =
   "Run your referral code, confirm the configured economics, and manage the Stripe Connect state that controls payout readiness."
 
 export function CreatorCodeView() {
-  const dashboard = useQuery(
-    api.queries.creator.dashboard.current.getCurrentCreatorDashboard
-  )
+  const dashboard = useCreatorDashboard()
   const setCodeActiveState = useMutation(
     api.mutations.creator.accounts.settings.setCurrentCreatorCodeActiveState
   )
@@ -195,6 +194,7 @@ export function CreatorCodeView() {
       creatorAccount.connectState === "ready" &&
       creatorAccount.payoutsEnabled === true,
     estimatedEarningsByCurrency: dashboard.estimatedEarningsByCurrency,
+    metricsComplete: dashboard.metricsComplete,
     paidConversionCount: dashboard.paidConversionCount,
     payoutEligible: creatorAccount.payoutEligible,
   })
@@ -378,7 +378,9 @@ export function CreatorCodeView() {
                   detail: "Users attributed to this creator code.",
                   icon: IconPlugConnected,
                   label: "Attributed signups",
-                  value: String(dashboard.signupCount),
+                  value: dashboard.metricsComplete
+                    ? String(dashboard.signupCount)
+                    : "Calculating…",
                 },
                 {
                   detail: estimatedPayout.detail,
@@ -390,7 +392,9 @@ export function CreatorCodeView() {
                   detail: "Attributed users with a paid subscription.",
                   icon: IconArrowRight,
                   label: "Paid conversions",
-                  value: String(dashboard.paidConversionCount),
+                  value: dashboard.metricsComplete
+                    ? String(dashboard.paidConversionCount)
+                    : "Calculating…",
                 },
               ].map((item) => {
                 const Icon = item.icon

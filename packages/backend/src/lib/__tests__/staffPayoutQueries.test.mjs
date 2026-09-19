@@ -10,15 +10,17 @@ function readRepoFile(path) {
 
 describe("staff payout query hardening", () => {
   it("keeps payout dashboard queries bounded and indexed", () => {
-    const source = readRepoFile("packages/backend/convex/queries/staff/internal.ts")
+    const source = readRepoFile(
+      "packages/backend/convex/queries/staff/internal.ts"
+    )
 
     expect(source).not.toContain('query("creatorEarningLedger").collect()')
     expect(source).not.toContain('query("creatorPayoutTransfers").collect()')
     expect(source).toContain('withIndex("by_status_invoiceIssuedAt"')
     expect(source).toContain('withIndex("by_status_createdAt"')
-    expect(source).toContain('creatorPayoutRunCreatedAfter')
+    expect(source).toContain("creatorPayoutRunCreatedAfter")
     expect(source).toContain('withIndex("by_updatedAt"')
-    expect(source).toContain(".take(5000)")
+    expect(source).toContain(".take(5001)")
     expect(source).toContain(".take(100)")
   })
 
@@ -35,7 +37,9 @@ describe("staff payout query hardening", () => {
     expect(routeSource).toContain(
       'renderStaffBillingPage("subscriptions-creator-transfers")'
     )
-    expect(sectionSource).toContain('href: "/staff/subscriptions/creator-transfers"')
+    expect(sectionSource).toContain(
+      'href: "/staff/subscriptions/creator-transfers"'
+    )
     expect(sectionSource).toContain(
       'pathname.startsWith("/staff/subscriptions/creator-transfers")'
     )
@@ -56,9 +60,7 @@ describe("staff payout query hardening", () => {
     expect(dialogSource).toContain("Execute manual transfer run")
     expect(dialogSource).toContain("Type EXECUTE")
     expect(dialogSource).toContain('args.state?.confirmation !== "EXECUTE"')
-    expect(viewSource).toContain(
-      "setCreatorPayoutExecuteConfirmationState({"
-    )
+    expect(viewSource).toContain("setCreatorPayoutExecuteConfirmationState({")
     expect(viewSource).not.toContain(
       "onClick={() => void executeCreatorPayoutRun(row.original.id)}"
     )
