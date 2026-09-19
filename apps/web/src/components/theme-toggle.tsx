@@ -20,7 +20,7 @@ export function ThemeToggle() {
         render={
           <Button
             aria-keyshortcuts="D"
-            aria-label={`Switch to ${isDark ? "light" : "dark"} mode`}
+            aria-label="Toggle color theme"
             onClick={() => setTheme(isDark ? "light" : "dark")}
             size="icon-sm"
             variant="outline"
