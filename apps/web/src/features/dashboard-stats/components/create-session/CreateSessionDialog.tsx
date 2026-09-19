@@ -174,7 +174,7 @@ export function DashboardStatsCreateSessionDialog({
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
-      <DialogContent className="max-w-xl">
+      <DialogContent className="max-h-[90svh] max-w-xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Create ranked session</DialogTitle>
           <DialogDescription>
@@ -184,6 +184,29 @@ export function DashboardStatsCreateSessionDialog({
           </DialogDescription>
         </DialogHeader>
 
+        <ol
+          aria-label="Session creation progress"
+          className="grid grid-cols-3 gap-2 border-b border-border pb-4 text-xs"
+        >
+          {(["username", "startSr", "review"] as const).map((item, index) => (
+            <li
+              key={item}
+              aria-current={step === item ? "step" : undefined}
+              className={
+                step === item
+                  ? "font-semibold text-foreground"
+                  : "text-muted-foreground"
+              }
+            >
+              {index + 1}.{" "}
+              {item === "username"
+                ? "Player"
+                : item === "startSr"
+                  ? "Starting SR"
+                  : "Review"}
+            </li>
+          ))}
+        </ol>
         <div className="flex flex-col gap-6">
           {step === "username" ? (
             <FieldGroup>

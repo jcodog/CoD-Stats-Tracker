@@ -281,13 +281,10 @@ export function PricingIntro({
 export function PricingPlanList({
   catalog,
   signedIn,
-  viewport,
 }: {
   catalog: PricingCatalogResponse
   signedIn: boolean
-  viewport: "desktop" | "mobile"
 }) {
-  const isMobileView = viewport === "mobile"
   const activePlans = catalog.plans.filter((plan) => plan.active)
   const recommendedPlanKey = getRecommendedPlanKey(activePlans)
 
@@ -325,11 +322,9 @@ export function PricingPlanList({
       <div
         className={cn(
           "grid gap-4",
-          isMobileView
-            ? "grid-cols-1"
-            : activePlans.length >= 3
-              ? "md:grid-cols-2 xl:grid-cols-3"
-              : "md:grid-cols-2"
+          activePlans.length >= 3
+            ? "md:grid-cols-2 xl:grid-cols-3"
+            : "md:grid-cols-2"
         )}
       >
         {activePlans.map((plan) => {
@@ -477,223 +472,111 @@ export function PricingPlanList({
   )
 }
 
-export function PricingComparisonDesktop({
+export function PricingComparison({
   catalog,
 }: {
   catalog: PricingCatalogResponse
 }) {
   const activePlans = catalog.plans.filter((plan) => plan.active)
   const featureGroups = buildPricingFeatureRows(activePlans)
-
-  if (activePlans.length === 0) {
-    return null
-  }
-
-  const gridTemplateColumns =
-    "minmax(0, 22rem) repeat(" +
-    activePlans.length +
-    ", minmax(10rem, 1fr))"
-
+  if (!activePlans.length) return null
   return (
-    <section className="grid gap-5">
+    <section className="grid gap-5" aria-labelledby="pricing-comparison-title">
       <div className="grid gap-2">
         <Badge className="w-fit" variant="outline">
           Full breakdown
         </Badge>
-        <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+        <h2
+          id="pricing-comparison-title"
+          className="text-2xl font-semibold tracking-tight sm:text-3xl"
+        >
           Compare the details
         </h2>
-        <p className="max-w-[44rem] text-sm leading-7 text-foreground/76 sm:text-base">
-          Use the cards above to pick a direction. Use this table when you want
-          the exact feature split before choosing.
+        <p className="text-sm leading-7 text-muted-foreground">
+          Compare every included feature. Scroll the table on smaller screens.
         </p>
       </div>
-
-      <div className="overflow-x-auto rounded-xl border border-border/70 bg-card/45 shadow-sm">
-        <div className="min-w-[64rem]">
-          <div
-            className="grid border-b border-border/70 bg-muted/35 px-4 py-4"
-            style={{ gridTemplateColumns }}
-          >
-            <div className="pr-6 text-xs font-medium tracking-wide text-muted-foreground uppercase">
-              Feature
-            </div>
-            {activePlans.map((plan) => (
-              <div className="px-4" key={plan.planKey}>
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-sm font-semibold">{plan.name}</span>
+      <div
+        role="region"
+        aria-label="Plan feature comparison"
+        tabIndex={0}
+        className="overflow-x-auto rounded-xl border border-border bg-card focus-visible:outline-2 focus-visible:outline-ring"
+      >
+        <table className="w-full min-w-[40rem] border-collapse text-left text-sm">
+          <caption className="sr-only">
+            Features included in each active CodStats plan
+          </caption>
+          <thead>
+            <tr className="border-b border-border bg-muted/40">
+              <th scope="col" className="min-w-48 p-4 font-medium">
+                Feature
+              </th>
+              {activePlans.map((plan) => (
+                <th
+                  scope="col"
+                  key={plan.planKey}
+                  className="min-w-36 p-4 font-semibold"
+                >
+                  {plan.name}
                   {catalog.currentPlanKey === plan.planKey ? (
-                    <Badge variant="secondary">Current</Badge>
+                    <Badge className="ml-2" variant="secondary">
+                      Current
+                    </Badge>
                   ) : null}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {featureGroups.map((group) => (
-            <div key={group.category}>
-              <div className="border-b border-border/70 bg-muted/20 px-4 py-3 text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                {group.category}
-              </div>
-              {group.rows.map((feature) => (
-                <div
-                  className="grid border-b border-border/60 px-4 py-4 last:border-b-0"
-                  key={feature.featureKey}
-                  style={{ gridTemplateColumns }}
-                >
-                  <div className="pr-6">
-                    <div className="text-sm font-medium">{feature.name}</div>
-                    <div className="mt-1 max-w-[20rem] text-xs leading-6 text-muted-foreground">
-                      {feature.description}
-                    </div>
-                  </div>
-
-                  {activePlans.map((plan) => {
-                    const isIncluded = plan.features.some(
-                      (candidate) =>
-                        candidate.featureKey === feature.featureKey
-                    )
-
-                    return (
-                      <div
-                        className="flex items-center gap-2 px-4 text-sm"
-                        key={plan.planKey + ":" + feature.featureKey}
-                      >
-                        {isIncluded ? (
-                          <>
-                            <span className="flex size-6 items-center justify-center rounded-full bg-primary/10">
-                              <IconCheck
-                                aria-hidden="true"
-                                className="size-3.5 text-primary"
-                              />
-                            </span>
-                            <span className="font-medium">Included</span>
-                          </>
-                        ) : (
-                          <>
-                            <span className="flex size-6 items-center justify-center rounded-full bg-muted">
-                              <IconMinus
-                                aria-hidden="true"
-                                className="size-3.5 text-muted-foreground"
-                              />
-                            </span>
-                            <span className="text-muted-foreground">
-                              Not included
-                            </span>
-                          </>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
+                </th>
               ))}
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  )
-}
-
-export function PricingComparisonMobile({
-  catalog,
-}: {
-  catalog: PricingCatalogResponse
-}) {
-  const activePlans = catalog.plans.filter((plan) => plan.active)
-  const featureGroups = buildPricingFeatureRows(activePlans)
-
-  if (activePlans.length === 0) {
-    return null
-  }
-
-  return (
-    <section className="grid gap-5">
-      <div className="grid gap-2">
-        <Badge className="w-fit" variant="outline">
-          Full breakdown
-        </Badge>
-        <h2 className="text-2xl font-semibold tracking-tight">
-          Compare the details
-        </h2>
-        <p className="text-sm leading-7 text-foreground/76">
-          A compact plan-by-plan breakdown when you want to check every
-          included feature.
-        </p>
-      </div>
-
-      <div className="grid gap-4">
-        {featureGroups.map((group) => (
-          <section
-            className="overflow-hidden rounded-lg border border-border/70 bg-card/55"
-            key={group.category}
-          >
-            <div className="border-b border-border/70 bg-muted/25 px-4 py-3">
-              <h3 className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                {group.category}
-              </h3>
-            </div>
-            <div className="grid">
+            </tr>
+          </thead>
+          {featureGroups.map((group) => (
+            <tbody key={group.category}>
+              <tr>
+                <th
+                  scope="colgroup"
+                  colSpan={activePlans.length + 1}
+                  className="border-y border-border bg-muted/20 px-4 py-3 text-xs font-medium tracking-wide text-muted-foreground uppercase"
+                >
+                  {group.category}
+                </th>
+              </tr>
               {group.rows.map((feature) => (
-                <div
-                  className="grid gap-3 border-b border-border/60 p-4 last:border-b-0"
+                <tr
+                  className="border-b border-border/60 last:border-0"
                   key={feature.featureKey}
                 >
-                  <div className="grid gap-1">
-                    <div className="text-sm font-medium">{feature.name}</div>
-                    <p className="text-xs leading-6 text-muted-foreground">
+                  <th scope="row" className="p-4 font-medium">
+                    <span>{feature.name}</span>
+                    <p className="mt-1 max-w-xs text-xs leading-6 font-normal text-muted-foreground">
                       {feature.description}
                     </p>
-                  </div>
-
-                  <div className="grid gap-2">
-                    {activePlans.map((plan) => {
-                      const isIncluded = plan.features.some(
-                        (candidate) =>
-                          candidate.featureKey === feature.featureKey
-                      )
-
-                      return (
-                        <div
-                          className="flex items-center justify-between gap-4 text-sm"
-                          key={plan.planKey + ":" + feature.featureKey}
-                        >
-                          <span className="flex items-center gap-2">
-                            <span>{plan.name}</span>
-                            {catalog.currentPlanKey === plan.planKey ? (
-                              <Badge variant="secondary">Current</Badge>
-                            ) : null}
-                          </span>
-                          <span
-                            className={cn(
-                              "flex items-center gap-1.5",
-                              isIncluded
-                                ? "font-medium text-foreground"
-                                : "text-muted-foreground"
-                            )}
-                          >
-                            {isIncluded ? (
-                              <IconCheck
-                                aria-hidden="true"
-                                className="size-3.5 text-primary"
-                              />
-                            ) : (
-                              <IconMinus
-                                aria-hidden="true"
-                                className="size-3.5"
-                              />
-                            )}
-                            {isIncluded ? "Included" : "Not included"}
-                          </span>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
+                  </th>
+                  {activePlans.map((plan) => {
+                    const included = plan.features.some(
+                      (item) => item.featureKey === feature.featureKey
+                    )
+                    return (
+                      <td key={plan.planKey} className="p-4">
+                        <span className="inline-flex items-center gap-2">
+                          {included ? (
+                            <IconCheck
+                              aria-hidden="true"
+                              className="size-4 text-primary"
+                            />
+                          ) : (
+                            <IconMinus
+                              aria-hidden="true"
+                              className="size-4 text-muted-foreground"
+                            />
+                          )}
+                          <span>{included ? "Included" : "Not included"}</span>
+                        </span>
+                      </td>
+                    )
+                  })}
+                </tr>
               ))}
-            </div>
-          </section>
-        ))}
+            </tbody>
+          ))}
+        </table>
       </div>
     </section>
   )

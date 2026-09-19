@@ -1,7 +1,8 @@
+import { ApplicationProviders } from "@/components/providers/ApplicationProviders"
 export default function StaffProtectedLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  return children
+  return <ApplicationProviders>{children}</ApplicationProviders>
 }

@@ -132,12 +132,12 @@ function ToolbarGroup({
   label: string
 }) {
   return (
-    <div className="grid min-w-0 gap-2">
-      <span className="text-xs font-medium whitespace-nowrap text-muted-foreground">
+    <fieldset className="grid min-w-0 gap-2">
+      <legend className="mb-2 text-xs font-medium whitespace-nowrap text-muted-foreground">
         {label}
-      </span>
+      </legend>
       <div className="flex flex-wrap items-center gap-2">{children}</div>
-    </div>
+    </fieldset>
   )
 }
 
@@ -165,9 +165,7 @@ export function DashboardStatsEditorClient({
   }
 
   return (
-    <DashboardStatsEditorLoaded
-      initialDashboardState={initialDashboardState}
-    />
+    <DashboardStatsEditorLoaded initialDashboardState={initialDashboardState} />
   )
 }
 
@@ -350,7 +348,7 @@ function DashboardStatsEditorLoaded({
 
   return (
     <>
-      <div className="flex flex-1 flex-col gap-8">
+      <div className="flex flex-1 flex-col gap-5">
         <header
           className={
             "max-md:grid max-md:gap-4 max-md:border-b max-md:border-border/60 max-md:pb-5 md:flex md:flex-col md:gap-5 md:border-b md:border-border/60 md:pb-6 md:lg:flex-row md:lg:items-end md:lg:justify-between"
@@ -358,16 +356,12 @@ function DashboardStatsEditorLoaded({
         >
           <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-2">
-              <h1
-                className={
-                  "max-md:text-3xl max-md:font-semibold max-md:tracking-tight max-md:text-balance md:text-4xl md:font-semibold md:tracking-tight md:text-balance"
-                }
-              >
+              <h1 className={"text-2xl font-semibold tracking-tight"}>
                 Ranked stats
               </h1>
               <p className="max-w-3xl text-sm text-muted-foreground">
-                Create sessions for the current ranked title, log matches, and
-                review SR movement without leaving the dashboard.
+                {sessionMetaLabel ??
+                  "Start a session to track your ranked progress."}
               </p>
             </div>
           </div>
@@ -379,16 +373,12 @@ function DashboardStatsEditorLoaded({
           >
             {showUpgradeCta ? (
               <DashboardUpgradeButton
-                className={
-                  "max-md:h-11 max-md:w-full max-md:justify-center"
-                }
+                className={"max-md:h-11 max-md:w-full max-md:justify-center"}
               />
             ) : null}
             {showCreateSessionButton ? (
               <Button
-                className={
-                  "max-md:h-11 max-md:w-full max-md:justify-center"
-                }
+                className={"max-md:h-11 max-md:w-full max-md:justify-center"}
                 disabled={!canCreateSession}
                 onClick={handleOpenCreateSessionDialog}
                 variant="outline"
@@ -397,9 +387,7 @@ function DashboardStatsEditorLoaded({
               </Button>
             ) : null}
             <Button
-              className={
-                "max-md:h-11 max-md:w-full max-md:justify-center"
-              }
+              className={"max-md:h-11 max-md:w-full max-md:justify-center"}
               disabled={!canLogMatches}
               onClick={handleOpenLogMatchSheet}
             >
@@ -422,9 +410,7 @@ function DashboardStatsEditorLoaded({
           </Alert>
         ) : null}
 
-        {showUpgradeCta ? (
-          <DashboardUpgradePrompt compact />
-        ) : null}
+        {showUpgradeCta ? <DashboardUpgradePrompt compact /> : null}
 
         {activeSessions.length === 0 ? (
           <SurfaceFrame
@@ -464,8 +450,8 @@ function DashboardStatsEditorLoaded({
               >
                 <div className="grid gap-3 text-sm text-muted-foreground">
                   <h2 className="text-base font-semibold tracking-tight text-foreground">
-                      Session capacity
-                    </h2>
+                    Session capacity
+                  </h2>
                   <p>
                     Free users can keep one active session for the current title
                     and season.
@@ -501,17 +487,13 @@ function DashboardStatsEditorLoaded({
               <div className="grid gap-0">
                 <div
                   className={
-                    "max-md:border-y max-md:border-border/60 max-md:py-5 md:px-6 md:py-7"
+                    "max-md:border-y max-md:border-border/60 max-md:py-5 md:px-5 md:py-5"
                   }
                 >
-                  <div
-                    className={
-                      "max-md:grid max-md:gap-5 md:grid md:gap-6 md:xl:grid-cols-[minmax(0,1fr)_auto] md:xl:items-start"
-                    }
-                  >
+                  <div className={"grid min-w-0 gap-4"}>
                     <div className="grid min-w-0 gap-2">
                       <h2 className="text-base font-semibold tracking-tight">
-                        Session controls
+                        Active session
                       </h2>
                       <p className="text-sm text-muted-foreground">
                         {sessionMetaLabel ??
@@ -521,7 +503,7 @@ function DashboardStatsEditorLoaded({
 
                     <div
                       className={
-                        "max-md:grid max-md:gap-3 md:grid md:gap-4 md:sm:grid-cols-2 md:xl:grid-cols-[minmax(17rem,19rem)_auto_auto_auto] md:xl:items-start"
+                        "grid min-w-0 gap-4 sm:grid-cols-2 2xl:grid-cols-[minmax(15rem,1fr)_auto_auto_auto]"
                       }
                     >
                       <div
@@ -532,9 +514,7 @@ function DashboardStatsEditorLoaded({
                         <ToolbarGroup label="Session">
                           <AppSelect
                             className="w-full min-w-0"
-                            id={
-                              "dashboard-session"
-                            }
+                            id={"dashboard-session"}
                             onValueChange={(value) =>
                               startTransition(() => setSelectedSessionId(value))
                             }
@@ -769,8 +749,8 @@ function DashboardStatsEditorLoaded({
                           Latest 50 matches
                         </h2>
                         <p className="text-sm text-muted-foreground">
-                          All logged matches for the selected session within the
-                          active filter window.
+                          The latest 50 matches, filtered to the selected date
+                          range.
                         </p>
                       </div>
                       <DashboardStatsRecentMatches

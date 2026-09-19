@@ -1,3 +1,4 @@
+import { AuthShell } from "./AuthShell"
 import { SignUp } from "@clerk/nextjs"
 
 import { CreatorCodeNotice } from "@/features/creator-attribution/components/CreatorCodeNotice"
@@ -16,31 +17,22 @@ export function SignUpView({
 }: {
   pendingCreatorCode?: PendingCreatorCodeSummary | null
 }) {
-
   return (
-    <main className="flex min-h-screen flex-1 items-center justify-center bg-background">
-      <div
-        className={
-          "max-md:mx-auto max-md:flex max-md:w-full max-md:max-w-sm max-md:px-4 max-md:py-6 md:mx-auto md:flex md:w-full md:max-w-md md:px-6 md:py-10"
-        }
-      >
-        <div className="grid w-full gap-4">
-          {pendingCreatorCode ? (
-            <CreatorCodeNotice
-              code={pendingCreatorCode.code}
-              discountPercent={pendingCreatorCode.discountPercent}
-              layout="stacked"
-            />
-          ) : null}
+    <AuthShell mode="sign-up">
+      {pendingCreatorCode ? (
+        <CreatorCodeNotice
+          code={pendingCreatorCode.code}
+          discountPercent={pendingCreatorCode.discountPercent}
+          layout="stacked"
+        />
+      ) : null}
 
-          <SignUp
-            appearance={signUpAppearance}
-            path="/sign-up"
-            routing="path"
-            signInUrl="/sign-in"
-          />
-        </div>
-      </div>
-    </main>
+      <SignUp
+        appearance={signUpAppearance}
+        path="/sign-up"
+        routing="path"
+        signInUrl="/sign-in"
+      />
+    </AuthShell>
   )
 }

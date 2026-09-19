@@ -3,11 +3,8 @@ import { Geist_Mono, Inter } from "next/font/google"
 
 import { cn } from "@workspace/ui/lib/utils"
 import "@workspace/ui/globals.css"
-import { Toaster } from "@workspace/ui/components/sonner"
 import { ThemeProvider } from "@/components/providers/theme-provider"
 import { ClerkProvider } from "@/components/providers/ClerkProvider"
-import ConvexClientProvider from "@/components/providers/ConvexProviderWithClerk"
-import { TanstackQueryProvider } from "@/components/providers/TanstackQueryProvider"
 import { TooltipProvider } from "@workspace/ui/components/tooltip"
 import {
   getSiteUrl,
@@ -20,7 +17,7 @@ import {
 import { Databuddy } from "@databuddy/sdk/react"
 import { env } from "@/env/client"
 
-const inter = Inter({subsets:['latin'],variable:'--font-sans'})
+const inter = Inter({ subsets: ["latin"], variable: "--font-sans" })
 
 const fontMono = Geist_Mono({
   subsets: ["latin"],
@@ -141,24 +138,19 @@ export default function RootLayout({
         <ThemeProvider>
           <TooltipProvider>
             <ClerkProvider>
-              <ConvexClientProvider>
-                <TanstackQueryProvider>
-                  {children}
-                  <Toaster richColors position="top-right" closeButton />
-                  <Databuddy
-                    clientId={env.NEXT_PUBLIC_DATABUDDY_CLIENT_ID}
-                    trackHashChanges={true}
-                    trackAttributes={true}
-                    trackOutgoingLinks={true}
-                    trackInteractions={true}
-                    trackWebVitals={true}
-                    trackErrors={true}
-                    enableBatching
-                    batchSize={50}
-                    disabled={process.env.NODE_ENV !== "production"}
-                  />
-                </TanstackQueryProvider>
-              </ConvexClientProvider>
+              {children}
+              <Databuddy
+                clientId={env.NEXT_PUBLIC_DATABUDDY_CLIENT_ID}
+                trackHashChanges={true}
+                trackAttributes={true}
+                trackOutgoingLinks={true}
+                trackInteractions={true}
+                trackWebVitals={true}
+                trackErrors={true}
+                enableBatching
+                batchSize={50}
+                disabled={process.env.NODE_ENV !== "production"}
+              />
             </ClerkProvider>
           </TooltipProvider>
         </ThemeProvider>

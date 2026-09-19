@@ -29,7 +29,7 @@ function CreatorHomeLoadingState() {
   return (
     <div className="grid gap-6">
       <section className="overflow-hidden rounded-xl border border-border/60 bg-background">
-        <div className="grid gap-0 sm:grid-cols-2 xl:grid-cols-5">
+        <div className="grid grid-cols-2 gap-px bg-border xl:grid-cols-5">
           {Array.from({ length: 5 }).map((_, index) => (
             <div
               key={index}
@@ -156,7 +156,7 @@ export function CreatorHomeView() {
   return (
     <div className="flex flex-1 flex-col">
       <CreatorConsoleHeader description={pageDescription} />
-      <div className="grid gap-6 px-4 py-6 md:px-6 lg:px-8">
+      <div className="mx-auto grid w-full max-w-7xl gap-6 px-4 py-6 md:px-6 lg:px-8">
         <section className="flex flex-col gap-3 border-b border-border/60 pb-5 lg:flex-row lg:items-center lg:justify-between">
           <CreatorConnectStatusLine
             description={connectPresentation.description}
@@ -188,8 +188,20 @@ export function CreatorHomeView() {
           </div>
         </section>
 
-        <section className="border-y border-border/60">
-          <div className="grid gap-0 sm:grid-cols-2 xl:grid-cols-5">
+        {dashboard.creatorAccount.pendingActions.length > 0 ? (
+          <Alert>
+            <AlertTitle>Setup still needs attention</AlertTitle>
+            <AlertDescription>
+              {dashboard.creatorAccount.pendingActions.join(" ")}
+            </AlertDescription>
+          </Alert>
+        ) : null}
+
+        <section
+          aria-label="Creator performance and setup"
+          className="overflow-hidden rounded-lg border border-border"
+        >
+          <div className="grid grid-cols-2 gap-px bg-border xl:grid-cols-5">
             {[
               {
                 detail: estimatedPayout.detail,
@@ -235,13 +247,13 @@ export function CreatorHomeView() {
               return (
                 <div
                   key={item.label}
-                  className="flex min-h-[7.5rem] flex-col gap-3 border-b border-border/60 px-0 py-5 sm:px-4 xl:border-r xl:border-b-0 xl:px-5"
+                  className="flex min-w-0 flex-col gap-2 bg-card p-4 sm:p-5"
                 >
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Icon className="size-4" />
                     {item.label}
                   </div>
-                  <div className="text-2xl font-semibold tracking-tight text-foreground">
+                  <div className="text-xl font-semibold tracking-tight break-words text-foreground sm:text-2xl">
                     {item.value}
                   </div>
                   <p className="text-sm text-muted-foreground">{item.detail}</p>
@@ -251,17 +263,8 @@ export function CreatorHomeView() {
           </div>
         </section>
 
-        {dashboard.creatorAccount.pendingActions.length > 0 ? (
-          <Alert>
-            <AlertTitle>Setup still needs attention</AlertTitle>
-            <AlertDescription>
-              {dashboard.creatorAccount.pendingActions.join(" ")}
-            </AlertDescription>
-          </Alert>
-        ) : null}
-
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
-          <section className="border-y border-border/60 py-5">
+          <section className="rounded-lg border border-border bg-card p-5">
             <div className="grid gap-5">
               <div className="text-lg font-semibold tracking-tight text-foreground">
                 Program summary
@@ -307,7 +310,7 @@ export function CreatorHomeView() {
             </div>
           </section>
 
-          <section className="border-y border-border/60 py-5">
+          <section className="rounded-lg border border-border bg-card p-5">
             <div className="flex h-full flex-col gap-4">
               <div className="flex flex-col gap-1">
                 <div className="text-lg font-semibold tracking-tight text-foreground">

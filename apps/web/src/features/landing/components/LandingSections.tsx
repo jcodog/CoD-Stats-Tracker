@@ -1,575 +1,323 @@
 import Link from "next/link"
-import type { ReactElement, SVGProps } from "react"
-
+import Image from "next/image"
+import { ThemeToggle } from "@/components/theme-toggle"
 import { NavbarAuthActions } from "@/features/landing/components/NavbarAuthActions"
 import { PUBLIC_SITE_ANALYTICS_URL } from "@/lib/site-analytics"
-import { ClerkIconLight } from "@workspace/ui/components/ui/svgs/clerkIconLight"
-import { ClerkWordmarkDark } from "@workspace/ui/components/ui/svgs/clerkWordmarkDark"
-import { Cloudflare } from "@workspace/ui/components/ui/svgs/cloudflare"
-import { Convex } from "@workspace/ui/components/ui/svgs/convex"
-import { ConvexWordmarkDark } from "@workspace/ui/components/ui/svgs/convexWordmarkDark"
-import { NextjsIconDark } from "@workspace/ui/components/ui/svgs/nextjsIconDark"
-import { NextjsLogoDark } from "@workspace/ui/components/ui/svgs/nextjsLogoDark"
-import { Redis } from "@workspace/ui/components/ui/svgs/redis"
-import { ShadcnUiDark } from "@workspace/ui/components/ui/svgs/shadcnUiDark"
-import { Stripe } from "@workspace/ui/components/ui/svgs/stripe"
-import { StripeWordmark } from "@workspace/ui/components/ui/svgs/stripeWordmark"
-import { TurborepoIconDark } from "@workspace/ui/components/ui/svgs/turborepoIconDark"
-import { TurborepoWordmarkDark } from "@workspace/ui/components/ui/svgs/turborepoWordmarkDark"
-import { Typescript } from "@workspace/ui/components/ui/svgs/typescript"
-import { VercelDark } from "@workspace/ui/components/ui/svgs/vercelDark"
-import { VercelWordmarkDark } from "@workspace/ui/components/ui/svgs/vercelWordmarkDark"
-import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-} from "@workspace/ui/components/avatar"
 import { buttonVariants } from "@workspace/ui/components/button"
-import { cn } from "@workspace/ui/lib/utils"
 
-export type LandingViewport = "desktop" | "mobile"
-export const MARKETING_SHELL_MAX_WIDTH = "max-w-[90rem]"
+export const MARKETING_SHELL_MAX_WIDTH = "max-w-[80rem]"
+const frame = `mx-auto w-full ${MARKETING_SHELL_MAX_WIDTH} px-5 sm:px-8 lg:px-10`
 
-const MARKETING_FRAME_CLASSNAME = `mx-auto w-full ${MARKETING_SHELL_MAX_WIDTH} px-4 sm:px-6 lg:px-8`
 
-const productSteps = [
-  {
-    title: "Track ranked sessions",
-    description:
-      "Start a ranked run, log match outcomes, and keep SR movement attached to the session you are reviewing.",
-  },
-  {
-    title: "Review performance",
-    description:
-      "Use the dashboard to compare wins, losses, SR changes, recent matches, and session trends in one place.",
-  },
-  {
-    title: "Use creator tools where relevant",
-    description:
-      "Creator-plan accounts can manage community tools such as Play With Viewers without a separate public creator page.",
-  },
-] as const
-
-const dashboardReviewItems = [
-  {
-    title: "Ranked sessions",
-    description:
-      "Create a current ranked session and keep match logs tied to that run.",
-  },
-  {
-    title: "Match and stat tracking",
-    description:
-      "Record outcomes, SR changes, maps, modes, and optional match details.",
-  },
-  {
-    title: "Graphical stat views",
-    description:
-      "Review SR timelines, win/loss breakdowns, and daily performance where session data exists.",
-  },
-  {
-    title: "Creator tools on Creator",
-    description:
-      "Creator-plan accounts unlock community queue tooling for ranked creators.",
-  },
-] as const
-
-const creatorToolItems = [
-  {
-    title: "Play With Viewers queue",
-    detail:
-      "Creator-plan accounts can open a ranked viewer queue, set rank bounds, control matches per viewer, and publish the queue into Discord.",
-  },
-  {
-    title: "Selection and invite flow",
-    detail:
-      "Queue management, batch selection, and invite handling stay close to the creator dashboard so viewer lobbies can move without chaos.",
-  },
-  {
-    title: "Plan-gated creator workspace",
-    detail:
-      "Creator tools are available through the Creator plan and authenticated creator workspace, not a public creator directory.",
-  },
-] as const
-
-type StackGraphic = (props: SVGProps<SVGSVGElement>) => ReactElement
-
-const engineeringStackItems: Array<{
-  Logo: StackGraphic
-  logoClassName: string
-  name: string
-  Wordmark?: StackGraphic
-  wordmarkClassName?: string
-}> = [
-  {
-    Logo: NextjsIconDark,
-    Wordmark: NextjsLogoDark,
-    logoClassName: "h-10 w-10",
-    name: "Next.js",
-    wordmarkClassName: "h-4 w-auto",
-  },
-  {
-    Logo: Typescript,
-    logoClassName: "h-11 w-11",
-    name: "TypeScript",
-  },
-  {
-    Logo: ClerkIconLight,
-    Wordmark: ClerkWordmarkDark,
-    logoClassName: "h-11 w-11",
-    name: "Clerk",
-    wordmarkClassName: "h-4 w-auto",
-  },
-  {
-    Logo: Convex,
-    Wordmark: ConvexWordmarkDark,
-    logoClassName: "h-11 w-11",
-    name: "Convex",
-    wordmarkClassName: "h-4 w-auto",
-  },
-  {
-    Logo: Stripe,
-    Wordmark: StripeWordmark,
-    logoClassName: "h-10 w-10",
-    name: "Stripe",
-    wordmarkClassName: "h-4 w-auto",
-  },
-  {
-    Logo: VercelDark,
-    Wordmark: VercelWordmarkDark,
-    logoClassName: "h-8 w-auto",
-    name: "Vercel",
-    wordmarkClassName: "h-3.5 w-auto",
-  },
-  {
-    Logo: Cloudflare,
-    logoClassName: "h-7 w-auto",
-    name: "Cloudflare",
-  },
-  {
-    Logo: TurborepoIconDark,
-    Wordmark: TurborepoWordmarkDark,
-    logoClassName: "h-10 w-10",
-    name: "Turborepo",
-    wordmarkClassName: "h-3.5 w-auto",
-  },
-  {
-    Logo: ShadcnUiDark,
-    logoClassName: "h-10 w-10",
-    name: "shadcn/ui",
-  },
-  {
-    Logo: Redis,
-    logoClassName: "h-10 w-auto",
-    name: "Redis",
-  },
-] as const
-
-export function LandingBackground() {
+export function LandingHeader() {
   return (
-    <div
-      aria-hidden="true"
-      className="pointer-events-none fixed inset-0 -z-10 overflow-hidden"
-    >
-      <div className="absolute inset-0 bg-background/90" />
-      <div className="absolute inset-0 bg-[linear-gradient(to_bottom,hsl(var(--muted)/0.16),transparent_18rem)]" />
-      <div className="absolute inset-x-0 top-0 border-t border-border/50" />
-      <div className="absolute inset-x-0 bottom-0 h-64 bg-linear-to-t from-background via-background/96 to-transparent" />
-    </div>
-  )
-}
-
-export function LandingHeader({ viewport }: { viewport: LandingViewport }) {
-  const isMobileView = viewport === "mobile"
-
-  return (
-    <header className="fixed inset-x-0 top-0 z-50 overflow-x-clip border-b border-border/60 bg-background/85 backdrop-blur supports-backdrop-filter:bg-background/70">
+    <header className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur-sm">
       <div
-        className={cn(
-          "flex min-w-0 items-center justify-between py-3",
-          MARKETING_FRAME_CLASSNAME,
-          isMobileView ? "gap-2" : "gap-6"
-        )}
+        className={`${frame} flex min-h-18 flex-wrap items-center justify-between gap-x-4 gap-y-3 py-3`}
       >
         <Link
           href="/"
-          className="group inline-flex min-w-0 shrink items-center gap-2 rounded-md text-base font-semibold tracking-tight text-foreground transition-colors hover:text-primary focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          aria-label="CodStats home"
+          className="flex items-center gap-2.5 rounded-md text-lg font-semibold tracking-tight focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <Avatar className="h-7 w-7 overflow-hidden rounded-md bg-primary/10 after:hidden">
-            <AvatarImage
-              src="/logo.png"
-              alt="CodStats logo"
-              className="rounded-none object-cover"
-            />
-            <AvatarFallback className="rounded-none text-[0.65rem] font-semibold">
-              CS
-            </AvatarFallback>
-          </Avatar>
-          <span className="truncate">CodStats</span>
+          <Image
+            src="/logo.png"
+            alt=""
+            width={32}
+            height={32}
+            className="rounded-md"
+          />
+          CodStats
         </Link>
-
-        <div className="flex min-w-0 shrink-0 items-center gap-2 sm:gap-3">
+        <nav
+          aria-label="Main navigation"
+          className="order-3 flex w-full items-center gap-6 border-t border-border pt-3 text-sm text-muted-foreground sm:order-none sm:w-auto sm:border-0 sm:pt-0"
+        >
           <Link
+            className="hover:text-foreground focus-visible:underline"
+            href="/#features"
+          >
+            Product
+          </Link>
+          <Link
+            className="hover:text-foreground focus-visible:underline"
+            href="/#creators"
+          >
+            For creators
+          </Link>
+          <Link
+            className="hover:text-foreground focus-visible:underline"
             href="/pricing"
-            className={cn(
-              "rounded-md px-2 py-1 text-sm font-medium text-foreground/82 transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
-              isMobileView && "px-1.5 text-[0.8125rem]"
-            )}
           >
             Pricing
           </Link>
-          <NavbarAuthActions compact={isMobileView} />
+        </nav>
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          <NavbarAuthActions compact />
         </div>
       </div>
     </header>
   )
 }
 
-export function LandingHeroSection({
-  viewport,
-}: {
-  viewport: LandingViewport
-}) {
-  const isMobileView = viewport === "mobile"
-
+export function LandingHeroSection() {
   return (
-    <section
-      className={
-        isMobileView
-          ? "grid gap-7 border-b border-border/70 pb-8"
-          : "grid gap-8 pt-4"
-      }
-    >
-      <div className="grid gap-4">
-        <h1
-          className={
-            isMobileView
-              ? "max-w-[18rem] text-[2.55rem] leading-[0.95] font-semibold tracking-tight text-balance"
-              : "max-w-[44rem] text-5xl leading-[0.94] font-semibold tracking-tight text-balance lg:text-6xl"
-          }
-        >
-          Ranked sessions, match history, and creator tools in one place.
-        </h1>
-        <p className="max-w-[34rem] text-base leading-8 text-pretty text-foreground/84 sm:text-lg">
-          CodStats helps Call of Duty ranked players track sessions, understand
-          performance, and manage creator/community tools where relevant.
-        </p>
+    <div className="relative z-10 flex flex-col items-start py-6 lg:py-16">
+      <p className="mb-6 flex items-center gap-3 text-sm font-medium text-muted-foreground">
+        <span aria-hidden className="h-px w-8 bg-primary" />
+        Your ranked record, in focus
+      </p>
+      <h1 className="max-w-2xl text-5xl leading-[1.04] font-semibold tracking-[-0.045em] text-balance sm:text-6xl lg:text-7xl">
+        Every session.
+        <br />A clearer picture.
+      </h1>
+      <p className="mt-7 max-w-lg text-lg leading-8 text-muted-foreground">
+        Know what changed between your first match and your last. Log your
+        ranked games, follow your SR and find the patterns worth playing for.
+      </p>
+      <div className="mt-8">
+        <NavbarAuthActions context="hero" layout="responsive" />
       </div>
-
-      <div
-        className={
-          isMobileView ? "grid gap-2" : "flex flex-wrap items-center gap-3"
-        }
-      >
-        <NavbarAuthActions
-          context="hero"
-          layout={isMobileView ? "stacked" : "inline"}
-        />
-        <Link
-          href="/pricing"
-          className={buttonVariants({ variant: "outline" })}
-        >
-          View pricing
-        </Link>
-      </div>
-    </section>
+      <p className="mt-4 text-sm text-muted-foreground">
+        Your matches. Your progress. One place to review it.
+      </p>
+    </div>
   )
 }
 
-export function LandingProductSection({
-  viewport,
-}: {
-  viewport: LandingViewport
-}) {
-  const isMobileView = viewport === "mobile"
-
+export function LandingProductSection() {
   return (
-    <aside
-      className={
-        isMobileView
-          ? "border-b border-border/70 pb-8"
-          : "border-l border-border/70 pl-8"
-      }
-    >
-      <div className="grid gap-2">
-        <h2 className="text-lg font-semibold tracking-tight sm:text-xl">
-          What CodStats does
-        </h2>
-        <p className="max-w-[30rem] text-sm leading-7 text-foreground/80">
-          The product is centered on ranked review: track a session, log the
-          matches that shaped it, and read the result without a noisy dashboard.
+    <figure className="relative z-10 min-w-0 overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-sm">
+      <figcaption className="flex items-center justify-between gap-3 border-b border-border px-5 py-4 text-sm">
+        <span className="font-medium">Ranked session</span>
+        <span className="text-xs text-muted-foreground">
+          Illustrative preview
+        </span>
+      </figcaption>
+      <div className="p-5 sm:p-7">
+        <div className="flex items-end justify-between">
+          <div>
+            <p className="text-sm text-muted-foreground">Session SR</p>
+            <p className="mt-2 font-mono text-4xl font-semibold tracking-tight">
+              4,280
+            </p>
+          </div>
+          <p className="text-sm font-medium text-primary">+180 SR</p>
+        </div>
+        <svg
+          viewBox="0 0 440 150"
+          role="img"
+          aria-label="Example SR progression from 4,100 to 4,280 over six matches"
+          className="mt-6 h-40 w-full overflow-visible"
+        >
+          <path
+            d="M0 25H440M0 75H440M0 125H440"
+            fill="none"
+            stroke="currentColor"
+            className="text-border"
+          />
+          <path
+            d="M0 125L88 96L176 110L264 60L352 77L440 20"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="3"
+            strokeLinejoin="round"
+            className="text-primary"
+          />
+        </svg>
+        <dl className="mt-2 grid grid-cols-3 divide-x divide-border border-y border-border py-4">
+          {[
+            ["Matches", "6"],
+            ["Record", "4W / 2L"],
+            ["Win rate", "67%"],
+          ].map(([label, value]) => (
+            <div key={label} className="px-3 first:pl-0">
+              <dt className="text-xs text-muted-foreground">{label}</dt>
+              <dd className="mt-1 font-mono text-lg font-medium">{value}</dd>
+            </div>
+          ))}
+        </dl>
+        <div className="mt-5 flex items-center justify-between text-sm">
+          <span className="font-medium">Latest match</span>
+          <span className="text-primary">Win · +55 SR</span>
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">
+          Match outcomes and SR changes stay tied to the session.
         </p>
       </div>
+    </figure>
+  )
+}
 
-      <div className="mt-5 border-y border-border/70">
-        {productSteps.map((item) => (
-          <article
-            className="grid gap-1 border-b border-border/70 py-4 last:border-b-0"
-            key={item.title}
-          >
-            <h3 className="text-sm font-semibold">{item.title}</h3>
-            <p className="text-sm leading-6 text-foreground/78">
-              {item.description}
+export function LandingFeatureList() {
+  const features = [
+    [
+      "Log the details that matter",
+      "Record the result and SR change first. Add maps, modes and match stats when you want a deeper review.",
+    ],
+    [
+      "See the whole session",
+      "Review your SR timeline, win/loss breakdown and recent games together, with clear context for each ranked run.",
+    ],
+    [
+      "Build a useful match history",
+      "Keep your sessions organized so the next review starts with your own record, not a guess about how the night went.",
+    ],
+  ]
+  return (
+    <section
+      id="features"
+      className="scroll-mt-36 border-t border-border pt-12 sm:pt-16"
+    >
+      <div className="grid gap-4 md:grid-cols-2 md:gap-12">
+        <h2 className="max-w-md text-3xl font-semibold tracking-tight sm:text-4xl">
+          Less guessing.
+          <br />
+          More context.
+        </h2>
+        <p className="max-w-lg text-base leading-7 text-muted-foreground">
+          A focused workspace for the games you play and the progress you want
+          to understand. Start with a session, then make each match part of the
+          record.
+        </p>
+      </div>
+      <div className="mt-10 grid gap-8 md:grid-cols-3 md:gap-10">
+        {features.map(([title, description], i) => (
+          <article key={title} className="border-t border-border pt-5">
+            <p aria-hidden className="mb-6 font-mono text-sm text-primary">
+              0{i + 1}
+            </p>
+            <h3 className="text-lg font-semibold tracking-tight">{title}</h3>
+            <p className="mt-3 text-sm leading-7 text-muted-foreground">
+              {description}
             </p>
           </article>
         ))}
       </div>
-    </aside>
-  )
-}
-
-export function LandingFeatureList({
-  viewport,
-}: {
-  viewport: LandingViewport
-}) {
-  const isMobileView = viewport === "mobile"
-
-  return (
-    <section
-      className={
-        isMobileView
-          ? "grid gap-4"
-          : "grid gap-8 lg:grid-cols-[minmax(0,18rem)_minmax(0,1fr)] lg:items-start"
-      }
-    >
-      <div className="grid gap-2">
-        <h2 className="text-2xl font-semibold tracking-tight text-balance sm:text-3xl">
-          What you can do
-        </h2>
-        <p className="max-w-[21rem] text-sm leading-7 text-pretty text-foreground/80 sm:max-w-[23rem] sm:text-base">
-          Start with match tracking, then upgrade when you need more room,
-          stronger views, or creator tools.
-        </p>
-      </div>
-
-      <div className="border-y border-border/70">
-        {dashboardReviewItems.map((feature) => (
-          <article
-            key={feature.title}
-            className={
-              isMobileView
-                ? "border-b border-border/70 py-5 last:border-b-0"
-                : "border-b border-border/70 py-6 last:border-b-0"
-            }
-          >
-            <div className="grid gap-1">
-              <h3 className="text-lg font-semibold tracking-tight">
-                {feature.title}
-              </h3>
-              <p className="max-w-[44rem] text-sm leading-7 wrap-break-word text-foreground/80">
-                {feature.description}
-              </p>
-            </div>
-          </article>
-        ))}
-      </div>
     </section>
   )
 }
 
-export function LandingCreatorToolsSection({
-  viewport,
-}: {
-  viewport: LandingViewport
-}) {
-  const isMobileView = viewport === "mobile"
-
+export function LandingCreatorToolsSection() {
   return (
     <section
-      className={
-        isMobileView
-          ? "grid gap-4 pb-10"
-          : "grid gap-8 pb-10 lg:grid-cols-[minmax(0,18rem)_minmax(0,1fr)] lg:items-start"
-      }
+      id="creators"
+      className="grid scroll-mt-36 gap-8 border-y border-border py-12 sm:py-16 md:grid-cols-2 md:gap-16"
     >
-      <div className="grid gap-2">
-        <h2 className="text-2xl font-semibold tracking-tight text-balance sm:text-3xl">
-          Creator tools on Creator
+      <div>
+        <p className="mb-4 text-sm font-medium text-primary">
+          For ranked creators
+        </p>
+        <h2 className="max-w-lg text-3xl font-semibold tracking-tight sm:text-4xl">
+          Keep the next lobby moving.
         </h2>
-        <p className="max-w-[21rem] text-sm leading-7 text-pretty text-foreground/80 sm:max-w-[23rem] sm:text-base">
-          Creator tooling is plan-gated and account-based. It supports creator
-          workflows without implying a public creator page.
+        <p className="mt-5 max-w-lg text-base leading-7 text-muted-foreground">
+          Bring Play With Viewers into your workflow. Manage the queue, choose
+          your next group and keep invites organized in your creator workspace.
         </p>
-      </div>
-
-      <div className="border-y border-border/70">
-        {creatorToolItems.map((item) => (
-          <article
-            key={item.title}
-            className={
-              isMobileView
-                ? "border-b border-border/70 py-5 last:border-b-0"
-                : "border-b border-border/70 py-6 last:border-b-0"
-            }
-          >
-            <div className="grid gap-1">
-              <h3 className="text-lg font-semibold tracking-tight">
-                {item.title}
-              </h3>
-              <p className="max-w-[44rem] text-sm leading-7 wrap-break-word text-foreground/80">
-                {item.detail}
-              </p>
-            </div>
-          </article>
-        ))}
-      </div>
-    </section>
-  )
-}
-
-export function LandingPricingTeaser({
-  viewport,
-}: {
-  viewport: LandingViewport
-}) {
-  const isMobileView = viewport === "mobile"
-
-  return (
-    <section
-      className={
-        isMobileView
-          ? "grid gap-4 border-y border-border/70 py-6"
-          : "grid gap-8 border-y border-border/70 py-8 lg:grid-cols-[minmax(0,18rem)_minmax(0,1fr)] lg:items-center"
-      }
-    >
-      <div className="grid gap-2">
-        <h2 className="text-2xl font-semibold tracking-tight text-balance sm:text-3xl">
-          Plans stay simple
-        </h2>
-        <p className="max-w-[23rem] text-sm leading-7 text-foreground/80 sm:text-base">
-          Premium is for deeper ranked review. Creator adds creator workspace
-          tools.
-        </p>
-      </div>
-
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <p className="max-w-[38rem] text-sm leading-7 text-foreground/80">
-          Pricing is shown on the pricing page with estimated currencies where
-          available. Stripe Checkout confirms the final currency, discounts,
-          taxes, and total.
-        </p>
-        <Link href="/pricing" className={buttonVariants({})}>
-          View pricing
+        <Link
+          href="/pricing"
+          className={buttonVariants({ variant: "outline", className: "mt-6" })}
+        >
+          Explore the Creator plan
         </Link>
       </div>
+      <ol className="divide-y divide-border">
+        {[
+          ["Set your queue", "Choose rank bounds and matches per viewer."],
+          ["Bring your community in", "Publish your queue into Discord."],
+          [
+            "Select, invite, play",
+            "Manage selection and invites alongside the queue.",
+          ],
+        ].map(([title, description], i) => (
+          <li key={title} className="flex gap-5 py-5 first:pt-0">
+            <span
+              aria-hidden
+              className="pt-1 font-mono text-sm text-muted-foreground"
+            >
+              0{i + 1}
+            </span>
+            <div>
+              <h3 className="font-medium">{title}</h3>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                {description}
+              </p>
+            </div>
+          </li>
+        ))}
+      </ol>
     </section>
   )
 }
 
-export function LandingStackSection({
-  viewport,
-}: {
-  viewport: LandingViewport
-}) {
-  const gridClassName =
-    viewport === "mobile"
-      ? "grid-cols-2"
-      : "grid-cols-2 sm:grid-cols-3 lg:grid-cols-5"
-
+export function LandingPricingTeaser() {
   return (
-    <section className="grid gap-6 pb-10">
-      <div className="grid gap-2">
-        <h2 className="text-2xl font-semibold tracking-tight text-balance sm:text-3xl">
-          Built on tools you can inspect
+    <section className="flex flex-col items-start justify-between gap-6 py-4 sm:flex-row sm:items-center">
+      <div>
+        <h2 className="text-3xl font-semibold tracking-tight">
+          Find your next step.
         </h2>
-        <p className="max-w-[42rem] text-sm leading-7 text-pretty text-foreground/78 sm:text-base">
-          Open-source, typed, and built on inspectable tools.
+        <p className="mt-3 text-base text-muted-foreground">
+          Compare the plans and choose the tools that fit how you play.
         </p>
       </div>
-
-      <div className="border-y border-border/70 py-8">
-        <div className={cn("grid items-center gap-x-8 gap-y-8", gridClassName)}>
-          {engineeringStackItems.map((item) => {
-            const Logo = item.Logo
-            const Wordmark = item.Wordmark
-
-            return (
-              <figure
-                key={item.name}
-                className="flex min-h-24 items-center justify-center"
-              >
-                <span className="sr-only">{item.name}</span>
-                <div className="flex flex-col items-center justify-center gap-3">
-                  <Logo aria-hidden="true" className={item.logoClassName} />
-                  {Wordmark ? (
-                    <Wordmark
-                      aria-hidden="true"
-                      className={item.wordmarkClassName}
-                    />
-                  ) : null}
-                </div>
-              </figure>
-            )
-          })}
-        </div>
-      </div>
+      <Link href="/pricing" className={buttonVariants({ size: "lg" })}>
+        Compare plans
+      </Link>
     </section>
   )
 }
 
 export function LandingFooter() {
   return (
-    <footer className="border-t border-border/70 bg-background/80">
-      <div
-        className={cn(
-          "flex flex-wrap items-center justify-between gap-3 py-5",
-          MARKETING_FRAME_CLASSNAME
-        )}
-      >
-        <p className="text-xs text-foreground/62">
-          CodStats - &copy;{" "}
-          <Link
-            href="https://cleoai.cloud"
-            className="underline-offset-4 hover:text-foreground hover:underline"
-          >
-            CleoAI
-          </Link>{" "}
-          {new Date().getFullYear()}
-        </p>
-        <nav aria-label="Legal" className="flex flex-wrap items-center gap-4">
+    <footer className="border-t border-border bg-muted/20">
+      <div className={`${frame} grid gap-8 py-10 sm:grid-cols-[1fr_auto]`}>
+        <div>
+          <Link href="/" className="text-lg font-semibold tracking-tight">
+            CodStats
+          </Link>
+          <p className="mt-2 text-sm text-muted-foreground">
+            A clearer record of your ranked game.
+          </p>
+          <p className="mt-5 text-xs text-muted-foreground">
+            &copy; {new Date().getFullYear()}{" "}
+            <Link
+              className="underline underline-offset-4"
+              href="https://cleoai.cloud"
+            >
+              CleoAI
+            </Link>
+          </p>
+        </div>
+        <nav
+          aria-label="Legal and transparency"
+          className="grid grid-cols-2 gap-x-8 gap-y-3 text-sm text-muted-foreground"
+        >
+          {[
+            ["Terms", "tos"],
+            ["Privacy", "privacy"],
+            ["Cookies", "cookies"],
+            ["Refunds", "refunds"],
+            ["Disputes", "disputes"],
+            ["GDPR", "gdpr"],
+          ].map(([label, slug]) => (
+            <Link
+              key={slug}
+              href={`/policies/${slug}`}
+              className="hover:text-foreground focus-visible:underline"
+            >
+              {label}
+            </Link>
+          ))}
           <Link
             href={PUBLIC_SITE_ANALYTICS_URL}
-            className="text-xs text-foreground/62 transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-            rel="noreferrer"
             target="_blank"
+            rel="noreferrer"
+            className="col-span-2 hover:text-foreground focus-visible:underline"
           >
-            Public analytics
-          </Link>
-          <Link
-            href="/policies/tos"
-            className="text-xs text-foreground/62 transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-          >
-            Terms
-          </Link>
-          <Link
-            href="/policies/privacy"
-            className="text-xs text-foreground/62 transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-          >
-            Privacy
-          </Link>
-          <Link
-            href="/policies/cookies"
-            className="text-xs text-foreground/62 transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-          >
-            Cookies
-          </Link>
-          <Link
-            href="/policies/refunds"
-            className="text-xs text-foreground/62 transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-          >
-            Refunds
-          </Link>
-          <Link
-            href="/policies/disputes"
-            className="text-xs text-foreground/62 transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-          >
-            Disputes
-          </Link>
-          <Link
-            href="/policies/gdpr"
-            className="text-xs text-foreground/62 transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-          >
-            GDPR
+            Public analytics ↗
           </Link>
         </nav>
       </div>

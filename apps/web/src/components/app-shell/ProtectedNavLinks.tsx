@@ -20,7 +20,7 @@ function ActiveIndicator({ layout }: { layout: "desktop" | "mobile" }) {
     <span
       aria-hidden="true"
       className={cn(
-        "rounded-full bg-primary shadow-[0_0_0.9rem_hsl(var(--primary)/0.32),0_0_0.18rem_hsl(var(--primary)/0.7)] transition-opacity duration-150",
+        "rounded-sm bg-primary transition-opacity duration-150",
         layout === "desktop"
           ? "absolute inset-x-2 -bottom-1 h-0.5"
           : "absolute top-2 bottom-2 left-0 w-0.5"
@@ -45,7 +45,7 @@ export function ProtectedNavLinks({ items, layout }: ProtectedNavLinksProps) {
               className: cn(
                 "relative text-sm font-medium",
                 layout === "desktop"
-                  ? "h-7 px-2.5 text-foreground/80 hover:text-foreground"
+                  ? "h-9 px-3 text-foreground/80 hover:text-foreground"
                   : "h-11 w-full justify-start rounded-lg px-3 pl-4 text-foreground/80 hover:text-foreground",
                 isActive && "text-foreground"
               ),

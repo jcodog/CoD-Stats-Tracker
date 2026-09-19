@@ -6,14 +6,24 @@ import { IconBrandOpenai } from "@tabler/icons-react"
 import { ChatGptAppSettingsSection } from "@/features/account/components/ChatGptAppSettingsSection"
 
 export function AccountView() {
-
   return (
-    <div
-      className={
-        "max-md:flex max-md:flex-1 max-md:items-start max-md:justify-center max-md:px-0 max-md:py-2 md:flex md:flex-1 md:items-center md:justify-center"
-      }
-    >
-      <UserProfile path="/account" routing="path">
+    <div className="mx-auto grid w-full max-w-5xl gap-6">
+      <header className="border-b border-border pb-5">
+        <h1 className="text-2xl font-semibold tracking-tight">Account</h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Manage your profile, sign-in methods and connected apps.
+        </p>
+      </header>
+      <UserProfile
+        path="/account"
+        routing="path"
+        appearance={{
+          elements: {
+            rootBox: "w-full",
+            cardBox: "w-full max-w-none border border-border shadow-none",
+          },
+        }}
+      >
         <UserProfile.Page
           label="ChatGPT App"
           labelIcon={<IconBrandOpenai className="size-4" />}

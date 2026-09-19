@@ -18,10 +18,10 @@ function SummaryMetric({
   valueStyle?: CSSProperties
 }) {
   return (
-    <div className="flex items-end justify-between gap-4 py-4 md:block md:px-6 md:py-5">
+    <div className="min-w-0 bg-card px-4 py-4 sm:px-5">
       <dt className={cn("text-sm text-muted-foreground")}>{label}</dt>
       <dd
-        className="text-right text-3xl font-semibold tracking-tight md:mt-2 md:text-left"
+        className="mt-2 font-mono text-2xl font-semibold tracking-tight tabular-nums sm:text-3xl"
         style={valueStyle}
       >
         {value}
@@ -45,7 +45,6 @@ export function DashboardStatsSummary({
   showHeader?: boolean
   winRate?: number | null
 }) {
-
   return (
     <section
       className={cn(
@@ -61,15 +60,9 @@ export function DashboardStatsSummary({
           <p className="text-sm text-muted-foreground">{description}</p>
         </div>
       ) : null}
-      <dl className="divide-y divide-border/60 border-y border-border/60 md:grid md:grid-cols-2 md:divide-x md:divide-y-0 xl:grid-cols-4">
-        <SummaryMetric
-          label="Start SR"
-          value={`${overview.startSr}`}
-        />
-        <SummaryMetric
-          label="Current SR"
-          value={`${overview.currentSr}`}
-        />
+      <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-border bg-border lg:grid-cols-4">
+        <SummaryMetric label="Start SR" value={`${overview.startSr}`} />
+        <SummaryMetric label="Current SR" value={`${overview.currentSr}`} />
         <SummaryMetric
           label="Net SR"
           value={`${overview.netSr > 0 ? "+" : ""}${overview.netSr}`}

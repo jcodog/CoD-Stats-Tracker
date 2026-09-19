@@ -1,6 +1,6 @@
 "use client"
 
-import { Authenticated, Unauthenticated } from "convex/react"
+import { useAuth } from "@clerk/nextjs"
 import Link from "next/link"
 
 import { buttonVariants } from "@workspace/ui/components/button"
@@ -13,12 +13,14 @@ export function NavbarAuthActions({
 }: {
   compact?: boolean
   context?: "hero" | "nav"
-  layout?: "inline" | "stacked"
+  layout?: "inline" | "stacked" | "responsive"
 }) {
+  const { isLoaded, isSignedIn } = useAuth()
   const isHero = context === "hero"
   const isStacked = layout === "stacked"
   const wrapperClassName = cn(
     "flex",
+    layout === "responsive" && "max-md:w-full max-md:flex-col",
     isStacked
       ? "flex-col gap-2"
       : compact
@@ -44,8 +46,14 @@ export function NavbarAuthActions({
   )
 
   return (
-    <div className={wrapperClassName}>
-      <Authenticated>
+    <div className={cn(wrapperClassName, isHero ? "min-h-11" : "min-h-8")}>
+      {!isLoaded ? (
+        <span
+          aria-label="Loading account options"
+          className="h-8 w-36 rounded-md bg-muted motion-safe:animate-pulse"
+        />
+      ) : null}
+      {isLoaded && isSignedIn ? (
         <Link
           href="/dashboard"
           className={buttonVariants({
@@ -55,22 +63,24 @@ export function NavbarAuthActions({
         >
           Go to Dashboard
         </Link>
-      </Authenticated>
+      ) : null}
 
-      <Unauthenticated>
-        <Link className={secondaryLinkClassName} href="/sign-in">
-          Sign In
-        </Link>
-        <Link
-          href="/sign-up"
-          className={buttonVariants({
-            size: compact ? "sm" : "lg",
-            className: primaryClassName,
-          })}
-        >
-          {isHero ? "Get Started" : "Sign Up"}
-        </Link>
-      </Unauthenticated>
+      {isLoaded && !isSignedIn ? (
+        <>
+          <Link className={secondaryLinkClassName} href="/sign-in">
+            Sign In
+          </Link>
+          <Link
+            href="/sign-up"
+            className={buttonVariants({
+              size: compact ? "sm" : "lg",
+              className: primaryClassName,
+            })}
+          >
+            {isHero ? "Get Started" : "Sign Up"}
+          </Link>
+        </>
+      ) : null}
     </div>
   )
 }

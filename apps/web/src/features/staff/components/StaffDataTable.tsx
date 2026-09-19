@@ -75,7 +75,11 @@ export function StaffDataTable<TData extends RowData>({
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-start md:justify-between">
         <label className="relative w-full max-w-sm">
-          <IconSearch className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground" />
+          <span className="sr-only">{searchPlaceholder}</span>
+          <IconSearch
+            aria-hidden
+            className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground"
+          />
           <Input
             className="h-11 pl-9"
             onChange={(event) => setSearch(event.target.value)}
@@ -83,7 +87,12 @@ export function StaffDataTable<TData extends RowData>({
             value={search}
           />
         </label>
-        {toolbar}
+        <div className="flex flex-wrap items-center gap-3">
+          <p role="status" className="text-xs text-muted-foreground">
+            {table.getRowModel().rows.length} of {data.length} loaded rows
+          </p>
+          {toolbar}
+        </div>
       </div>
 
       <div className="overflow-hidden border border-border/60 bg-background">
@@ -94,7 +103,17 @@ export function StaffDataTable<TData extends RowData>({
                 {table.getHeaderGroups().map((headerGroup) => (
                   <TableRow key={headerGroup.id}>
                     {headerGroup.headers.map((header) => (
-                      <TableHead key={header.id} colSpan={header.colSpan}>
+                      <TableHead
+                        key={header.id}
+                        colSpan={header.colSpan}
+                        aria-sort={
+                          header.column.getIsSorted() === "asc"
+                            ? "ascending"
+                            : header.column.getIsSorted() === "desc"
+                              ? "descending"
+                              : undefined
+                        }
+                      >
                         {header.isPlaceholder ? null : (
                           <button
                             className={cn(
@@ -105,6 +124,7 @@ export function StaffDataTable<TData extends RowData>({
                             )}
                             onClick={header.column.getToggleSortingHandler()}
                             type="button"
+                            disabled={!header.column.getCanSort()}
                           >
                             {flexRender(
                               header.column.columnDef.header,

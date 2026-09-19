@@ -795,9 +795,9 @@ export function DashboardStatsLogMatchSheet({
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
-      <DialogContent className="flex max-h-[min(88vh,54rem)] flex-col overflow-hidden overscroll-contain p-0 sm:max-w-[min(92vw,72rem)]">
-        <DialogHeader className="border-b border-border/60 px-7 py-5 pr-14">
-          <div className="flex items-start justify-between gap-4">
+      <DialogContent className="flex max-h-[min(92svh,54rem)] flex-col overflow-hidden overscroll-contain p-0 sm:max-w-[min(92vw,72rem)]">
+        <DialogHeader className="border-b border-border/60 px-5 py-4 pr-12 sm:px-7 sm:pr-14">
+          <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="grid gap-1">
               <DialogTitle>Log Ranked Match</DialogTitle>
               <DialogDescription>
@@ -824,7 +824,7 @@ export function DashboardStatsLogMatchSheet({
         ) : null}
 
         <div className="min-h-0 flex-1 overflow-y-auto">
-          <div className="grid gap-6 px-7 py-6">
+          <div className="grid gap-6 px-5 py-5 sm:px-7 sm:py-6">
             <div className="grid gap-1">
               <h3 className="text-lg font-semibold tracking-tight">
                 {currentStep.title}

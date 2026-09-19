@@ -1,35 +1,42 @@
-import { LandingDesktopView } from "@/features/landing/views/LandingDesktopView"
-import { LandingMobileView } from "@/features/landing/views/LandingMobileView"
+import { ProductBackground } from "@/components/backgrounds/ProductBackground"
 import {
-  LandingBackground,
+  LandingHeroSection,
+  LandingProductSection,
+  LandingFeatureList,
+  LandingCreatorToolsSection,
+  LandingPricingTeaser,
   LandingFooter,
   LandingHeader,
   MARKETING_SHELL_MAX_WIDTH,
 } from "@/features/landing/components/LandingSections"
-import { resolveRequestViewport } from "@/lib/server/request-viewport"
 
-export async function LandingView() {
-  const viewport = await resolveRequestViewport()
-
+export function LandingView() {
   return (
-    <div className="relative isolate flex min-h-screen flex-col bg-background [font-family:var(--font-geist-sans)]">
+    <div className="relative isolate flex min-h-screen flex-col bg-background">
       <a
         href="#main-content"
-        className="sr-only z-50 rounded-md px-3 py-2 focus-visible:not-sr-only focus-visible:absolute focus-visible:top-3 focus-visible:left-3 focus-visible:bg-background focus-visible:text-foreground focus-visible:shadow-md"
+        className="sr-only z-50 rounded-md px-3 py-2 focus-visible:not-sr-only focus-visible:absolute focus-visible:top-3 focus-visible:left-3 focus-visible:bg-background"
       >
-        Skip to Main Content
+        Skip to main content
       </a>
-
-      <LandingBackground />
-      <LandingHeader viewport={viewport} />
-
+      <LandingHeader />
       <main
         id="main-content"
-        className={`mx-auto flex w-full ${MARKETING_SHELL_MAX_WIDTH} flex-1 flex-col overflow-x-clip px-4 pt-20 pb-20 sm:px-6 sm:pt-24 lg:px-8`}
+        className={`mx-auto w-full ${MARKETING_SHELL_MAX_WIDTH} flex-1 px-5 pb-16 sm:px-8 lg:px-10`}
       >
-        {viewport === "mobile" ? <LandingMobileView /> : <LandingDesktopView />}
+        <section className="relative grid items-center gap-10 py-12 sm:py-20 lg:grid-cols-[1.1fr_1fr] lg:gap-12">
+          <div className="pointer-events-none absolute -inset-x-5 inset-y-0 [mask-image:linear-gradient(to_bottom,transparent,black_30%,transparent)] opacity-25">
+            <ProductBackground effect="threads" />
+          </div>
+          <LandingHeroSection />
+          <LandingProductSection />
+        </section>
+        <div className="grid gap-12 sm:gap-16">
+          <LandingFeatureList />
+          <LandingCreatorToolsSection />
+          <LandingPricingTeaser />
+        </div>
       </main>
-
       <LandingFooter />
     </div>
   )

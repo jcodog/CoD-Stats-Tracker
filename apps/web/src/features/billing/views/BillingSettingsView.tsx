@@ -44,7 +44,7 @@ function getSubscriptionAmountLabel(
   subscription: BillingCenterSubscription | null
 ) {
   if (!subscription) {
-    return "No active Stripe subscription"
+    return "No active Payment and renewal"
   }
 
   if (subscription.amount === null || !subscription.currency) {
@@ -91,9 +91,11 @@ function getCreatorGrantLabel(state: BillingResolvedState | null | undefined) {
 
 function StateRow(args: { label: string; value: string }) {
   return (
-    <div className="flex flex-col gap-1 border-t border-border/60 py-4 first:border-t-0">
+    <div className="grid gap-1 border-t border-border/60 py-3 first:border-t-0 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] sm:gap-4">
       <div className="text-sm text-muted-foreground">{args.label}</div>
-      <div className="text-sm font-medium text-foreground">{args.value}</div>
+      <div className="text-sm font-medium break-words text-foreground">
+        {args.value}
+      </div>
     </div>
   )
 }
@@ -173,16 +175,14 @@ export function BillingSettingsView({
   }
 
   return (
-    <div
-      className={"max-md:flex max-md:flex-col max-md:gap-5 md:flex md:flex-col md:gap-6"}
-    >
+    <div className={"mx-auto flex w-full max-w-5xl flex-col gap-6"}>
       <div
         className={
           "max-md:grid max-md:gap-3 md:flex md:flex-col md:gap-4 md:lg:flex-row md:lg:items-start md:lg:justify-between"
         }
       >
         <div className="flex flex-col gap-2">
-          <h1 className="text-3xl font-semibold tracking-tight">Billing</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Billing</h1>
           <p className="max-w-3xl text-sm text-muted-foreground">
             Stripe Customer Portal manages payment methods, invoices,
             cancellation, reactivation, plan changes, and billing details.
@@ -223,7 +223,7 @@ export function BillingSettingsView({
           <div className="border-b border-border/60 py-5 md:border-r md:border-b-0 md:pr-6">
             <div className="flex items-center gap-2 text-lg font-semibold tracking-tight">
               <IconShieldCheck className="size-5" />
-              App billing state
+              Your plan and access
             </div>
             <div className="mt-4">
               <StateRow
@@ -256,7 +256,7 @@ export function BillingSettingsView({
 
           <div className="py-5 md:pl-6">
             <div className="text-lg font-semibold tracking-tight">
-              Stripe subscription
+              Payment and renewal
             </div>
             <div className="mt-4">
               <StateRow

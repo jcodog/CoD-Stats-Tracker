@@ -15,13 +15,15 @@ export function StaffPageIntro({
 }) {
   return (
     <div className="grid gap-2 border-b border-border/60 pb-5">
-      <h1 className="text-3xl font-semibold tracking-tight text-balance">
+      <h1 className="text-2xl font-semibold tracking-tight text-balance">
         {title}
       </h1>
       <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
         {description}
       </p>
-      {meta ? <div className="text-sm text-muted-foreground">{meta}</div> : null}
+      {meta ? (
+        <div className="text-sm text-muted-foreground">{meta}</div>
+      ) : null}
     </div>
   )
 }
@@ -38,20 +40,23 @@ export function StaffMetricStrip({
   return (
     <section
       className={cn(
-        "overflow-hidden border border-border/60 bg-background",
+        "overflow-hidden rounded-lg border border-border bg-card",
         className
       )}
     >
       <dl
         className={cn(
-          "grid gap-px bg-border/60 md:grid-cols-2 xl:grid-cols-4",
+          "grid grid-cols-2 gap-px bg-border lg:grid-cols-4",
           columnsClassName
         )}
       >
         {items.map((item) => (
-          <div className="bg-background px-4 py-4 md:px-5" key={String(item.label)}>
+          <div
+            className="bg-background px-4 py-4 md:px-5"
+            key={String(item.label)}
+          >
             <dt className="text-sm text-muted-foreground">{item.label}</dt>
-            <dd className="mt-2 text-2xl font-semibold tracking-tight tabular-nums">
+            <dd className="mt-2 font-mono text-2xl font-semibold tracking-tight tabular-nums">
               {item.value}
             </dd>
           </div>
@@ -79,7 +84,7 @@ export function StaffSection({
   return (
     <section
       className={cn(
-        "overflow-hidden border border-border/60 bg-background",
+        "overflow-hidden rounded-lg border border-border bg-card",
         className
       )}
     >

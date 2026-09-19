@@ -2,12 +2,12 @@
 
 ## Recovery checkpoint
 
-Resumed from committed `f47b4ee` on `refactor/shadcn-baseui-rebaseline` with a clean tree. Current local changes are authoritative. No builds, codegen, dev servers, subagents, commits, pushes, deployments or external mutations are authorized.
+Resumed from actual committed `5a386f4` (newer than the supplied cb0a824 checkpoint) on `refactor/shadcn-baseui-rebaseline` with a clean tree. Current local changes are authoritative. No builds, codegen, dev servers, subagents, commits, pushes, deployments or external mutations are authorized.
 
 ## Completed source work
 
 - Tooling: TypeScript 7.0.2 compiler via `@typescript/native`; TypeScript 6.0.3 JavaScript API for typescript-eslint 8.70.0. Explicit compiler paths avoid competing tsc binaries. The typescript6 wrapper alias failed under Bun, so retain the real TS6 package. Web/UI lint and typecheck passed in the previous run. Backend lint/typecheck now pass after removing unused code and deriving the Redis client type from its factory. No rule suppression.
-- Base UI/Mira: regenerated 22 used primitives, migrated render composition and toggle/select contracts, fixed shared cn/mobile-hook boundaries, removed 27 unreachable components and obsolete direct dependencies. Bare d theme hotkey removed. Web/UI lint and typecheck passed. Browser interaction verification remains pending, so do not claim the UI workstream fully validated.
+- Base UI/Mira: regenerated 22 used primitives, migrated render composition and toggle/select contracts, fixed shared cn/mobile-hook boundaries, removed 27 unreachable components and obsolete direct dependencies. The intentional guarded D/d theme shortcut was subsequently restored and is retained. Web/UI lint and typecheck passed. Browser interaction verification remains pending, so do not claim the UI workstream fully validated.
 - #36 checkout policy: removed the lossy Vercel-to-Convex mirror and cron. UI availability and backend checkout/quote enforcement use one explicit Convex environment policy. Only literal true enables checkout. UI query failures deny availability. Vercel targeting remains for overlays; checkout is an operational switch and has no targeting exceptions. Legacy featureFlags table remains dormant to avoid destructive migration.
 
 ## #36 verification
@@ -19,15 +19,15 @@ Fixed the Node action directive displaced by an import. Added registered query/a
 - Tests required an escalated retry because the filesystem sandbox could not resolve installed dependency junctions. No installation changes were needed.
 - Deployment configuration is intentionally untouched. To enable checkout later, set BILLING_CHECKOUT_ENABLED=true in the target Convex deployment. Set false to disable; there is no six-hour synchronization job. Local example defaults to false.
 
-## Remaining order
+## Current workstream state
 
-1. #28 request-scoped viewer/access resolution and authenticated shell bootstrap. In progress next.
-2. #27/#30/#31 dashboard query consolidation, native subscriptions, bounded reads and legacy migration end state.
-3. #33 audit existing hosted Stripe billing, FX, creator attribution, Connect and payouts; preserve working behavior.
-4. #29 responsive composition without server user-agent branching.
-5. #35 provider scope and public hydration.
-6. Public redesign with one React Bits background; shared Cleo-family auth shell with Dither; protected application UX.
-7. #34 final regression/performance validation using permitted existing scripts and Playwright CLI.
+- User-confirmed closed: #27, #28, #30, #31, #33, #36. Do not reopen without a concrete regression.
+- #29: remaining server-UA presentation and duplicate public view wrappers removed; source validation passed. Responsive browser verification remains pending.
+- #35: application providers scoped to protected groups; source import-graph tests pass. Runtime hydration and bundle evidence pending.
+- Public/auth visual redesign and protected UX changes are implemented locally. Browser acceptance remains pending, so do not describe visuals as fully verified.
+- #32/#34: source regression guards added; final browser/accessibility/performance checks blocked by localhost availability. Next work is the bounded validation in docs/modernization-browser-validation.md, then any concrete corrections it reveals. Do not restart backend audits or redo working migrations.
+
+The chronological entries below include superseded intermediate states. This recovery section and the latest checkpoints are authoritative.
 
 ## Browser blocker
 
@@ -118,3 +118,30 @@ Pricing received a focused product-design pass before the broader visual phase. 
 The redesign uses the existing Base UI/Mira shadcn primitives and semantic CodStats tokens. It does not hard-code catalog prices or feature entitlements. Preserve this information hierarchy when #29 removes the remaining pricing `RequestViewport`/desktop-mobile wrapper architecture; make the responsive implementation one semantic tree without reverting to the old flat billing-row presentation.
 
 Mobbin reference search was unavailable because the connected Mobbin account requires a paid plan. The shadcn and React best-practice skills were used instead. A local TypeScript transpile syntax check reported zero diagnostics. Automated Vercel preview validation is still unavailable for these connector-created commits because the project's verified-commit rule cancels them before build, so a developer-signed follow-up commit is required before visual browser review on `dev.codstats.tech`.
+
+## #29 and #35 responsive/provider checkpoint
+
+Resumed from actual HEAD 5a386f4, which includes the newer pricing redesign. Preserved its catalog-driven cards and purchase hierarchy. Removed all remaining request viewport calls and the obsolete helper. Landing, pricing and policy routes now render one responsive tree; eight redundant desktop/mobile wrappers were removed. Pricing comparison is one semantic table with labeled horizontal overflow, caption and row/column headers. Existing protected/auth/account/billing responsive work and distinct mobile sidebar interactions remain intact.
+
+ApplicationProviders now owns Convex, TanStack Query and application toasts inside the protected and staff-protected route groups. Root remains a server layout with theme, shared tooltip, themed Clerk and telemetry. Public auth buttons read Clerk directly instead of initializing Convex. Public/static routes no longer import the application provider graph. Clerk remains shared for live public sign-in state, and the guarded D/d shortcut remains at the theme boundary.
+
+Validation: web lint and typecheck passed; all 10 focused web tests passed (19 assertions), including shortcut guards and logging flow. No build/codegen or external mutations performed. Runtime bundle savings have not been measured. Browser resize, hydration and accessibility checks remain pending under #32/#34 because the existing user-owned localhost endpoint was unavailable at the previous check. Next: public/auth/protected visual modernization, followed by final browser/performance protection. Closed backend workstreams are not reopened.
+
+## Public/auth visual implementation checkpoint
+
+Rebuilt public navigation, landing composition and footer around a ranked-session product preview, clear primary actions, focused session features and creator workflow. Preview numbers are explicitly illustrative. Removed the implementation-logo wall. Pricing retains the committed catalog-driven cards, FX/currency behavior, annual savings, attribution notices and CTAs; it now shares the new public frame and one semantic comparison table. Policy pages share the same navigation/footer. Public theme buttons expose the preserved D/d shortcut.
+
+Inspected the actual local Cleo AuthShell at E:/projects/cleo/Cleo/apps/dashboard/src/features/auth/AuthShell.tsx. CodStats now uses its split visual/form composition with its own identity, semantic theme and copy. Clerk sign-in/sign-up and creator attribution notices remain integrated. React Bits Dither is confined to auth; Threads is confined to the landing hero. Official fragment algorithms were adapted to a native WebGL2 host, avoiding new Three/R3F/OGL dependencies. Original license/provenance are retained under components/backgrounds. Effects use semantic primary color, 24fps maximum, half-resolution with a 960x600 cap, off-screen/hidden-tab pause and static CSS fallback for mobile/reduced motion/WebGL failure. No animated background enters analytics routes.
+
+Source typecheck and lint passed after public/auth implementation. Actual visual quality, shader rendering, Clerk states and contrast remain browser-unverified. Latest check on 2026-09-19: localhost:3000 refused the connection. No server was started or debugged.
+
+## Protected UX and regression checkpoint
+
+Dashboard now uses a compact session-aware heading, controls that wrap at intermediate widths, grouped accessible controls and a two-column mobile metric summary. Recent matches use one semantic keyboard-scrollable table on all widths, retain full notes and explicitly identify the latest-50 scope. Complete totals and partial-history notices remain unchanged. Chart update animations are disabled; Cartesian charts enable accessibility navigation. Session creation exposes its three-step progress and bounds dialog height; match logging uses smaller mobile gutters and a wrapping step header.
+
+Application shell adds a skip link and a visible mobile theme control. Account gains a consistent heading and bounded Clerk profile layout. Billing uses readable paired label/value rows and plan/access versus renewal sections. Creator setup warnings precede metrics; its responsive summary and operational sections now share the application's compact bordered surfaces. Staff summary density, labeled table search, loaded-row counts and sort announcements are improved. Financial calculations, server pagination, role checks and restored keyboard conveniences are preserved.
+
+Added test:modernization and included it in the web test chain. It follows actual source import graphs to prevent public/auth routes from initializing Convex React/TanStack clients and protected routes from pulling in marketing graphics, and guards removal of the obsolete viewport boundary. All three checks passed. These are architecture regression guards, not runtime bundle measurements. Final focused checks are running; #32/#34 browser, accessibility and measured performance acceptance remain open. See docs/modernization-browser-validation.md for the bounded remaining validation.
+
+
+Final source validation for this run: web lint/typecheck passed; the complete web test chain passed 84 tests with 679 assertions and five existing snapshots. Backend test:convex passed 169 tests with 653 assertions. No backend logic changed. Browser/visual/shader/accessibility/hydration/performance acceptance remains blocked by connection refused at localhost:3000. #32/#34 are not complete. No builds, codegen, server starts, external mutations, commits or pushes occurred.

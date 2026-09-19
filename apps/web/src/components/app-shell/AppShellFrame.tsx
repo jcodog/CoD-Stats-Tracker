@@ -38,6 +38,12 @@ export function AppShellFrame({
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
+      <a
+        href="#app-content"
+        className="sr-only focus-visible:not-sr-only focus-visible:fixed focus-visible:top-3 focus-visible:left-3 focus-visible:z-50 focus-visible:rounded-md focus-visible:bg-background focus-visible:p-3 focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        Skip to content
+      </a>
       <header className="sticky top-0 z-40 border-b border-border/70 bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/80">
         <div
           className={`mx-auto flex w-full ${protectedShellWidthClass} items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8`}
@@ -73,6 +79,7 @@ export function AppShellFrame({
           </div>
 
           <div className="flex items-center gap-2 md:hidden">
+            <ThemeToggle />
             <MobileProtectedSidebar
               checkoutEnabled={checkoutEnabled}
               navItems={navItems}
@@ -83,7 +90,9 @@ export function AppShellFrame({
       </header>
 
       <main
-        className={`mx-auto flex w-full ${protectedShellWidthClass} flex-1 flex-col px-4 py-8 sm:px-6 lg:px-8`}
+        id="app-content"
+        tabIndex={-1}
+        className={`mx-auto flex w-full ${protectedShellWidthClass} flex-1 flex-col px-4 py-6 sm:px-6 lg:px-8`}
       >
         {children}
       </main>

@@ -110,13 +110,12 @@ export function DashboardStatsRecentMatches({
         <div className="flex flex-col gap-1 border-b border-border/60 px-5 py-4">
           <h2 className="text-base font-semibold">Recent matches</h2>
           <p className="text-sm text-muted-foreground">
-            All logged matches for the selected session within the active filter
-            window.
+            The latest 50 matches, filtered to your selected date range.
           </p>
         </div>
       ) : null}
 
-      <div className="px-6 py-6">
+      <div className="py-4">
         {filteredMatches.length === 0 ? (
           <Empty
             className={cn(
@@ -182,72 +181,19 @@ export function DashboardStatsRecentMatches({
               ) : null}
             </div>
 
-            <div className="divide-y divide-border/60 border-y border-border/60 md:hidden">
-              {paginatedMatches.map((match) => (
-                <article key={match.id} className="px-0 py-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="grid gap-1">
-                      <p className="text-sm font-medium text-foreground">
-                        {formatDashboardDateTime(match.createdAt)}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {getModeLabel(match.mode)} on{" "}
-                        {getMapLabel(match.mapName)}
-                      </p>
-                    </div>
-                    <Badge
-                      className="capitalize"
-                      style={getDashboardOutcomeBadgeStyle(match.outcome)}
-                      variant="outline"
-                    >
-                      {match.outcome}
-                    </Badge>
-                  </div>
-
-                  <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                    <div className="grid gap-1">
-                      <span className="text-xs text-muted-foreground">SR</span>
-                      <span
-                        className="font-medium"
-                        style={getDashboardMetricTextStyle(match.srChange)}
-                      >
-                        {match.srChange > 0 ? "+" : ""}
-                        {match.srChange}
-                        {match.lossProtected ? (
-                          <span className="ml-2 text-xs text-muted-foreground">
-                            LP
-                          </span>
-                        ) : null}
-                      </span>
-                    </div>
-                    <div className="grid gap-1">
-                      <span className="text-xs text-muted-foreground">
-                        K / D
-                      </span>
-                      <span className="text-sm text-foreground">
-                        {match.kills ?? "-"} / {match.deaths ?? "-"}
-                      </span>
-                    </div>
-                    <div className="grid gap-1">
-                      <span className="text-xs text-muted-foreground">
-                        Notes
-                      </span>
-                      <span className="text-sm text-muted-foreground">
-                        {match.notes ?? "No note"}
-                      </span>
-                    </div>
-                  </div>
-                </article>
-              ))}
-            </div>
-
             <div
+              role="region"
+              aria-label="Recent match results"
+              tabIndex={0}
               className={cn(
-                "hidden overflow-x-auto md:block",
+                "overflow-x-auto focus-visible:ring-2 focus-visible:ring-ring",
                 embedded ? "" : "rounded-xl border border-border/60"
               )}
             >
               <Table>
+                <caption className="sr-only">
+                  Latest session matches in the selected date range
+                </caption>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Played</TableHead>
@@ -291,7 +237,7 @@ export function DashboardStatsRecentMatches({
                       <TableCell>
                         {match.kills ?? "-"} / {match.deaths ?? "-"}
                       </TableCell>
-                      <TableCell className="max-w-[240px] truncate text-sm text-muted-foreground">
+                      <TableCell className="max-w-[240px] text-sm whitespace-normal text-muted-foreground">
                         {match.notes ?? "No note"}
                       </TableCell>
                     </TableRow>

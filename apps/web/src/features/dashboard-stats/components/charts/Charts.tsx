@@ -159,7 +159,6 @@ function ChartPanel({
   description: string
   title: string
 }) {
-
   return (
     <div
       className={cn(
@@ -358,7 +357,7 @@ export const DashboardStatsCharts = memo(function DashboardStatsCharts({
               className={cn("w-full min-w-0", "max-md:h-52.5 md:h-65")}
               config={srChartConfig}
             >
-              <LineChart data={filteredTimeline}>
+              <LineChart accessibilityLayer data={filteredTimeline}>
                 <CartesianGrid vertical={false} />
                 <XAxis
                   axisLine={false}
@@ -404,6 +403,7 @@ export const DashboardStatsCharts = memo(function DashboardStatsCharts({
                   />
                 ))}
                 <Line
+                  isAnimationActive={false}
                   activeDot={({ cx, cy, payload }) => {
                     if (typeof cx !== "number" || typeof cy !== "number") {
                       return null
@@ -443,15 +443,13 @@ export const DashboardStatsCharts = memo(function DashboardStatsCharts({
           ) : (
             <div className="flex flex-col gap-4">
               <ChartContainer
-                className={cn(
-                  "w-full min-w-0",
-                  "max-md:h-52.5 md:h-65"
-                )}
+                className={cn("w-full min-w-0", "max-md:h-52.5 md:h-65")}
                 config={winLossChartConfig}
               >
                 <PieChart>
                   <ChartTooltip content={<ChartTooltipContent />} />
                   <Pie
+                    isAnimationActive={false}
                     data={winLossItems}
                     dataKey="value"
                     innerRadius={WIN_LOSS_RING_INNER_RADIUS}
@@ -512,7 +510,7 @@ export const DashboardStatsCharts = memo(function DashboardStatsCharts({
               className={cn("w-full min-w-0", "max-md:h-52.5 md:h-65")}
               config={winLossChartConfig}
             >
-              <BarChart data={dailyWinLossData}>
+              <BarChart accessibilityLayer data={dailyWinLossData}>
                 <CartesianGrid vertical={false} />
                 <XAxis
                   axisLine={false}
@@ -529,11 +527,13 @@ export const DashboardStatsCharts = memo(function DashboardStatsCharts({
                 <ChartTooltip content={<ChartTooltipContent />} />
                 <ChartLegend content={<ChartLegendContent />} />
                 <Bar
+                  isAnimationActive={false}
                   dataKey="wins"
                   fill="var(--color-wins)"
                   radius={[4, 4, 0, 0]}
                 />
                 <Bar
+                  isAnimationActive={false}
                   dataKey="losses"
                   fill="var(--color-losses)"
                   radius={[4, 4, 0, 0]}
@@ -557,7 +557,7 @@ export const DashboardStatsCharts = memo(function DashboardStatsCharts({
               className={cn("w-full min-w-0", "max-md:h-52.5 md:h-65")}
               config={dailySrChartConfig}
             >
-              <BarChart data={dailySrData}>
+              <BarChart accessibilityLayer data={dailySrData}>
                 <CartesianGrid vertical={false} />
                 <XAxis
                   axisLine={false}
@@ -575,7 +575,11 @@ export const DashboardStatsCharts = memo(function DashboardStatsCharts({
                   width={44}
                 />
                 <ChartTooltip content={<ChartTooltipContent />} />
-                <Bar dataKey="netSr" radius={[4, 4, 0, 0]}>
+                <Bar
+                  isAnimationActive={false}
+                  dataKey="netSr"
+                  radius={[4, 4, 0, 0]}
+                >
                   {dailySrData.map((day) => (
                     <Cell
                       fill={getDashboardMetricColor(day.netSr)}

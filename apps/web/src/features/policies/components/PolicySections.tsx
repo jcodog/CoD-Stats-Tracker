@@ -2,7 +2,6 @@ import type { ReactNode } from "react"
 import Link from "next/link"
 
 import {
-  LandingBackground,
   LandingFooter,
   LandingHeader,
   MARKETING_SHELL_MAX_WIDTH,
@@ -13,17 +12,9 @@ import {
   type PolicySlug,
 } from "@/features/policies/lib/policies"
 
-export type PolicyViewport = "desktop" | "mobile"
-
-export function MarketingPageShell({
-  children,
-  viewport,
-}: {
-  children: ReactNode
-  viewport: PolicyViewport
-}) {
+export function MarketingPageShell({ children }: { children: ReactNode }) {
   return (
-    <div className="relative isolate flex min-h-screen flex-col bg-background [font-family:var(--font-geist-sans)]">
+    <div className="relative isolate flex min-h-screen flex-col bg-background">
       <a
         href="#main-content"
         className="sr-only z-50 rounded-md px-3 py-2 focus-visible:not-sr-only focus-visible:absolute focus-visible:top-3 focus-visible:left-3 focus-visible:bg-background focus-visible:text-foreground focus-visible:shadow-md"
@@ -31,12 +22,11 @@ export function MarketingPageShell({
         Skip to Main Content
       </a>
 
-      <LandingBackground />
-      <LandingHeader viewport={viewport} />
+      <LandingHeader />
 
       <main
         id="main-content"
-        className={`mx-auto flex w-full ${MARKETING_SHELL_MAX_WIDTH} flex-1 flex-col overflow-x-clip px-4 pt-20 pb-20 sm:px-6 sm:pt-24 lg:px-8`}
+        className={`mx-auto flex w-full ${MARKETING_SHELL_MAX_WIDTH} flex-1 flex-col overflow-x-clip px-5 pt-12 pb-16 sm:px-8 sm:pt-16 lg:px-10`}
       >
         {children}
       </main>
@@ -72,19 +62,13 @@ export function PolicyIntro({
   )
 }
 
-export function PolicyDirectory({
-  currentSlug,
-  viewport,
-}: {
-  currentSlug?: PolicySlug
-  viewport: PolicyViewport
-}) {
-  const isMobileView = viewport === "mobile"
-
+export function PolicyDirectory({ currentSlug }: { currentSlug?: PolicySlug }) {
   return (
     <nav
       aria-label="Policy navigation"
-      className={isMobileView ? "grid gap-2" : "grid gap-2 lg:sticky lg:top-28"}
+      className={
+        "max-md:grid max-md:gap-2 md:grid md:gap-2 md:lg:sticky md:lg:top-28"
+      }
     >
       <div className="border-b border-border/70 pb-3">
         <div className="text-sm font-medium text-foreground">Policy index</div>
@@ -116,18 +100,14 @@ export function PolicyDirectory({
   )
 }
 
-export function PolicyIndexList({ viewport }: { viewport: PolicyViewport }) {
-  const isMobileView = viewport === "mobile"
-
+export function PolicyIndexList() {
   return (
-    <section className={isMobileView ? "grid gap-4" : "grid gap-4"}>
+    <section className={"grid gap-4"}>
       <div className="border-b border-border/70">
         {POLICY_DOCUMENTS.map((policy) => (
           <Link
             className={
-              isMobileView
-                ? "group block border-b border-border/70 py-5 transition-colors last:border-b-0 focus-visible:rounded-md focus-visible:ring-2 focus-visible:ring-ring/80 focus-visible:outline-none"
-                : "group block border-b border-border/70 py-6 transition-colors last:border-b-0 focus-visible:rounded-md focus-visible:ring-2 focus-visible:ring-ring/80 focus-visible:outline-none"
+              "max-md:group md:group max-md:block max-md:border-b max-md:border-border/70 max-md:py-5 max-md:transition-colors max-md:last:border-b-0 max-md:focus-visible:rounded-md max-md:focus-visible:ring-2 max-md:focus-visible:ring-ring/80 max-md:focus-visible:outline-none md:block md:border-b md:border-border/70 md:py-6 md:transition-colors md:last:border-b-0 md:focus-visible:rounded-md md:focus-visible:ring-2 md:focus-visible:ring-ring/80 md:focus-visible:outline-none"
             }
             href={`/policies/${policy.slug}`}
             key={policy.slug}
@@ -155,25 +135,15 @@ export function PolicyMeta({ lastUpdated }: { lastUpdated: string }) {
   )
 }
 
-export function PolicyBody({
-  policy,
-  viewport,
-}: {
-  policy: PolicyDocument
-  viewport: PolicyViewport
-}) {
-  const isMobileView = viewport === "mobile"
-
+export function PolicyBody({ policy }: { policy: PolicyDocument }) {
   return (
-    <div className={isMobileView ? "grid gap-6" : "grid gap-6"}>
+    <div className={"grid gap-6"}>
       <PolicyMeta lastUpdated={policy.lastUpdated} />
       <div className="border-b border-border/70">
         {policy.sections.map((section) => (
           <section
             className={
-              isMobileView
-                ? "grid gap-3 border-b border-border/70 py-5 last:border-b-0"
-                : "grid gap-3 border-b border-border/70 py-6 last:border-b-0"
+              "max-md:grid max-md:gap-3 max-md:border-b max-md:border-border/70 max-md:py-5 max-md:last:border-b-0 md:grid md:gap-3 md:border-b md:border-border/70 md:py-6 md:last:border-b-0"
             }
             key={section.title}
           >

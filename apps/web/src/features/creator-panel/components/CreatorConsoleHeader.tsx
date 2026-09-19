@@ -71,7 +71,7 @@ export function CreatorConsoleHeader({
 
   return (
     <header className="border-b border-border/70 px-4 py-4 md:px-6 lg:px-8">
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div className="grid min-w-0 gap-4">
           <div className="flex items-center gap-2">
             <SidebarTrigger className="-ml-1 md:hidden" />
@@ -81,11 +81,11 @@ export function CreatorConsoleHeader({
           </div>
 
           <div className="grid gap-2">
-            <h1 className="text-3xl font-semibold tracking-tight text-foreground">
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground">
               {title ?? currentRoute.title}
             </h1>
             {description ? (
-              <p className="max-w-3xl text-sm text-muted-foreground sm:text-base">
+              <p className="max-w-3xl text-sm text-muted-foreground">
                 {description}
               </p>
             ) : null}
